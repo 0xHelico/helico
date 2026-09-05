@@ -149,8 +149,9 @@ if (import.meta.main) {
 		if (!encode) throw new Error('--abi needs --owner and --deadline')
 		process.stdout.write(encodeRecenterParams(sized, encode))
 	} else {
-		console.log(
-			json({ ...sized, encoded: encode ? encodeRecenterParams(sized, encode) : undefined }),
+		process.stdout.write(
+			`${json({ ...sized, encoded: encode ? encodeRecenterParams(sized, encode) : undefined })}
+`,
 		)
 	}
 }

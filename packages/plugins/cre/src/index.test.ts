@@ -223,7 +223,7 @@ describe('onCronTrigger', () => {
 			{ ...offCentre, range: [100, 1_100] as [number, number] },
 			'HOLD (vault would reject: NothingToMint)',
 		],
-	])('holds on %s without writing anything', (_, chain, expected) => {
+	] as [string, Chain, string][])('holds on %s without writing anything', (_, chain, expected) => {
 		const { result, writes } = run(chain)
 		expect(result).toBe(expected)
 		expect(writes).toHaveLength(0)

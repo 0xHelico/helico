@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import { decideRecentre, nearestUsableTick, vaultRejects } from './decision'
+import {
+	decideRecentre,
+	nearestUsableTick,
+	type VaultRejection,
+	type Verdict,
+	vaultRejects,
+} from './decision'
 
 const mandate = {
 	rangeWidthTicks: 1000,
@@ -26,7 +32,7 @@ describe('decideRecentre', () => {
 			'in range',
 		],
 	])('%s', (_, input, reason) => {
-		expect(decideRecentre(input)).toEqual({ act: false, reason })
+		expect(decideRecentre(input)).toEqual({ act: false, reason } as Verdict)
 	})
 
 	test('re-centres on the tick with exactly the committed width, snapped to the spacing', () => {
@@ -223,6 +229,6 @@ describe('nearestUsableTick', () => {
 		[-887_275, 10, -887_270],
 		[887_275, 10, 887_270],
 	])('rounds %d at spacing %d to %d', (tick, spacing, expected) => {
-		expect(nearestUsableTick(tick, spacing)).toBe(expected)
+		expect(nearestUsableTick(tick, spacing)).toBe(expected as VaultRejection | null)
 	})
 })
