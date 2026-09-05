@@ -35,10 +35,11 @@ import {IStateView} from "./IStateView.sol";
 ///      **What a rogue agent can do.** Holding `AGENT_ROLE` lets you re-range a position that
 ///      committed a mandate, into a band of the committed width, containing the current market
 ///      price, measurably closer to it than the band already is, no more often than the
-///      cooldown allows, before the mandate expires. The new NFT and every token that leaves
-///      the old one go to the position's owner, because those two addresses are the only
-///      destinations this contract will write into a payload. There is no path that pays an
-///      agent, and no path that touches a position whose owner did not commit a mandate.
+///      cooldown allows, keeping at least the share of liquidity the mandate demands, before
+///      the mandate expires. The new NFT and every token that leaves the old one go to the
+///      position's owner, because those two addresses are the only destinations this contract
+///      will write into a payload. There is no path that pays an agent, and no path that
+///      touches a position whose owner did not commit a mandate.
 ///
 ///      **What it cannot promise.** The agent picks the slippage bounds on the withdrawal, so
 ///      a dishonest one can still choose bad ones and let the re-range be sandwiched. That is
@@ -136,6 +137,8 @@ contract HelicoVault is AccessControlUpgradeable, PausableUpgradeable, Reentranc
     error UnusableOwner();
     error PositionNotDelivered();
     error RangeNotDelivered();
+    error LiquidityNotRetained();
+    error RetentionOutOfRange();
     error ZeroAddress();
     error NotAContract();
     error UpgradeNotScheduled();
@@ -174,6 +177,7 @@ contract HelicoVault is AccessControlUpgradeable, PausableUpgradeable, Reentranc
         if (m.rangeWidthTicks == 0) revert RangeWidthZero();
         if (m.maxLiquidity == 0) revert MaxLiquidityZero();
         if (m.minImprovementBps >= BPS) revert ImprovementOutOfRange();
+        if (m.minRetainedBps > BPS) revert RetentionOutOfRange();
 
         // The pool is read from the position rather than taken on trust, so a mandate cannot
         // commit to a pool the position is not in.
@@ -284,7 +288,7 @@ contract HelicoVault is AccessControlUpgradeable, PausableUpgradeable, Reentranc
 
         positionManager.modifyLiquidities(_buildPlan(tokenId, liquidity, key, p), p.deadline);
 
-        _assertDelivered(newTokenId, m.poolId, p);
+        _assertDelivered(newTokenId, m, liquidity, p);
 
         emit Recentred(p.owner, tokenId, newTokenId, p.tickLower, p.tickUpper, liquidity, msg.sender);
     }
@@ -317,13 +321,29 @@ contract HelicoVault is AccessControlUpgradeable, PausableUpgradeable, Reentranc
 
     /// @dev Encoding the right plan is not the same as the plan having happened. These read
     ///      the result back out of the PositionManager.
-    function _assertDelivered(uint256 newTokenId, bytes32 poolId, RecenterParams calldata p) internal view {
-        if (positionManager.ownerOf(newTokenId) != p.owner) revert PositionNotDelivered();
+    function _assertDelivered(
+        uint256 newTokenId,
+        Mandate memory m,
+        uint128 liquidityBefore,
+        RecenterParams calldata p
+    ) internal view {
+        if (positionManager.ownerOf(newTokenId) != p.owner) {
+            revert PositionNotDelivered();
+        }
 
         (PoolKey memory newKey, uint256 newInfo) = positionManager.getPoolAndPositionInfo(newTokenId);
-        if (newKey.hashPoolKey() != poolId) revert PoolNotPermitted();
+        if (newKey.hashPoolKey() != m.poolId) revert PoolNotPermitted();
         if (_tickLower(newInfo) != p.tickLower || _tickUpper(newInfo) != p.tickUpper) {
             revert RangeNotDelivered();
+        }
+
+        // How much to mint is the agent's number, and every check above is about *where value
+        // went* - all of which pass when an agent mints dust and lets the remainder go back to
+        // the owner's wallet. No token is lost; the earning position is. Measured from what was
+        // delivered, not from what was asked for.
+        uint256 retained = positionManager.getPositionLiquidity(newTokenId);
+        if (retained * BPS < uint256(liquidityBefore) * uint256(m.minRetainedBps)) {
+            revert LiquidityNotRetained();
         }
     }
 
