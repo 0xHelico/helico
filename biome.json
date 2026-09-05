@@ -1,0 +1,83 @@
+{
+	"$schema": "https://biomejs.dev/schemas/2.5.12/schema.json",
+	"vcs": {
+		"enabled": true,
+		"clientKind": "git",
+		"useIgnoreFile": true,
+		"defaultBranch": "main"
+	},
+	"files": {
+		"ignoreUnknown": true
+	},
+	"formatter": {
+		"enabled": true,
+		"indentStyle": "tab",
+		"lineWidth": 100
+	},
+	"javascript": {
+		"formatter": {
+			"quoteStyle": "single",
+			"semicolons": "asNeeded",
+			"trailingCommas": "all"
+		}
+	},
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"preset": "recommended",
+			"correctness": {
+				"noUnusedImports": "error",
+				"noUnusedVariables": "error",
+				"noUnusedFunctionParameters": "warn"
+			},
+			"suspicious": {
+				"noExplicitAny": "error",
+				"noConsole": "warn",
+				"noDebugger": "error"
+			},
+			"style": {
+				"useConst": "error",
+				"useImportType": "error",
+				"useExportType": "error",
+				"useTemplate": "warn",
+				"useNodejsImportProtocol": "error",
+				"useAsConstAssertion": "error",
+				"useDefaultParameterLast": "error",
+				"useConsistentArrayType": { "level": "error", "options": { "syntax": "shorthand" } },
+				"noParameterAssign": "error",
+				"noNonNullAssertion": "warn",
+				"noNestedTernary": "warn",
+				"noUselessElse": "warn",
+				"noInferrableTypes": "warn"
+			},
+			"complexity": {
+				"noExcessiveCognitiveComplexity": {
+					"level": "warn",
+					"options": { "maxAllowedComplexity": 20 }
+				}
+			},
+			"performance": {
+				"noAccumulatingSpread": "error"
+			}
+		}
+	},
+	"assist": {
+		"enabled": true,
+		"actions": {
+			"source": {
+				"organizeImports": "on"
+			}
+		}
+	},
+	"overrides": [
+		{
+			"includes": ["**/*.test.ts"],
+			"linter": {
+				"rules": {
+					"suspicious": { "noExplicitAny": "off", "noConsole": "off" },
+					"complexity": { "noExcessiveCognitiveComplexity": "off" }
+				}
+			}
+		}
+	]
+}

@@ -1,20 +1,27 @@
 {
-  "name": "helico",
-  "private": true,
-  "packageManager": "bun@1.3.14",
-  "workspaces": [
-    "apps/*",
-    "packages/*",
-    "packages/plugins/*"
-  ],
-  "scripts": {
-    "build": "turbo run build",
-    "dev": "turbo run dev",
-    "test": "turbo run test",
-    "typecheck": "turbo run typecheck"
-  },
-  "devDependencies": {
-    "turbo": "^2.10.12",
-    "typescript": "^5.9.3"
-  }
+	"name": "helico",
+	"private": true,
+	"packageManager": "bun@1.3.14",
+	"workspaces": [
+		"apps/*",
+		"packages/*",
+		"packages/plugins/*"
+	],
+	"scripts": {
+		"build": "turbo run build",
+		"dev": "turbo run dev",
+		"test": "turbo run test",
+		"typecheck": "turbo run typecheck",
+		"check": "biome check .",
+		"fix": "biome check --write .",
+		"format": "biome format --write .",
+		"lint": "biome lint .",
+		"prepare": "husky"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.5.12",
+		"husky": "^9.1.7",
+		"turbo": "^2.10.12",
+		"typescript": "^5.9.3"
+	}
 }
