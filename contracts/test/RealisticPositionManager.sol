@@ -211,6 +211,14 @@ contract RealisticPositionManager is IPositionManager {
         }
     }
 
+    /// @dev Present so this mock satisfies `IPositionManager`, and deliberately unusable.
+    ///      The swap path it belongs to changes the pool price, which this mock does not model,
+    ///      and proving anything about a swap against a linear-cost mock is exactly the mistake
+    ///      that produced a green suite for a drainable vault. That path is tested on a fork.
+    function modifyLiquiditiesWithoutUnlock(bytes calldata, bytes[] calldata) external payable {
+        revert("use a fork test for the swap path");
+    }
+
     function _approvedOrOwner(address spender, uint256 tokenId) internal view returns (bool) {
         address owner = _owners[tokenId];
         return spender == owner || isApprovedForAll[owner][spender];
