@@ -12,8 +12,8 @@ Submission for [ETHOnline 2026](https://ethglobal.com/events/ethonline2026)
 | Directory | Contents |
 |---|---|
 | [`contracts/`](contracts/) | Smart contracts |
-| [`cre/`](cre/) | Chainlink CRE workflows |
-| [`be/`](be/) | Backend |
+| [`apps/cre/`](apps/cre/) | Chainlink CRE workflows |
+| [`apps/be/`](apps/be/) | Backend |
 | [`docs/plans/`](docs/plans/) | Implementation plans, written before the code |
 
 ## Partner integrations

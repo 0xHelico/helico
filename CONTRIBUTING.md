@@ -125,8 +125,8 @@ worth the small overhead on anything substantial.
 | Directory | Contents |
 |---|---|
 | [`contracts/`](contracts/) | Smart contracts |
-| [`cre/`](cre/) | Chainlink CRE workflows — see its README for the mandatory `handlerInTee` requirement |
-| [`be/`](be/) | Backend |
+| [`apps/cre/`](apps/cre/) | Chainlink CRE workflows — see its README for the mandatory `handlerInTee` requirement |
+| [`apps/be/`](apps/be/) | Backend |
 | [`docs/plans/`](docs/plans/) | Implementation plans, written before the code |
 
 ## What must not be committed

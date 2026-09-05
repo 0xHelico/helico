@@ -4,7 +4,8 @@ Working guide for Claude Code in this repository.
 
 ## What this is
 
-An **ETHOnline 2026** hackathon submission. Monorepo: `contracts/`, `cre/`, `be/`.
+An **ETHOnline 2026** hackathon submission. Monorepo: `contracts/` for Solidity, `apps/` for
+runnable services (`apps/cre/`, `apps/be/`).
 
 The rules below come from ETHGlobal's official workshops and the event prize page, not
 from guesswork. The research notes behind them are kept outside this repository.
