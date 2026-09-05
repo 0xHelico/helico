@@ -105,3 +105,24 @@ simulation and allowance reads, README rewritten per module, root README row upd
 - `mainnet.base.org` rate-limits the smoke (HTTP 429); it defaults to
   `base-rpc.publicnode.com` and honours `RPC_URL`.
 - `addresses()` returns checksummed addresses so decoded calldata compares equal.
+
+## Revision — executed on Base Sepolia
+
+Issue [#12](https://github.com/0xHelico/helico/issues/12). The user provided a test wallet
+(the key lives in a gitignored `.env`, loaded by bun as `PRIVATE_KEY`). `src/e2e.ts` runs the
+package for real on Base Sepolia, where the SDKs know every v4 contract and an ETH/USDC
+0.05 % pool exists: Permit2 approvals, mint, exact-in and exact-out swaps with native input,
+an ERC-20-input swap through the Permit2 allowance, collect, decrease and burn. Every
+transaction hash is in the package README.
+
+What the runs taught:
+
+- Public testnet RPCs are load-balanced across nodes that lag by a block or two. A freshly
+  mined approval was invisible to the node estimating the next call (`AllowanceExpired(0)`),
+  a quote came from a node that had not seen the mint, and balances read right after a
+  receipt were stale. The script now rebuilds each transaction per attempt, retries, and pins
+  balance reads to receipt block numbers.
+- A collect ran out of gas at the node's estimate (110k limit, 162k needed). Sends now carry
+  a 50 % cushion over `estimateGas`.
+- The liquidity row of the status table moves from "decoded only" to "executed", except
+  `initializePool` and `increase`, which are still decoded only.

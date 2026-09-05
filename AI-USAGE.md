@@ -104,6 +104,22 @@ Format: date · what was done · the AI's role · what a human verified.
   Router via `eth_call`, allowance read. **Nothing sent. Liquidity calldata decoded, not
   simulated.** `bun run check` clean.
 
+### 2026-09-05 — Uniswap plugin executed on Base Sepolia
+
+- **Done:** `packages/plugins/uniswap/src/e2e.ts` and the `e2e` script: the package's own
+  builders run for real with a test wallet, one transaction hash per step, recorded in the
+  package README.
+- **AI's role:** wrote the script, diagnosed the two failures on the way (a lagging public
+  RPC, an under-estimated gas limit) from receipts and re-simulation, fixed the script, and
+  cleaned up the positions left by the partial runs. The human supplied the wallet.
+- **Plan:** revision in
+  [`docs/plans/2026-09-05-plugin-uniswap-complete.md`](docs/plans/2026-09-05-plugin-uniswap-complete.md).
+- **Verified:** on Base Sepolia, wallet `0x7461…88C0`: mint (NFT #27362), exact-in swap,
+  exact-out swap with the router-level refund (received exactly 0.5 USDC), ERC-20-input swap
+  through the Permit2 allowance, collect, decrease 100 % and burn, all `status: success`.
+  `initializePool` and `increaseLiquidity` remain decoded in tests only. The key was never
+  written to the repository.
+
 <!--
 Template for the next entry:
 

@@ -53,6 +53,10 @@ must link to this file. Everything below was observed while building
   work on net deltas. Obvious in hindsight, invisible in the docs.
 - `https://mainnet.base.org`, viem's default Base RPC, answers HTTP 429 after about ten
   calls in a row; the smoke script had to move to another public endpoint.
+- On Base Sepolia, a `collect` (`DECREASE_LIQUIDITY` by 0 plus `TAKE_PAIR`) through the
+  PositionManager ran out of gas at the node's own estimate (110k estimated, 162k needed a
+  block later). A note in the liquidity docs that estimates for position-manager calls need a
+  cushion would save a reverted transaction.
 
 ## Suggestions
 

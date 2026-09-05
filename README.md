@@ -25,7 +25,7 @@ Submission for [ETHOnline 2026](https://ethglobal.com/events/ethonline2026)
 
 | Partner | Status | Where | Code reference |
 |---|---|---|---|
-| Uniswap v4 | reusable package: addresses, pools, quotes, swaps (all four shapes), Permit2 approvals, liquidity; swaps and quotes verified live on Base by `eth_call`; **nothing sent, liquidity calldata not simulated, not wired into an app** | [`packages/plugins/uniswap/`](packages/plugins/uniswap/) | [`src/swap.ts#L93`](packages/plugins/uniswap/src/swap.ts#L93) Universal Router `execute`, [`src/quote.ts#L16`](packages/plugins/uniswap/src/quote.ts#L16) v4 `Quoter`, [`src/approval.ts#L132`](packages/plugins/uniswap/src/approval.ts#L132) Permit2, [`src/liquidity.ts#L93`](packages/plugins/uniswap/src/liquidity.ts#L93) `V4PositionManager` |
+| Uniswap v4 | reusable package: addresses, pools, quotes, swaps (all four shapes), Permit2 approvals, liquidity; quotes and all swap shapes verified on Base mainnet by `eth_call`; swaps, Permit2 approvals, mint, collect, and burn **executed on Base Sepolia** (transactions in the package README); **not wired into an app** | [`packages/plugins/uniswap/`](packages/plugins/uniswap/) | [`src/swap.ts#L93`](packages/plugins/uniswap/src/swap.ts#L93) Universal Router `execute`, [`src/quote.ts#L16`](packages/plugins/uniswap/src/quote.ts#L16) v4 `Quoter`, [`src/approval.ts#L132`](packages/plugins/uniswap/src/approval.ts#L132) Permit2, [`src/liquidity.ts#L93`](packages/plugins/uniswap/src/liquidity.ts#L93) `V4PositionManager` |
 
 ## Contributing
 
