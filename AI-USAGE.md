@@ -54,6 +54,20 @@ Format: date · what was done · the AI's role · what a human verified.
 - **Verified:** `bun install`, then `bun run typecheck` from the root: Turborepo ran
   `tsc --noEmit` in `@helico/core`, 1 task successful.
 
+### 2026-09-05 — Biome and Husky
+
+- **Done:** `biome.json` at the root with an explicit rule set, `.vscode` settings so the
+  editor formats with Biome, Husky `pre-commit` (Biome on staged files) and `commit-msg`
+  (Conventional Commits) hooks, root scripts `check`, `fix`, `format`, `lint`. Existing
+  files formatted once in their own commit.
+- **AI's role:** dry-ran candidate configs against the CRE template files first, read
+  Chainlink's own Biome config to match its style, wrote the config and hooks, ran the checks.
+- **Prompt:** *"Also set up a formatter with Biome, and make sure the config is thorough"*,
+  then *"also add Husky"* (Indonesian, translated).
+- **Plan:** not needed — tooling only.
+- **Verified:** `bun run check` exits 0 on the whole repo; a commit with the message
+  `bad message` is rejected by the hook; the real commits pass the staged check.
+
 <!--
 Template for the next entry:
 
