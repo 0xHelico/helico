@@ -157,7 +157,7 @@ console.log(
 )
 
 // 1. Let Permit2 pull USDC for the PositionManager, then add liquidity around the current price.
-await ensureApprovals(a.positionManager, 10_000000n)
+await ensureApprovals(a.positionManager, 10_000_000n)
 const range = {
 	tickLower: nearestUsableTick(pool.tick - 2000, 10),
 	tickUpper: nearestUsableTick(pool.tick + 2000, 10),
@@ -168,7 +168,7 @@ const { tx: mint, receipt: mintReceipt } = await send('mint position', async () 
 		pool: await snapshot(),
 		...range,
 		amount0: 3n * 10n ** 15n,
-		amount1: 9_000000n,
+		amount1: 9_000_000n,
 		recipient: account.address,
 		slippageBps: SLIPPAGE_BPS,
 		deadline: deadlineFromNow(600),
@@ -234,7 +234,7 @@ console.log(
 )
 
 // 4. Exact input with an ERC-20, paid through the Permit2 allowance to the router.
-await ensureApprovals(a.universalRouter, 1_000000n)
+await ensureApprovals(a.universalRouter, 1_000_000n)
 const usdcIn = 500_000n
 await send(
 	`swap exact-in: ${formatUnits(usdcIn, 6)} USDC -> ETH via the Permit2 allowance`,

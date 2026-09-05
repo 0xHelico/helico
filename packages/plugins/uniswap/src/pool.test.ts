@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { Ether, Token } from '@uniswap/sdk-core'
 import { Pool } from '@uniswap/v4-sdk'
-import { type PublicClient, zeroAddress } from 'viem'
+import { zeroAddress } from 'viem'
+import { stateViewAbi } from './abi/stateView'
 import { addresses } from './addresses'
 import {
 	createPoolKey,
@@ -13,6 +14,7 @@ import {
 	sqrtPriceX96ToPrice,
 	tickToPrice,
 } from './pool'
+import { fakeClient } from './test/fakeClient'
 import type { PoolKey } from './types'
 
 const BASE = 8453
@@ -56,14 +58,13 @@ describe('poolId', () => {
 
 describe('getPoolState', () => {
 	test('reads slot0 and liquidity from StateView for the pool id', async () => {
-		const calls: { address: string; functionName: string; args: unknown[] }[] = []
-		const client = {
-			chain: { id: BASE },
-			readContract: async (c: { address: string; functionName: string; args: unknown[] }) => {
-				calls.push(c)
-				return c.functionName === 'getSlot0' ? [SQRT_PRICE, TICK, 512125, 500] : 54379539174718576n
+		const { client, calls } = fakeClient(BASE, [
+			{
+				address: addresses(BASE).stateView,
+				abi: stateViewAbi,
+				results: { getSlot0: [SQRT_PRICE, TICK, 512125, 500], getLiquidity: 54379539174718576n },
 			},
-		} as unknown as PublicClient
+		])
 
 		const state = await getPoolState(client, ethUsdc)
 
@@ -76,7 +77,6 @@ describe('getPoolState', () => {
 			liquidity: 54379539174718576n,
 		})
 		expect(calls.map((c) => c.functionName).sort()).toEqual(['getLiquidity', 'getSlot0'])
-		expect(new Set(calls.map((c) => c.address))).toEqual(new Set([addresses(BASE).stateView]))
 		expect(calls.every((c) => c.args[0] === poolId(ethUsdc))).toBe(true)
 	})
 })

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { decodeFunctionData, maxUint48, maxUint160, maxUint256, type PublicClient } from 'viem'
+import { decodeFunctionData, maxUint48, maxUint160, maxUint256 } from 'viem'
 import { erc20Abi } from './abi/erc20'
 import { permit2Abi } from './abi/permit2'
 import { addresses } from './addresses'
@@ -11,6 +11,7 @@ import {
 	getAllowances,
 	permitSingleTypedData,
 } from './approval'
+import { fakeClient } from './test/fakeClient'
 
 const BASE = 8453
 const USDC = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
@@ -19,14 +20,10 @@ const chain = addresses(BASE)
 
 describe('getAllowances', () => {
 	test('reads the token allowance to Permit2 and the Permit2 allowance to the router', async () => {
-		const calls: { address: string; functionName: string; args: unknown[] }[] = []
-		const client = {
-			chain: { id: BASE },
-			readContract: async (c: { address: string; functionName: string; args: unknown[] }) => {
-				calls.push(c)
-				return c.address === USDC ? 7n : [5n, 1_800_000_000, 3]
-			},
-		} as unknown as PublicClient
+		const { client, calls } = fakeClient(BASE, [
+			{ address: USDC, abi: erc20Abi, results: { allowance: 7n } },
+			{ address: chain.permit2, abi: permit2Abi, results: { allowance: [5n, 1_800_000_000, 3] } },
+		])
 
 		const allowances = await getAllowances(client, { token: USDC, owner: OWNER })
 
@@ -34,8 +31,8 @@ describe('getAllowances', () => {
 			tokenToPermit2: 7n,
 			permit2ToSpender: { amount: 5n, expiration: 1_800_000_000, nonce: 3 },
 		})
-		expect(calls.find((c) => c.address === USDC)?.args).toEqual([OWNER, chain.permit2])
-		expect(calls.find((c) => c.address === chain.permit2)?.args).toEqual([
+		expect(calls.find((c) => c.to === USDC)?.args).toEqual([OWNER, chain.permit2])
+		expect(calls.find((c) => c.to === chain.permit2)?.args).toEqual([
 			OWNER,
 			USDC,
 			chain.universalRouter,

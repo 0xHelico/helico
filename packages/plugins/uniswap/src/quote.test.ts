@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { type PublicClient, zeroAddress } from 'viem'
+import { zeroAddress } from 'viem'
+import { quoterAbi } from './abi/quoter'
 import { addresses } from './addresses'
 import {
 	quoteExactInput,
@@ -7,6 +8,7 @@ import {
 	quoteExactOutput,
 	quoteExactOutputSingle,
 } from './quote'
+import { fakeClient } from './test/fakeClient'
 import type { PathKey, PoolKey } from './types'
 
 const BASE = 8453
@@ -26,27 +28,30 @@ const hop: PathKey = {
 	hookData: '0x',
 }
 
-type Call = { address: string; functionName: string; args: unknown[] }
-
-const fakeClient = (calls: Call[]) =>
-	({
-		chain: { id: BASE },
-		simulateContract: async (c: Call) => {
-			calls.push(c)
-			return { result: [2447954705n, 80480n] }
+/** The Quoter answers every function with the same pair so the mapping of outputs is what gets tested. */
+const quoter = () =>
+	fakeClient(BASE, [
+		{
+			address: addresses(BASE).quoter,
+			abi: quoterAbi,
+			results: {
+				quoteExactInputSingle: [2447954705n, 80480n],
+				quoteExactOutputSingle: [407905856564516898n, 80480n],
+				quoteExactInput: [24497077n, 150000n],
+				quoteExactOutput: [4081979168789944n, 150000n],
+			},
 		},
-	}) as unknown as PublicClient
+	])
 
 describe('quotes', () => {
-	test('quoteExactInputSingle simulates the Quoter and names the output', async () => {
-		const calls: Call[] = []
-		const quote = await quoteExactInputSingle(fakeClient(calls), {
+	test('quoteExactInputSingle encodes the params struct and names the output', async () => {
+		const { client, calls } = quoter()
+		const quote = await quoteExactInputSingle(client, {
 			poolKey: ethUsdc,
 			zeroForOne: true,
 			amountIn: 10n ** 18n,
 		})
 		expect(quote).toEqual({ amountOut: 2447954705n, gasEstimate: 80480n })
-		expect(calls[0]?.address).toBe(addresses(BASE).quoter)
 		expect(calls[0]?.functionName).toBe('quoteExactInputSingle')
 		expect(calls[0]?.args[0]).toEqual({
 			poolKey: ethUsdc,
@@ -57,29 +62,30 @@ describe('quotes', () => {
 	})
 
 	test('quoteExactOutputSingle names the input', async () => {
-		const calls: Call[] = []
-		const quote = await quoteExactOutputSingle(fakeClient(calls), {
+		const { client, calls } = quoter()
+		const quote = await quoteExactOutputSingle(client, {
 			poolKey: ethUsdc,
 			zeroForOne: true,
-			amountOut: 1000_000000n,
+			amountOut: 1_000_000_000n,
 		})
-		expect(quote).toEqual({ amountIn: 2447954705n, gasEstimate: 80480n })
+		expect(quote).toEqual({ amountIn: 407905856564516898n, gasEstimate: 80480n })
 		expect(calls[0]?.functionName).toBe('quoteExactOutputSingle')
 		expect(calls[0]?.args[0]).toEqual({
 			poolKey: ethUsdc,
 			zeroForOne: true,
-			exactAmount: 1000_000000n,
+			exactAmount: 1_000_000_000n,
 			hookData: '0x',
 		})
 	})
 
 	test('quoteExactInput passes the path starting at currencyIn', async () => {
-		const calls: Call[] = []
-		await quoteExactInput(fakeClient(calls), {
+		const { client, calls } = quoter()
+		const quote = await quoteExactInput(client, {
 			currencyIn: zeroAddress,
 			path: [hop],
 			amountIn: 10n ** 18n,
 		})
+		expect(quote.amountOut).toBe(24497077n)
 		expect(calls[0]?.functionName).toBe('quoteExactInput')
 		expect(calls[0]?.args[0]).toEqual({
 			exactCurrency: zeroAddress,
@@ -89,18 +95,18 @@ describe('quotes', () => {
 	})
 
 	test('quoteExactOutput passes the path ending at currencyOut', async () => {
-		const calls: Call[] = []
-		const quote = await quoteExactOutput(fakeClient(calls), {
-			currencyOut: USDC,
-			path: [{ ...hop, intermediateCurrency: zeroAddress }],
-			amountOut: 1n,
-		})
-		expect(quote.amountIn).toBe(2447954705n)
+		const { client, calls } = quoter()
+		const path = [{ ...hop, intermediateCurrency: zeroAddress }]
+		const quote = await quoteExactOutput(client, { currencyOut: USDC, path, amountOut: 1n })
+		expect(quote.amountIn).toBe(4081979168789944n)
 		expect(calls[0]?.functionName).toBe('quoteExactOutput')
-		expect(calls[0]?.args[0]).toEqual({
-			exactCurrency: USDC,
-			path: [{ ...hop, intermediateCurrency: zeroAddress }],
-			exactAmount: 1n,
-		})
+		expect(calls[0]?.args[0]).toEqual({ exactCurrency: USDC, path, exactAmount: 1n })
+	})
+
+	test('refuses a chain without v4', async () => {
+		const { client } = fakeClient(999999, [])
+		await expect(
+			quoteExactInputSingle(client, { poolKey: ethUsdc, zeroForOne: true, amountIn: 1n }),
+		).rejects.toThrow('not deployed')
 	})
 })

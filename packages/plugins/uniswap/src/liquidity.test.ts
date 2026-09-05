@@ -57,7 +57,7 @@ describe('mint / increase', () => {
 		const tx = encodeMintPosition({
 			...common,
 			amount0: 10n ** 18n,
-			amount1: 2500_000000n,
+			amount1: 2_500_000_000n,
 			recipient: RECIPIENT,
 		})
 		const [, deadline] = decodeModify(tx.data)
@@ -70,7 +70,7 @@ describe('mint / increase', () => {
 	})
 
 	test('increase targets a token id and is deterministic', () => {
-		const input = { ...common, tokenId: 42n, amount0: 10n ** 17n, amount1: 250_000000n }
+		const input = { ...common, tokenId: 42n, amount0: 10n ** 17n, amount1: 250_000_000n }
 		const tx = encodeIncreaseLiquidity(input)
 		expect(tx.to).toBe(posm)
 		expect(tx.liquidity).toBeGreaterThan(0n)
@@ -108,12 +108,12 @@ describe('decrease / collect', () => {
 
 describe('initialize', () => {
 	test('sqrtPriceX96FromAmounts round-trips through sqrtPriceX96ToPrice', () => {
-		const sqrt = sqrtPriceX96FromAmounts({ amount0: 10n ** 18n, amount1: 2450_000000n })
+		const sqrt = sqrtPriceX96FromAmounts({ amount0: 10n ** 18n, amount1: 2_450_000_000n })
 		expect(Math.abs(sqrtPriceX96ToPrice(sqrt, 18, 6) - 2450)).toBeLessThan(0.01)
 	})
 
 	test('initializePool carries the pool key and price', () => {
-		const sqrt = sqrtPriceX96FromAmounts({ amount0: 10n ** 18n, amount1: 2450_000000n })
+		const sqrt = sqrtPriceX96FromAmounts({ amount0: 10n ** 18n, amount1: 2_450_000_000n })
 		const tx = encodeInitializePool({ chainId: BASE, poolKey: pool.poolKey, sqrtPriceX96: sqrt })
 		const { functionName, args } = decodeFunctionData({ abi: positionManagerAbi, data: tx.data })
 		expect(tx.to).toBe(posm)

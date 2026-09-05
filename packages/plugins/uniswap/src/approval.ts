@@ -1,16 +1,10 @@
 import { AllowanceTransfer } from '@uniswap/permit2-sdk'
-import {
-	type Address,
-	encodeFunctionData,
-	maxUint48,
-	maxUint160,
-	maxUint256,
-	type PublicClient,
-} from 'viem'
+import { type Address, encodeFunctionData, maxUint48, maxUint160, maxUint256 } from 'viem'
+import { readContract } from 'viem/actions'
 import { erc20Abi } from './abi/erc20'
 import { permit2Abi } from './abi/permit2'
 import { addresses } from './addresses'
-import { chainIdOf } from './client'
+import { type ChainClient, chainIdOf } from './client'
 import type { Transaction } from './types'
 
 export type Allowances = {
@@ -22,19 +16,19 @@ export type Allowances = {
 
 /** Both allowances a Universal Router swap of an ERC-20 input needs. */
 export async function getAllowances(
-	client: PublicClient,
+	client: ChainClient,
 	{ token, owner, spender }: { token: Address; owner: Address; spender?: Address },
 ): Promise<Allowances> {
 	const chain = addresses(await chainIdOf(client))
 	const target = spender ?? chain.universalRouter
 	const [tokenToPermit2, [amount, expiration, nonce]] = await Promise.all([
-		client.readContract({
+		readContract(client, {
 			address: token,
 			abi: erc20Abi,
 			functionName: 'allowance',
 			args: [owner, chain.permit2],
 		}),
-		client.readContract({
+		readContract(client, {
 			address: chain.permit2,
 			abi: permit2Abi,
 			functionName: 'allowance',

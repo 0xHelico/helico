@@ -56,7 +56,7 @@ export function buildPath({ currencies, pools }: Route): BuiltPath {
 	}
 	return {
 		currencyIn: currencies[0] as Address,
-		currencyOut: currencies[currencies.length - 1] as Address,
+		currencyOut: currencies.at(-1) as Address,
 		exactInPath: pools.map((pool, i) => toPathKey(currencies[i + 1] as Address, pool)),
 		exactOutPath: pools.map((pool, i) => toPathKey(currencies[i] as Address, pool)),
 	}

@@ -1,10 +1,11 @@
-import type { Address, Hex, PublicClient } from 'viem'
+import type { Address, Hex } from 'viem'
+import { simulateContract } from 'viem/actions'
 import { quoterAbi } from './abi/quoter'
 import { addresses } from './addresses'
-import { chainIdOf } from './client'
+import { type ChainClient, chainIdOf } from './client'
 import type { PathKey, PoolKey } from './types'
 
-const quoterOf = async (client: PublicClient) => addresses(await chainIdOf(client)).quoter
+const quoterOf = async (client: ChainClient) => addresses(await chainIdOf(client)).quoter
 
 export type SingleHopQuoteInput = {
 	poolKey: PoolKey
@@ -14,10 +15,10 @@ export type SingleHopQuoteInput = {
 
 /** Output for an exact input through one pool. A read-only eth_call, nothing is sent. */
 export async function quoteExactInputSingle(
-	client: PublicClient,
+	client: ChainClient,
 	{ poolKey, zeroForOne, amountIn, hookData = '0x' }: SingleHopQuoteInput & { amountIn: bigint },
 ) {
-	const { result } = await client.simulateContract({
+	const { result } = await simulateContract(client, {
 		address: await quoterOf(client),
 		abi: quoterAbi,
 		functionName: 'quoteExactInputSingle',
@@ -28,10 +29,10 @@ export async function quoteExactInputSingle(
 
 /** Input needed for an exact output through one pool. */
 export async function quoteExactOutputSingle(
-	client: PublicClient,
+	client: ChainClient,
 	{ poolKey, zeroForOne, amountOut, hookData = '0x' }: SingleHopQuoteInput & { amountOut: bigint },
 ) {
-	const { result } = await client.simulateContract({
+	const { result } = await simulateContract(client, {
 		address: await quoterOf(client),
 		abi: quoterAbi,
 		functionName: 'quoteExactOutputSingle',
@@ -42,10 +43,10 @@ export async function quoteExactOutputSingle(
 
 /** Output for an exact input along a multi-hop path that starts at `currencyIn`. */
 export async function quoteExactInput(
-	client: PublicClient,
+	client: ChainClient,
 	{ currencyIn, path, amountIn }: { currencyIn: Address; path: PathKey[]; amountIn: bigint },
 ) {
-	const { result } = await client.simulateContract({
+	const { result } = await simulateContract(client, {
 		address: await quoterOf(client),
 		abi: quoterAbi,
 		functionName: 'quoteExactInput',
@@ -56,10 +57,10 @@ export async function quoteExactInput(
 
 /** Input needed for an exact output along a multi-hop path that ends at `currencyOut`. */
 export async function quoteExactOutput(
-	client: PublicClient,
+	client: ChainClient,
 	{ currencyOut, path, amountOut }: { currencyOut: Address; path: PathKey[]; amountOut: bigint },
 ) {
-	const { result } = await client.simulateContract({
+	const { result } = await simulateContract(client, {
 		address: await quoterOf(client),
 		abi: quoterAbi,
 		functionName: 'quoteExactOutput',

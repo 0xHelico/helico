@@ -1,15 +1,9 @@
 import { nearestUsableTick as sdkNearestUsableTick, TickMath } from '@uniswap/v3-sdk'
-import {
-	type Address,
-	encodeAbiParameters,
-	type Hex,
-	keccak256,
-	type PublicClient,
-	zeroAddress,
-} from 'viem'
+import { type Address, encodeAbiParameters, type Hex, keccak256, zeroAddress } from 'viem'
+import { readContract } from 'viem/actions'
 import { stateViewAbi } from './abi/stateView'
 import { addresses } from './addresses'
-import { chainIdOf } from './client'
+import { type ChainClient, chainIdOf } from './client'
 import type { PoolKey } from './types'
 
 export const MIN_TICK = TickMath.MIN_TICK
@@ -67,17 +61,17 @@ export type PoolState = {
 }
 
 /** Price and liquidity from StateView. */
-export async function getPoolState(client: PublicClient, key: PoolKey): Promise<PoolState> {
+export async function getPoolState(client: ChainClient, key: PoolKey): Promise<PoolState> {
 	const { stateView } = addresses(await chainIdOf(client))
 	const id = poolId(key)
 	const [[sqrtPriceX96, tick, protocolFee, lpFee], liquidity] = await Promise.all([
-		client.readContract({
+		readContract(client, {
 			address: stateView,
 			abi: stateViewAbi,
 			functionName: 'getSlot0',
 			args: [id],
 		}),
-		client.readContract({
+		readContract(client, {
 			address: stateView,
 			abi: stateViewAbi,
 			functionName: 'getLiquidity',

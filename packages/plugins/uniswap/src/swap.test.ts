@@ -122,7 +122,7 @@ describe('single-hop swaps', () => {
 			chainId: BASE,
 			poolKey: ethUsdc,
 			zeroForOne: true,
-			amountOut: 1000_000000n,
+			amountOut: 1_000_000_000n,
 			amountInMaximum: 10n ** 18n,
 			deadline,
 		})

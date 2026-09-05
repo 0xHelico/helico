@@ -18,6 +18,10 @@ reads, quotes, and builds calldata. It never signs or sends. Plans:
 
 Not here: sending anything, the Trading API (needs a key), UniswapX, hooks development, CCA.
 
+Every read takes any viem `Client`, including chain-typed ones such as
+`createPublicClient({ chain: base })`, and goes through viem's tree-shakable actions. Scripts
+and tests are part of `typecheck` (`types: ["bun"]`), so an editor error is a `tsc` error.
+
 ## Use
 
 ```ts
@@ -70,6 +74,8 @@ bun run --filter @helico/plugin-uniswap test    # offline, one file per module
 bun run --filter @helico/plugin-uniswap smoke   # live, read-only, Base; RPC_URL overrides the endpoint
 bun run --filter @helico/plugin-uniswap e2e     # sends real transactions on Base Sepolia; needs PRIVATE_KEY
 ```
+
+Copy `.env.example` to `.env` for the scripts; bun loads it automatically.
 
 ## Do not forget
 

@@ -65,7 +65,7 @@ await simulate(
 	}),
 )
 
-const wantUsdc = 1000_000000n
+const wantUsdc = 1_000_000_000n
 const exactOut = await quoteExactOutputSingle(client, {
 	poolKey,
 	zeroForOne: true,
@@ -107,7 +107,7 @@ await simulate(
 		deadline,
 	}),
 )
-const wantUsdt = 10_000000n
+const wantUsdt = 10_000_000n
 const hopOut = await quoteExactOutput(client, {
 	currencyOut: route.currencyOut,
 	path: route.exactOutPath,
