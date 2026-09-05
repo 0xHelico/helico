@@ -15,6 +15,7 @@ import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/U
 import {
     EIP712Upgradeable
 } from "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
+import {MulticallUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/MulticallUpgradeable.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -50,6 +51,15 @@ import {TickMath} from "./lib/TickMath.sol";
 ///      will write into a payload. There is no path that pays an agent, and no path that
 ///      touches a position whose owner did not commit a mandate.
 ///
+///      **Batching.** `multicall` is inherited so a relayer holding authorisations for several
+///      users can land them in one transaction. The usual hazard — a `payable` function batched
+///      with itself, where `msg.value` is visible in full to every `delegatecall` — cannot arise
+///      here, but not for the reason first written down: the vault *does* have a payable
+///      function, `upgradeToAndCall` from UUPS. What makes it safe is that **`multicall` itself
+///      is not payable**, so `msg.value` is zero for the whole batch and there is nothing to
+///      count twice. `scripts/check-no-payable.py` guards that, since a Solidity test can only
+///      show that today's `multicall` rejects value.
+///
 ///      **What it cannot promise.** The agent picks the slippage bounds on the withdrawal, so
 ///      a dishonest one can still choose bad ones and let the re-range be sandwiched. That is
 ///      bounded by `amount0Min`/`amount1Min` reaching the pool unmodified, and it is the next
@@ -60,6 +70,7 @@ contract HelicoVault is
     ReentrancyGuard,
     UUPSUpgradeable,
     EIP712Upgradeable,
+    MulticallUpgradeable,
     IUnlockCallback
 {
     using SafeERC20 for IERC20;
