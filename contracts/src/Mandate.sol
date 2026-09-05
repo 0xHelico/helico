@@ -51,7 +51,7 @@ library MandateLib {
     /// @dev The layout is (bytes32, uint16, uint16, uint32, uint128, uint64) and the workflow
     ///      that runs inside the enclave recomputes this hash from the same layout. Reordering
     ///      or resizing a field here silently breaks that agreement, so it is checked on both
-    ///      sides in `packages/plugins/cre/test/mandate.test.ts`.
+    ///      sides in `packages/plugins/cre/src/mandate.test.ts`.
     function hash(Mandate memory m) internal pure returns (bytes32) {
         return keccak256(abi.encode(m));
     }

@@ -255,6 +255,33 @@ contract VaultAttacksTest is Test {
         vault.recenter(again);
     }
 
+    /// @notice A known gap, pinned so it cannot change silently.
+    ///
+    /// @dev `liquidityToMint` is the agent's choice, and nothing requires it to be near what
+    ///      the burn produced. A rogue agent can mint dust and let `TAKE_PAIR` return the rest
+    ///      to the owner's wallet. Every guarantee this contract makes still holds - the value
+    ///      goes to the owner, the range is compliant, the cooldown binds - but the position
+    ///      stops earning, which is a griefing vector the README has to name.
+    ///
+    ///      This test asserts the current behaviour rather than the desired one. Closing it
+    ///      needs a floor on `liquidityToMint` relative to the withdrawn liquidity, and an
+    ///      honest floor is a mandate field, which changes the hash the enclave computes. When
+    ///      that lands, this test flips to an expected revert.
+    function test_KnownGap_AgentCanMintDustAndEndTheEarningPosition() public {
+        vm.prank(alice);
+        vault.setMandate(aliceToken, _mandate(type(uint128).max));
+
+        vm.prank(agent);
+        uint256 dust = vault.recenter(_params(alice, -50, 50));
+
+        assertEq(pm.getPositionLiquidity(dust), 1, "the position is now dust");
+        assertEq(pm.ownerOf(dust), alice, "it is still the owner's");
+        assertEq(t0.balanceOf(alice), ALICE_LIQUIDITY - 1, "and the rest went to their wallet");
+        assertEq(t1.balanceOf(alice), ALICE_LIQUIDITY - 1, "not to the agent");
+        assertEq(t0.balanceOf(agent), 0, "the agent gains nothing");
+        assertEq(t1.balanceOf(agent), 0, "the agent gains nothing");
+    }
+
     // --- upgrades ------------------------------------------------------------------------
 
     /// @notice A schedule that never expires is a permanent standing authorisation, not a

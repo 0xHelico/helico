@@ -409,7 +409,7 @@ contract HelicoVaultTest is Test {
     ///         matching and every action is rejected on-chain for no visible reason.
     /// @dev Deliberately spelled out rather than derived, so the encoding cannot drift on this
     ///      side without the test being edited too. The mirror of this lives in
-    ///      `packages/plugins/cre/test/mandate.test.ts`.
+    ///      `packages/plugins/cre/src/mandate.test.ts`.
     function test_MandateHashMatchesTheTupleTheEnclaveEncodes() public view {
         bytes32 fromStruct = MandateLib.hash(mandate);
         bytes32 fromTuple = keccak256(
