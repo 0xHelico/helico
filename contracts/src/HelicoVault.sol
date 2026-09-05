@@ -206,6 +206,7 @@ contract HelicoVault is
     error SignerLacksAgentRole(address signer);
     error WrongNonce();
     error MandateChanged();
+    error AuthorisationExpired();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -378,6 +379,10 @@ contract HelicoVault is
         uint256 nonce,
         bytes calldata signature
     ) external whenNotPaused nonReentrant returns (uint256 newTokenId) {
+        // The PositionManager enforces this too, deep inside the batch. Checking it first only
+        // saves a relayer the gas it would spend reaching that revert with an authorisation
+        // that was never going to work — which is the common case for a stale one.
+        if (block.timestamp > p.deadline) revert AuthorisationExpired();
         if (nonce != nonces[p.owner]) revert WrongNonce();
         if (_accounts[p.owner].mandate.hash() != mandateHash) revert MandateChanged();
 

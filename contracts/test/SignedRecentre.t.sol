@@ -248,6 +248,21 @@ contract SignedRecentreTest is Test {
         vault.recenterWithSignature(p, MandateLib.hash(mandate), 0, sig);
     }
 
+    /// @notice A stale authorisation is refused at the door, not deep inside the v4 batch.
+    /// @dev The PositionManager would reject it anyway; this only spares a relayer the gas of
+    ///      finding out the expensive way, which is the common case for one that has been sat
+    ///      on. Asked for on review, and right: it is nearly free.
+    function test_RejectsAnExpiredAuthorisationBeforeSpendingGasOnIt() public {
+        HelicoVault.RecenterParams memory p = _params();
+        bytes memory sig = _sign(agentKey, p, 0);
+
+        skip(61);
+
+        vm.prank(relayer);
+        vm.expectRevert(HelicoVault.AuthorisationExpired.selector);
+        vault.recenterWithSignature(p, MandateLib.hash(mandate), 0, sig);
+    }
+
     function test_RejectsWhenPaused() public {
         bytes32 guardian = vault.GUARDIAN_ROLE();
         vm.startPrank(admin);
