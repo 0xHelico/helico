@@ -68,10 +68,17 @@ be updated until the deadline — submit early, refine afterwards.
 Permitted and encouraged. What is forbidden is **not understanding the result**.
 
 - **Commit plans to the repository.** Before any significant implementation, write the plan
-  to `docs/plans/<date>-<topic>.md` and commit it **before** writing code. This is
-  ETHGlobal's own recommendation and doubles as evidence of process.
-- **Log it in `AI-USAGE.md`** — where AI was used, which model, and what the instructions
-  were. The submission is required to explain this.
+  to `docs/plans/<date>-<topic>.md` and commit it **before** writing code.
+- **Keep the prompts too.** ETHGlobal's rules state that if you use a spec-driven workflow,
+  you *"must include all spec files, prompts, and planning artifacts in your submission
+  repository. Judges need to see the full picture of how you directed the AI, not just the
+  generated output."* Plans alone do not satisfy this — record the actual prompts alongside
+  them.
+- **Log it in `AI-USAGE.md`** — which parts of the code, which specific files or assets were
+  AI-generated or AI-assisted, which model, and what the instructions were.
+- **AI assists, it does not author.** Submissions that *"rely entirely on AI without
+  meaningful contributions from team members may not be eligible for partner prizes or
+  finalist consideration."*
 - **Never claim an integration that is not proven to work.** A fake integration is a
   **full disqualification**, not a deduction. If it is untested, write "untested".
 
@@ -89,11 +96,33 @@ Permitted and encouraged. What is forbidden is **not understanding the result**.
       each integration
 - [ ] `AI-USAGE.md` filled in honestly
 - [ ] Commit history clean and traceable
-- [ ] Demo video **2–4 minutes, ≥720p, clear spoken audio, no music, NOT sped up**
+- [ ] Demo video passes every rejection criterion (see below)
 - [ ] Every partner integration **tested and genuinely working**
 - [ ] At most **3 partner prizes**, each confirmed open to our track
 - [ ] For the finalist track: **deployed and usable by others without us running anything**
       (localhost is not accepted; testnet is fine)
+
+### Demo video — automatic rejections
+
+Upload fails or a re-submission is demanded for any of these:
+
+| 🚨 Never | Consequence |
+|---|---|
+| Under 2 minutes or over 4 minutes | **Upload fails** |
+| Below 720p | **Upload fails** |
+| Sped up to fit the time limit | Re-submission demanded |
+| Music with on-screen text instead of you speaking | Re-submission demanded |
+| Recorded on a mobile phone | Re-submission demanded |
+| Text-to-speech or AI voiceover | Re-submission demanded |
+
+Editing to cut out waiting is allowed. Keep the intro under 20 seconds, and if you use
+slides, no more than four bullet points each.
+
+### Partner prizes
+
+Up to **3** per submission. Note: **if one partner has several tracks, qualifying for all of
+them still counts as a single partner prize** — so picking a partner with multiple prizes
+costs one slot, not several.
 
 ### Partner requirements
 

@@ -16,6 +16,15 @@ leaves a traceable record of process for judges.
 YYYY-MM-DD-short-topic.md
 ```
 
+## Keep the prompts as well
+
+ETHGlobal's rules on spec-driven workflows require **all spec files, prompts, and planning
+artifacts** in the repository, so judges can see how the AI was directed rather than only
+what it produced.
+
+Record the prompt that produced a plan inside the plan file itself, under a
+`## Prompts` heading. A plan without its prompt is half the record.
+
 ## Minimum contents
 
 - **Problem** — what is being solved, and why

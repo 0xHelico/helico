@@ -56,11 +56,17 @@ punished for an honest "not yet"; everyone loses if we claim something false.
 
 ### 4. Log your AI usage
 
-Add an entry to [`AI-USAGE.md`](AI-USAGE.md) covering **where** you used AI, **which model**,
-and **what you asked it**. The submission is required to explain this.
+Add an entry to [`AI-USAGE.md`](AI-USAGE.md) covering **which files or parts of the code**
+were AI-generated or AI-assisted, **which model**, and **what you asked it**.
 
-Using AI is encouraged. Not understanding what it produced is what gets us disqualified,
-so review what lands in your commits.
+**Keep your prompts.** ETHGlobal's rules require that spec files, prompts, and planning
+artifacts all live in the repository: *"Judges need to see the full picture of how you
+directed the AI, not just the generated output."* A plan without the prompt behind it is
+half the record.
+
+Using AI is encouraged. Two things are not: not understanding what it produced, and letting
+it author the whole project — submissions that rely entirely on AI *"without meaningful
+contributions from team members"* can lose partner prize and finalist eligibility.
 
 ---
 
