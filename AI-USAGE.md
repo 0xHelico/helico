@@ -52,8 +52,8 @@ Format: date · what was done · the AI's role · what a human verified.
   checks. The handler logic is Chainlink's, and the README says so.
 - **Plan:** [`docs/plans/2026-09-05-plugin-cre.md`](docs/plans/2026-09-05-plugin-cre.md),
   prompts included.
-- **Verified:** `pnpm install`, `pnpm --filter @helico/plugin-cre typecheck` (clean), `test`
-  (9 pass, 0 fail). WASM compile and `cre workflow simulate` (CLI v1.32.0) verified from a
+- **Verified:** `bun install`, `bun run --filter @helico/plugin-cre typecheck` (clean), `test`
+  (9 pass, 0 fail), re-run after the switch to bun. WASM compile and `cre workflow simulate` (CLI v1.32.0) verified from a
   throwaway CRE project outside the repo that imports the package: TEE banner shown, result
   `REJECT (score: N, secret reached API: true)`. **Not deployed**: no deploy access on the
   machine's CRE account, and Confidential Workflows is a separate private beta.

@@ -40,8 +40,8 @@ to an env var. Needs Bun 1.2.21+ and the CRE CLI.
 ## Check
 
 ```bash
-pnpm --filter @helico/plugin-cre typecheck
-pnpm --filter @helico/plugin-cre test
+bun run --filter @helico/plugin-cre typecheck
+bun run --filter @helico/plugin-cre test
 ```
 
 ## Do not forget

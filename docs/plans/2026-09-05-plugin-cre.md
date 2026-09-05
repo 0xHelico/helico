@@ -165,3 +165,11 @@ So the scope of this PR is the **reusable package only**:
 - Verification of step 4 (WASM compile + simulate) therefore ran from a **throwaway CRE
   project outside the repository** that depends on the package through `file:`. It is not
   committed. Steps 1–3 run in the repo as written.
+
+## Revision 2 — workspace moved from pnpm to bun
+
+Issue [#5](https://github.com/0xHelico/helico/issues/5). Bun is required by the CRE SDK and
+CLI anyway, so it became the package manager too. Every `pnpm --filter` in this plan now
+reads `bun run --filter`; `pnpm install` is `bun install`. Bun 1.3 installs workspaces with
+its isolated linker, so the plugin's dependencies live in `packages/plugins/cre/node_modules`
+as symlinks, the same shape pnpm produced. Steps 1–3 re-run green after the switch.
