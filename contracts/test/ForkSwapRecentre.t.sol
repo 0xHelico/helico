@@ -209,14 +209,38 @@ contract ForkSwapRecentreTest is ForkBase {
     ///      range, so the pool halts the swap there. This spends everything the burn returned,
     ///      the largest swap the vault will ever permit, and the position still lands inside
     ///      the band the user signed.
+    /// @notice The attack the design review found, run against the real curve.
+    ///
+    /// @dev The range is checked against the tick *before* the unlock, and the swap moves that
+    ///      tick afterwards. An agent that swaps far more than the re-centre needs would push
+    ///      the price out of the range it just had approved, and mint single-sided while every
+    ///      post-condition still passed — the retention floor does not catch it, because a unit
+    ///      of liquidity is cheapest exactly at the edge a manipulated price sits on.
+    ///
+    ///      The swap size is derived from the pool's **live** active liquidity, not from a
+    ///      number measured once. A fixed size stops being an attack the moment somebody adds
+    ///      liquidity. A teammate ran the first version of this test against a pool three times
+    ///      deeper than when it was written and the tick did not move at all, so it passed
+    ///      while proving nothing.
     function test_AnOversizedSwapCannotPushThePriceOutOfTheCommittedRange() public {
         _fork();
         _setUpVault();
 
-        // Big enough to move this pool, which takes about 17,000 `par` per tick spacing, and a
-        // range only two spacings wide — so an unbounded swap really would leave it.
-        uint256 big = 400_000 ether;
-        (uint256 tokenId,,) = _mintOutOfRangePosition(big);
+        int24 spacing = demoPool.tickSpacing;
+        int24 tick = _tickOf(demoPool);
+        int24 newUpper = (tick / spacing) * spacing + spacing;
+        int24 newLower = newUpper - 20;
+
+        // Enough token1 to carry the price five spacings past the range's upper edge at the
+        // liquidity in the pool right now: amount1 = L * (sqrtTarget - sqrtNow) / 2**96.
+        uint128 active = STATE_VIEW.getLiquidity(demoPool.hashPoolKey());
+        uint160 sqrtNow = _sqrtPriceOf(demoPool);
+        uint160 sqrtTarget = TickMath.getSqrtPriceAtTick(newUpper + spacing * 5);
+        uint256 toCrossTheEdge = Math.mulDiv(active, sqrtTarget - sqrtNow, Q96);
+        assertGt(toCrossTheEdge, 0, "the pool has liquidity to push against");
+
+        // Mint with headroom, so the burn certainly returns more than the attack needs.
+        (uint256 tokenId,,) = _mintOutOfRangePosition(toCrossTheEdge * 2);
         uint128 liquidityBefore = POSITION_MANAGER.getPositionLiquidity(tokenId);
 
         Mandate memory m = _mandate();
@@ -225,15 +249,10 @@ contract ForkSwapRecentreTest is ForkBase {
         vm.prank(owner);
         vault.setMandate(tokenId, m);
 
-        int24 spacing = demoPool.tickSpacing;
-        int24 tick = _tickOf(demoPool);
-        int24 newUpper = (tick / spacing) * spacing + spacing;
-        int24 newLower = newUpper - 20;
-
-        // Everything the burn returns, which is the most `SwapExceedsWithdrawn` will allow, and
-        // an order of magnitude more than this re-centre needs. Enough to carry the price well
-        // past `newUpper` if nothing stopped it.
-        uint256 everything = (big * 99) / 100;
+        // Re-read: minting the position above may itself have shifted the tick.
+        tick = _tickOf(demoPool);
+        newUpper = (tick / spacing) * spacing + spacing;
+        newLower = newUpper - 20;
 
         vm.prank(agent);
         uint256 newTokenId = vault.recenter(
@@ -247,7 +266,7 @@ contract ForkSwapRecentreTest is ForkBase {
                 amount0Max: type(uint128).max,
                 amount1Max: type(uint128).max,
                 zeroForOne: false,
-                amountIn: everything,
+                amountIn: toCrossTheEdge,
                 minAmountOut: 0,
                 deadline: block.timestamp + 60
             })
@@ -264,10 +283,11 @@ contract ForkSwapRecentreTest is ForkBase {
         assertEq(agent.balance, 0, "the agent gained nothing");
         assertEq(IERC20(demoPool.currency1).balanceOf(agent), 0, "the agent gained nothing");
 
+        emit log_named_uint("active liquidity", active);
+        emit log_named_uint("input sized to cross the edge", toCrossTheEdge);
         emit log_named_int("tick before", tick);
         emit log_named_int("tick after the oversized swap", after_);
         emit log_named_uint("liquidity before", liquidityBefore);
-        emit log_named_uint("liquidity after", POSITION_MANAGER.getPositionLiquidity(newTokenId));
     }
 
     function _sqrtPriceOf(PoolKey memory key) internal view returns (uint160 sqrtPriceX96) {
