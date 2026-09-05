@@ -25,3 +25,8 @@ artifacts/
 
 # CRE simulator scratch files
 .cre_build_tmp.*
+
+# Foundry
+contracts/out/
+contracts/cache/
+contracts/lib/
