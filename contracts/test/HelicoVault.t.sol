@@ -429,8 +429,8 @@ contract HelicoVaultTest is Test {
         assertEq(t0.balanceOf(user), 100_000, "what did not fit went to the owner");
     }
 
-    /// @notice Zero is a choice, not a default: it permits the dust mint, explicitly.
-    function test_RetentionOfZeroPermitsAnyMint() public {
+    /// @notice Zero is a choice, not a default: it permits a dust mint, explicitly.
+    function test_RetentionOfZeroPermitsADustMint() public {
         Mandate memory loose = mandate;
         loose.minRetainedBps = 0;
         vm.prank(user);
@@ -442,6 +442,35 @@ contract HelicoVaultTest is Test {
         vm.prank(agent);
         uint256 dust = vault.recenter(p);
         assertEq(pm.getPositionLiquidity(dust), 1);
+    }
+
+    /// @notice But it does not permit minting *nothing*, which is a withdrawal with a
+    ///         re-centre's name on it.
+    /// @dev The floor cannot catch this on its own: `0 * BPS < liquidityBefore * 0` is false,
+    ///      so a mandate that opted out of the floor would let the whole position be burned and
+    ///      paid out. Refused above the floor and independent of it. The workflow reached the
+    ///      same conclusion from the other side and holds rather than emitting such a verdict.
+    function test_RejectsAMintOfNothingEvenWithNoRetentionFloor() public {
+        Mandate memory loose = mandate;
+        loose.minRetainedBps = 0;
+        vm.prank(user);
+        vault.setMandate(tokenId, loose);
+
+        HelicoVault.RecenterParams memory p = _params(-50, 50);
+        p.liquidityToMint = 0;
+
+        vm.prank(agent);
+        vm.expectRevert(HelicoVault.NothingToMint.selector);
+        vault.recenter(p);
+    }
+
+    function test_RejectsAMintOfNothingWithAFloorToo() public {
+        HelicoVault.RecenterParams memory p = _params(-50, 50);
+        p.liquidityToMint = 0;
+
+        vm.prank(agent);
+        vm.expectRevert(HelicoVault.NothingToMint.selector);
+        vault.recenter(p);
     }
 
     function test_RejectsRetentionAboveOneHundredPercent() public {

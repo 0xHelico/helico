@@ -134,6 +134,7 @@ contract HelicoVault is AccessControlUpgradeable, PausableUpgradeable, Reentranc
     error MaxLiquidityZero();
     error LiquidityTooLarge();
     error NothingToMove();
+    error NothingToMint();
     error UnusableOwner();
     error PositionNotDelivered();
     error RangeNotDelivered();
@@ -272,6 +273,13 @@ contract HelicoVault is AccessControlUpgradeable, PausableUpgradeable, Reentranc
         }
 
         // Measured, not declared. The cap is on what actually moves.
+        // A re-centre that mints nothing is a withdrawal wearing a re-centre's name: the whole
+        // position is burned and every token goes to the owner's wallet. `minRetainedBps` is
+        // meant to catch that, but a mandate committing zero opts out of the floor, and zero is
+        // a legitimate thing for a user to commit. So this is refused unconditionally, above
+        // the floor and independent of it.
+        if (p.liquidityToMint == 0) revert NothingToMint();
+
         uint128 liquidity = positionManager.getPositionLiquidity(tokenId);
         if (liquidity == 0) revert NothingToMove();
         if (liquidity > m.maxLiquidity) revert LiquidityTooLarge();
