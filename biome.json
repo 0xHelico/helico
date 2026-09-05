@@ -8,7 +8,7 @@
 	},
 	"files": {
 		"ignoreUnknown": true,
-		"includes": ["**", "!**/*.astro", "!**/public"]
+		"includes": ["**", "!**/*.astro", "!apps/landing/public"]
 	},
 	"formatter": {
 		"enabled": true,

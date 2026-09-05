@@ -4,8 +4,10 @@ Issue: [#9](https://github.com/0xHelico/helico/issues/9)
 
 ## Problem
 
-Helico needs a public landing page eventually, and the finalist track needs something
-deployed that others can open. Nothing exists under `apps/` yet. The product story is not
+Helico needs a public landing page eventually: a home for the product story once it
+exists, and a deploy pipeline we will need anyway. (The finalist track's requirement is a
+deployed application others can use without us running anything, which a static placeholder
+does not satisfy on its own.) Nothing exists under `apps/` yet. The product story is not
 written, so what is needed now is a starter that builds, type-checks, and fits the workspace
 (bun, Turborepo, Biome, Husky), with placeholder content that is obviously placeholder.
 
