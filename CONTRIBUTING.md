@@ -18,22 +18,27 @@ Ask the repo owner to add you, then confirm you can see the project on your own 
 It is named for the AI agent, but the compliance rules in it apply to humans identically.
 The short version is below; the file has the detail.
 
-## The five rules that actually matter
+## Rules
+
+Two kinds, and the difference matters. **ETHGlobal rules** carry a real penalty — up to
+disqualifying the whole submission. **Team conventions** are our own choices; we think they
+are right, but breaking one costs nothing official.
+
+---
+
+## ETHGlobal rules — breaking these has a penalty
 
 ### 1. Commit small and often
 
-This is not a style preference. **Judges inspect the commit history**, and a project whose
-history is three commits containing a million lines is disqualified from the finalist track.
+Not a style preference. **Judges inspect the commit history.** In the event kickoff:
 
-Commit each coherent step. Never squash your working history. Never rewrite history that
-has been pushed.
+> *"You cannot just have three commits with a million lines… it has to be properly chunked
+> so we can see commits, who did what… following proper branch rules and pull request rules."*
 
-### 2. Everything in English
+An unauditable repository disqualifies a project from the finalist track. Commit each
+coherent step; never squash your working history.
 
-READMEs, comments, docs, plans, commit messages. Judges and partner reviewers read this
-repository. Anything they cannot read cannot be credited to us.
-
-### 3. Write the plan before the code
+### 2. Write the plan before the code
 
 For anything more than a small fix, write a plan to `docs/plans/<date>-<topic>.md` and
 commit it **before** you start building.
@@ -41,7 +46,7 @@ commit it **before** you start building.
 This is ETHGlobal's own recommendation, and the plan must state **how the work will be
 verified** — because of rule 4.
 
-### 4. Never claim an integration that is not proven to work
+### 3. Never claim an integration that is not proven to work
 
 An integration that does not genuinely function is a **full disqualification** of the
 entire submission. Not a deduction — the whole project.
@@ -49,13 +54,38 @@ entire submission. Not a deduction — the whole project.
 If you have not tested it, say "untested". If it half-works, say what half. Nobody gets
 punished for an honest "not yet"; everyone loses if we claim something false.
 
-### 5. Log your AI usage
+### 4. Log your AI usage
 
 Add an entry to [`AI-USAGE.md`](AI-USAGE.md) covering **where** you used AI, **which model**,
 and **what you asked it**. The submission is required to explain this.
 
 Using AI is encouraged. Not understanding what it produced is what gets us disqualified,
 so review what lands in your commits.
+
+---
+
+## Team conventions — our choices, not ETHGlobal's
+
+These carry no official penalty. We follow them because they make the work legible.
+
+### Everything in English
+
+READMEs, comments, docs, plans, commit messages.
+
+ETHGlobal does not require this — we checked, there is no language rule. We do it because
+judges and partner reviewers read this repository, and Uniswap specifically asks for a
+README pointing at particular contracts and lines of code. A document a reviewer cannot
+read cannot be credited to us.
+
+### Never rewrite pushed history
+
+Also not an ETHGlobal rule. But they do require history that shows how the work developed
+over time, and rewriting it after the fact destroys exactly that. Once real work has
+started, treat pushed commits as permanent.
+
+### Conventional Commits
+
+See the format below.
 
 ## Commit format
 

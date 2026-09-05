@@ -9,15 +9,17 @@ An **ETHOnline 2026** hackathon submission. Monorepo: `contracts/`, `cre/`, `be/
 The rules below come from ETHGlobal's official workshops and the event prize page, not
 from guesswork. The research notes behind them are kept outside this repository.
 
-## Language
+## Language — team convention, not an ETHGlobal rule
 
 | Where | Language |
 |---|---|
 | **Everything committed here** — docs, comments, READMEs, plans | **English** |
 | Commit messages, PR titles and bodies | **English** |
 
-Judges and partner reviewers read this repository. Anything they cannot read cannot be
-credited.
+ETHGlobal imposes no language requirement — the workshops and prize page say nothing about
+it. This is our own convention, adopted because judges and partner reviewers read this
+repository, and Uniswap asks for a README pointing at particular contracts and lines of
+code. A document a reviewer cannot read cannot be credited.
 
 ## Commit convention
 
@@ -55,7 +57,8 @@ be updated until the deadline — submit early, refine afterwards.
   history. *"You cannot just have three commits with a million lines"* disqualifies a
   project from the finalist track.
 - **Never squash** working history into one large commit.
-- **Never rewrite published history** once real work has started.
+- **Never rewrite published history** once real work has started. *(Team convention — not
+  an ETHGlobal rule, but rewriting destroys the development history they do require.)*
 - Use branches and pull requests for larger changes.
 - The repository **must stay public** for the duration of the event and judging.
 - These rules apply to **every** repository connected to the submission, not just the primary.
