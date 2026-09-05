@@ -45,11 +45,25 @@ struct Mandate {
     uint128 maxLiquidity;
     /// @dev The agent's authority lapses at this timestamp, with no action required.
     uint64 expiry;
+    /// @dev The smallest share of the position's liquidity, in basis points, that must survive
+    ///      a re-centre.
+    ///
+    ///      Re-centring in v4 withdraws everything and mints again, and how much to mint is the
+    ///      agent's number. Without a floor, an agent can mint dust and let the remainder go
+    ///      back to the owner's wallet: no token is lost, but the position stops earning. This
+    ///      is the user's tolerance for that, because a constant cannot be honest here - for a
+    ///      fixed width, the liquidity obtainable from a given pair of amounts depends on where
+    ///      the range sits relative to the price.
+    ///
+    ///      Zero permits today's behaviour, chosen rather than defaulted into. Must not exceed
+    ///      10,000; 10,000 demands a re-centre that loses no liquidity at all, which the pool
+    ///      may simply not allow - in which case nothing happens, which is the safe failure.
+    uint16 minRetainedBps;
 }
 
 library MandateLib {
-    /// @dev The layout is (bytes32, uint16, uint16, uint32, uint128, uint64) and the workflow
-    ///      that runs inside the enclave recomputes this hash from the same layout. Reordering
+    /// @dev The layout is (bytes32, uint16, uint16, uint32, uint128, uint64, uint16) and the
+    ///      workflow inside the enclave recomputes this hash from the same layout. Reordering
     ///      or resizing a field here silently breaks that agreement, so it is checked on both
     ///      sides in `packages/plugins/cre/src/mandate.test.ts`.
     function hash(Mandate memory m) internal pure returns (bytes32) {

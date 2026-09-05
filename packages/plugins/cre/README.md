@@ -22,8 +22,8 @@ Every run (cron trigger, `handlerInTee`):
    `rangeWidthTicks` centred on the tick, emitted only if `vaultRejects`, a mirror of
    `HelicoVault._checkRange`, would accept it.
 4. `sizeRecentre`: what the burn returns at the current price and the liquidity that buys over
-   the new range (Uniswap's arithmetic on native `BigInt`), scaled by `slippageBps`. Below
-   `minRetainedBps` of the old liquidity it holds rather than mint dust.
+   the new range (Uniswap's arithmetic on native `BigInt`), scaled by `slippageBps`. Below the
+   mandate's `minRetainedBps` of the old liquidity it holds rather than mint dust.
 5. `deliver`: `runtime.report(...)` over `abi.encode(bool act, bytes32 mandateHash, RecenterParams p)`
    and `EVMClient.writeReport` to the vault on `chainSelectorName`. A hold writes nothing.
 
@@ -70,10 +70,10 @@ await runner.run(initWorkflow)
 ```
 
 Config: `{ schedule, rpcUrl, chainSelectorName, vault, positionManager, stateView, owner, poolId,
-mandateHash, gasLimit, slippageBps, minRetainedBps, deadlineSeconds }`. `secrets.yaml` must map
+mandateHash, gasLimit, slippageBps, deadlineSeconds }`. `secrets.yaml` must map
 `MANDATE_RANGE_WIDTH_TICKS`, `MANDATE_MIN_IMPROVEMENT_BPS`, `MANDATE_COOLDOWN_SECONDS`,
-`MANDATE_MAX_LIQUIDITY`, `MANDATE_EXPIRY` to env vars, with the same values the user passed to
-`setMandate`. Any chain with a v4 `StateView` and a CRE forwarder works; on Robinhood that is
+`MANDATE_MAX_LIQUIDITY`, `MANDATE_EXPIRY`, `MANDATE_MIN_RETAINED_BPS` to env vars, with the same
+values the user passed to `setMandate`. Any chain with a v4 `StateView` and a CRE forwarder works; on Robinhood that is
 the testnet (`robinhood-testnet`).
 
 ## Check
