@@ -121,6 +121,18 @@ docs: record the Uniswap integration entry points
 Judges look for proper branch and pull request practice on the finalist track, so PRs are
 worth the small overhead on anything substantial.
 
+## Review
+
+**Every pull request gets the other person as reviewer.** @rifkyeasy requests @ghozzza,
+@ghozzza requests @rifkyeasy. [`.github/CODEOWNERS`](.github/CODEOWNERS) does this
+automatically, so there is nothing to remember — GitHub skips the author, so each of us is
+asked only for the other's work.
+
+Small and obvious changes can still merge once the reviewer has looked; the point is that
+someone else looked, not that the process is heavy. Judges on the finalist track expect
+proper branch and pull request practice, and a second pair of eyes is how mistakes get
+caught before they reach `main`.
+
 ## Where things live
 
 | Directory | Contents |
