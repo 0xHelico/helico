@@ -211,6 +211,23 @@ Format: date · what was done · the AI's role · what a human verified.
   from a throwaway project against the Robinhood Chain Testnet ETH/WETH pool: `RECENTER
   -560..440`, `HOLD (in range)`, `HOLD (mandate hash mismatch)` (table in the package README).
 
+### 2026-09-05 — CRE plugin: aligned with the vault's mandate rules
+
+- **Done:** `packages/plugins/cre` follows the vault on `feat/vault-contract` (#34): fields and
+  secret ids renamed to `rangeWidthTicks` / `maxLiquidity` (same layout, same hash);
+  `decision.ts` now mirrors `HelicoVault._checkRange` (`vaultRejects`) and only emits a range
+  the vault would accept; the README says what the enclave keeps confidential now that the
+  mandate is public on-chain.
+- **AI's role:** reviewed the vault contract from a clean worktree (`forge test`, 44 pass),
+  found the semantic mismatch on `minImprovementBps` and the public-mandate point, wrote the
+  mirror, the grid test, and the docs. The collaborator asked for the renames in #34; the
+  human chose to keep the contract as the source of truth.
+- **Plan:** [`docs/plans/2026-09-05-cre-vault-alignment.md`](docs/plans/2026-09-05-cre-vault-alignment.md).
+- **Verified:** `typecheck`, `test` (32 pass, including a grid over ticks, spacings, widths, and
+  thresholds asserting every `act = true` verdict passes the vault's rule), `bun run check`;
+  three `cre workflow simulate` runs with the renamed secrets against the Robinhood Chain
+  Testnet ETH/WETH pool: `RECENTER -560..440`, `HOLD (in range)`, `HOLD (mandate hash mismatch)`.
+
 <!--
 Template for the next entry:
 
