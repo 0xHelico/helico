@@ -46,6 +46,29 @@ The agent proposes actions. The contract **validates every action against the co
 mandate and reverts anything that does not match.** The agent chooses; the contract decides
 what is allowed.
 
+**How the action reaches the contract — typed parameters, not router calldata.** The Uniswap
+plugin builds EOA-style transactions (`{ to, data, value }` for the Universal Router and
+PositionManager). A non-custodial vault must not forward those blindly, and decoding router
+calldata on-chain to check it would be expensive and brittle. So the vault exposes typed
+functions instead:
+
+```
+recenter(PoolKey key, int24 tickLower, int24 tickUpper, uint128 amount0Max, uint128 amount1Max)
+```
+
+The vault makes the PositionManager calls itself and validates the typed parameters against
+the mandate. The plugin then serves the agent and the enclave — pool state, quotes, cost
+gating, the decision — and the Solidity surface stays small enough to audit in the time we
+have.
+
+Two details that follow from the mandate struct:
+
+- `poolId` is `keccak256(PoolKey)`, so the contract cannot act on the id alone. Pass the full
+  key and check its hash against the mandate.
+- `rangeWidthBps` has to snap to the pool's tick spacing when it becomes ticks. The plugin's
+  `nearestUsableTick` does this for the agent; the contract needs the same rule, or the two
+  will disagree about what a valid range is.
+
 Three consequences worth stating plainly:
 
 - **The agent cannot move funds outside the mandate**, so a stolen agent key is a bad day
@@ -96,7 +119,9 @@ Robinhood Chain mainnet. Uniswap launched there recently and pools are already r
 hooks, and the CCA launches aggregator is available there too — it is where the newest
 parts of the stack actually run, not merely another deployment target.
 
-CRE cannot write on-chain to Robinhood mainnet, only to its testnet. That costs the
+CRE cannot write on-chain to Robinhood mainnet, only to its testnet. Targeting the testnet
+also means bumping `@helico/plugin-cre` from `@chainlink/cre-sdk@1.18.0` to 1.19.x, which
+the supported-networks table requires, and re-running the simulation afterwards. That costs the
 DON-signed report path through the Forwarder; it does not affect prize eligibility, since
 the qualification text asks for a confidential workflow and accepts a CLI simulation as
 evidence. Mandate enforcement is contract-side and does not depend on who submits the
@@ -156,7 +181,9 @@ Not design problems — supply problems, recorded so they are not discovered lat
   full run needs more, and the finalist track requires something others can use without us
   present.
 - **Testnet faucet ETH** for the end-to-end run on Robinhood testnet.
-- **A hook-less reference pool** on mainnet for the read-only smoke; discovery is running.
+- ~~A hook-less reference pool on mainnet for the read-only smoke~~ → **found**: fee 87,
+  tick spacing 1, liquidity 2.2e17, about 2,458 USDG per ETH. The mainnet smoke passes
+  against it with router 2.1.1 calldata accepted via `eth_call`.
 
 ## Prompts
 
