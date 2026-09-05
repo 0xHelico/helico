@@ -242,10 +242,14 @@ Format: date · what was done · the AI's role · what a human verified.
   range without a swap, and reported it with live-pool numbers on #37. The humans decided the
   chains (both Robinhood networks) and own the contract side.
 - **Plan:** [`docs/plans/2026-09-05-cre-forwarder-delivery.md`](docs/plans/2026-09-05-cre-forwarder-delivery.md).
-- **Verified:** `typecheck`, `test` (74 pass: the arithmetic grid against the SDK, the read
-  path against a fake JSON-RPC answering by selector, the report bytes and `writeReport`
-  payload), `bun run check`. Not yet run against a deployed vault: the vault's `onReport` is
-  pending, so the simulator run for the delivery path is recorded as pending, not done.
+- **Revised after review (same day):** the review of #40 found that `minRetainedBps = 0` let a
+  zero mint through (`0 < 0`); fixed with an unconditional hold on a zero mint. #42 chose the
+  swap: `sizeRecentre` now sizes `zeroForOne`, `amountIn`, `minAmountOut` (swap estimated at
+  the pool's active liquidity with the pool's fee, bounded to the new range) and the report
+  tuple carries them; `maxPoolFeePips` is enclave policy. The report tuple is pinned to a
+  `cast abi-encode` vector, the RPC fault paths and the boundary cases are tested.
+- **Verified:** `typecheck`, `test` (100 pass), `bun run check`. Not run against a deployed
+  vault and not simulated with this binary: the vault with the swap leg is pending (#42).
 
 <!--
 Template for the next entry:

@@ -48,7 +48,8 @@ The enclave, per run:
    `config.vault` on `config.chainSelectorName`. A hold is not written.
 
 Config becomes `{ schedule, rpcUrl, chainSelectorName, vault, positionManager, stateView,
-owner, poolId, tickSpacing, mandateHash, gasLimit, slippageBps, deadlineSeconds }`.
+owner, poolId, mandateHash, gasLimit, slippageBps, deadlineSeconds }`; the tick spacing comes
+from the position's pool key.
 
 ## How to verify
 
@@ -66,3 +67,21 @@ The user's instruction was "cek lagi" (check again) after "lanjutin aja sesuai k
 temenku ya" (keep going according to what my friend wants). The collaborator's request is
 issue #37. The report shape is my proposal on that issue; the rest follows the CRE docs on
 on-chain writes and the forwarder directory.
+
+## Revisions — same day, after review and #42
+
+- **Zero mint defect.** With `minRetainedBps = 0` the floor check is `0 < 0` and a zero-liquidity
+  mint went through to `act = true`. Fixed with an unconditional hold on `liquidityToMint === 0`,
+  regardless of the floor; the vault adds the same `NothingToMint` on its side.
+- **The swap is in the report.** #42 chose option 1: the vault swaps inside its own unlock.
+  `RecenterParams` gains `zeroForOne`, `amountIn`, `minAmountOut` after `amount1Max` and before
+  `deadline`. `sizeRecentre` estimates the swap at the pool's active liquidity with the pool's
+  LP fee (`getNextSqrtPriceFromInput`, cross-checked against the SDK), bounds the input so the
+  price stays inside the new range (where the vault's `sqrtPriceLimitX96` would stop it), and
+  finds the input where the two sides fund the same liquidity by binary search.
+- **Fee ceiling.** `maxPoolFeePips` is enclave policy: launch pools on Robinhood carry 6 to 20%
+  LP fees, and a re-centre through one costs more than it recovers.
+- **Chain.** The user chose Robinhood mainnet only; `writeReport` has no forwarder there, so the
+  delivery leg is the one #41 replaces with signing. Everything else in this plan stands.
+- **Config hex values are lowercased** on parse so a checksummed value compares equal to keccak
+  output; the report tuple is pinned to a `cast abi-encode` vector; RPC faults throw.
