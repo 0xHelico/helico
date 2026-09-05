@@ -14,6 +14,7 @@ proven to work**.
 |---|---|---|
 | Claude Code | Opus 5 | Hackathon rule research, repository scaffolding, workshop session notes |
 | Claude Code | Fable 5.1 | Monorepo tooling — pnpm workspaces, Turborepo, `packages/` scaffold |
+| Claude Code | Fable 5.1 | Chainlink CRE plugin scaffold (`packages/plugins/cre`), its plan and README |
 
 ## Log
 
@@ -39,6 +40,23 @@ Format: date · what was done · the AI's role · what a human verified.
 - **Plan:** not needed — tooling only, no application code.
 - **Verified:** `pnpm install` then `pnpm typecheck` from the root. Turborepo ran
   `tsc --noEmit` in `@helico/core` and it passed. Nothing else exists to test yet.
+
+### 2026-09-05 — Chainlink CRE plugin scaffold
+
+- **Done:** `packages/plugins/cre` (`@helico/plugin-cre`), a reusable package holding the
+  confidential handler from Chainlink's `hello-confidential-workflows-ts` template,
+  scaffolded with `cre init`. `src/index.ts` is the template's `workflow.ts` unchanged; the
+  package layout, tsconfig, tests location, and README are ours. `apps/cre` untouched.
+- **AI's role:** researched the CRE docs, the template repository, and Chainlink's agent
+  skill first; wrote the plan and its revision, the package layout, and the README; ran the
+  checks. The handler logic is Chainlink's, and the README says so.
+- **Plan:** [`docs/plans/2026-09-05-plugin-cre.md`](docs/plans/2026-09-05-plugin-cre.md),
+  prompts included.
+- **Verified:** `pnpm install`, `pnpm --filter @helico/plugin-cre typecheck` (clean), `test`
+  (9 pass, 0 fail). WASM compile and `cre workflow simulate` (CLI v1.32.0) verified from a
+  throwaway CRE project outside the repo that imports the package: TEE banner shown, result
+  `REJECT (score: N, secret reached API: true)`. **Not deployed**: no deploy access on the
+  machine's CRE account, and Confidential Workflows is a separate private beta.
 
 <!--
 Template for the next entry:

@@ -138,3 +138,30 @@ The instructions that produced this plan, verbatim (Indonesian) with an English 
 Standing instructions from earlier in the same session that shaped the process: open an
 issue, leave one comment, then branch and PR; never commit straight to `main`; always pull
 first.
+
+## Revision — same day, after the first scaffold passed
+
+The first cut put the whole CRE project (project.yaml, workflow dir, simulate script) under
+`packages/plugins/cre`. The user then narrowed it:
+
+> untuk usage nya di apps/cre
+
+*"Its usage goes in `apps/cre`."*
+
+> cuma ini buat packages doang/reusable package
+
+*"This one is only for `packages`, a reusable package."*
+
+> pastikan setiap readme intinya aja jangan bertele tele
+
+*"Keep every README to the point."*
+
+So the scope of this PR is the **reusable package only**:
+
+- `packages/plugins/cre` exports `configSchema`, `initWorkflow`, `onCronTrigger` from
+  `src/index.ts` (the template's `workflow.ts`, unchanged) and ships the `bun test` suite.
+- `apps/cre` is untouched. Wiring the package into a runnable CRE project there is a
+  separate task.
+- Verification of step 4 (WASM compile + simulate) therefore ran from a **throwaway CRE
+  project outside the repository** that depends on the package through `file:`. It is not
+  committed. Steps 1–3 run in the repo as written.
