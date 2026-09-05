@@ -6,7 +6,12 @@ import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.s
 
 import {HelicoVault} from "../src/HelicoVault.sol";
 import {Mandate, MandateLib, PoolKey} from "../src/Mandate.sol";
-import {MockERC20, MockStateView, RealisticPositionManager} from "./RealisticPositionManager.sol";
+import {
+    MockERC20,
+    MockPoolManager,
+    MockStateView,
+    RealisticPositionManager
+} from "./RealisticPositionManager.sol";
 import {VaultV2} from "./VaultV2.sol";
 
 /// @notice The security properties Helico claims, written as tests.
@@ -26,6 +31,7 @@ contract VaultAttacksTest is Test {
     HelicoVault vault;
     RealisticPositionManager pm;
     MockStateView stateView;
+    MockPoolManager poolManager;
     MockERC20 t0;
     MockERC20 t1;
 
@@ -48,16 +54,13 @@ contract VaultAttacksTest is Test {
         t1 = new MockERC20();
         pm = new RealisticPositionManager(t0, t1);
         stateView = new MockStateView();
+        poolManager = new MockPoolManager();
 
         HelicoVault impl = new HelicoVault();
-        vault = HelicoVault(
-            address(
-                new ERC1967Proxy(
-                    address(impl),
-                    abi.encodeCall(HelicoVault.initialize, (admin, address(pm), address(stateView)))
-                )
-            )
+        bytes memory init = abi.encodeCall(
+            HelicoVault.initialize, (admin, address(pm), address(stateView), address(poolManager))
         );
+        vault = HelicoVault(payable(address(new ERC1967Proxy(address(impl), init))));
 
         bytes32 agentRole = vault.AGENT_ROLE();
         bytes32 upgraderRole = vault.UPGRADER_ROLE();
@@ -109,6 +112,9 @@ contract VaultAttacksTest is Test {
             amount1Min: 0,
             amount0Max: type(uint128).max,
             amount1Max: type(uint128).max,
+            zeroForOne: false,
+            amountIn: 0,
+            minAmountOut: 0,
             deadline: block.timestamp + 60
         });
     }
@@ -271,6 +277,44 @@ contract VaultAttacksTest is Test {
 
         assertEq(pm.getPositionLiquidity(aliceToken), ALICE_LIQUIDITY, "the position is untouched");
         assertEq(t0.balanceOf(alice), 0, "and was not cashed out from under them");
+    }
+
+    // --- the unlock callback -------------------------------------------------------------
+
+    /// @notice The callback is the vault's most exposed surface now that it takes the pool lock
+    ///         itself. Anyone may call it; only the PoolManager may be answered.
+    function test_UnlockCallbackRejectsEveryCallerButThePoolManager() public {
+        vm.prank(agent);
+        vm.expectRevert(HelicoVault.NotPoolManager.selector);
+        vault.unlockCallback("");
+
+        vm.prank(alice);
+        vm.expectRevert(HelicoVault.NotPoolManager.selector);
+        vault.unlockCallback("");
+    }
+
+    /// @notice And the PoolManager itself may only be answered while a re-centre is in flight,
+    ///         so a lock taken for some other purpose cannot drive the vault's callback.
+    function test_UnlockCallbackRejectsThePoolManagerWithNothingInFlight() public {
+        vm.prank(address(poolManager));
+        vm.expectRevert(HelicoVault.NoRecentreInFlight.selector);
+        vault.unlockCallback("");
+    }
+
+    /// @notice The agent may only swap what the burn produced. Anything beyond it would have to
+    ///         come from another user's balance or from a donation sitting in the vault.
+    function test_AgentCannotSwapMoreThanTheBurnReturned() public {
+        vm.prank(alice);
+        vault.setMandate(aliceToken, _mandate(type(uint128).max));
+
+        HelicoVault.RecenterParams memory p = _params(alice, -50, 50);
+        p.liquidityToMint = ALICE_LIQUIDITY;
+        p.amountIn = uint256(ALICE_LIQUIDITY) + 1; // one more than the position can possibly hold
+        p.zeroForOne = true;
+
+        vm.prank(agent);
+        vm.expectRevert(HelicoVault.SwapExceedsWithdrawn.selector);
+        vault.recenter(p);
     }
 
     // --- upgrades ------------------------------------------------------------------------

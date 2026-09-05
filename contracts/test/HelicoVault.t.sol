@@ -8,7 +8,12 @@ import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 
 import {HelicoVault} from "../src/HelicoVault.sol";
 import {Mandate, MandateLib, PoolKey} from "../src/Mandate.sol";
-import {MockERC20, MockStateView, RealisticPositionManager} from "./RealisticPositionManager.sol";
+import {
+    MockERC20,
+    MockPoolManager,
+    MockStateView,
+    RealisticPositionManager
+} from "./RealisticPositionManager.sol";
 import {VaultV2} from "./VaultV2.sol";
 
 contract HelicoVaultTest is Test {
@@ -18,6 +23,7 @@ contract HelicoVaultTest is Test {
     HelicoVault vault;
     RealisticPositionManager pm;
     MockStateView stateView;
+    MockPoolManager poolManager;
     MockERC20 t0;
     MockERC20 t1;
 
@@ -42,10 +48,13 @@ contract HelicoVaultTest is Test {
         t1 = new MockERC20();
         pm = new RealisticPositionManager(t0, t1);
         stateView = new MockStateView();
+        poolManager = new MockPoolManager();
 
         HelicoVault impl = new HelicoVault();
-        bytes memory data = abi.encodeCall(HelicoVault.initialize, (admin, address(pm), address(stateView)));
-        vault = HelicoVault(address(new ERC1967Proxy(address(impl), data)));
+        bytes memory data = abi.encodeCall(
+            HelicoVault.initialize, (admin, address(pm), address(stateView), address(poolManager))
+        );
+        vault = HelicoVault(payable(address(new ERC1967Proxy(address(impl), data))));
 
         vm.startPrank(admin);
         vault.grantRole(vault.AGENT_ROLE(), agent);
@@ -88,6 +97,9 @@ contract HelicoVaultTest is Test {
             amount1Min: 0,
             amount0Max: type(uint128).max,
             amount1Max: type(uint128).max,
+            zeroForOne: false,
+            amountIn: 0,
+            minAmountOut: 0,
             deadline: block.timestamp + 60
         });
     }
@@ -366,7 +378,7 @@ contract HelicoVaultTest is Test {
         vm.prank(upgrader);
         vault.upgradeToAndCall(address(v2), "");
 
-        assertEq(VaultV2(address(vault)).version(), 2);
+        assertEq(VaultV2(payable(address(vault))).version(), 2);
     }
 
     function test_UpgradeRejectsCallerWithoutRole() public {
@@ -429,8 +441,8 @@ contract HelicoVaultTest is Test {
         assertEq(t0.balanceOf(user), 100_000, "what did not fit went to the owner");
     }
 
-    /// @notice Zero is a choice, not a default: it permits the dust mint, explicitly.
-    function test_RetentionOfZeroPermitsAnyMint() public {
+    /// @notice Zero is a choice, not a default: it permits a dust mint, explicitly.
+    function test_RetentionOfZeroPermitsADustMint() public {
         Mandate memory loose = mandate;
         loose.minRetainedBps = 0;
         vm.prank(user);
@@ -442,6 +454,35 @@ contract HelicoVaultTest is Test {
         vm.prank(agent);
         uint256 dust = vault.recenter(p);
         assertEq(pm.getPositionLiquidity(dust), 1);
+    }
+
+    /// @notice But it does not permit minting *nothing*, which is a withdrawal with a
+    ///         re-centre's name on it.
+    /// @dev The floor cannot catch this on its own: `0 * BPS < liquidityBefore * 0` is false,
+    ///      so a mandate that opted out of the floor would let the whole position be burned and
+    ///      paid out. Refused above the floor and independent of it. The workflow reached the
+    ///      same conclusion from the other side and holds rather than emitting such a verdict.
+    function test_RejectsAMintOfNothingEvenWithNoRetentionFloor() public {
+        Mandate memory loose = mandate;
+        loose.minRetainedBps = 0;
+        vm.prank(user);
+        vault.setMandate(tokenId, loose);
+
+        HelicoVault.RecenterParams memory p = _params(-50, 50);
+        p.liquidityToMint = 0;
+
+        vm.prank(agent);
+        vm.expectRevert(HelicoVault.NothingToMint.selector);
+        vault.recenter(p);
+    }
+
+    function test_RejectsAMintOfNothingWithAFloorToo() public {
+        HelicoVault.RecenterParams memory p = _params(-50, 50);
+        p.liquidityToMint = 0;
+
+        vm.prank(agent);
+        vm.expectRevert(HelicoVault.NothingToMint.selector);
+        vault.recenter(p);
     }
 
     function test_RejectsRetentionAboveOneHundredPercent() public {
@@ -508,26 +549,22 @@ contract HelicoVaultTest is Test {
     function test_ImplementationCannotBeInitialised() public {
         HelicoVault impl = new HelicoVault();
         vm.expectRevert();
-        impl.initialize(admin, address(pm), address(stateView));
+        impl.initialize(admin, address(pm), address(stateView), address(poolManager));
     }
 
+    /// @dev Every constructor argument, one at a time, so adding a fourth cannot quietly slip
+    ///      past the guard the way it would with three hand-written cases.
     function test_RejectsZeroAddressesOnInitialize() public {
         HelicoVault impl = new HelicoVault();
+        address[4] memory good = [admin, address(pm), address(stateView), address(poolManager)];
 
-        vm.expectRevert(HelicoVault.ZeroAddress.selector);
-        new ERC1967Proxy(
-            address(impl),
-            abi.encodeCall(HelicoVault.initialize, (address(0), address(pm), address(stateView)))
-        );
-
-        vm.expectRevert(HelicoVault.ZeroAddress.selector);
-        new ERC1967Proxy(
-            address(impl), abi.encodeCall(HelicoVault.initialize, (admin, address(0), address(stateView)))
-        );
-
-        vm.expectRevert(HelicoVault.ZeroAddress.selector);
-        new ERC1967Proxy(
-            address(impl), abi.encodeCall(HelicoVault.initialize, (admin, address(pm), address(0)))
-        );
+        for (uint256 i = 0; i < good.length; i++) {
+            address[4] memory args = good;
+            args[i] = address(0);
+            vm.expectRevert(HelicoVault.ZeroAddress.selector);
+            new ERC1967Proxy(
+                address(impl), abi.encodeCall(HelicoVault.initialize, (args[0], args[1], args[2], args[3]))
+            );
+        }
     }
 }

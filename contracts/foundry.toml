@@ -12,3 +12,9 @@ via_ir = false
 line_length = 110
 tab_width = 4
 bracket_spacing = false
+
+# Fork tests read this. Left as an env lookup rather than a literal because the public
+# endpoint keeps only about ten minutes of state, so anyone running these will eventually
+# want their own archive node. `forge test` skips the fork suite when it is unset.
+[rpc_endpoints]
+robinhood = "${ROBINHOOD_RPC_URL}"
