@@ -23,10 +23,14 @@ Submission for [ETHOnline 2026](https://ethglobal.com/events/ethonline2026)
 
 > Filled in only once an integration actually works. The **code reference column is
 > required** — some partners verify an integration by reading the exact lines pointed to here.
+>
+> Uniswap Foundation also requires [`FEEDBACK.md`](FEEDBACK.md), which records what we
+> observed while building on their stack.
 
 | Partner | Status | Where | Code reference |
 |---|---|---|---|
 | Chainlink CRE | reusable package only: unit-tested and simulated from a throwaway project, **not wired into an app, not deployed** | [`packages/plugins/cre/`](packages/plugins/cre/) | [`src/index.ts#L118-L136`](packages/plugins/cre/src/index.ts#L118-L136) `initWorkflow` registers the TEE handler with `handlerInTee` (L132) |
+| Uniswap v4 | reusable package for any chain: addresses, pools, quotes, swaps (all four shapes), Permit2 approvals, liquidity; quotes and every swap shape verified on Base mainnet by `eth_call`; swaps, approvals, pool initialisation, mint, increase, collect, and burn **executed on Base Sepolia** (transactions in the package README); Robinhood Chain mainnet and testnet resolved and tested offline, on-chain runs pending; **not wired into an app** | [`packages/plugins/uniswap/`](packages/plugins/uniswap/) | [`src/swap.ts`](packages/plugins/uniswap/src/swap.ts) Universal Router `execute`, [`src/quote.ts`](packages/plugins/uniswap/src/quote.ts) v4 `Quoter`, [`src/approval.ts`](packages/plugins/uniswap/src/approval.ts) Permit2, [`src/liquidity.ts`](packages/plugins/uniswap/src/liquidity.ts) `V4PositionManager`, [`src/addresses.ts`](packages/plugins/uniswap/src/addresses.ts) per-chain resolver; line ranges in the package README |
 
 ## Contributing
 

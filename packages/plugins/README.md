@@ -9,6 +9,7 @@ A plugin may depend on [`@helico/core`](../core/) through `workspace:*`; none do
 | Plugin | Package | Integration |
 |---|---|---|
 | [`cre/`](cre/) | `@helico/plugin-cre` | Chainlink CRE confidential workflows |
+| [`uniswap/`](uniswap/) | `@helico/plugin-uniswap` | Uniswap v4 on-chain, any chain: pools, quotes, swaps, Permit2 approvals, liquidity |
 
 ## Why a package rather than code inside an app
 

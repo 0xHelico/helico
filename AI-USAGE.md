@@ -13,6 +13,7 @@ proven to work**.
 | Tool | Model | Used for |
 |---|---|---|
 | Claude Code | Opus 5 | Hackathon rule research, repository scaffolding, workshop session notes |
+| Claude Code | Fable 5.1 | Uniswap plugin (`packages/plugins/uniswap`), its plan, README, and `FEEDBACK.md` |
 | Claude Code | Fable 5.1 | Chainlink CRE plugin scaffold (`packages/plugins/cre`), its plan and README |
 | Claude Code | Fable 5.1 | Monorepo tooling — bun workspaces (started on pnpm), Turborepo, Biome, Husky, `packages/` scaffold |
 | Claude Code | Fable 5.1 | Landing page starter (`apps/landing`), its plan and README |
@@ -110,6 +111,88 @@ Format: date · what was done · the AI's role · what a human verified.
   points at the package and at #20/#21.
 - **AI's role:** applied the collaborator's review findings; ran the checks.
 - **Verified:** `bun run --filter @helico/plugin-cre typecheck` and `test` (9 pass), `bun run check`.
+
+### 2026-09-05 — Uniswap plugin
+
+- **Done:** `packages/plugins/uniswap` (`@helico/plugin-uniswap`): v4 addresses from the
+  SDKs, pool id, `StateView` reads, v4 `Quoter` quotes, Universal Router swap calldata via
+  `V4Planner`. Offline tests, a live smoke script, README, `FEEDBACK.md` filled in.
+- **AI's role:** read the Uniswap AI skills, the v4-periphery and v4-core interfaces, and
+  the deployments page first; probed the SDKs under bun and the live pool on Base before
+  writing; wrote the plan, code, tests, and docs; ran every check. The human chose the
+  package, its scope, and the on-chain path over the Trading API.
+- **Plan:** [`docs/plans/2026-09-05-plugin-uniswap.md`](docs/plans/2026-09-05-plugin-uniswap.md),
+  prompts included.
+- **Verified:** `bun run --filter @helico/plugin-uniswap typecheck` (clean), `test` (8 pass,
+  0 fail, offline), `smoke` against Base through viem's public RPC: live pool state, a live
+  quote (1 ETH → 2,448.94 USDC at the time), and the SDK-built swap calldata accepted by the
+  Universal Router in an `eth_call` from an ETH-holding address. **No transaction was sent.**
+  `bun run check` clean.
+
+### 2026-09-05 — Uniswap plugin, complete and modular
+
+- **Done:** `@helico/plugin-uniswap` split into `addresses`, `pool`, `quote`, `swap`,
+  `approval`, `liquidity` (plus `abi/`, `types`, `client`), one test file per module, a barrel
+  `index.ts`, and a smoke script covering pools, all four swap shapes, and allowances.
+- **AI's role:** read the v4-sdk, universal-router-sdk, permit2-sdk, v4-periphery, and
+  v4-core sources for the exact structs and constructor orders; wrote the plan, modules,
+  tests, docs; ran every check and fixed what the live simulation caught (a v4 `SWEEP` the
+  router rejects, a degenerate round-trip route). The human asked for the scope and the
+  modular shape.
+- **Plan:** [`docs/plans/2026-09-05-plugin-uniswap-complete.md`](docs/plans/2026-09-05-plugin-uniswap-complete.md),
+  prompt included.
+- **Verified:** `typecheck` clean; `test` 39 pass, 0 fail across 6 files, offline; `smoke`
+  live on Base: pool state and price, exact-in and exact-out quotes, single-hop and
+  multi-hop (ETH → USDC → USDT) swap calldata for all four shapes accepted by the Universal
+  Router via `eth_call`, allowance read. **Nothing sent. Liquidity calldata decoded, not
+  simulated.** `bun run check` clean.
+
+### 2026-09-05 — Uniswap plugin executed on Base Sepolia
+
+- **Done:** `packages/plugins/uniswap/src/e2e.ts` and the `e2e` script: the package's own
+  builders run for real with a test wallet, one transaction hash per step, recorded in the
+  package README.
+- **AI's role:** wrote the script, diagnosed the two failures on the way (a lagging public
+  RPC, an under-estimated gas limit) from receipts and re-simulation, fixed the script, and
+  cleaned up the positions left by the partial runs. The human supplied the wallet.
+- **Plan:** revision in
+  [`docs/plans/2026-09-05-plugin-uniswap-complete.md`](docs/plans/2026-09-05-plugin-uniswap-complete.md).
+- **Verified:** on Base Sepolia, wallet `0x7461…88C0`: mint (NFT #27362), exact-in swap,
+  exact-out swap with the router-level refund (received exactly 0.5 USDC), ERC-20-input swap
+  through the Permit2 allowance, collect, decrease 100 % and burn, all `status: success`.
+  `initializePool` and `increaseLiquidity` remain decoded in tests only. The key was never
+  written to the repository.
+
+### 2026-09-05 — Uniswap plugin accepts any viem client
+
+- **Done:** reads take a generic viem `Client` and use `viem/actions`; scripts and tests are
+  type-checked (`@types/bun`, `types: ["bun"]`); a `request`-level fake client for tests;
+  `.env.example`; numeric separators and `.at(-1)` per the editor's linter.
+- **AI's role:** diagnosed the editor diagnostics the human pasted, applied viem's own
+  guidance for libraries, rewrote the fakes, ran the checks.
+- **Plan:** revision in
+  [`docs/plans/2026-09-05-plugin-uniswap-complete.md`](docs/plans/2026-09-05-plugin-uniswap-complete.md).
+- **Verified:** `typecheck` clean over `src/**` including `e2e.ts`; `test` 40 pass; `smoke`
+  live on Base; `bun run check` clean.
+
+### 2026-09-05 — Uniswap plugin: any chain, Robinhood Chain, review fixes
+
+- **Done:** `addresses()` resolves any chain (SDK, documented deployments, or
+  `registerV4Addresses()`) and picks the Universal Router version per chain; encoders build
+  the 2.1.1 structs where needed; `networks.ts` registry with Robinhood Chain mainnet and
+  testnet definitions; scripts take `CHAIN`; the e2e is self-contained (native/wrapped pool);
+  review fixes from #8.
+- **AI's role:** researched Robinhood Chain (docs, explorers, on-chain bytecode comparison,
+  `Initialize` logs), the SDK's router version tables, and the v4-periphery router source;
+  wrote the code, tests, and docs; ran the checks. The human chose the chains and the
+  any-chain requirement.
+- **Plan:** revision in
+  [`docs/plans/2026-09-05-plugin-uniswap-complete.md`](docs/plans/2026-09-05-plugin-uniswap-complete.md).
+- **Verified:** `typecheck` (all packages), `test` (48 pass), `bun run check`; e2e on Base
+  Sepolia with the new self-contained flow: 12 transactions, all `status: success`, including
+  `initializePool` and `increaseLiquidity`. Robinhood Chain mainnet smoke passed (router 2.1.1, ETH/USDG 87/1,
+  quotes and both swap shapes accepted via `eth_call`); the testnet e2e ran with faucet ETH: 12 transactions, all
+  `status: success`, through router 2.1.1 (hashes in the package README).
 
 <!--
 Template for the next entry:
