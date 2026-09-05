@@ -175,7 +175,8 @@ Format: date · what was done · the AI's role · what a human verified.
 - **Verified:** `typecheck` (all packages), `test` (48 pass), `bun run check`; e2e on Base
   Sepolia with the new self-contained flow: 12 transactions, all `status: success`, including
   `initializePool` and `increaseLiquidity`. Robinhood Chain mainnet smoke passed (router 2.1.1, ETH/USDG 87/1,
-  quotes and both swap shapes accepted via `eth_call`); the e2e there needs testnet faucet ETH.
+  quotes and both swap shapes accepted via `eth_call`); the testnet e2e ran with faucet ETH: 12 transactions, all
+  `status: success`, through router 2.1.1 (hashes in the package README).
 
 <!--
 Template for the next entry:

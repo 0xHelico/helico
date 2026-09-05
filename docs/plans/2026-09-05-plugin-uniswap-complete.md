@@ -169,3 +169,5 @@ asked for Robinhood Chain mainnet and testnet, then for a shape that scales to a
 - **Robinhood mainnet smoke, 2026-09-05:** the deepest hook-less ETH/USDG pool is fee 87 /
   spacing 1 (liquidity 2.2e17); quotes and both single-hop swap shapes in the 2.1.1 layout
   were accepted by the router via `eth_call`. The e2e waits for testnet faucet ETH.
+- **Robinhood testnet e2e, 2026-09-05:** 12 transactions, all successful, on a self-made ETH/WETH pool
+  through router 2.1.1 (NFT #2544). Hashes in the package README.

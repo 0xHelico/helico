@@ -42,7 +42,7 @@ Built-ins:
 | `base` | Base | 2.0 | ETH/USDC 0.05 %, read with liquidity; multi-hop via USDT |
 | `base-sepolia` | Base Sepolia | 2.0 | ETH/USDC 0.05 % (Circle test USDC) |
 | `robinhood` | Robinhood Chain (4663) | 2.1.1 | ETH/USDG fee 87 / spacing 1, the deepest hook-less pool found |
-| `robinhood-testnet` | Robinhood Chain Testnet (46630) | 2.1.1 | none; the e2e makes its own |
+| `robinhood-testnet` | Robinhood Chain Testnet (46630) | 2.1.1 | none needed; the e2e made its own and ran there |
 
 **Robinhood Chain.** viem ships no definition, so [`chains.ts`](src/chains.ts) defines both
 networks from Robinhood's docs. The mainnet only has Universal Router 2.1.1. The quote asset
@@ -133,8 +133,25 @@ commit history of this file.
 **Robinhood Chain mainnet, read-only, 2026-09-05** (`CHAIN=robinhood bun run smoke`): router
 2.1.1 resolved, ETH/USDG 87/1 read at tick −198250 with liquidity 2.2e17 (2,458 USDG per ETH),
 quote 1 ETH → 2,457.18 USDG, exact-in and exact-out swap calldata in the 2.1.1 layout accepted
-by the Universal Router via `eth_call`, allowances read. The e2e there waits for testnet faucet
-ETH (`https://faucet.testnet.chain.robinhood.com`).
+by the Universal Router via `eth_call`, allowances read.
+
+**Robinhood Chain Testnet, executed, 2026-09-05** (`CHAIN=robinhood-testnet bun run e2e`,
+router 2.1.1, wallet `0x7461…88C0`), all `status: success`:
+
+| Step | Transaction |
+|---|---|
+| Wrap 0.001 ETH | [`0x3e1c…1f53`](https://explorer.testnet.chain.robinhood.com/tx/0x3e1cd6164d6fab46a7a462cc54b0f6aa44e6c14931c84c55b3c16f9429371f53) |
+| Initialize the ETH/WETH pool at 1:1 | [`0x6006…aaf8`](https://explorer.testnet.chain.robinhood.com/tx/0x6006b5fed11e252ad91105013ed1827a4d9e8db4c6e805f140eb539b3afeaaf8) |
+| Approve WETH → Permit2 | [`0x01ff…9bab`](https://explorer.testnet.chain.robinhood.com/tx/0x01ff88286036d778bc9e83f41696c72e6b68af59bad73b88e505b3546b309bab) |
+| Approve Permit2 → PositionManager | [`0xb02a…2747`](https://explorer.testnet.chain.robinhood.com/tx/0xb02afef7bfefb7a14f64d2877e1ecf720f6d07e9b1e2ef4782f9fd6fb67d2747) |
+| Mint position NFT #2544 | [`0xdc46…1a2c`](https://explorer.testnet.chain.robinhood.com/tx/0xdc46fc5a14e1e24974d8f069c7aff19757dd95fa56adfcf958e28bd685491a2c) |
+| Increase liquidity | [`0x2c0a…bf9f`](https://explorer.testnet.chain.robinhood.com/tx/0x2c0aee7f58ddb35830ddd36733bfe4a7c7a9e71e7bc92c5596156da0693fbf9f) |
+| Swap exact-in, 0.00004 ETH → WETH (2.1.1 struct) | [`0xfcb5…50a7`](https://explorer.testnet.chain.robinhood.com/tx/0xfcb5ce655dd3d4f5d7ef1541899064a3756b784c113810f433c8bb0b609050a7) |
+| Swap exact-out, ETH → exactly 0.00004 WETH, refund swept | [`0x5e44…1a5e`](https://explorer.testnet.chain.robinhood.com/tx/0x5e447c8312648c4c6326a1fa29e6c22293991d060576d2c6033c4ab4fb401a5e) |
+| Approve Permit2 → Universal Router | [`0xc3f1…d351`](https://explorer.testnet.chain.robinhood.com/tx/0xc3f145ce63c8d4fff1e61396f7aadec48d91f208b0f4c0018e586199144ed351) |
+| Swap exact-in, 0.00004 WETH → ETH via the Permit2 allowance | [`0x7ac5…41d2`](https://explorer.testnet.chain.robinhood.com/tx/0x7ac5f4312203afcd375c12072960185da62485a442583a5a49575567081441d2) |
+| Collect fees | [`0x0c5c…eb8d9`](https://explorer.testnet.chain.robinhood.com/tx/0x0c5cb5a3ff4bc0cf12b6ead0779eca9c08d592551c992dacd06bdce6720eb8d9) |
+| Decrease 100 % and burn the NFT | [`0x7ab3…4397`](https://explorer.testnet.chain.robinhood.com/tx/0x7ab35c8ee3db057fdccfbd4e90cf1c20dfcc6aa6ba42e8cbb228942532fc4397) |
 
 ## Do not forget
 
