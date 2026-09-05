@@ -1,24 +1,39 @@
 import { describe, expect, test } from 'bun:test'
-import type { TeeRuntime } from '@chainlink/cre-sdk'
 import {
+	type Address,
 	bytesToHex,
 	decodeAbiParameters,
 	encodeAbiParameters,
+	getAddress,
 	type Hex,
 	parseAbiParameters,
+	toFunctionSelector,
 } from 'viem'
 import {
 	type Config,
 	configSchema,
+	deliver,
+	encodeReport,
 	initWorkflow,
 	MANDATE_SECRET_IDS,
 	mandateHash,
 	onCronTrigger,
+	recenterParamsAbi,
 } from './index'
+import { fakeRuntime } from './test/fakeRuntime'
 
-// ─── Fixtures ────────────────────────────────────────────────
+// ─── Fixtures: the Robinhood testnet ETH/WETH pool at tick -65 ───────────────
 const poolId = '0xea84630b1ccfd69145b791334c55a7d8be1565910cb6e290c489413c977fd9c5'
-const secretValues = {
+const poolKey = {
+	currency0: '0x0000000000000000000000000000000000000000',
+	currency1: '0x7943e237c7F95DA44E0301572D358911207852Fa',
+	fee: 500,
+	tickSpacing: 10,
+	hooks: '0x0000000000000000000000000000000000000000',
+} as const
+const sqrtPriceX96 = 78_971_408_793_868_239_585_893_302_751n
+const owner = getAddress('0x746182d0cccc5cefc69853bb0325c850029388c0')
+const secrets = {
 	[MANDATE_SECRET_IDS.rangeWidthTicks]: '1000',
 	[MANDATE_SECRET_IDS.minImprovementBps]: '50',
 	[MANDATE_SECRET_IDS.cooldownSeconds]: '3600',
@@ -36,132 +51,236 @@ const committedHash = mandateHash({
 const config: Config = {
 	schedule: '0 */5 * * * *',
 	rpcUrl: 'https://rpc.testnet.chain.robinhood.com/rpc',
-	stateView: '0xF3334192D15450CDd385C8B70e03F9a6bD9e673b',
+	chainSelectorName: 'robinhood-testnet',
+	vault: '0x1111111111111111111111111111111111111111',
+	positionManager: '0x58daec3116aae6D93017bAAea7749052E8a04fA7',
+	stateView: '0xF3334192D15450CdD385c8B70e03f9A6bD9E673b',
+	owner,
 	poolId,
-	tickSpacing: 10,
-	position: { tickLower: 100, tickUpper: 1100, lastActionAt: 0 },
 	mandateHash: committedHash,
+	gasLimit: '1500000',
+	slippageBps: 50,
+	minRetainedBps: 1000,
+	deadlineSeconds: 600,
+}
+const now = 1_700_000_000
+
+type Chain = {
+	tokenId: bigint
+	lastActionAt: bigint
+	active: boolean
+	tick: number
+	liquidity: bigint
+	range: [number, number]
 }
 
-/** What StateView.getSlot0 returns for a pool sitting at `tick`. */
-const slot0 = (tick: number): Hex =>
-	encodeAbiParameters(parseAbiParameters('uint160, int24, uint24, uint24'), [
-		79_228_162_514_264_337_593_543_950_336n,
-		tick,
-		0,
-		500,
-	])
+const sel = (sig: string): Hex => toFunctionSelector(sig)
+const u256 = (x: bigint | number | boolean): Hex =>
+	encodeAbiParameters([{ type: 'uint256' }], [BigInt(x)])
 
-const base64ToHex = (b64: string): Hex => bytesToHex(Buffer.from(b64, 'base64'))
+/** The five reads the enclave makes, answered from one description of the chain. */
+const handlers = (c: Chain) => ({
+	[sel('function positionOf(address)')]: () => u256(c.tokenId),
+	[sel('function lastActionAt(address)')]: () => u256(c.lastActionAt),
+	[sel('function isActive(address)')]: () => u256(c.active),
+	[sel('function getSlot0(bytes32)')]: () =>
+		encodeAbiParameters(parseAbiParameters('uint160, int24, uint24, uint24'), [
+			sqrtPriceX96,
+			c.tick,
+			0,
+			500,
+		]),
+	[sel('function getPositionLiquidity(uint256)')]: () => u256(c.liquidity),
+	[sel('function getPoolAndPositionInfo(uint256)')]: () =>
+		encodeAbiParameters(parseAbiParameters('(address,address,uint24,int24,address), uint256'), [
+			[poolKey.currency0, poolKey.currency1, poolKey.fee, poolKey.tickSpacing, poolKey.hooks],
+			((BigInt(c.range[1]) & 0xffffffn) << 32n) | ((BigInt(c.range[0]) & 0xffffffn) << 8n),
+		]),
+})
 
-type Report = {
-	encodedPayload: string
-	encoderName: string
-	signingAlgo: string
-	hashingAlgo: string
-}
-
-/** A TeeRuntime that records what leaves the enclave and what the enclave asked for. */
-const fakeRuntime = (tick: number, overrides: Partial<Config> = {}) => {
-	const reports: Report[] = []
-	const httpRequests: { url: string; body: string }[] = []
-	const runtime = {
+const run = (chain: Chain, overrides: Partial<Config> = {}, writeStatus?: number) => {
+	const fake = fakeRuntime({
 		config: { ...config, ...overrides },
-		now: () => new Date(1_700_000_000 * 1000),
-		log: () => {},
-		getSecrets: (requests: { id: string }[]) => ({
-			result: () =>
-				Object.fromEntries(
-					requests.map((r) => [
-						r.id,
-						{ id: r.id, namespace: 'main', value: secretValues[r.id] ?? '' },
-					]),
-				),
-		}),
-		callCapability: ({ payload }: { payload: { url: string; body: string } }) => {
-			httpRequests.push({ url: payload.url, body: Buffer.from(payload.body, 'base64').toString() })
-			return {
-				result: () => ({
-					statusCode: 200,
-					body: new TextEncoder().encode(
-						JSON.stringify({ jsonrpc: '2.0', id: 1, result: slot0(tick) }),
-					),
-				}),
-			}
-		},
-		usingTheDons: () => ({
-			report: (input: Report) => {
-				reports.push(input)
-				return { result: () => ({}) }
-			},
-		}),
-	}
-	return { runtime: runtime as unknown as TeeRuntime<Config>, reports, httpRequests }
+		secrets,
+		now,
+		handlers: handlers(chain),
+		writeStatus,
+	})
+	const result = onCronTrigger(fake.runtime)
+	return { ...fake, result }
 }
 
-const decodeReport = (r: Report) =>
+const decodeReport = (rawReport: Uint8Array) =>
 	decodeAbiParameters(
-		parseAbiParameters('bool act, int24 tickLower, int24 tickUpper, bytes32 mandateHash'),
-		base64ToHex(r.encodedPayload),
+		[{ type: 'bool' }, { type: 'bytes32' }, recenterParamsAbi],
+		bytesToHex(rawReport),
 	)
+
+// In range but off-centre, so the burn returns both tokens and a centred range can be funded.
+const offCentre: Chain = {
+	tokenId: 7n,
+	lastActionAt: 0n,
+	active: true,
+	tick: -65,
+	liquidity: 10n ** 15n,
+	range: [-1_000, 0],
+}
 
 // ─── Tests ───────────────────────────────────────────────────
 describe('configSchema', () => {
-	test('accepts the shape the enclave needs and nothing secret', () => {
+	test('carries no threshold and no position: both are read from secrets and the vault', () => {
 		expect(configSchema.parse(config)).toEqual(config)
+		expect(Object.keys(configSchema.shape)).not.toContain('position')
 		expect(Object.keys(configSchema.shape)).not.toContain('minImprovementBps')
-		expect(() => configSchema.parse({ ...config, mandateHash: '0x1234' })).toThrow()
 	})
 })
 
 describe('onCronTrigger', () => {
-	test('reads the tick through eth_call from inside the enclave', () => {
-		const { runtime, httpRequests } = fakeRuntime(1_500)
-		onCronTrigger(runtime)
-		expect(httpRequests).toHaveLength(1)
-		expect(httpRequests[0]?.url).toBe(config.rpcUrl)
-		const rpc = JSON.parse(httpRequests[0]?.body ?? '{}') as {
-			method: string
-			params: [{ to: string; data: string }]
+	test('refuses, and never reads the chain, when the secrets do not match the committed hash', () => {
+		const { result, rpcRequests, writes } = run(offCentre, { mandateHash: `0x${'ab'.repeat(32)}` })
+		expect(result).toBe('HOLD (mandate hash mismatch)')
+		expect(rpcRequests).toHaveLength(0)
+		expect(writes).toHaveLength(0)
+	})
+
+	test('reads the account and the pool, then the position, in two batches from inside the enclave', () => {
+		const { rpcRequests } = run({ ...offCentre, range: [-2_000, -1_000], tick: -65 })
+		expect(rpcRequests).toHaveLength(2)
+		expect(rpcRequests[0]?.map((r) => r.params[0].to)).toEqual([
+			config.vault,
+			config.vault,
+			config.vault,
+			config.stateView,
+		])
+		expect(rpcRequests[1]?.map((r) => r.params[0].to)).toEqual([
+			config.positionManager,
+			config.positionManager,
+		])
+		expect(rpcRequests[1]?.[0]?.params[0].data).toBe(
+			`${sel('function getPositionLiquidity(uint256)')}${'0'.repeat(63)}7`,
+		)
+	})
+
+	test.each([
+		['a revoked mandate', { ...offCentre, active: false }, 'HOLD (mandate revoked)'],
+		[
+			'a position still in range',
+			{ ...offCentre, range: [-560, 440] as [number, number] },
+			'HOLD (in range)',
+		],
+		[
+			'the cooldown',
+			{ ...offCentre, range: [100, 1_100] as [number, number], lastActionAt: BigInt(now - 60) },
+			'HOLD (cooldown)',
+		],
+		[
+			'an empty position',
+			{ ...offCentre, range: [100, 1_100] as [number, number], liquidity: 0n },
+			'HOLD (vault would reject: NothingToMove)',
+		],
+		[
+			'a position over the cap',
+			{ ...offCentre, range: [100, 1_100] as [number, number], liquidity: 10n ** 19n },
+			'HOLD (vault would reject: LiquidityTooLarge)',
+		],
+		[
+			'an out-of-range position, which holds one token and cannot fund a two-sided range',
+			{ ...offCentre, range: [100, 1_100] as [number, number] },
+			'HOLD (the burn cannot fund the new range without a swap)',
+		],
+	])('holds on %s without writing anything', (_, chain, expected) => {
+		const { result, writes } = run(chain)
+		expect(result).toBe(expected)
+		expect(writes).toHaveLength(0)
+	})
+
+	test('an in-range but off-centre position: this needs a policy change to act, so it holds today', () => {
+		expect(run(offCentre).result).toBe('HOLD (in range)')
+	})
+
+	test('an out-of-range position always holds today: one token cannot fund a two-sided range', () => {
+		for (const range of [
+			[-1_000, -70],
+			[100, 1_100],
+		] as [number, number][]) {
+			const { result, writes } = run({ ...offCentre, range })
+			expect(result).toBe('HOLD (the burn cannot fund the new range without a swap)')
+			expect(writes).toHaveLength(0)
 		}
-		expect(rpc.method).toBe('eth_call')
-		expect(rpc.params[0].to).toBe(config.stateView)
-		expect(rpc.params[0].data).toBe(`0xc815641c${poolId.slice(2)}`)
+	})
+})
+
+describe('deliver', () => {
+	const params = {
+		owner,
+		tickLower: -560,
+		tickUpper: 440,
+		liquidityToMint: 129_997_405_203_692n,
+		amount0Min: 3_234_967_638_235n,
+		amount1Min: 45_299_872_474_506n,
+		amount0Max: 3_251_223_757_021n,
+		amount1Max: 45_527_510_024_630n,
+		deadline: BigInt(now + 600),
+	}
+
+	test('signs the report through the DON and writes it to the vault on the configured chain', () => {
+		const fake = fakeRuntime({ config, secrets, now, handlers: {} })
+		const txHash = deliver(
+			fake.runtime.usingTheDons(),
+			config,
+			encodeReport(true, committedHash, params),
+		)
+		expect(txHash).toBe(`0x${'ab'.repeat(32)}`)
+		expect(fake.writes).toHaveLength(1)
+		const write = fake.writes[0] as NonNullable<(typeof fake.writes)[0]>
+		expect(bytesToHex(write.receiver)).toBe(config.vault.toLowerCase())
+		expect(write.gasConfig?.gasLimit).toBe(1_500_000n)
+		// The bytes the DON signed are the bytes the vault receives, and they decode as its own struct.
+		expect(Buffer.from(fake.reports[0] ?? '', 'base64')).toEqual(
+			Buffer.from(write.report?.rawReport ?? new Uint8Array()),
+		)
+		const [act, hash, p] = decodeReport(write.report?.rawReport ?? new Uint8Array())
+		expect(act).toBe(true)
+		expect(hash).toBe(committedHash)
+		expect(p).toEqual(params)
+		// Nothing else crossed out: no RPC traffic went through the DON.
+		expect(fake.rpcRequests).toHaveLength(0)
 	})
 
-	test('reports a re-centre with only the verdict and the mandate hash crossing out', () => {
-		const { runtime, reports } = fakeRuntime(1_500)
-		expect(onCronTrigger(runtime)).toBe('RECENTER 1000..2000')
-		expect(reports).toHaveLength(1)
-		expect(reports[0]).toMatchObject({
-			encoderName: 'evm',
-			signingAlgo: 'ecdsa',
-			hashingAlgo: 'keccak256',
+	test('fails loudly when the write does not succeed', () => {
+		const fake = fakeRuntime({ config, secrets, now, handlers: {}, writeStatus: 1 })
+		expect(() =>
+			deliver(fake.runtime.usingTheDons(), config, encodeReport(true, committedHash, params)),
+		).toThrow('writeReport failed: REVERTED')
+	})
+
+	test('rejects a chain selector name the SDK does not know', () => {
+		const fake = fakeRuntime({
+			config: { ...config, chainSelectorName: 'nowhere' },
+			secrets,
+			now,
+			handlers: {},
 		})
-		expect(decodeReport(reports[0] as Report)).toEqual([true, 1_000, 2_000, committedHash])
-		// Four ABI words, nothing else: the thresholds and the tick are not in the payload.
-		expect(base64ToHex(reports[0]?.encodedPayload ?? '').length).toBe(2 + 4 * 64)
+		expect(() =>
+			deliver(
+				fake.runtime.usingTheDons(),
+				{ ...config, chainSelectorName: 'nowhere' },
+				encodeReport(false, committedHash),
+			),
+		).toThrow('Unknown chain selector name')
 	})
+})
 
-	test('handles a negative tick: the Robinhood testnet pool at tick -65 re-centres to -560..440', () => {
-		const { runtime, reports } = fakeRuntime(-65)
-		expect(onCronTrigger(runtime)).toBe('RECENTER -560..440')
-		expect(decodeReport(reports[0] as Report)).toEqual([true, -560, 440, committedHash])
-	})
-
-	test('reports a hold when the position is still in range', () => {
-		const { runtime, reports } = fakeRuntime(600)
-		expect(onCronTrigger(runtime)).toBe('HOLD (in range)')
-		expect(decodeReport(reports[0] as Report)).toEqual([false, 0, 0, committedHash])
-	})
-
-	test('refuses to act, and never reads the chain, when the secrets do not match the committed hash', () => {
-		const tampered = `0x${'ab'.repeat(32)}` as const
-		const { runtime, reports, httpRequests } = fakeRuntime(1_500, { mandateHash: tampered })
-		expect(onCronTrigger(runtime)).toBe('HOLD (mandate hash mismatch)')
-		expect(httpRequests).toHaveLength(0)
-		// The report carries the hash the enclave actually computed, so the vault sees the mismatch too.
-		expect(decodeReport(reports[0] as Report)).toEqual([false, 0, 0, committedHash])
+describe('encodeReport', () => {
+	test('a hold encodes as act = false with zeroed params, so the layout never changes', () => {
+		const [act, hash, p] = decodeAbiParameters(
+			[{ type: 'bool' }, { type: 'bytes32' }, recenterParamsAbi],
+			encodeReport(false, committedHash),
+		)
+		expect(act).toBe(false)
+		expect(hash).toBe(committedHash)
+		expect(p.owner).toBe('0x0000000000000000000000000000000000000000' as Address)
+		expect(encodeReport(false, committedHash).length).toBe(2 + 11 * 64)
 	})
 })
 
