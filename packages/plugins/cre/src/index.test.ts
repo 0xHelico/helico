@@ -62,7 +62,6 @@ const config: Config = {
 	mandateHash: committedHash,
 	gasLimit: '1500000',
 	slippageBps: 50,
-	minRetainedBps: 1000,
 	deadlineSeconds: 600,
 }
 const now = 1_700_000_000

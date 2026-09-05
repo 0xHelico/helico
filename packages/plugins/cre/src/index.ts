@@ -46,8 +46,6 @@ export const configSchema = z.object({
 	gasLimit: z.string().regex(/^\d+$/),
 	/** Enclave policy, not mandate: slippage on the burn and the mint. */
 	slippageBps: z.number().int().min(0).max(5000),
-	/** Enclave policy: refuse a re-centre that keeps less than this share of the liquidity. */
-	minRetainedBps: z.number().int().min(0).max(10_000),
 	deadlineSeconds: z.number().int().positive(),
 })
 export type Config = z.infer<typeof configSchema>
@@ -113,8 +111,9 @@ export function decide(config: Config, mandate: Mandate, state: ChainState, now:
 		proposed: verdict,
 		slippageBps: config.slippageBps,
 	})
-	// Never a dust mint: below the floor the burn would return most of the value to the wallet.
-	if (sizing.liquidityToMint * 10_000n < state.liquidity * BigInt(config.minRetainedBps)) {
+	// The mandate's floor, applied before the vault has to: below it the burn would return most of
+	// the value to the wallet and the vault would revert LiquidityNotRetained anyway.
+	if (sizing.liquidityToMint * 10_000n < state.liquidity * BigInt(mandate.minRetainedBps)) {
 		return { act: false, reason: 'the burn cannot fund the new range without a swap' }
 	}
 	return {

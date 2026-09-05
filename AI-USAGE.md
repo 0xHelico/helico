@@ -234,7 +234,8 @@ Format: date · what was done · the AI's role · what a human verified.
   the enclave (`chain.ts`), ports the Uniswap sqrt-price arithmetic to native `BigInt`
   (`math.ts`, cross-checked against `@uniswap/v3-sdk`), sizes the mint the burn will fund
   (`sizing.ts`), and delivers `abi.encode(act, mandateHash, RecenterParams)` to the vault with
-  `EVMClient.writeReport` (`deliver`). Config drops the position and the tick spacing.
+  `EVMClient.writeReport` (`deliver`). Config drops the position and the tick spacing; the
+  retained-liquidity floor is the mandate's `minRetainedBps` from #39.
 - **AI's role:** read the CRE docs on on-chain writes and the forwarder directory, the SDK's
   generated EVM client, and the vault on `main`; wrote the code, the fake runtime, and the
   tests; found that an out-of-range position holds one token and so cannot fund a two-sided
