@@ -14,6 +14,7 @@ proven to work**.
 |---|---|---|
 | Claude Code | Opus 5 | Hackathon rule research, repository scaffolding, workshop session notes |
 | Claude Code | Fable 5.1 | Monorepo tooling — pnpm workspaces, Turborepo, `packages/` scaffold |
+| Claude Code | Fable 5.1 | Uniswap plugin (`packages/plugins/uniswap`), its plan, README, and `FEEDBACK.md` |
 
 ## Log
 
@@ -67,6 +68,23 @@ Format: date · what was done · the AI's role · what a human verified.
 - **Plan:** not needed — tooling only.
 - **Verified:** `bun run check` exits 0 on the whole repo; a commit with the message
   `bad message` is rejected by the hook; the real commits pass the staged check.
+
+### 2026-09-05 — Uniswap plugin
+
+- **Done:** `packages/plugins/uniswap` (`@helico/plugin-uniswap`): v4 addresses from the
+  SDKs, pool id, `StateView` reads, v4 `Quoter` quotes, Universal Router swap calldata via
+  `V4Planner`. Offline tests, a live smoke script, README, `FEEDBACK.md` filled in.
+- **AI's role:** read the Uniswap AI skills, the v4-periphery and v4-core interfaces, and
+  the deployments page first; probed the SDKs under bun and the live pool on Base before
+  writing; wrote the plan, code, tests, and docs; ran every check. The human chose the
+  package, its scope, and the on-chain path over the Trading API.
+- **Plan:** [`docs/plans/2026-09-05-plugin-uniswap.md`](docs/plans/2026-09-05-plugin-uniswap.md),
+  prompts included.
+- **Verified:** `bun run --filter @helico/plugin-uniswap typecheck` (clean), `test` (8 pass,
+  0 fail, offline), `smoke` against Base through viem's public RPC: live pool state, a live
+  quote (1 ETH → 2,448.94 USDC at the time), and the SDK-built swap calldata accepted by the
+  Universal Router in an `eth_call` from an ETH-holding address. **No transaction was sent.**
+  `bun run check` clean.
 
 <!--
 Template for the next entry:

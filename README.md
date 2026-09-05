@@ -25,7 +25,7 @@ Submission for [ETHOnline 2026](https://ethglobal.com/events/ethonline2026)
 
 | Partner | Status | Where | Code reference |
 |---|---|---|---|
-| — | not started | — | — |
+| Uniswap v4 | reusable package only: on-chain pool state, quotes, and swap calldata, verified live on Base by `eth_call`; **no swap sent, not wired into an app** | [`packages/plugins/uniswap/`](packages/plugins/uniswap/) | [`src/index.ts#L88`](packages/plugins/uniswap/src/index.ts#L88) `StateView` reads, [`#L116`](packages/plugins/uniswap/src/index.ts#L116) v4 `Quoter`, [`#L141`](packages/plugins/uniswap/src/index.ts#L141) Universal Router `execute` calldata |
 
 ## Contributing
 
