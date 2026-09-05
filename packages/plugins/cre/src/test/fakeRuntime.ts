@@ -4,6 +4,9 @@ import type { Config } from '../index'
 
 export type EthCallHandler = (data: Hex, to: string) => Hex
 
+/** Thrown by a handler to answer the call with a JSON-RPC error, the way a reverting `eth_call` does. */
+export class RpcError extends Error {}
+
 type RpcCall = { to: string; data: Hex }
 type Batch = { id: number; method: string; params: [RpcCall, string] }[]
 
@@ -53,11 +56,14 @@ export function fakeRuntime(input: {
 			const raw = typeof p.body === 'string' ? Buffer.from(p.body, 'base64') : Buffer.from(p.body)
 			const batch = JSON.parse(raw.toString()) as Batch
 			rpcRequests.push(batch)
-			const replies = batch.map(({ id, params }) => ({
-				jsonrpc: '2.0',
-				id,
-				result: answer(params[0]),
-			}))
+			const replies = batch.map(({ id, params }) => {
+				try {
+					return { jsonrpc: '2.0', id, result: answer(params[0]) }
+				} catch (e) {
+					if (e instanceof RpcError) return { jsonrpc: '2.0', id, error: { message: e.message } }
+					throw e
+				}
+			})
 			return {
 				result: () => ({
 					statusCode: input.httpStatus ?? 200,

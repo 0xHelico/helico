@@ -22,7 +22,7 @@ import {
 	recenterParamsAbi,
 	recoverRecentreSigner,
 } from './index'
-import { fakeRuntime } from './test/fakeRuntime'
+import { fakeRuntime, RpcError } from './test/fakeRuntime'
 
 // ─── Fixtures: the Robinhood testnet ETH/WETH pool at tick -65 ───────────────
 const poolId = '0xea84630b1ccfd69145b791334c55a7d8be1565910cb6e290c489413c977fd9c5'
@@ -57,6 +57,10 @@ const config: Config = {
 	rpcUrl: 'https://rpc.testnet.chain.robinhood.com/rpc',
 	delivery: 'forwarder',
 	chainSelectorName: 'robinhood-testnet',
+	domainName: 'HelicoVault',
+	domainVersion: '1',
+	agentKeySecretId: 'AGENT_KEY',
+	noncesFunction: 'nonces',
 	vault: '0x1111111111111111111111111111111111111111',
 	positionManager: '0x58daec3116aae6D93017bAAea7749052E8a04fA7',
 	stateView: '0xF3334192D15450CdD385c8B70e03f9A6bD9E673b',
@@ -77,6 +81,10 @@ type Chain = {
 	tick: number
 	liquidity: bigint
 	range: [number, number]
+	poolLiquidity?: bigint
+	lpFee?: number
+	poolKeyOverride?: Partial<typeof poolKey>
+	nonce?: bigint
 }
 
 const sel = (sig: string): Hex => toFunctionSelector(sig)
@@ -226,11 +234,14 @@ describe('onCronTrigger', () => {
 			{ ...offCentre, range: [100, 1_100] as [number, number] },
 			'HOLD (vault would reject: NothingToMint)',
 		],
-	])('holds on %s without writing anything', async (_, chain, expected) => {
-		const { result, writes } = await run(chain)
-		expect(result).toBe(expected)
-		expect(writes).toHaveLength(0)
-	})
+	] as [string, Chain, string][])(
+		'holds on %s without writing anything',
+		async (_, chain, expected) => {
+			const { result, writes } = await run(chain)
+			expect(result).toBe(expected)
+			expect(writes).toHaveLength(0)
+		},
+	)
 
 	test('a retention floor of zero does not let a zero mint through', async () => {
 		const zeroFloor = { ...secrets, [MANDATE_SECRET_IDS.minRetainedBps]: '0' }
@@ -273,7 +284,7 @@ describe('onCronTrigger', () => {
 		expect(result).toBe(`RECENTER -560..440 tx 0x${'ab'.repeat(32)}`)
 		expect(writes).toHaveLength(1)
 		const write = writes[0] as NonNullable<(typeof writes)[0]>
-		expect(bytesToHex(write.receiver)).toBe(config.vault.toLowerCase())
+		expect(bytesToHex(write.receiver)).toBe(config.vault.toLowerCase() as Hex)
 		expect(write.gasConfig?.gasLimit).toBe(1_500_000n)
 		const [act, hash, p] = decodeReport(write.report?.rawReport ?? new Uint8Array())
 		expect(act).toBe(true)
@@ -404,8 +415,25 @@ describe('signature delivery', () => {
 		expect(secretRequests).not.toContain('AGENT_KEY')
 	})
 
-	test('refuses to sign without the key or the nonce', async () => {
+	test('refuses to sign without the key', async () => {
 		await expect(run(chain, signing)).rejects.toThrow('Secret AGENT_KEY is missing')
+	})
+
+	test('a vault without nonces fails loudly instead of signing against nothing', async () => {
+		const noNonces = handlers(chain)
+		noNonces[sel('function nonces(address)')] = () => {
+			throw new RpcError('execution reverted')
+		}
+		const fake = fakeRuntime({
+			config: configSchema.parse({ ...config, ...signing }),
+			secrets: withKey,
+			now,
+			handlers: noNonces,
+		})
+		await expect(onCronTrigger(fake.runtime)).rejects.toThrow(
+			'eth_call 5 failed: execution reverted',
+		)
+		expect(fake.reports).toHaveLength(0)
 	})
 
 	test('the schema ties chainId to signature delivery and chainSelectorName to the forwarder', () => {
@@ -451,7 +479,7 @@ describe('deliver', () => {
 		expect(txHash).toBe(`0x${'ab'.repeat(32)}`)
 		expect(fake.writes).toHaveLength(1)
 		const write = fake.writes[0] as NonNullable<(typeof fake.writes)[0]>
-		expect(bytesToHex(write.receiver)).toBe(config.vault.toLowerCase())
+		expect(bytesToHex(write.receiver)).toBe(config.vault.toLowerCase() as Hex)
 		expect(write.gasConfig?.gasLimit).toBe(1_500_000n)
 		// The bytes the DON signed are the bytes the vault receives, and they decode as its own struct.
 		expect(Buffer.from(fake.reports[0] ?? '', 'base64')).toEqual(

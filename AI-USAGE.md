@@ -251,6 +251,17 @@ Format: date · what was done · the AI's role · what a human verified.
 - **Verified:** `typecheck`, `test` (100 pass), `bun run check`. Not run against a deployed
   vault and not simulated with this binary: the vault with the swap leg is pending (#42).
 
+### 2026-09-05 — CRE plugin: sizing script for the fork cross-check
+
+- **Done:** `packages/plugins/cre/src/size.ts`, a package script that prints `sizeRecentre`'s
+  output for an explicit chain state (JSON, or the ABI-encoded `RecenterParams` for `vm.ffi`),
+  behind a pure `sizeForState`; the package now type-checks its tests too (`types: ["bun"]`).
+- **AI's role:** wrote the script, the tests, and the worked example from the live demo pool;
+  the collaborator asked for the cross-check on #43.
+- **Plan:** small tooling, tracked in #45; no separate plan document.
+- **Verified:** `typecheck` (tests included now, three type mismatches in existing tests fixed),
+  `test` (105 pass), `bun run check`; the example in the package README was produced by the
+  script from the pool state read with `cast` at block 55182962.
 ### 2026-09-05 — CRE plugin: the enclave signs the re-centre
 
 - **Done:** `packages/plugins/cre/src/sign.ts` (EIP-712 `Recenter(RecenterParams params, bytes32
