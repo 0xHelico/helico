@@ -11,4 +11,8 @@ interface IStateView {
         external
         view
         returns (uint160 sqrtPriceX96, int24 tick, uint24 protocolFee, uint24 lpFee);
+
+    /// @notice The pool's currently active liquidity, used by fork tests to judge whether a
+    ///         swap of a given size would move the price absurdly.
+    function getLiquidity(bytes32 poolId) external view returns (uint128 liquidity);
 }

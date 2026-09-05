@@ -13,9 +13,14 @@ import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/Pau
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+
 import {Mandate, MandateLib, PoolKey} from "./Mandate.sol";
 import {IPositionManager} from "./IPositionManager.sol";
+import {IPoolManager, IUnlockCallback} from "./IPoolManager.sol";
 import {IStateView} from "./IStateView.sol";
+import {TickMath} from "./lib/TickMath.sol";
 
 /// @title HelicoVault
 /// @notice Enforces a user's committed mandate on an agent that re-centres their Uniswap v4
@@ -45,7 +50,14 @@ import {IStateView} from "./IStateView.sol";
 ///      a dishonest one can still choose bad ones and let the re-range be sandwiched. That is
 ///      bounded by `amount0Min`/`amount1Min` reaching the pool unmodified, and it is the next
 ///      thing to tighten - see `docs/plans`. It is written down rather than glossed over.
-contract HelicoVault is AccessControlUpgradeable, PausableUpgradeable, ReentrancyGuard, UUPSUpgradeable {
+contract HelicoVault is
+    AccessControlUpgradeable,
+    PausableUpgradeable,
+    ReentrancyGuard,
+    UUPSUpgradeable,
+    IUnlockCallback
+{
+    using SafeERC20 for IERC20;
     using MandateLib for Mandate;
     using MandateLib for PoolKey;
 
@@ -69,6 +81,12 @@ contract HelicoVault is AccessControlUpgradeable, PausableUpgradeable, Reentranc
     uint8 private constant MINT_POSITION = 0x02;
     uint8 private constant BURN_POSITION = 0x03;
     uint8 private constant TAKE_PAIR = 0x11;
+    uint8 private constant SETTLE = 0x0b;
+    uint8 private constant SWEEP = 0x14;
+
+    /// @dev `ActionConstants.OPEN_DELTA` — settle whatever is currently owed rather than a
+    ///      named amount.
+    uint128 private constant OPEN_DELTA = 0;
 
     /// @dev v4 maps recipient `address(1)` to the caller and `address(2)` to the PositionManager
     ///      itself. Both would send a payout somewhere other than the owner, so an owner address
@@ -101,8 +119,15 @@ contract HelicoVault is AccessControlUpgradeable, PausableUpgradeable, Reentranc
 
     mapping(address => ScheduledUpgrade) public scheduledUpgrades;
 
+    IPoolManager public poolManager;
+
+    /// @dev Set for the duration of one `recenter`, so `unlockCallback` can tell a callback it
+    ///      asked for from one it did not. Deliberately not a reentrancy guard: `recenter`
+    ///      already holds OpenZeppelin's, and the callback runs inside that window.
+    bool private _recentring;
+
     /// @dev Reserved so later versions can add state without shifting what is already stored.
-    uint256[46] private __gap;
+    uint256[44] private __gap;
 
     event MandateSet(address indexed owner, uint256 indexed tokenId, bytes32 mandateHash);
     event Revoked(address indexed owner, uint256 indexed tokenId);
@@ -134,6 +159,14 @@ contract HelicoVault is AccessControlUpgradeable, PausableUpgradeable, Reentranc
     error MaxLiquidityZero();
     error LiquidityTooLarge();
     error NothingToMove();
+    error NothingToMint();
+    error NotPoolManager();
+    error NoRecentreInFlight();
+    error SwapExceedsWithdrawn();
+    error SwapOutputTooSmall();
+    error PriceLeftTheRange();
+    error VaultNotEmpty();
+    error PayoutFailed();
     error UnusableOwner();
     error PositionNotDelivered();
     error RangeNotDelivered();
@@ -151,8 +184,14 @@ contract HelicoVault is AccessControlUpgradeable, PausableUpgradeable, Reentranc
         _disableInitializers();
     }
 
-    function initialize(address admin, address positionManager_, address stateView_) external initializer {
-        if (admin == address(0) || positionManager_ == address(0) || stateView_ == address(0)) {
+    function initialize(address admin, address positionManager_, address stateView_, address poolManager_)
+        external
+        initializer
+    {
+        if (
+            admin == address(0) || positionManager_ == address(0) || stateView_ == address(0)
+                || poolManager_ == address(0)
+        ) {
             revert ZeroAddress();
         }
 
@@ -163,7 +202,20 @@ contract HelicoVault is AccessControlUpgradeable, PausableUpgradeable, Reentranc
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         positionManager = IPositionManager(positionManager_);
         stateView = IStateView(stateView_);
+        poolManager = IPoolManager(poolManager_);
     }
+
+    /// @notice Accepts native currency, which a v4 pool with `currency0 == address(0)` pays out
+    ///         mid-re-centre.
+    /// @dev This also accepts native from anyone. A re-centre measures what it produced against
+    ///      the balance it started with, so a stray transfer is excluded from every payout and
+    ///      is stuck rather than payable to somebody else. Documented in the README rather than
+    ///      swept, because a sweep is a privileged path this contract does not otherwise need.
+    /// @dev `Currency.transfer` for native is a bare `call`, so without this every re-centre on
+    ///      a native pool would revert at the take, before the swap. The vault still ends every
+    ///      call holding nothing: `_settleUp` sends the balance this call produced to the owner
+    ///      and asserts what remains equals what was there before.
+    receive() external payable {}
 
     // --- user ---------------------------------------------------------------------------
 
@@ -238,7 +290,22 @@ contract HelicoVault is AccessControlUpgradeable, PausableUpgradeable, Reentranc
         uint128 amount1Min;
         uint128 amount0Max;
         uint128 amount1Max;
+        /// @dev Swap direction. Ignored when `amountIn` is zero.
+        bool zeroForOne;
+        /// @dev How much of the withdrawn side to swap. Zero skips the swap entirely.
+        uint256 amountIn;
+        /// @dev A convenience for the agent, not a guard. The agent sets it, and a cap the
+        ///      agent sets is not a cap — what bounds the swap is the price limit below.
+        uint256 minAmountOut;
         uint256 deadline;
+    }
+
+    /// @dev Everything `unlockCallback` needs, passed through the PoolManager and back.
+    struct Unlock {
+        uint256 tokenId;
+        uint128 liquidity;
+        PoolKey key;
+        RecenterParams p;
     }
 
     /// @notice Move a position into a new range. The agent chooses whether and where; this
@@ -272,6 +339,13 @@ contract HelicoVault is AccessControlUpgradeable, PausableUpgradeable, Reentranc
         }
 
         // Measured, not declared. The cap is on what actually moves.
+        // A re-centre that mints nothing is a withdrawal wearing a re-centre's name: the whole
+        // position is burned and every token goes to the owner's wallet. `minRetainedBps` is
+        // meant to catch that, but a mandate committing zero opts out of the floor, and zero is
+        // a legitimate thing for a user to commit. So this is refused unconditionally, above
+        // the floor and independent of it.
+        if (p.liquidityToMint == 0) revert NothingToMint();
+
         uint128 liquidity = positionManager.getPositionLiquidity(tokenId);
         if (liquidity == 0) revert NothingToMove();
         if (liquidity > m.maxLiquidity) revert LiquidityTooLarge();
@@ -286,37 +360,194 @@ contract HelicoVault is AccessControlUpgradeable, PausableUpgradeable, Reentranc
         newTokenId = positionManager.nextTokenId();
         a.tokenId = newTokenId;
 
-        positionManager.modifyLiquidities(_buildPlan(tokenId, liquidity, key, p), p.deadline);
+        // The vault takes the pool lock itself rather than letting `modifyLiquidities` take it,
+        // because that leaves no room between the burn and the mint — and a swap has to sit
+        // there. v4 has no re-range action and an out-of-range position holds one token, which
+        // cannot fund a range that contains the price.
+        _recentring = true;
+        poolManager.unlock(abi.encode(Unlock({tokenId: tokenId, liquidity: liquidity, key: key, p: p})));
+        _recentring = false;
 
         _assertDelivered(newTokenId, m, liquidity, p);
 
         emit Recentred(p.owner, tokenId, newTokenId, p.tickLower, p.tickUpper, liquidity, msg.sender);
     }
 
-    /// @dev The whole payload. Both addresses in it are `p.owner`, which was checked against
-    ///      `ownerOf` above - there is no parameter through which a caller names a recipient.
-    function _buildPlan(uint256 tokenId, uint128 liquidity, PoolKey memory key, RecenterParams calldata p)
+    /// @notice Called back by the PoolManager while the vault holds the pool lock.
+    /// @dev Not `nonReentrant`, and that is deliberate. This runs inside `recenter`, which
+    ///      already holds OpenZeppelin's single guard flag, so the modifier would make every
+    ///      re-centre revert with `ReentrancyGuardReentrantCall`. The flag below is what
+    ///      distinguishes a callback the vault asked for; `msg.sender` is what makes it safe.
+    function unlockCallback(bytes calldata data) external override returns (bytes memory) {
+        if (msg.sender != address(poolManager)) revert NotPoolManager();
+        if (!_recentring) revert NoRecentreInFlight();
+
+        Unlock memory u = abi.decode(data, (Unlock));
+
+        // What the vault already held is not this call's to spend or to pay out.
+        uint256 held0 = _balanceOf(u.key.currency0);
+        uint256 held1 = _balanceOf(u.key.currency1);
+
+        (uint256 got0, uint256 got1) = _withdraw(u, held0, held1);
+        (got0, got1) = _swap(u, got0, got1);
+        _mint(u, got0, got1);
+        _settleUp(u, held0, held1);
+
+        return "";
+    }
+
+    /// @dev Burn the whole position into the vault. `TAKE_PAIR` names this contract because the
+    ///      swap needs the tokens here; they leave again before the callback returns.
+    function _withdraw(Unlock memory u, uint256 held0, uint256 held1)
         internal
-        pure
-        returns (bytes memory)
+        returns (uint256 got0, uint256 got1)
     {
-        bytes memory actions = abi.encodePacked(DECREASE_LIQUIDITY, BURN_POSITION, MINT_POSITION, TAKE_PAIR);
+        bytes memory actions = abi.encodePacked(DECREASE_LIQUIDITY, BURN_POSITION, TAKE_PAIR);
+        bytes[] memory params = new bytes[](3);
+        params[0] = abi.encode(u.tokenId, uint256(u.liquidity), u.p.amount0Min, u.p.amount1Min, bytes(""));
+        // The decrease already enforced the floor on the principal; applying it again to the
+        // fees the burn collects would reject a position whose fees are simply small.
+        params[1] = abi.encode(u.tokenId, uint128(0), uint128(0), bytes(""));
+        params[2] = abi.encode(u.key.currency0, u.key.currency1, address(this));
 
-        bytes[] memory params = new bytes[](4);
-        // Withdraw the whole position, with the agent's slippage floor.
-        params[0] = abi.encode(tokenId, uint256(liquidity), p.amount0Min, p.amount1Min, bytes(""));
-        // Burn the now-empty NFT and collect fees. The floor is zero because the decrease
-        // above already enforced it on the principal; applying it twice would reject a
-        // position whose fees are simply small.
-        params[1] = abi.encode(tokenId, uint128(0), uint128(0), bytes(""));
-        // Mint the new range to the owner.
-        params[2] = abi.encode(
-            key, p.tickLower, p.tickUpper, p.liquidityToMint, p.amount0Max, p.amount1Max, p.owner, bytes("")
+        positionManager.modifyLiquiditiesWithoutUnlock(actions, params);
+
+        got0 = _balanceOf(u.key.currency0) - held0;
+        got1 = _balanceOf(u.key.currency1) - held1;
+    }
+
+    /// @dev Trade the side the new range does not want for the side it does.
+    function _swap(Unlock memory u, uint256 got0, uint256 got1) internal returns (uint256, uint256) {
+        if (u.p.amountIn == 0) return (got0, got1);
+
+        // The agent may only move what the burn produced. Anything beyond it would have to come
+        // from another user's balance or from a donation.
+        uint256 available = u.p.zeroForOne ? got0 : got1;
+        if (u.p.amountIn > available) revert SwapExceedsWithdrawn();
+
+        // The guard that carries the weight. The limit is the price at the edge of the range
+        // the user committed to, so the pool itself halts the swap there and the price cannot
+        // be pushed out of that range — not by the agent, not by us. Without it, an agent
+        // moves the price after `_checkRange` has already approved the range against it, and
+        // mints single-sided while every post-condition still passes.
+        // One below the upper edge when the price is going up, because `tickUpper` is exclusive:
+        // a fill that reached exactly `getSqrtPriceAtTick(tickUpper)` would land the pool on a
+        // tick the mint forbids, so the guard would revert the re-centre precisely when it did
+        // its job. The lower edge is inclusive and needs no adjustment.
+        uint160 limit = u.p.zeroForOne
+            ? TickMath.getSqrtPriceAtTick(u.p.tickLower)
+            : TickMath.getSqrtPriceAtTick(u.p.tickUpper) - 1;
+
+        int256 delta = poolManager.swap(
+            u.key,
+            IPoolManager.SwapParams({
+                zeroForOne: u.p.zeroForOne, amountSpecified: -int256(u.p.amountIn), sqrtPriceLimitX96: limit
+            }),
+            ""
         );
-        // Whatever the mint did not consume goes to the owner, not to this contract.
-        params[3] = abi.encode(key.currency0, key.currency1, p.owner);
 
-        return abi.encode(actions, params);
+        // BalanceDelta packs amount0 in the upper 128 bits and amount1 in the lower. Negative
+        // is owed by us, positive is owed to us.
+        int128 d0;
+        int128 d1;
+        assembly ("memory-safe") {
+            d0 := sar(128, delta)
+            d1 := signextend(15, delta)
+        }
+
+        // Named for the currency rather than the direction: `moved0` is however much token0
+        // changed hands, whether the vault paid it or received it. Calling them paid/received
+        // reads backwards in one of the two directions.
+        uint256 moved0 = _resolve(u.key.currency0, d0);
+        uint256 moved1 = _resolve(u.key.currency1, d1);
+        if (u.p.zeroForOne) {
+            if (moved1 < u.p.minAmountOut) revert SwapOutputTooSmall();
+            return (got0 - moved0, got1 + moved1);
+        }
+        if (moved0 < u.p.minAmountOut) revert SwapOutputTooSmall();
+        return (got0 + moved0, got1 - moved1);
+    }
+
+    /// @dev Settles one side of a swap delta and returns the amount that moved.
+    function _resolve(address currency, int128 amount) internal returns (uint256) {
+        if (amount == 0) return 0;
+        if (amount < 0) {
+            uint256 owed = uint256(uint128(-amount));
+            if (currency == address(0)) {
+                poolManager.settle{value: owed}();
+            } else {
+                poolManager.sync(currency);
+                IERC20(currency).safeTransfer(address(poolManager), owed);
+                poolManager.settle();
+            }
+            return owed;
+        }
+        uint256 due = uint256(uint128(amount));
+        poolManager.take(currency, address(this), due);
+        return due;
+    }
+
+    /// @dev Mint the new range to the owner, funded by what the burn and the swap produced.
+    function _mint(Unlock memory u, uint256 got0, uint256 got1) internal {
+        // Belt to the price limit's braces: the swap may have moved the tick, and every check
+        // in `_assertDelivered` is about where the range is rather than where the price is.
+        (, int24 tick,,) = stateView.getSlot0(u.key.hashPoolKey());
+        if (tick < u.p.tickLower || tick >= u.p.tickUpper) revert PriceLeftTheRange();
+
+        // The PositionManager pays a settle mapped `payerIsUser = false` out of its own
+        // balance, so funding the mint is a transfer to it rather than a Permit2 allowance
+        // from the vault to anyone. Whatever it does not spend comes back on the sweep.
+        uint256 value;
+        if (u.key.currency0 == address(0)) value = got0;
+        else if (got0 > 0) IERC20(u.key.currency0).safeTransfer(address(positionManager), got0);
+        if (got1 > 0) IERC20(u.key.currency1).safeTransfer(address(positionManager), got1);
+
+        bytes memory actions = abi.encodePacked(MINT_POSITION, SETTLE, SETTLE, SWEEP, SWEEP);
+        bytes[] memory params = new bytes[](5);
+        params[0] = abi.encode(
+            u.key,
+            u.p.tickLower,
+            u.p.tickUpper,
+            u.p.liquidityToMint,
+            u.p.amount0Max,
+            u.p.amount1Max,
+            u.p.owner,
+            bytes("")
+        );
+        params[1] = abi.encode(u.key.currency0, uint256(OPEN_DELTA), false);
+        params[2] = abi.encode(u.key.currency1, uint256(OPEN_DELTA), false);
+        // Back to the vault rather than straight to the owner, so what reaches them is an
+        // amount this call computed instead of whatever balance happened to be sitting there.
+        params[3] = abi.encode(u.key.currency0, address(this));
+        params[4] = abi.encode(u.key.currency1, address(this));
+
+        positionManager.modifyLiquiditiesWithoutUnlock{value: value}(actions, params);
+    }
+
+    /// @dev Pay the owner exactly what this call produced, and prove the vault kept none of it.
+    function _settleUp(Unlock memory u, uint256 held0, uint256 held1) internal {
+        _payOut(u.key.currency0, u.p.owner, _balanceOf(u.key.currency0) - held0);
+        _payOut(u.key.currency1, u.p.owner, _balanceOf(u.key.currency1) - held1);
+
+        // Asserted on chain, not only in a test. The vault is not a custodian, and the only
+        // moment it holds anything is between the burn and the mint of this one call.
+        if (_balanceOf(u.key.currency0) != held0 || _balanceOf(u.key.currency1) != held1) {
+            revert VaultNotEmpty();
+        }
+    }
+
+    function _payOut(address currency, address to, uint256 amount) internal {
+        if (amount == 0) return;
+        if (currency == address(0)) {
+            (bool ok,) = to.call{value: amount}("");
+            if (!ok) revert PayoutFailed();
+        } else {
+            IERC20(currency).safeTransfer(to, amount);
+        }
+    }
+
+    function _balanceOf(address currency) internal view returns (uint256) {
+        return currency == address(0) ? address(this).balance : IERC20(currency).balanceOf(address(this));
     }
 
     /// @dev Encoding the right plan is not the same as the plan having happened. These read

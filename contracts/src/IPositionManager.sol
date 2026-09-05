@@ -15,4 +15,9 @@ interface IPositionManager {
     ///      before a batch that mints exactly once tells the vault which token it will get.
     function nextTokenId() external view returns (uint256);
     function getPoolAndPositionInfo(uint256 tokenId) external view returns (PoolKey memory, uint256 info);
+    /// @dev Runs the same action loop as `modifyLiquidities` but assumes the PoolManager is
+    ///      already unlocked. Its `isNotLocked` modifier guards the PositionManager's own
+    ///      reentrancy lock, not the pool's, so it is callable from inside our unlock callback.
+    ///      That is what lets the vault put a swap between the burn and the mint.
+    function modifyLiquiditiesWithoutUnlock(bytes calldata actions, bytes[] calldata params) external payable;
 }
