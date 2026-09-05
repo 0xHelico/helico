@@ -3,39 +3,89 @@
 Submission for [ETHOnline 2026](https://ethglobal.com/events/ethonline2026)
 (September 4–16, 2026).
 
-> 🚧 **Work in progress.** The project description, architecture, and integration claims
-> get filled in once something actually runs. Nothing here is claimed before it is proven —
-> see [Rules](#rules) for why that matters.
+**Helico keeps a Uniswap v4 liquidity position in range, under rules its owner commits to on
+chain.** The owner writes a mandate — which pool, how wide a band, how much may move, how
+often, until when. An agent proposes a re-centre; the contract refuses anything the mandate
+does not allow. Revoking the NFT approval ends it, and nothing the operator controls can block
+that.
+
+Nothing here is claimed before it is proven. Where something is not yet true, it is marked as
+not yet true rather than left to be assumed — see [Rules](#rules) for why that matters.
 
 ## Layout
 
 | Directory | Contents |
 |---|---|
-| [`contracts/`](contracts/) | Smart contracts |
-| [`apps/cre/`](apps/cre/) | Chainlink CRE workflows |
-| [`apps/be/`](apps/be/) | Backend |
-| [`apps/landing/`](apps/landing/) | Landing page, Astro |
+| [`contracts/`](contracts/) | `HelicoVault` and its tests |
+| [`packages/plugins/uniswap/`](packages/plugins/uniswap/) | Uniswap v4 on-chain package, `@helico/plugin-uniswap` |
+| [`packages/plugins/cre/`](packages/plugins/cre/) | Chainlink CRE confidential workflow, `@helico/plugin-cre` |
 | [`packages/core/`](packages/core/) | Shared library, `@helico/core` |
-| [`packages/plugins/`](packages/plugins/) | Plugins, one package each, `@helico/plugin-<name>` |
+| [`apps/landing/`](apps/landing/) | Landing page, Astro |
 | [`docs/plans/`](docs/plans/) | Implementation plans, written before the code |
+
+`apps/be/` and `apps/cre/` are scaffolding from the initial layout and are **empty**. They are
+left in place rather than linked as though they held something; the CRE workflow lives in
+`packages/plugins/cre`, because every integration is a reusable package here.
 
 ## Partner integrations
 
-> Filled in only once an integration actually works. The **code reference column is
-> required** — some partners verify an integration by reading the exact lines pointed to here.
->
-> Uniswap Foundation also requires [`FEEDBACK.md`](FEEDBACK.md), which records what we
-> observed while building on their stack.
+Every reference below is a **commit-pinned permalink**, verified against the code it points at
+rather than copied from an earlier draft — line numbers move, and three of these had already
+drifted by the time they were written down.
 
-| Partner | Status | Where | Code reference |
-|---|---|---|---|
-| Chainlink CRE | reusable package: the enclave recomputes the mandate hash, reads the vault and the pool from inside the TEE, mirrors the vault's range rule, sizes the swap and the mint, and either signs the re-centre with the agent key held as a Vault DON secret (EIP-712, any chain) or encodes `(act, mandateHash, RecenterParams)` for a CRE forwarder; unit-tested, decision simulated in the CRE simulator on an earlier binary; **not run against a deployed vault, not deployed** | [`packages/plugins/cre/`](packages/plugins/cre/) | [`src/index.ts#L173-L234`](packages/plugins/cre/src/index.ts#L173-L234) `onCronTrigger` runs in the enclave, [`src/index.ts#L244-L265`](packages/plugins/cre/src/index.ts#L244-L265) `deliver` writes the report, [`src/sign.ts#L65-L75`](packages/plugins/cre/src/sign.ts#L65-L75) `signRecentre` signs it with the agent key, [`src/index.ts#L268-L276`](packages/plugins/cre/src/index.ts#L268-L276) `initWorkflow` registers it with `handlerInTee` |
-| Uniswap v4 | reusable package for any chain: addresses, pools, quotes, swaps (all four shapes), Permit2 approvals, liquidity; quotes and every swap shape verified on Base mainnet by `eth_call`; swaps, approvals, pool initialisation, mint, increase, collect, and burn **executed on Base Sepolia** (transactions in the package README); Robinhood Chain mainnet and testnet resolved and tested offline, on-chain runs pending; **not wired into an app** | [`packages/plugins/uniswap/`](packages/plugins/uniswap/) | [`src/swap.ts`](packages/plugins/uniswap/src/swap.ts) Universal Router `execute`, [`src/quote.ts`](packages/plugins/uniswap/src/quote.ts) v4 `Quoter`, [`src/approval.ts`](packages/plugins/uniswap/src/approval.ts) Permit2, [`src/liquidity.ts`](packages/plugins/uniswap/src/liquidity.ts) `V4PositionManager`, [`src/addresses.ts`](packages/plugins/uniswap/src/addresses.ts) per-chain resolver; line ranges in the package README |
+Uniswap Foundation also asks for [`FEEDBACK.md`](FEEDBACK.md), which records what we ran into
+while building on their stack.
 
-## Contributing
+### Uniswap v4
 
-New here? Read [`CONTRIBUTING.md`](CONTRIBUTING.md) first — it is short, and it covers the
-two mistakes that can cost the entire submission.
+The plugin talks to v4 directly — no aggregator, no wrapper — and every claim here has an
+on-chain transaction behind it on Base Sepolia, listed in
+[`packages/plugins/uniswap/README.md`](packages/plugins/uniswap/README.md).
+
+| What | Where |
+|---|---|
+| Universal Router `execute`, `V4_SWAP` command, router-level `SWEEP` | [`swap.ts#L100-L121`](https://github.com/0xHelico/helico/blob/a301d3cd668ea169cfe313fb0ded8bb346f74957/packages/plugins/uniswap/src/swap.ts#L100-L121) |
+| `SWAP_EXACT_IN_SINGLE` action and its settlement pair | [`swap.ts#L148-L170`](https://github.com/0xHelico/helico/blob/a301d3cd668ea169cfe313fb0ded8bb346f74957/packages/plugins/uniswap/src/swap.ts#L148-L170) |
+| `Quoter` read over `eth_call` | [`quote.ts#L17-L28`](https://github.com/0xHelico/helico/blob/a301d3cd668ea169cfe313fb0ded8bb346f74957/packages/plugins/uniswap/src/quote.ts#L17-L28) |
+| Pool state through `StateView` | [`pool.ts#L64-L82`](https://github.com/0xHelico/helico/blob/a301d3cd668ea169cfe313fb0ded8bb346f74957/packages/plugins/uniswap/src/pool.ts#L64-L82) |
+| `PoolId` derivation, matching v4's own | [`pool.ts#L39-L52`](https://github.com/0xHelico/helico/blob/a301d3cd668ea169cfe313fb0ded8bb346f74957/packages/plugins/uniswap/src/pool.ts#L39-L52) |
+| Addresses resolved from the official SDK | [`addresses.ts#L99-L107`](https://github.com/0xHelico/helico/blob/a301d3cd668ea169cfe313fb0ded8bb346f74957/packages/plugins/uniswap/src/addresses.ts#L99-L107) |
+| Permit2 approval | [`approval.ts#L93-L110`](https://github.com/0xHelico/helico/blob/a301d3cd668ea169cfe313fb0ded8bb346f74957/packages/plugins/uniswap/src/approval.ts#L93-L110) |
+| EIP-712 `PermitSingle` typed data | [`approval.ts#L134-L160`](https://github.com/0xHelico/helico/blob/a301d3cd668ea169cfe313fb0ded8bb346f74957/packages/plugins/uniswap/src/approval.ts#L134-L160) |
+| `PositionManager` mint | [`liquidity.ts#L93-L124`](https://github.com/0xHelico/helico/blob/a301d3cd668ea169cfe313fb0ded8bb346f74957/packages/plugins/uniswap/src/liquidity.ts#L93-L124) |
+
+### The vault
+
+`HelicoVault` enforces a user's committed mandate on the agent that re-centres their position.
+It is upgradeable behind a timelock, non-custodial, and every rejection path is a test — see
+[`contracts/README.md`](contracts/README.md) for what a rogue agent can and cannot do.
+
+| What | Where |
+|---|---|
+| The mandate a user commits | [`Mandate.sol#L20-L62`](https://github.com/0xHelico/helico/blob/a301d3cd668ea169cfe313fb0ded8bb346f74957/contracts/src/Mandate.sol#L20-L62) |
+| Committing it, checked against the position's real pool | [`HelicoVault.sol#L226-L246`](https://github.com/0xHelico/helico/blob/a301d3cd668ea169cfe313fb0ded8bb346f74957/contracts/src/HelicoVault.sol#L226-L246) |
+| The action the agent may propose | [`HelicoVault.sol#L321-L374`](https://github.com/0xHelico/helico/blob/a301d3cd668ea169cfe313fb0ded8bb346f74957/contracts/src/HelicoVault.sol#L321-L374) |
+| Every range rule, including the one the price must satisfy | [`HelicoVault.sol#L583-L607`](https://github.com/0xHelico/helico/blob/a301d3cd668ea169cfe313fb0ded8bb346f74957/contracts/src/HelicoVault.sol#L583-L607) |
+| The swap that makes an out-of-range position recoverable | [`HelicoVault.sol#L381-L397`](https://github.com/0xHelico/helico/blob/a301d3cd668ea169cfe313fb0ded8bb346f74957/contracts/src/HelicoVault.sol#L381-L397) |
+| The exit, which nothing can block | [`HelicoVault.sol#L256-L261`](https://github.com/0xHelico/helico/blob/a301d3cd668ea169cfe313fb0ded8bb346f74957/contracts/src/HelicoVault.sol#L256-L261) |
+
+### Chainlink CRE — Confidential Workflows
+
+The decision about whether and where to re-centre runs **inside the enclave**, over thresholds
+released there by the Vault DON. Only the verdict crosses back out.
+
+| What | Where |
+|---|---|
+| `handlerInTee` registration | [`index.ts#L220-L228`](https://github.com/0xHelico/helico/blob/a301d3cd668ea169cfe313fb0ded8bb346f74957/packages/plugins/cre/src/index.ts#L220-L228) |
+| The confidential handler itself | [`index.ts#L161-L196`](https://github.com/0xHelico/helico/blob/a301d3cd668ea169cfe313fb0ded8bb346f74957/packages/plugins/cre/src/index.ts#L161-L196) |
+| The re-centre decision, Helico's own logic | [`index.ts#L99-L158`](https://github.com/0xHelico/helico/blob/a301d3cd668ea169cfe313fb0ded8bb346f74957/packages/plugins/cre/src/index.ts#L99-L158) |
+| Chain reads made from inside the enclave | [`chain.ts#L19-L43`](https://github.com/0xHelico/helico/blob/a301d3cd668ea169cfe313fb0ded8bb346f74957/packages/plugins/cre/src/chain.ts#L19-L43) |
+| The mandate hash, tying the verdict to what the user signed | [`mandate.ts#L38-L50`](https://github.com/0xHelico/helico/blob/a301d3cd668ea169cfe313fb0ded8bb346f74957/packages/plugins/cre/src/mandate.ts#L38-L50) |
+
+> ⚠️ **Not yet claimed.** The workflow's verdict does not yet drive the vault on chain.
+> Confidential Workflows is an invite-only beta separate from CRE deploy access, so this runs
+> in the CRE simulator; the simulator stands in for the enclave, and the README of the plugin
+> says so where it matters. We would rather say that than imply a live DON deployment.
 
 ## Rules
 
