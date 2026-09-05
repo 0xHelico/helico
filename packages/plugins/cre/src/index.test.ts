@@ -50,7 +50,12 @@ const makeFakeTeeRuntime = ({ statusCode = 200, body = 'hello' }: FakeTeeRuntime
 		}),
 	}
 
-	return { runtime: runtime as unknown as TeeRuntime<ReturnType<typeof makeConfig>>, capturedHeaders, reports, logs }
+	return {
+		runtime: runtime as unknown as TeeRuntime<ReturnType<typeof makeConfig>>,
+		capturedHeaders,
+		reports,
+		logs,
+	}
 }
 
 describe('onCronTrigger', () => {

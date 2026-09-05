@@ -1,10 +1,4 @@
-import {
-	cre,
-	hexToBase64,
-	ok,
-	text,
-	type TeeRuntime,
-} from '@chainlink/cre-sdk'
+import { cre, hexToBase64, ok, type TeeRuntime, text } from '@chainlink/cre-sdk'
 import { encodeAbiParameters, parseAbiParameters } from 'viem'
 import { z } from 'zod'
 
@@ -100,10 +94,10 @@ export const onCronTrigger = (runtime: TeeRuntime<Config>): string => {
 	// secret or the raw response body.
 	const donRuntime = runtime.usingTheDons()
 
-	const encodedPayload = encodeAbiParameters(
-		parseAbiParameters('string verdict, uint256 score'),
-		[verdict, BigInt(score)],
-	)
+	const encodedPayload = encodeAbiParameters(parseAbiParameters('string verdict, uint256 score'), [
+		verdict,
+		BigInt(score),
+	])
 
 	donRuntime
 		.report({
