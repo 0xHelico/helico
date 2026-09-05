@@ -32,6 +32,7 @@ contract Deploy is Script {
 
     error WrongChain(uint256 actual);
     error NoAgentAddress();
+    error NoAdminAddress();
     error DependencyHasNoCode(address dependency);
 
     function run() external returns (HelicoVault vault) {
@@ -41,7 +42,13 @@ contract Deploy is Script {
 
         address agent = vm.envAddress("AGENT_ADDRESS");
         if (agent == address(0)) revert NoAgentAddress();
-        address admin = vm.envOr("ADMIN_ADDRESS", msg.sender);
+
+        // The address that will actually sign, resolved the way Foundry resolves it. Not
+        // `address(this)`: a script contract is ephemeral, Foundry refuses to let its address
+        // be relied on, and every call below is broadcast from the wallet rather than from here.
+        address deployer = msg.sender;
+        address admin = vm.envOr("ADMIN_ADDRESS", deployer);
+        if (admin == address(0)) revert NoAdminAddress();
 
         // The addresses above are constants, so this catches a chain that answers with the
         // right id but is not the chain we think it is.
@@ -50,7 +57,7 @@ contract Deploy is Script {
         _requireCode(POOL_MANAGER);
 
         vm.startBroadcast();
-        vault = deploy(admin, agent);
+        vault = _deploy(deployer, admin, agent);
         vm.stopBroadcast();
 
         console.log("vault (proxy)  ", address(vault));
@@ -59,23 +66,26 @@ contract Deploy is Script {
         console.log("chain          ", block.chainid);
     }
 
-    /// @dev The deployment itself, separated from `run` so a fork test can rehearse it. A
-    ///      script nobody has run is the same as no script — and the first rehearsal of this
-    ///      one failed, because it granted roles it did not hold.
+    /// @dev The deployment itself, taking the deployer explicitly so it works both under a
+    ///      broadcast (where the caller is the wallet) and in a fork test (where it is the test
+    ///      contract). The first version took `address(this)`, which Foundry rejects outright
+    ///      inside a broadcast — and the fork test could not catch it, because calling `deploy`
+    ///      externally makes `address(this)` the script rather than the sender. A rehearsal
+    ///      through a door production does not use is not a rehearsal.
     ///
-    ///      So it takes the admin role itself, hands out the three roles, passes the admin role
-    ///      on, and renounces its own. The deployer keeps nothing. Every step is in the same
-    ///      broadcast, so there is no window in which the contract exists with an admin nobody
-    ///      intended.
-    function deploy(address admin, address agent) public returns (HelicoVault vault) {
+    ///      The deployer holds the admin role only for the length of this sequence: it grants
+    ///      the three roles, passes the admin role on, and renounces its own. Note that a
+    ///      broadcast is a signed *sequence*, not one transaction, so those steps land in
+    ///      separate blocks — the deployer is briefly the sole admin, which is why it should be
+    ///      a key you control and discard, and why `ADMIN_ADDRESS` should be a multisig.
+    function _deploy(address deployer, address admin, address agent) internal returns (HelicoVault vault) {
         HelicoVault implementation = new HelicoVault();
         vault = HelicoVault(
             payable(address(
                     new ERC1967Proxy(
                         address(implementation),
                         abi.encodeCall(
-                            HelicoVault.initialize,
-                            (address(this), POSITION_MANAGER, STATE_VIEW, POOL_MANAGER)
+                            HelicoVault.initialize, (deployer, POSITION_MANAGER, STATE_VIEW, POOL_MANAGER)
                         )
                     )
                 ))
@@ -89,9 +99,14 @@ contract Deploy is Script {
 
         bytes32 adminRole = vault.DEFAULT_ADMIN_ROLE();
         vault.grantRole(adminRole, admin);
-        if (admin != address(this)) vault.renounceRole(adminRole, address(this));
+        if (admin != deployer) vault.renounceRole(adminRole, deployer);
 
         console.log("implementation ", address(implementation));
+    }
+
+    /// @dev Kept for fork tests, which call it as the deployer themselves.
+    function deploy(address admin, address agent) public returns (HelicoVault) {
+        return _deploy(address(this), admin, agent);
     }
 
     function _requireCode(address dependency) internal view {

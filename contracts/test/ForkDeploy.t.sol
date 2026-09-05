@@ -20,6 +20,10 @@ contract ForkDeployTest is ForkBase {
         _fork();
         script = new Deploy();
 
+        // A distinct deployer, so the handover is exercised rather than skipped. The first
+        // version of this test used `deploy(admin, enclave)` with the script itself as the
+        // implicit deployer, which is exactly why it could not catch that `run()` was refused
+        // outright by Foundry for relying on `address(this)`.
         HelicoVault vault = script.deploy(admin, enclave);
 
         // Wired to the real periphery, not to whatever was in the constructor's comment.
@@ -44,6 +48,25 @@ contract ForkDeployTest is ForkBase {
         assertEq(version, "1");
         assertEq(chainId, ROBINHOOD_MAINNET, "the domain binds the chain it was deployed to");
         assertEq(verifying, address(vault), "and the address it lives at");
+    }
+
+    /// @notice The deployer must not keep the admin role when a separate admin is named.
+    /// @dev The handover is three calls at the end of the sequence and the one place the script
+    ///      can leave the contract governed by the wrong party. It is asserted here rather than
+    ///      assumed, because the anvil rehearsal defaults `ADMIN_ADDRESS` to the deployer and so
+    ///      never exercises the renounce.
+    function test_DeployerKeepsNothingWhenTheAdminIsSomebodyElse() public {
+        _fork();
+        script = new Deploy();
+
+        HelicoVault vault = script.deploy(admin, enclave);
+        bytes32 adminRole = vault.DEFAULT_ADMIN_ROLE();
+
+        assertTrue(vault.hasRole(adminRole, admin), "the named admin holds it");
+        assertFalse(vault.hasRole(adminRole, address(script)), "and the deployer does not");
+        assertFalse(vault.hasRole(vault.UPGRADER_ROLE(), address(script)), "nor may it upgrade");
+        assertFalse(vault.hasRole(vault.GUARDIAN_ROLE(), address(script)), "nor pause");
+        assertFalse(vault.hasRole(vault.AGENT_ROLE(), address(script)), "nor act");
     }
 
     /// @notice A mainnet script that runs anywhere is one that eventually runs somewhere else.
