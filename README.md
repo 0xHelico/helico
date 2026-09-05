@@ -76,11 +76,11 @@ released there by the Vault DON. Only the verdict crosses back out.
 
 | What | Where |
 |---|---|
-| `handlerInTee` registration | [`index.ts#L220-L228`](https://github.com/0xHelico/helico/blob/a301d3cd668ea169cfe313fb0ded8bb346f74957/packages/plugins/cre/src/index.ts#L220-L228) |
-| The confidential handler itself | [`index.ts#L161-L196`](https://github.com/0xHelico/helico/blob/a301d3cd668ea169cfe313fb0ded8bb346f74957/packages/plugins/cre/src/index.ts#L161-L196) |
-| The re-centre decision, Helico's own logic | [`index.ts#L99-L158`](https://github.com/0xHelico/helico/blob/a301d3cd668ea169cfe313fb0ded8bb346f74957/packages/plugins/cre/src/index.ts#L99-L158) |
-| Chain reads made from inside the enclave | [`chain.ts#L19-L43`](https://github.com/0xHelico/helico/blob/a301d3cd668ea169cfe313fb0ded8bb346f74957/packages/plugins/cre/src/chain.ts#L19-L43) |
-| The mandate hash, tying the verdict to what the user signed | [`mandate.ts#L38-L50`](https://github.com/0xHelico/helico/blob/a301d3cd668ea169cfe313fb0ded8bb346f74957/packages/plugins/cre/src/mandate.ts#L38-L50) |
+| `handlerInTee` registration | [`index.ts#L268-L276`](https://github.com/0xHelico/helico/blob/fe6c2610063c464bbe5c05f87230ccb47bf5520b/packages/plugins/cre/src/index.ts#L268-L276) |
+| The confidential handler itself | [`index.ts#L173-L234`](https://github.com/0xHelico/helico/blob/fe6c2610063c464bbe5c05f87230ccb47bf5520b/packages/plugins/cre/src/index.ts#L173-L234) |
+| The re-centre decision, Helico's own logic | [`index.ts#L111-L170`](https://github.com/0xHelico/helico/blob/fe6c2610063c464bbe5c05f87230ccb47bf5520b/packages/plugins/cre/src/index.ts#L111-L170) |
+| Chain reads made from inside the enclave | [`chain.ts#L20-L44`](https://github.com/0xHelico/helico/blob/fe6c2610063c464bbe5c05f87230ccb47bf5520b/packages/plugins/cre/src/chain.ts#L20-L44) |
+| The mandate hash, tying the verdict to what the user signed | [`mandate.ts#L38-L50`](https://github.com/0xHelico/helico/blob/fe6c2610063c464bbe5c05f87230ccb47bf5520b/packages/plugins/cre/src/mandate.ts#L38-L50) |
 
 > ⚠️ **Not yet claimed.** The workflow's verdict does not yet drive the vault on chain.
 > Confidential Workflows is an invite-only beta separate from CRE deploy access, so this runs
