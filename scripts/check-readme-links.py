@@ -10,9 +10,9 @@ Run it after anything that moves code the README points at:
 
     python3 scripts/check-readme-links.py
 
-It checks that each range starts on a declaration and ends on a closing brace, and that the
-pinned commit is the one the working tree is on. It does not fetch the commit: the point is to
-catch drift before the pin is updated, not to trust the pin.
+It checks that each range starts on a declaration and ends on a closing brace, and that no
+referenced file has changed since the pinned commit. A pin older than HEAD is fine on its own —
+a docs commit does not move the code — so only a file that actually moved is reported.
 """
 
 import re
@@ -35,15 +35,26 @@ def main() -> int:
         print("no pinned links found — has the README changed shape?")
         return 1
 
-    head = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True
-    ).stdout.strip()
-
     problems = 0
-    pins = {sha for sha, _, _, _ in links}
-    for sha in pins:
-        if sha != head:
-            print(f"pin {sha[:8]} is not HEAD ({head[:8]}) — re-verify before updating it")
+
+    # A pin older than HEAD is normal and not worth reporting: a docs commit does not move the
+    # code the links point at. What matters is whether any *referenced file* has changed since
+    # the pin, because then the pinned lines and the working tree have diverged.
+    referenced = sorted({rel for _, rel, _, _ in links})
+    for sha in {sha for sha, _, _, _ in links}:
+        moved = subprocess.run(
+            ["git", "diff", "--name-only", sha, "HEAD", "--", *referenced],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+        )
+        if moved.returncode != 0:
+            print(f"cannot compare against {sha[:8]} — fetch it, or the pin is wrong")
+            problems += 1
+        elif moved.stdout.strip():
+            for changed in moved.stdout.strip().split("\n"):
+                print(f"CHANGED  {changed} has moved since the pin {sha[:8]}")
+            problems += 1
 
     for sha, rel, start, end in links:
         a, b = int(start), int(end)
