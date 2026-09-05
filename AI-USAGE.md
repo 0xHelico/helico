@@ -13,6 +13,7 @@ proven to work**.
 | Tool | Model | Used for |
 |---|---|---|
 | Claude Code | Opus 5 | Hackathon rule research, repository scaffolding, workshop session notes |
+| Claude Code | Fable 5.1 | Chainlink CRE plugin scaffold (`packages/plugins/cre`), its plan and README |
 | Claude Code | Fable 5.1 | Monorepo tooling — bun workspaces (started on pnpm), Turborepo, Biome, Husky, `packages/` scaffold |
 | Claude Code | Fable 5.1 | Uniswap plugin (`packages/plugins/uniswap`), its plan, README, and `FEEDBACK.md` |
 
@@ -131,6 +132,32 @@ Format: date · what was done · the AI's role · what a human verified.
   [`docs/plans/2026-09-05-plugin-uniswap-complete.md`](docs/plans/2026-09-05-plugin-uniswap-complete.md).
 - **Verified:** `typecheck` clean over `src/**` including `e2e.ts`; `test` 40 pass; `smoke`
   live on Base; `bun run check` clean.
+
+### 2026-09-05 — Chainlink CRE plugin scaffold
+
+- **Done:** `packages/plugins/cre` (`@helico/plugin-cre`), a reusable package holding the
+  confidential handler from Chainlink's `hello-confidential-workflows-ts` template,
+  scaffolded with `cre init`. `src/index.ts` is the template's `workflow.ts`, unchanged apart from
+  Biome formatting; the package layout, tsconfig, tests location, and README are ours. `apps/cre` untouched.
+- **AI's role:** researched the CRE docs, the template repository, and Chainlink's agent
+  skill first; wrote the plan and its revision, the package layout, and the README; ran the
+  checks. The handler logic is Chainlink's, and the README says so.
+- **Plan:** [`docs/plans/2026-09-05-plugin-cre.md`](docs/plans/2026-09-05-plugin-cre.md),
+  prompts included.
+- **Verified:** `bun install`, `bun run --filter @helico/plugin-cre typecheck` (clean), `test`
+  (9 pass, 0 fail), re-run after the switch to bun. WASM compile and `cre workflow simulate` (CLI v1.32.0) verified from a
+  throwaway CRE project outside the repo that imports the package: TEE banner shown, result
+  `REJECT (score: N, secret reached API: true)`. **Not deployed**: no deploy access on the
+  machine's CRE account, and Confidential Workflows is a separate private beta.
+
+### 2026-09-05 — CRE plugin review fixes
+
+- **Done:** README anchors point at the whole `initWorkflow` (`L118-L136`); the TEE test
+  asserts the actual constraint (Nitro, `us-west-2`) instead of presence; the package README
+  states that the test file is the template's too; the plan carries a status note; `apps/cre`
+  points at the package and at #20/#21.
+- **AI's role:** applied the collaborator's review findings; ran the checks.
+- **Verified:** `bun run --filter @helico/plugin-cre typecheck` and `test` (9 pass), `bun run check`.
 
 <!--
 Template for the next entry:

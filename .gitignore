@@ -19,3 +19,6 @@ artifacts/
 
 # Turborepo
 .turbo/
+
+# CRE simulator scratch files
+.cre_build_tmp.*

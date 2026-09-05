@@ -25,6 +25,7 @@ Submission for [ETHOnline 2026](https://ethglobal.com/events/ethonline2026)
 
 | Partner | Status | Where | Code reference |
 |---|---|---|---|
+| Chainlink CRE | reusable package only: unit-tested and simulated from a throwaway project, **not wired into an app, not deployed** | [`packages/plugins/cre/`](packages/plugins/cre/) | [`src/index.ts#L118-L136`](packages/plugins/cre/src/index.ts#L118-L136) `initWorkflow` registers the TEE handler with `handlerInTee` (L132) |
 | Uniswap v4 | reusable package: addresses, pools, quotes, swaps (all four shapes), Permit2 approvals, liquidity; quotes and all swap shapes verified on Base mainnet by `eth_call`; swaps, Permit2 approvals, mint, collect, and burn **executed on Base Sepolia** (transactions in the package README); **not wired into an app** | [`packages/plugins/uniswap/`](packages/plugins/uniswap/) | [`src/swap.ts#L93`](packages/plugins/uniswap/src/swap.ts#L93) Universal Router `execute`, [`src/quote.ts#L16`](packages/plugins/uniswap/src/quote.ts#L16) v4 `Quoter`, [`src/approval.ts#L132`](packages/plugins/uniswap/src/approval.ts#L132) Permit2, [`src/liquidity.ts#L93`](packages/plugins/uniswap/src/liquidity.ts#L93) `V4PositionManager` |
 
 ## Contributing
