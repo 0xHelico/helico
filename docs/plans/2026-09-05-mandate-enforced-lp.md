@@ -72,6 +72,24 @@ application, and thresholds the user does not want visible are exactly that.
 > policy and the reasoning — *when* and *why* we act, not *what* we did. Any wording we
 > publish must say it that way.
 
+### What the chain actually looks like
+
+Findings from the plugin work on Robinhood Chain (#14), none of which appear in any workshop
+material and all of which change details here:
+
+- **The quote asset is USDG, not USDC.** Pairs are ETH/USDG, so the mandate's pool selection
+  and every example in the interface should say so.
+- **Most ETH/USDG pools are hooked.** This confirms the chain choice — hooks are live where
+  we are building — but it means keep-in-range meets hooked pools as the normal case rather
+  than an edge case. Re-centring must work against a pool whose hook may charge dynamic fees
+  or restrict who can add liquidity.
+- **Universal Router is version 2.1.1**, whose v4 swap structs carry an extra
+  `minHopPriceX36` field. The plugin encodes for that; anything we build on top inherits it.
+- **viem has no chain definition** for either Robinhood network, so the plugin defines both.
+- **The testnet is not on Uniswap's deployments page**, but v4 is deployed there at the same
+  addresses, verified by comparing PoolManager, Quoter and StateView bytecode against
+  mainnet rather than assuming.
+
 ### Chain
 
 Robinhood Chain mainnet. Uniswap launched there recently and pools are already running
@@ -115,6 +133,7 @@ submission, so each claim below needs a way to be checked.
 | The confidential part is meaningful | `cre workflow simulate` runnable from a clean checkout, with committed output. |
 | Returns claims are real | Log every action with expected and realised improvement, and gas spent. Publish the table. If the numbers are unflattering, publish them anyway and say what threshold would have been better. |
 | Others can use it | Someone outside the team opens the URL and completes a run with us not present. |
+| Re-centring survives a hooked pool | Run it against one of the hooked ETH/USDG pools, not only a plain one. |
 
 ## What we will and will not claim
 
@@ -128,6 +147,16 @@ numbers are what distinguish that from a slogan.
 
 We will not claim that transactions are private, that returns are guaranteed, or that any
 integration works before it has run.
+
+## Known blockers
+
+Not design problems — supply problems, recorded so they are not discovered late:
+
+- **Gas.** The mainnet wallet holds roughly two transactions' worth at current prices. A
+  full run needs more, and the finalist track requires something others can use without us
+  present.
+- **Testnet faucet ETH** for the end-to-end run on Robinhood testnet.
+- **A hook-less reference pool** on mainnet for the read-only smoke; discovery is running.
 
 ## Prompts
 
