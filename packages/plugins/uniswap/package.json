@@ -1,0 +1,19 @@
+{
+	"name": "@helico/plugin-uniswap",
+	"version": "0.0.0",
+	"private": true,
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"scripts": {
+		"typecheck": "tsc --noEmit",
+		"test": "bun test",
+		"smoke": "bun run src/smoke.ts"
+	},
+	"dependencies": {
+		"@uniswap/sdk-core": "7.19.2",
+		"@uniswap/universal-router-sdk": "5.11.5",
+		"@uniswap/v4-sdk": "2.3.3",
+		"viem": "2.34.0"
+	}
+}
