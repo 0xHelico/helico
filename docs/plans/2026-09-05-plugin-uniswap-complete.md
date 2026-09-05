@@ -93,3 +93,15 @@ simulation and allowance reads, README rewritten per module, root README row upd
 
 *"Can you make the Uniswap plugin complete, not only swap, and not everything in
 `index.ts`; make it modular, clean, professional, refactored, and tested."*
+
+## Revision — what the live checks changed
+
+- `Actions.SWEEP` inside the v4 action list is rejected by the router
+  (`UnsupportedAction(0x14)`). The native refund for exact-output swaps is a router-level
+  `SWEEP` command after `V4_SWAP` (`commands = 0x1004`, two inputs).
+- The first multi-hop smoke used ETH → USDC → ETH through one pool. The Quoter accepts it,
+  the router reverts with `V4TooLittleReceived(min, 0)`: same-currency endpoints net their
+  deltas out. The smoke now uses ETH → USDC → USDT, both at the 0.05 % tier.
+- `mainnet.base.org` rate-limits the smoke (HTTP 429); it defaults to
+  `base-rpc.publicnode.com` and honours `RPC_URL`.
+- `addresses()` returns checksummed addresses so decoded calldata compares equal.

@@ -41,6 +41,18 @@ must link to this file. Everything below was observed while building
   (`/docs/uniswap-ai`, `/docs/trading-api`), so an agent following links dead-ends.
 - The recommended path for backends, the Trading API, is the one path a hackathon team
   cannot verify without registering for a key first.
+- `V4Planner` happily encodes `Actions.SWEEP`, but the Universal Router's v4 action set has
+  no sweep: the router reverts with `UnsupportedAction(0x14)`. Refunding unused native input
+  after an exact-output swap needs the router-level `SWEEP` command instead, which
+  `RoutePlanner` encodes correctly. Nothing in the skills or the SDK types says which actions
+  the router accepts.
+- The `v4-sdk-integration` skill imports `encodeMultihopExactInPath` from `@uniswap/v4-sdk`;
+  version 2.3.3 does not export it. The `PathKey` struct has to be built by hand.
+- A multi-hop route that ends in its own input currency (ETH → USDC → ETH) quotes fine but
+  reverts in the router with `V4TooLittleReceived(min, 0)`, because `SETTLE_ALL`/`TAKE_ALL`
+  work on net deltas. Obvious in hindsight, invisible in the docs.
+- `https://mainnet.base.org`, viem's default Base RPC, answers HTTP 429 after about ten
+  calls in a row; the smoke script had to move to another public endpoint.
 
 ## Suggestions
 
@@ -53,3 +65,6 @@ must link to this file. Everything below was observed while building
 - Fix the `llms.mdx` 404s, or list which pages are available to non-browser clients.
 - A rate-limited, keyless tier of the Trading API for read-only `quote` calls would let
   hackathon teams verify the recommended path before they commit to it.
+- Type the `Actions` a `V4Planner` may carry per execution context (router vs position
+  manager), or document the router's supported subset next to `handlerInTee`-style examples.
+- Update the `v4-sdk-integration` multi-hop snippet to the current SDK surface.

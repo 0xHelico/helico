@@ -25,7 +25,7 @@ Submission for [ETHOnline 2026](https://ethglobal.com/events/ethonline2026)
 
 | Partner | Status | Where | Code reference |
 |---|---|---|---|
-| Uniswap v4 | reusable package only: on-chain pool state, quotes, and swap calldata, verified live on Base by `eth_call`; **no swap sent, not wired into an app** | [`packages/plugins/uniswap/`](packages/plugins/uniswap/) | [`src/index.ts#L88`](packages/plugins/uniswap/src/index.ts#L88) `StateView` reads, [`#L116`](packages/plugins/uniswap/src/index.ts#L116) v4 `Quoter`, [`#L141`](packages/plugins/uniswap/src/index.ts#L141) Universal Router `execute` calldata |
+| Uniswap v4 | reusable package: addresses, pools, quotes, swaps (all four shapes), Permit2 approvals, liquidity; swaps and quotes verified live on Base by `eth_call`; **nothing sent, liquidity calldata not simulated, not wired into an app** | [`packages/plugins/uniswap/`](packages/plugins/uniswap/) | [`src/swap.ts#L93`](packages/plugins/uniswap/src/swap.ts#L93) Universal Router `execute`, [`src/quote.ts#L16`](packages/plugins/uniswap/src/quote.ts#L16) v4 `Quoter`, [`src/approval.ts#L132`](packages/plugins/uniswap/src/approval.ts#L132) Permit2, [`src/liquidity.ts#L93`](packages/plugins/uniswap/src/liquidity.ts#L93) `V4PositionManager` |
 
 ## Contributing
 

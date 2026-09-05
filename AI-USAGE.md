@@ -86,6 +86,24 @@ Format: date · what was done · the AI's role · what a human verified.
   Universal Router in an `eth_call` from an ETH-holding address. **No transaction was sent.**
   `bun run check` clean.
 
+### 2026-09-05 — Uniswap plugin, complete and modular
+
+- **Done:** `@helico/plugin-uniswap` split into `addresses`, `pool`, `quote`, `swap`,
+  `approval`, `liquidity` (plus `abi/`, `types`, `client`), one test file per module, a barrel
+  `index.ts`, and a smoke script covering pools, all four swap shapes, and allowances.
+- **AI's role:** read the v4-sdk, universal-router-sdk, permit2-sdk, v4-periphery, and
+  v4-core sources for the exact structs and constructor orders; wrote the plan, modules,
+  tests, docs; ran every check and fixed what the live simulation caught (a v4 `SWEEP` the
+  router rejects, a degenerate round-trip route). The human asked for the scope and the
+  modular shape.
+- **Plan:** [`docs/plans/2026-09-05-plugin-uniswap-complete.md`](docs/plans/2026-09-05-plugin-uniswap-complete.md),
+  prompt included.
+- **Verified:** `typecheck` clean; `test` 39 pass, 0 fail across 6 files, offline; `smoke`
+  live on Base: pool state and price, exact-in and exact-out quotes, single-hop and
+  multi-hop (ETH → USDC → USDT) swap calldata for all four shapes accepted by the Universal
+  Router via `eth_call`, allowance read. **Nothing sent. Liquidity calldata decoded, not
+  simulated.** `bun run check` clean.
+
 <!--
 Template for the next entry:
 
