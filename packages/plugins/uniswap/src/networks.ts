@@ -112,6 +112,15 @@ const builtIn: Network[] = [
 		wrappedNative: '0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73',
 		// USDG (Global Dollar) is the quote asset of most Robinhood Chain pools.
 		usd: { address: '0x5fc5360d0400a0fd4f2af552add042d716f1d168', symbol: 'USDG', decimals: 6 },
+		// The deepest hook-less ETH/USDG pool found on 2026-09-05 (liquidity 2.2e17 at tick -198246);
+		// most other ETH/USDG pools there carry a dynamic-fee hook.
+		nativeUsdPool: {
+			currency0: ZERO,
+			currency1: '0x5fc5360d0400a0fd4f2af552add042d716f1d168',
+			fee: 87,
+			tickSpacing: 1,
+			hooks: ZERO,
+		},
 	},
 	{
 		key: 'robinhood-testnet',

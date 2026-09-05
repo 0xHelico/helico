@@ -41,7 +41,7 @@ Built-ins:
 | `bnb` | BNB Smart Chain | 2.0 | BNB/USDC 0.05 %, read with liquidity |
 | `base` | Base | 2.0 | ETH/USDC 0.05 %, read with liquidity; multi-hop via USDT |
 | `base-sepolia` | Base Sepolia | 2.0 | ETH/USDC 0.05 % (Circle test USDC) |
-| `robinhood` | Robinhood Chain (4663) | 2.1.1 | pending, see below |
+| `robinhood` | Robinhood Chain (4663) | 2.1.1 | ETH/USDG fee 87 / spacing 1, the deepest hook-less pool found |
 | `robinhood-testnet` | Robinhood Chain Testnet (46630) | 2.1.1 | none; the e2e makes its own |
 
 **Robinhood Chain.** viem ships no definition, so [`chains.ts`](src/chains.ts) defines both
@@ -128,8 +128,13 @@ all `status: success`:
 | Decrease 100 % and burn the NFT | [`0xf98a…ad617`](https://sepolia.basescan.org/tx/0xf98a4ad77e81b07d7f15efcafa8f169e5d77b84d5bbb1bbe06568992223ad617) |
 
 An earlier run against the public ETH/USDC pool (mint #27362, swaps, collect, burn) is in the
-commit history of this file. Robinhood Chain runs are pending: the smoke needs a verified
-reference pool, the e2e needs testnet faucet ETH.
+commit history of this file.
+
+**Robinhood Chain mainnet, read-only, 2026-09-05** (`CHAIN=robinhood bun run smoke`): router
+2.1.1 resolved, ETH/USDG 87/1 read at tick −198250 with liquidity 2.2e17 (2,458 USDG per ETH),
+quote 1 ETH → 2,457.18 USDG, exact-in and exact-out swap calldata in the 2.1.1 layout accepted
+by the Universal Router via `eth_call`, allowances read. The e2e there waits for testnet faucet
+ETH (`https://faucet.testnet.chain.robinhood.com`).
 
 ## Do not forget
 

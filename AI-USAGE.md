@@ -174,8 +174,8 @@ Format: date · what was done · the AI's role · what a human verified.
   [`docs/plans/2026-09-05-plugin-uniswap-complete.md`](docs/plans/2026-09-05-plugin-uniswap-complete.md).
 - **Verified:** `typecheck` (all packages), `test` (48 pass), `bun run check`; e2e on Base
   Sepolia with the new self-contained flow: 12 transactions, all `status: success`, including
-  `initializePool` and `increaseLiquidity`. Robinhood runs pending: the read-only smoke needs
-  a verified reference pool, the e2e needs testnet faucet ETH.
+  `initializePool` and `increaseLiquidity`. Robinhood Chain mainnet smoke passed (router 2.1.1, ETH/USDG 87/1,
+  quotes and both swap shapes accepted via `eth_call`); the e2e there needs testnet faucet ETH.
 
 <!--
 Template for the next entry:

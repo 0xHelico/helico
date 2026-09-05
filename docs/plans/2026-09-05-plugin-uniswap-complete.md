@@ -166,3 +166,6 @@ asked for Robinhood Chain mainnet and testnet, then for a shape that scales to a
 - **Review items from #8:** the e2e never rebuilds once a hash exists (only the receipt is
   polled); Permit2 approvals default to 30 days; Base Sepolia is pinned in the tests;
   `permitSingleTypedData` is documented as not consumed by this package's own commands.
+- **Robinhood mainnet smoke, 2026-09-05:** the deepest hook-less ETH/USDG pool is fee 87 /
+  spacing 1 (liquidity 2.2e17); quotes and both single-hop swap shapes in the 2.1.1 layout
+  were accepted by the router via `eth_call`. The e2e waits for testnet faucet ETH.
