@@ -25,6 +25,11 @@ Submission for [ETHOnline 2026](https://ethglobal.com/events/ethonline2026)
 |---|---|---|---|
 | — | not started | — | — |
 
+## Contributing
+
+New here? Read [`CONTRIBUTING.md`](CONTRIBUTING.md) first — it is short, and it covers the
+two mistakes that can cost the entire submission.
+
 ## Rules
 
 This repository follows the ETHOnline 2026 rules. The one that matters most: **an
