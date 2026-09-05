@@ -1,0 +1,8 @@
+# Every pull request is reviewed by the other person on the team.
+# GitHub requests these owners automatically and skips the pull request's
+# own author, so each of us is asked to review only the other's work.
+#
+# This requests a review; it does not block a merge without branch
+# protection on main, which is deliberately off while the deadline is close.
+
+* @ghozzza @rifkyeasy
