@@ -40,6 +40,20 @@ Format: date · what was done · the AI's role · what a human verified.
 - **Verified:** `pnpm install` then `pnpm typecheck` from the root. Turborepo ran
   `tsc --noEmit` in `@helico/core` and it passed. Nothing else exists to test yet.
 
+### 2026-09-05 — Switch the workspace from pnpm to bun
+
+- **Done:** root `package.json` now declares bun workspaces and `packageManager: bun@1.3.14`;
+  `pnpm-workspace.yaml` and `pnpm-lock.yaml` removed, `bun.lock` committed. Turborepo
+  scripts unchanged.
+- **AI's role:** proposed keeping pnpm, then recommended the switch once the Chainlink CRE
+  work showed bun is mandatory anyway; verified Turborepo on bun workspaces in a scratch
+  project first, then applied it. The human decided.
+- **Prompt:** *"How about using bun for everything?"* then *"Yes, switch, while the pnpm
+  PRs are not merged yet."* (Indonesian, translated.)
+- **Plan:** not needed — tooling only.
+- **Verified:** `bun install`, then `bun run typecheck` from the root: Turborepo ran
+  `tsc --noEmit` in `@helico/core`, 1 task successful.
+
 <!--
 Template for the next entry:
 
