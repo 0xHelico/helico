@@ -113,9 +113,10 @@ docs: record the Uniswap integration entry points
 
 ## Branches and pull requests
 
-- Small, obvious changes can go straight to `main`.
-- Anything larger: branch, then open a pull request.
-- Branch naming: `<type>/<short-topic>` — e.g. `feat/cre-tee-handler`.
+- **Every change starts as an issue, gets a branch, and lands through a pull request.**
+  Nothing goes straight to `main`, however small.
+- Branch naming: `<type>/<short-topic>` — e.g. `feat/cre-tee-handler`, the same types as the
+  commit convention below.
 
 Judges look for proper branch and pull request practice on the finalist track, so PRs are
 worth the small overhead on anything substantial.
