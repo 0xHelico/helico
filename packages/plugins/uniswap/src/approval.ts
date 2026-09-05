@@ -1,5 +1,5 @@
 import { AllowanceTransfer } from '@uniswap/permit2-sdk'
-import { type Address, encodeFunctionData, maxUint48, maxUint160, maxUint256 } from 'viem'
+import { type Address, encodeFunctionData, maxUint160, maxUint256 } from 'viem'
 import { readContract } from 'viem/actions'
 import { erc20Abi } from './abi/erc20'
 import { permit2Abi } from './abi/permit2'
@@ -71,13 +71,21 @@ export function encodeApproveTokenToPermit2({
 	}
 }
 
+/** Uniswap's own interface approves for 30 days so allowances lapse; `Number(maxUint48)` is the explicit opt-in. */
+export const DEFAULT_PERMIT2_EXPIRATION_SECONDS = 30 * 24 * 60 * 60
+
+export const permit2ExpirationFromNow = (
+	seconds = DEFAULT_PERMIT2_EXPIRATION_SECONDS,
+	nowMs = Date.now(),
+): number => Math.floor(nowMs / 1000) + seconds
+
 export type Permit2ApprovalInput = {
 	chainId: number
 	token: Address
 	spender?: Address
 	/** uint160; unlimited by default. */
 	amount?: bigint
-	/** uint48 unix seconds; never expires by default. */
+	/** uint48 unix seconds; 30 days from now by default. */
 	expiration?: number
 }
 
@@ -87,7 +95,7 @@ export function encodeApprovePermit2({
 	token,
 	spender,
 	amount = maxUint160,
-	expiration = Number(maxUint48),
+	expiration = permit2ExpirationFromNow(),
 }: Permit2ApprovalInput): Transaction {
 	const chain = addresses(chainId)
 	return {
@@ -128,7 +136,7 @@ export function permitSingleTypedData({
 	token,
 	spender,
 	amount = maxUint160,
-	expiration = Number(maxUint48),
+	expiration = permit2ExpirationFromNow(),
 	nonce,
 	sigDeadline,
 }: PermitSingleInput): PermitSingleTypedData {

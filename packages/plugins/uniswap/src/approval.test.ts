@@ -9,6 +9,7 @@ import {
 	encodeApprovePermit2,
 	encodeApproveTokenToPermit2,
 	getAllowances,
+	permit2ExpirationFromNow,
 	permitSingleTypedData,
 } from './approval'
 import { fakeClient } from './test/fakeClient'
@@ -80,12 +81,20 @@ describe('approval calldata', () => {
 		expect(args).toEqual([chain.permit2, maxUint256])
 	})
 
-	test('Permit2 approve targets the router, unlimited and never expiring by default', () => {
+	test('Permit2 approve targets the router, unlimited in amount, expiring in 30 days by default', () => {
+		const before = permit2ExpirationFromNow()
 		const tx = encodeApprovePermit2({ chainId: BASE, token: USDC })
 		const { functionName, args } = decodeFunctionData({ abi: permit2Abi, data: tx.data })
 		expect(tx.to).toBe(chain.permit2)
 		expect(functionName).toBe('approve')
-		expect(args).toEqual([USDC, chain.universalRouter, maxUint160, Number(maxUint48)])
+		expect(args?.slice(0, 3)).toEqual([USDC, chain.universalRouter, maxUint160])
+		expect(Number(args?.[3])).toBeGreaterThanOrEqual(before)
+		expect(Number(args?.[3])).toBeLessThanOrEqual(permit2ExpirationFromNow() + 5)
+	})
+
+	test('never-expiring is an explicit opt-in', () => {
+		const tx = encodeApprovePermit2({ chainId: BASE, token: USDC, expiration: Number(maxUint48) })
+		expect(decodeFunctionData({ abi: permit2Abi, data: tx.data }).args?.[3]).toBe(Number(maxUint48))
 	})
 })
 
