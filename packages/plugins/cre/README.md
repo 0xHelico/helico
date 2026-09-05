@@ -7,6 +7,8 @@ What the handler does, all inside the enclave except the last step: fetch a Vaul
 secret, call `config.url` with it, score the response against `config.scoreThreshold`,
 then cross back to the DON with only the verdict and score, signed as a report.
 
+`src/index.ts` and `src/index.test.ts` are the template's `workflow.ts` and `workflow.test.ts`,
+unchanged apart from Biome formatting and one tightened TEE assertion in the test.
 Scaffolded with `cre init` from Chainlink's
 [`hello-confidential-workflows-ts`](https://github.com/smartcontractkit/cre-templates/tree/main/starter-templates/hello-confidential-workflows).
 Plan: [`docs/plans/2026-09-05-plugin-cre.md`](../../../docs/plans/2026-09-05-plugin-cre.md).
@@ -15,7 +17,7 @@ Plan: [`docs/plans/2026-09-05-plugin-cre.md`](../../../docs/plans/2026-09-05-plu
 
 | | |
 |---|---|
-| Registers a TEE handler with `handlerInTee` | ✅ `src/index.ts`, `initWorkflow` |
+| Registers a TEE handler with `handlerInTee` | ✅ [`src/index.ts#L118-L136`](src/index.ts#L118-L136), `initWorkflow`; the call is on L132 |
 | Unit tests, `bun test` | ✅ |
 | Compiles to WASM and simulates | ✅ verified from a throwaway CRE project importing this package, not in the repo |
 | Decision logic is Helico's | ❌ template placeholder, `scoreResponse` |

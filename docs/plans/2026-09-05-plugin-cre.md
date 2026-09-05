@@ -2,6 +2,12 @@
 
 Issue: [#3](https://github.com/0xHelico/helico/issues/3)
 
+> **Status.** The layout and the `pnpm` commands below describe the first cut and are
+> superseded by the revisions at the end: the package ships only `src/index.ts` and its tests,
+> the workspace runs on bun, and the runnable CRE project is a separate task
+> ([#21](https://github.com/0xHelico/helico/issues/21)). Kept as written because plans are
+> process evidence.
+
 ## Problem
 
 Helico intends to use Chainlink CRE, and the Chainlink prize at ETHOnline 2026 requires a

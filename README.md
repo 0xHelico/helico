@@ -25,7 +25,7 @@ Submission for [ETHOnline 2026](https://ethglobal.com/events/ethonline2026)
 
 | Partner | Status | Where | Code reference |
 |---|---|---|---|
-| Chainlink CRE | reusable package only: unit-tested and simulated from a throwaway project, **not wired into an app, not deployed** | [`packages/plugins/cre/`](packages/plugins/cre/) | [`src/index.ts#L138`](packages/plugins/cre/src/index.ts#L138) registers the TEE handler with `handlerInTee` |
+| Chainlink CRE | reusable package only: unit-tested and simulated from a throwaway project, **not wired into an app, not deployed** | [`packages/plugins/cre/`](packages/plugins/cre/) | [`src/index.ts#L118-L136`](packages/plugins/cre/src/index.ts#L118-L136) `initWorkflow` registers the TEE handler with `handlerInTee` (L132) |
 
 ## Contributing
 
