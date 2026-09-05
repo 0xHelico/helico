@@ -228,6 +228,29 @@ Format: date · what was done · the AI's role · what a human verified.
   three `cre workflow simulate` runs with the renamed secrets against the Robinhood Chain
   Testnet ETH/WETH pool: `RECENTER -560..440`, `HOLD (in range)`, `HOLD (mandate hash mismatch)`.
 
+### 2026-09-05 — CRE plugin: read the vault, size the mint, deliver the report
+
+- **Done:** `packages/plugins/cre` reads the account, pool, and position from the chain inside
+  the enclave (`chain.ts`), ports the Uniswap sqrt-price arithmetic to native `BigInt`
+  (`math.ts`, cross-checked against `@uniswap/v3-sdk`), sizes the mint the burn will fund
+  (`sizing.ts`), and delivers `abi.encode(act, mandateHash, RecenterParams)` to the vault with
+  `EVMClient.writeReport` (`deliver`). Config drops the position and the tick spacing; the
+  retained-liquidity floor is the mandate's `minRetainedBps` from #39.
+- **AI's role:** read the CRE docs on on-chain writes and the forwarder directory, the SDK's
+  generated EVM client, and the vault on `main`; wrote the code, the fake runtime, and the
+  tests; found that an out-of-range position holds one token and so cannot fund a two-sided
+  range without a swap, and reported it with live-pool numbers on #37. The humans decided the
+  chains (both Robinhood networks) and own the contract side.
+- **Plan:** [`docs/plans/2026-09-05-cre-forwarder-delivery.md`](docs/plans/2026-09-05-cre-forwarder-delivery.md).
+- **Revised after review (same day):** the review of #40 found that `minRetainedBps = 0` let a
+  zero mint through (`0 < 0`); fixed with an unconditional hold on a zero mint. #42 chose the
+  swap: `sizeRecentre` now sizes `zeroForOne`, `amountIn`, `minAmountOut` (swap estimated at
+  the pool's active liquidity with the pool's fee, bounded to the new range) and the report
+  tuple carries them; `maxPoolFeePips` is enclave policy. The report tuple is pinned to a
+  `cast abi-encode` vector, the RPC fault paths and the boundary cases are tested.
+- **Verified:** `typecheck`, `test` (100 pass), `bun run check`. Not run against a deployed
+  vault and not simulated with this binary: the vault with the swap leg is pending (#42).
+
 <!--
 Template for the next entry:
 
