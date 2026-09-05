@@ -12,6 +12,7 @@ import {
 import {
 	type Config,
 	configSchema,
+	configShape,
 	deliver,
 	encodeReport,
 	initWorkflow,
@@ -19,6 +20,7 @@ import {
 	mandateHash,
 	onCronTrigger,
 	recenterParamsAbi,
+	recoverRecentreSigner,
 } from './index'
 import { fakeRuntime } from './test/fakeRuntime'
 
@@ -53,6 +55,7 @@ const committedHash = mandateHash({
 const config: Config = {
 	schedule: '0 */5 * * * *',
 	rpcUrl: 'https://rpc.testnet.chain.robinhood.com/rpc',
+	delivery: 'forwarder',
 	chainSelectorName: 'robinhood-testnet',
 	vault: '0x1111111111111111111111111111111111111111',
 	positionManager: '0x58daec3116aae6D93017bAAea7749052E8a04fA7',
@@ -85,6 +88,7 @@ const handlers = (c: Chain) => ({
 	[sel('function positionOf(address)')]: () => u256(c.tokenId),
 	[sel('function lastActionAt(address)')]: () => u256(c.lastActionAt),
 	[sel('function isActive(address)')]: () => u256(c.active),
+	[sel('function nonces(address)')]: () => u256(c.nonce ?? 0n),
 	[sel('function getSlot0(bytes32)')]: () =>
 		encodeAbiParameters(parseAbiParameters('uint160, int24, uint24, uint24'), [
 			sqrtPriceX96,
@@ -113,7 +117,7 @@ type Faults = {
 	rpcBody?: string
 	secrets?: Record<string, string>
 }
-const run = (chain: Chain, overrides: Partial<Config> = {}, faults: Faults = {}) => {
+const run = async (chain: Chain, overrides: Partial<Config> = {}, faults: Faults = {}) => {
 	const fake = fakeRuntime({
 		config: configSchema.parse({ ...config, ...overrides }),
 		secrets: faults.secrets ?? secrets,
@@ -123,7 +127,7 @@ const run = (chain: Chain, overrides: Partial<Config> = {}, faults: Faults = {})
 		httpStatus: faults.httpStatus,
 		rpcBody: faults.rpcBody,
 	})
-	const result = onCronTrigger(fake.runtime)
+	const result = await onCronTrigger(fake.runtime)
 	return { ...fake, result }
 }
 
@@ -145,13 +149,13 @@ const offCentre: Chain = {
 
 // ─── Tests ───────────────────────────────────────────────────
 describe('configSchema', () => {
-	test('carries no threshold and no position: both are read from secrets and the vault', () => {
+	test('carries no threshold and no position: both are read from secrets and the vault', async () => {
 		for (const key of ['position', 'tickSpacing', 'minImprovementBps', 'minRetainedBps']) {
-			expect(Object.keys(configSchema.shape)).not.toContain(key)
+			expect(Object.keys(configShape)).not.toContain(key)
 		}
 	})
 
-	test('lowercases hex values so a checksummed config compares equal to keccak output', () => {
+	test('lowercases hex values so a checksummed config compares equal to keccak output', async () => {
 		const parsed = configSchema.parse({
 			...config,
 			poolId: poolId.toUpperCase().replace('0X', '0x'),
@@ -162,15 +166,17 @@ describe('configSchema', () => {
 })
 
 describe('onCronTrigger', () => {
-	test('refuses, and never reads the chain, when the secrets do not match the committed hash', () => {
-		const { result, rpcRequests, writes } = run(offCentre, { mandateHash: `0x${'ab'.repeat(32)}` })
+	test('refuses, and never reads the chain, when the secrets do not match the committed hash', async () => {
+		const { result, rpcRequests, writes } = await run(offCentre, {
+			mandateHash: `0x${'ab'.repeat(32)}`,
+		})
 		expect(result).toBe('HOLD (mandate hash mismatch)')
 		expect(rpcRequests).toHaveLength(0)
 		expect(writes).toHaveLength(0)
 	})
 
-	test('reads the account and the pool, then the position, in two batches from inside the enclave', () => {
-		const { rpcRequests } = run({ ...offCentre, range: [-2_000, -1_000], tick: -65 })
+	test('reads the account and the pool, then the position, in two batches from inside the enclave', async () => {
+		const { rpcRequests } = await run({ ...offCentre, range: [-2_000, -1_000], tick: -65 })
 		expect(rpcRequests).toHaveLength(2)
 		const lower = (a: string) => a.toLowerCase()
 		expect(rpcRequests[0]?.map((r) => r.params[0].to)).toEqual(
@@ -220,13 +226,13 @@ describe('onCronTrigger', () => {
 			{ ...offCentre, range: [100, 1_100] as [number, number] },
 			'HOLD (vault would reject: NothingToMint)',
 		],
-	])('holds on %s without writing anything', (_, chain, expected) => {
-		const { result, writes } = run(chain)
+	])('holds on %s without writing anything', async (_, chain, expected) => {
+		const { result, writes } = await run(chain)
 		expect(result).toBe(expected)
 		expect(writes).toHaveLength(0)
 	})
 
-	test('a retention floor of zero does not let a zero mint through', () => {
+	test('a retention floor of zero does not let a zero mint through', async () => {
 		const zeroFloor = { ...secrets, [MANDATE_SECRET_IDS.minRetainedBps]: '0' }
 		const hash = mandateHash({
 			poolId,
@@ -237,7 +243,7 @@ describe('onCronTrigger', () => {
 			expiry: 1_800_000_000,
 			minRetainedBps: 0,
 		})
-		const { result, writes } = run(
+		const { result, writes } = await run(
 			{ ...offCentre, range: [100, 1_100] },
 			{ mandateHash: hash },
 			{ secrets: zeroFloor },
@@ -246,7 +252,7 @@ describe('onCronTrigger', () => {
 		expect(writes).toHaveLength(0)
 	})
 
-	test('holds below the retention floor rather than shrinking the position', () => {
+	test('holds below the retention floor rather than shrinking the position', async () => {
 		const strict = { ...secrets, [MANDATE_SECRET_IDS.minRetainedBps]: '9999' }
 		const hash = mandateHash({
 			poolId,
@@ -257,13 +263,13 @@ describe('onCronTrigger', () => {
 			expiry: 1_800_000_000,
 			minRetainedBps: 9999,
 		})
-		const { result, writes } = run(belowRange, { mandateHash: hash }, { secrets: strict })
+		const { result, writes } = await run(belowRange, { mandateHash: hash }, { secrets: strict })
 		expect(result).toBe("HOLD (below the mandate's retention floor)")
 		expect(writes).toHaveLength(0)
 	})
 
-	test('re-centres an out-of-range position by swapping through the pool and delivers the sized params', () => {
-		const { result, writes, reports } = run(belowRange)
+	test('re-centres an out-of-range position by swapping through the pool and delivers the sized params', async () => {
+		const { result, writes, reports } = await run(belowRange)
 		expect(result).toBe(`RECENTER -560..440 tx 0x${'ab'.repeat(32)}`)
 		expect(writes).toHaveLength(1)
 		const write = writes[0] as NonNullable<(typeof writes)[0]>
@@ -289,8 +295,8 @@ describe('onCronTrigger', () => {
 		expect(reports).toHaveLength(1)
 	})
 
-	test('above its range the position is all token1, so the swap sells token1', () => {
-		const { result, writes } = run({
+	test('above its range the position is all token1, so the swap sells token1', async () => {
+		const { result, writes } = await run({
 			...offCentre,
 			range: [-2_000, -1_000],
 			poolLiquidity: 10n ** 18n,
@@ -302,9 +308,13 @@ describe('onCronTrigger', () => {
 		expect(p.amountIn).toBeLessThan(p.amount1Min)
 	})
 
-	test('the cooldown ends exactly at lastActionAt + cooldownSeconds, as in the vault', () => {
-		expect(run({ ...belowRange, lastActionAt: BigInt(now - 3_600) }).result).toStartWith('RECENTER')
-		expect(run({ ...belowRange, lastActionAt: BigInt(now - 3_599) }).result).toBe('HOLD (cooldown)')
+	test('the cooldown ends exactly at lastActionAt + cooldownSeconds, as in the vault', async () => {
+		expect((await run({ ...belowRange, lastActionAt: BigInt(now - 3_600) })).result).toStartWith(
+			'RECENTER',
+		)
+		expect((await run({ ...belowRange, lastActionAt: BigInt(now - 3_599) })).result).toBe(
+			'HOLD (cooldown)',
+		)
 	})
 
 	test.each([
@@ -319,8 +329,91 @@ describe('onCronTrigger', () => {
 			{ rpcBody: '[{"jsonrpc":"2.0","id":0,"error":{"message":"execution reverted"}}]' },
 			'eth_call 0 failed: execution reverted',
 		],
-	])('fails loudly on %s rather than deciding on a partial view', (_, faults, message) => {
-		expect(() => run(belowRange, {}, faults)).toThrow(message)
+	])('fails loudly on %s rather than deciding on a partial view', async (_, faults, message) => {
+		await expect(run(belowRange, {}, faults)).rejects.toThrow(message)
+	})
+})
+
+describe('signature delivery', () => {
+	// Anvil's first account, a public test key; the fake hands it out as the AGENT_KEY secret.
+	const agentKey = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
+	const agentAddress = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
+	const signing: Partial<Config> = { delivery: 'signature', chainId: 46630 }
+	const withKey = { ...secrets, AGENT_KEY: agentKey }
+	const belowRange: Chain = { ...offCentre, range: [100, 1_100], poolLiquidity: 10n ** 18n }
+	const chain: Chain = { ...belowRange, nonce: 7n }
+
+	test('signs the sized params with the agent key and lets only the authorisation out', async () => {
+		const { result, writes, reports, secretRequests } = await run(chain, signing, {
+			secrets: withKey,
+		})
+		expect(secretRequests).toContain('AGENT_KEY')
+		expect(result.startsWith('RECENTER -560..440 {')).toBe(true)
+		const auth = JSON.parse(result.slice(result.indexOf('{'))) as {
+			params: Record<string, string | number | boolean>
+			mandateHash: Hex
+			nonce: string
+			signature: Hex
+			signer: Address
+		}
+		expect(auth.signer).toBe(agentAddress)
+		expect(auth.nonce).toBe('7')
+		expect(auth.mandateHash).toBe(committedHash)
+		// No forwarder write; the DON report carries the authorisation and nothing else.
+		expect(writes).toHaveLength(0)
+		expect(reports).toHaveLength(1)
+		const [p, hash, nonce, sig] = decodeAbiParameters(
+			[recenterParamsAbi, { type: 'bytes32' }, { type: 'uint256' }, { type: 'bytes' }],
+			bytesToHex(Buffer.from(reports[0] ?? '', 'base64')),
+		)
+		expect(hash).toBe(committedHash)
+		expect(nonce).toBe(7n)
+		expect(sig).toBe(auth.signature)
+		expect([p.tickLower, p.tickUpper]).toEqual([-560, 440])
+		// The signature verifies against the vault's domain for exactly these params.
+		const domain = {
+			name: 'HelicoVault',
+			version: '1',
+			chainId: 46630,
+			verifyingContract: config.vault as Address,
+		}
+		expect(await recoverRecentreSigner(domain, { params: p, mandateHash: hash, nonce }, sig)).toBe(
+			agentAddress,
+		)
+		// The key itself never crosses out.
+		for (const leaked of [
+			result,
+			...reports,
+			bytesToHex(Buffer.from(reports[0] ?? '', 'base64')),
+		]) {
+			expect(leaked.toLowerCase()).not.toContain(agentKey.slice(2))
+		}
+	})
+
+	test('a hold signs nothing and asks for nothing more than the mandate', async () => {
+		const { result, reports, secretRequests } = await run({ ...chain, active: false }, signing, {
+			secrets: withKey,
+		})
+		expect(result).toBe('HOLD (mandate revoked)')
+		expect(reports).toHaveLength(0)
+		expect(secretRequests).toContain('AGENT_KEY')
+	})
+
+	test('forwarder delivery never asks the Vault DON for the agent key', async () => {
+		const { secretRequests } = await run(belowRange)
+		expect(secretRequests).not.toContain('AGENT_KEY')
+	})
+
+	test('refuses to sign without the key or the nonce', async () => {
+		await expect(run(chain, signing)).rejects.toThrow('Secret AGENT_KEY is missing')
+	})
+
+	test('the schema ties chainId to signature delivery and chainSelectorName to the forwarder', () => {
+		expect(() => configSchema.parse({ ...config, delivery: 'signature' })).toThrow('chainId')
+		expect(() => configSchema.parse({ ...config, chainSelectorName: undefined })).toThrow(
+			'chainSelectorName',
+		)
+		expect(configSchema.parse({ ...config, ...signing }).delivery).toBe('signature')
 	})
 })
 
@@ -340,7 +433,7 @@ describe('deliver', () => {
 		deadline: BigInt(now + 600),
 	}
 
-	test("encodes the tuple in the vault's field order: pinned to an encoding produced by cast", () => {
+	test("encodes the tuple in the vault's field order: pinned to an encoding produced by cast", async () => {
 		// cast abi-encode "f(bool,bytes32,(address,int24,int24,uint256,uint128,uint128,uint128,uint128,bool,uint256,uint256,uint256))" \
 		//   true 0x134be6bb…6225 "(0x7461…88C0,-560,440,129997405203692,3234967638235,45299872474506,3251223757021,45527510024630,true,1000000000000,995000000000,1700000600)"
 		expect(encodeReport(true, committedHash, params)).toBe(
@@ -348,7 +441,7 @@ describe('deliver', () => {
 		)
 	})
 
-	test('signs the report through the DON and writes it to the vault on the configured chain', () => {
+	test('signs the report through the DON and writes it to the vault on the configured chain', async () => {
 		const fake = fakeRuntime({ config, secrets, now, handlers: {} })
 		const txHash = deliver(
 			fake.runtime.usingTheDons(),
@@ -372,14 +465,14 @@ describe('deliver', () => {
 		expect(fake.rpcRequests).toHaveLength(0)
 	})
 
-	test('fails loudly when the write does not succeed', () => {
+	test('fails loudly when the write does not succeed', async () => {
 		const fake = fakeRuntime({ config, secrets, now, handlers: {}, writeStatus: 1 })
 		expect(() =>
 			deliver(fake.runtime.usingTheDons(), config, encodeReport(true, committedHash, params)),
 		).toThrow('writeReport failed: REVERTED')
 	})
 
-	test('rejects a chain selector name the SDK does not know', () => {
+	test('rejects a chain selector name the SDK does not know', async () => {
 		const fake = fakeRuntime({
 			config: { ...config, chainSelectorName: 'nowhere' },
 			secrets,
@@ -397,7 +490,7 @@ describe('deliver', () => {
 })
 
 describe('encodeReport', () => {
-	test('a hold encodes as act = false with zeroed params, so the layout never changes', () => {
+	test('a hold encodes as act = false with zeroed params, so the layout never changes', async () => {
 		const [act, hash, p] = decodeAbiParameters(
 			[{ type: 'bool' }, { type: 'bytes32' }, recenterParamsAbi],
 			encodeReport(false, committedHash),
@@ -410,7 +503,7 @@ describe('encodeReport', () => {
 })
 
 describe('initWorkflow', () => {
-	test('registers the cron handler inside a Nitro enclave in us-west-2', () => {
+	test('registers the cron handler inside a Nitro enclave in us-west-2', async () => {
 		const [handler] = initWorkflow(config)
 		expect(handler).toMatchObject({
 			requirements: {

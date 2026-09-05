@@ -31,6 +31,7 @@ export function fakeRuntime(input: {
 	const rpcRequests: Batch[] = []
 	const writes: WriteReportCall[] = []
 	const reports: string[] = []
+	const secretRequests: string[] = []
 
 	const answer = ({ to, data }: RpcCall): Hex => {
 		const handler = input.handlers[slice(data, 0, 4)]
@@ -90,16 +91,25 @@ export function fakeRuntime(input: {
 	}
 	const runtime = {
 		...don,
-		getSecrets: (requests: { id: string }[]) => ({
-			result: () =>
-				Object.fromEntries(
-					requests.map((r) => [
-						r.id,
-						{ id: r.id, namespace: 'main', value: input.secrets[r.id] ?? '' },
-					]),
-				),
-		}),
+		getSecrets: (requests: { id: string }[]) => {
+			secretRequests.push(...requests.map((r) => r.id))
+			return {
+				result: () =>
+					Object.fromEntries(
+						requests.map((r) => [
+							r.id,
+							{ id: r.id, namespace: 'main', value: input.secrets[r.id] ?? '' },
+						]),
+					),
+			}
+		},
 		usingTheDons: () => don,
 	}
-	return { runtime: runtime as unknown as TeeRuntime<Config>, rpcRequests, writes, reports }
+	return {
+		runtime: runtime as unknown as TeeRuntime<Config>,
+		rpcRequests,
+		writes,
+		reports,
+		secretRequests,
+	}
 }

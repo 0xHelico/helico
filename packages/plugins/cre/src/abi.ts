@@ -1,9 +1,10 @@
-import { parseAbi } from 'viem'
+import { type Address, parseAbi } from 'viem'
 
 export const vaultAbi = parseAbi([
 	'function positionOf(address owner) view returns (uint256)',
 	'function lastActionAt(address owner) view returns (uint64)',
 	'function isActive(address owner) view returns (bool)',
+	'function nonces(address owner) view returns (uint256)',
 ])
 
 export const positionManagerAbi = parseAbi([
@@ -34,3 +35,19 @@ export const recenterParamsAbi = {
 		{ name: 'deadline', type: 'uint256' },
 	],
 } as const
+
+/** The vault's `RecenterParams`, mirrored field for field. */
+export type RecenterParams = {
+	owner: Address
+	tickLower: number
+	tickUpper: number
+	liquidityToMint: bigint
+	amount0Min: bigint
+	amount1Min: bigint
+	amount0Max: bigint
+	amount1Max: bigint
+	zeroForOne: boolean
+	amountIn: bigint
+	minAmountOut: bigint
+	deadline: bigint
+}
