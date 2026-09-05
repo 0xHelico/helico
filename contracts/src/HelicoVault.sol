@@ -166,6 +166,7 @@ contract HelicoVault is
     error SwapOutputTooSmall();
     error PriceLeftTheRange();
     error VaultNotEmpty();
+    error PayoutFailed();
     error UnusableOwner();
     error PositionNotDelivered();
     error RangeNotDelivered();
@@ -206,6 +207,10 @@ contract HelicoVault is
 
     /// @notice Accepts native currency, which a v4 pool with `currency0 == address(0)` pays out
     ///         mid-re-centre.
+    /// @dev This also accepts native from anyone. A re-centre measures what it produced against
+    ///      the balance it started with, so a stray transfer is excluded from every payout and
+    ///      is stuck rather than payable to somebody else. Documented in the README rather than
+    ///      swept, because a sweep is a privileged path this contract does not otherwise need.
     /// @dev `Currency.transfer` for native is a bare `call`, so without this every re-centre on
     ///      a native pool would revert at the take, before the swap. The vault still ends every
     ///      call holding nothing: `_settleUp` sends the balance this call produced to the owner
@@ -425,7 +430,13 @@ contract HelicoVault is
         // be pushed out of that range — not by the agent, not by us. Without it, an agent
         // moves the price after `_checkRange` has already approved the range against it, and
         // mints single-sided while every post-condition still passes.
-        uint160 limit = TickMath.getSqrtPriceAtTick(u.p.zeroForOne ? u.p.tickLower : u.p.tickUpper);
+        // One below the upper edge when the price is going up, because `tickUpper` is exclusive:
+        // a fill that reached exactly `getSqrtPriceAtTick(tickUpper)` would land the pool on a
+        // tick the mint forbids, so the guard would revert the re-centre precisely when it did
+        // its job. The lower edge is inclusive and needs no adjustment.
+        uint160 limit = u.p.zeroForOne
+            ? TickMath.getSqrtPriceAtTick(u.p.tickLower)
+            : TickMath.getSqrtPriceAtTick(u.p.tickUpper) - 1;
 
         int256 delta = poolManager.swap(
             u.key,
@@ -444,14 +455,17 @@ contract HelicoVault is
             d1 := signextend(15, delta)
         }
 
-        uint256 paid = _resolve(u.key.currency0, d0);
-        uint256 received = _resolve(u.key.currency1, d1);
+        // Named for the currency rather than the direction: `moved0` is however much token0
+        // changed hands, whether the vault paid it or received it. Calling them paid/received
+        // reads backwards in one of the two directions.
+        uint256 moved0 = _resolve(u.key.currency0, d0);
+        uint256 moved1 = _resolve(u.key.currency1, d1);
         if (u.p.zeroForOne) {
-            if (received < u.p.minAmountOut) revert SwapOutputTooSmall();
-            return (got0 - paid, got1 + received);
+            if (moved1 < u.p.minAmountOut) revert SwapOutputTooSmall();
+            return (got0 - moved0, got1 + moved1);
         }
-        if (paid < u.p.minAmountOut) revert SwapOutputTooSmall();
-        return (got0 + paid, got1 - received);
+        if (moved0 < u.p.minAmountOut) revert SwapOutputTooSmall();
+        return (got0 + moved0, got1 - moved1);
     }
 
     /// @dev Settles one side of a swap delta and returns the amount that moved.
@@ -526,7 +540,7 @@ contract HelicoVault is
         if (amount == 0) return;
         if (currency == address(0)) {
             (bool ok,) = to.call{value: amount}("");
-            if (!ok) revert VaultNotEmpty();
+            if (!ok) revert PayoutFailed();
         } else {
             IERC20(currency).safeTransfer(to, amount);
         }

@@ -124,6 +124,9 @@ Written down rather than glossed over.
 - **A re-centre pays a swap through the position's own pool.** On a high-fee pool that can cost
   more than it recovers — v4 fees are hundredths of a bip, and pools on this chain run to 20%.
   Nothing in the contract can fix that; it is the pool the user chose.
+- **Stray native sent to the vault is stuck.** `receive()` accepts from anyone, and a re-centre
+  measures only what it produced, so a loose transfer is never paid to somebody else — but
+  there is no path to recover it either. That is the trade for not adding a privileged sweep.
 - **The mock is not Uniswap.** `RealisticPositionManager` models authorisation and settlement
   faithfully; it does not model the sqrt-price curve, and `MockPoolManager` refuses to model a
   swap at all. Anything asserted about the swap is asserted on a fork or not at all.
@@ -139,12 +142,15 @@ forge test
 ROBINHOOD_RPC_URL=https://rpc.mainnet.chain.robinhood.com forge test
 ```
 
+CI leaves `ROBINHOOD_RPC_URL` unset, so the fork suite reports `SKIP` there — read the tick
+count as 56 executed, not 62, unless the endpoint is set.
+
 The fork tests do **not** pin a block. The public RPC keeps roughly 6,100 blocks of state and
 the block time is 0.101 seconds, so a pinned fork works on the machine that warmed Foundry's
 cache and fails for everyone else within the hour. They fork `latest` and derive what they need
 from what they read.
 
-60 tests, 4 of them on a fork. `VaultAttacks.t.sol` holds the audit's findings as regression tests — each one was
+62 tests, 6 of them on a fork. `VaultAttacks.t.sol` holds the audit's findings as regression tests — each one was
 written before the contract could pass it, and the commit that added them is red on all nine.
 `HelicoVault.t.sol` covers every rejection path above, all three exits (paused, agent removed,
 upgrade pending), the upgrade path, and the hash agreement with the CRE workflow — pinned to a literal

@@ -1,0 +1,276 @@
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.28;
+
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+
+import {ForkBase} from "./ForkBase.sol";
+import {HelicoVault} from "../src/HelicoVault.sol";
+import {Mandate, MandateLib, PoolKey} from "../src/Mandate.sol";
+import {TickMath} from "../src/lib/TickMath.sol";
+
+interface IPermit2 {
+    function approve(address token, address spender, uint160 amount, uint48 expiration) external;
+}
+
+/// @dev The ERC-721 half of the real PositionManager, which the vault's own interface does not
+///      need and so does not declare.
+interface IPositionNft {
+    function setApprovalForAll(address operator, bool approved) external;
+}
+
+/// @notice The swap path, executed end to end against the real Uniswap v4 on Robinhood Chain.
+///
+/// @dev This file exists because the swap cannot be proven anywhere else. `MockPoolManager`
+///      refuses to model a price curve on purpose, so without this the lines that move the
+///      money would run in no test at all — the same hole as a mock that cannot refuse
+///      anything, with the mock replaced by nothing.
+///
+///      Nothing here is borrowed. The test funds an owner, mints its own position out of range
+///      through the live PositionManager, and re-centres it, so it does not depend on a
+///      stranger's position that may flip sides between runs, and it needs no archive node.
+contract ForkSwapRecentreTest is ForkBase {
+    using MandateLib for PoolKey;
+
+    address constant PERMIT2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
+    uint256 constant Q96 = 2 ** 96;
+
+    uint8 constant MINT_POSITION = 0x02;
+    uint8 constant SETTLE_PAIR = 0x0d;
+
+    HelicoVault vault;
+    address admin = makeAddr("admin");
+    address agent = makeAddr("agent");
+    address owner = makeAddr("owner");
+
+    /// @dev 100 whole `par`, enough to be a real position in a pool this deep without being a
+    ///      size that would move the price by itself.
+    uint256 constant PAR_IN = 100 ether;
+    uint16 constant WIDTH_TICKS = 200;
+    uint16 constant RETAIN_BPS = 5_000;
+
+    function _setUpVault() internal {
+        HelicoVault impl = new HelicoVault();
+        bytes memory init = abi.encodeCall(
+            HelicoVault.initialize,
+            (admin, address(POSITION_MANAGER), address(STATE_VIEW), address(POOL_MANAGER))
+        );
+        vault = HelicoVault(payable(address(new ERC1967Proxy(address(impl), init))));
+
+        bytes32 role = vault.AGENT_ROLE();
+        vm.prank(admin);
+        vault.grantRole(role, agent);
+    }
+
+    /// @dev Liquidity funded by token1 alone, for a range that sits entirely below the price.
+    function _liquidityForAmount1(uint160 sa, uint160 sb, uint256 amount1) internal pure returns (uint128) {
+        if (sa > sb) (sa, sb) = (sb, sa);
+        return uint128(Math.mulDiv(amount1, Q96, sb - sa));
+    }
+
+    /// @dev Mints a position whose whole range sits below the market, so it holds only token1 —
+    ///      the shape the product exists to rescue and the one that cannot be re-centred
+    ///      without a swap.
+    function _mintOutOfRangePosition() internal returns (uint256 tokenId, int24 lower, int24 upper) {
+        return _mintOutOfRangePosition(PAR_IN);
+    }
+
+    function _mintOutOfRangePosition(uint256 amount1)
+        internal
+        returns (uint256 tokenId, int24 lower, int24 upper)
+    {
+        int24 spacing = demoPool.tickSpacing;
+        int24 tick = _tickOf(demoPool);
+
+        upper = (tick / spacing) * spacing - spacing * 100;
+        lower = upper - spacing * 20;
+
+        uint128 liquidity = _liquidityForAmount1(
+            TickMath.getSqrtPriceAtTick(lower), TickMath.getSqrtPriceAtTick(upper), amount1
+        );
+
+        deal(demoPool.currency1, owner, amount1 * 2);
+        tokenId = POSITION_MANAGER.nextTokenId();
+
+        vm.startPrank(owner);
+        IERC20(demoPool.currency1).approve(PERMIT2, type(uint256).max);
+        IPermit2(PERMIT2)
+            .approve(
+                demoPool.currency1,
+                address(POSITION_MANAGER),
+                type(uint160).max,
+                uint48(block.timestamp + 1 days)
+            );
+
+        bytes memory actions = abi.encodePacked(MINT_POSITION, SETTLE_PAIR);
+        bytes[] memory params = new bytes[](2);
+        params[0] = abi.encode(
+            demoPool, lower, upper, uint256(liquidity), type(uint128).max, type(uint128).max, owner, bytes("")
+        );
+        params[1] = abi.encode(demoPool.currency0, demoPool.currency1);
+        POSITION_MANAGER.modifyLiquidities(abi.encode(actions, params), block.timestamp + 60);
+
+        IPositionNft(address(POSITION_MANAGER)).setApprovalForAll(address(vault), true);
+        vm.stopPrank();
+    }
+
+    function _mandate() internal view returns (Mandate memory) {
+        return Mandate({
+            poolId: demoPool.hashPoolKey(),
+            rangeWidthTicks: WIDTH_TICKS,
+            minImprovementBps: 100,
+            cooldownSeconds: 1 hours,
+            maxLiquidity: type(uint128).max,
+            expiry: uint64(block.timestamp + 30 days),
+            minRetainedBps: RETAIN_BPS
+        });
+    }
+
+    /// @notice The case the whole product exists for: a position that has drifted out of range,
+    ///         holding one token, re-centred onto the market.
+    function test_RecentresAnOutOfRangePositionThroughASwap() public {
+        _fork();
+        _setUpVault();
+
+        (uint256 tokenId,,) = _mintOutOfRangePosition();
+        uint128 liquidityBefore = POSITION_MANAGER.getPositionLiquidity(tokenId);
+        assertGt(liquidityBefore, 0, "the position exists");
+        assertFalse(_isInRange(tokenId, demoPool), "and it is out of range, which is the point");
+
+        vm.prank(owner);
+        vault.setMandate(tokenId, _mandate());
+
+        int24 spacing = demoPool.tickSpacing;
+        int24 tick = _tickOf(demoPool);
+        // Upper edge just above the market, so most of the new range is funded by the token the
+        // position already holds and the swap only has to cover the sliver above spot.
+        int24 newUpper = (tick / spacing) * spacing + spacing;
+        int24 newLower = newUpper - int24(uint24(WIDTH_TICKS));
+        assertTrue(tick >= newLower && tick < newUpper, "the new range brackets the market");
+
+        uint256 parAfterSwap = (PAR_IN * 85) / 100;
+        uint128 toMint =
+            _liquidityForAmount1(TickMath.getSqrtPriceAtTick(newLower), _sqrtPriceOf(demoPool), parAfterSwap);
+
+        uint256 ownerEthBefore = owner.balance;
+
+        vm.prank(agent);
+        uint256 newTokenId = vault.recenter(
+            HelicoVault.RecenterParams({
+                owner: owner,
+                tickLower: newLower,
+                tickUpper: newUpper,
+                liquidityToMint: toMint,
+                amount0Min: 0,
+                amount1Min: 0,
+                amount0Max: type(uint128).max,
+                amount1Max: type(uint128).max,
+                zeroForOne: false, // sell the token1 it holds for the token0 the range needs
+                amountIn: PAR_IN / 10,
+                minAmountOut: 0,
+                deadline: block.timestamp + 60
+            })
+        );
+
+        // The position moved, and it moved onto the market.
+        assertEq(POSITION_MANAGER.ownerOf(newTokenId), owner, "the new position belongs to the owner");
+        assertTrue(_isInRange(newTokenId, demoPool), "and it is earning again");
+        (int24 gotLower, int24 gotUpper) = _rangeOf(newTokenId);
+        assertEq(gotLower, newLower);
+        assertEq(gotUpper, newUpper);
+
+        // Enough of it survived the round trip.
+        uint128 retained = POSITION_MANAGER.getPositionLiquidity(newTokenId);
+        assertGe(
+            uint256(retained) * 10_000, uint256(liquidityBefore) * RETAIN_BPS, "cleared the retention floor"
+        );
+
+        // And the vault kept none of what passed through it.
+        assertEq(address(vault).balance, 0, "no native left in the vault");
+        assertEq(IERC20(demoPool.currency1).balanceOf(address(vault)), 0, "no token1 left in the vault");
+        assertGe(owner.balance, ownerEthBefore, "leftovers went to the owner, not to the agent");
+        assertEq(agent.balance, 0, "the agent gained nothing");
+        assertEq(IERC20(demoPool.currency1).balanceOf(agent), 0, "the agent gained nothing");
+
+        emit log_named_uint("liquidity before", liquidityBefore);
+        emit log_named_uint("liquidity after", retained);
+    }
+
+    /// @notice The attack the design review found, run against the real curve.
+    ///
+    /// @dev The range is checked against the tick *before* the unlock, and the swap moves that
+    ///      tick afterwards. An agent that swaps far more than the re-centre needs would push
+    ///      the price out of the range it just had approved, and mint single-sided while every
+    ///      post-condition still passed — the retention floor does not catch it, because a unit
+    ///      of liquidity is cheapest exactly at the edge a manipulated price sits on.
+    ///
+    ///      What stops it is the price limit: it is the sqrt price at the edge of the committed
+    ///      range, so the pool halts the swap there. This spends everything the burn returned,
+    ///      the largest swap the vault will ever permit, and the position still lands inside
+    ///      the band the user signed.
+    function test_AnOversizedSwapCannotPushThePriceOutOfTheCommittedRange() public {
+        _fork();
+        _setUpVault();
+
+        // Big enough to move this pool, which takes about 17,000 `par` per tick spacing, and a
+        // range only two spacings wide — so an unbounded swap really would leave it.
+        uint256 big = 400_000 ether;
+        (uint256 tokenId,,) = _mintOutOfRangePosition(big);
+        uint128 liquidityBefore = POSITION_MANAGER.getPositionLiquidity(tokenId);
+
+        Mandate memory m = _mandate();
+        m.rangeWidthTicks = 20;
+        m.minRetainedBps = 0; // so the floor cannot be what rejects it, only the price guard
+        vm.prank(owner);
+        vault.setMandate(tokenId, m);
+
+        int24 spacing = demoPool.tickSpacing;
+        int24 tick = _tickOf(demoPool);
+        int24 newUpper = (tick / spacing) * spacing + spacing;
+        int24 newLower = newUpper - 20;
+
+        // Everything the burn returns, which is the most `SwapExceedsWithdrawn` will allow, and
+        // an order of magnitude more than this re-centre needs. Enough to carry the price well
+        // past `newUpper` if nothing stopped it.
+        uint256 everything = (big * 99) / 100;
+
+        vm.prank(agent);
+        uint256 newTokenId = vault.recenter(
+            HelicoVault.RecenterParams({
+                owner: owner,
+                tickLower: newLower,
+                tickUpper: newUpper,
+                liquidityToMint: 1,
+                amount0Min: 0,
+                amount1Min: 0,
+                amount0Max: type(uint128).max,
+                amount1Max: type(uint128).max,
+                zeroForOne: false,
+                amountIn: everything,
+                minAmountOut: 0,
+                deadline: block.timestamp + 60
+            })
+        );
+
+        int24 after_ = _tickOf(demoPool);
+        assertTrue(after_ >= newLower && after_ < newUpper, "the pool halted at the committed edge");
+        assertTrue(_isInRange(newTokenId, demoPool), "so the position is still on the market");
+        assertEq(POSITION_MANAGER.ownerOf(newTokenId), owner, "and it is still the owner's");
+
+        // Everything the oversized swap bought still went to the owner, never to the agent.
+        assertEq(address(vault).balance, 0, "the vault kept nothing");
+        assertEq(IERC20(demoPool.currency1).balanceOf(address(vault)), 0, "the vault kept nothing");
+        assertEq(agent.balance, 0, "the agent gained nothing");
+        assertEq(IERC20(demoPool.currency1).balanceOf(agent), 0, "the agent gained nothing");
+
+        emit log_named_int("tick before", tick);
+        emit log_named_int("tick after the oversized swap", after_);
+        emit log_named_uint("liquidity before", liquidityBefore);
+        emit log_named_uint("liquidity after", POSITION_MANAGER.getPositionLiquidity(newTokenId));
+    }
+
+    function _sqrtPriceOf(PoolKey memory key) internal view returns (uint160 sqrtPriceX96) {
+        (sqrtPriceX96,,,) = STATE_VIEW.getSlot0(key.hashPoolKey());
+    }
+}
