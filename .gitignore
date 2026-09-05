@@ -19,3 +19,6 @@ artifacts/
 
 # Turborepo
 .turbo/
+
+# Astro generated types
+.astro/
