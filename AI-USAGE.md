@@ -228,6 +228,24 @@ Format: date · what was done · the AI's role · what a human verified.
   three `cre workflow simulate` runs with the renamed secrets against the Robinhood Chain
   Testnet ETH/WETH pool: `RECENTER -560..440`, `HOLD (in range)`, `HOLD (mandate hash mismatch)`.
 
+### 2026-09-05 — CRE plugin: read the vault, size the mint, deliver the report
+
+- **Done:** `packages/plugins/cre` reads the account, pool, and position from the chain inside
+  the enclave (`chain.ts`), ports the Uniswap sqrt-price arithmetic to native `BigInt`
+  (`math.ts`, cross-checked against `@uniswap/v3-sdk`), sizes the mint the burn will fund
+  (`sizing.ts`), and delivers `abi.encode(act, mandateHash, RecenterParams)` to the vault with
+  `EVMClient.writeReport` (`deliver`). Config drops the position and the tick spacing.
+- **AI's role:** read the CRE docs on on-chain writes and the forwarder directory, the SDK's
+  generated EVM client, and the vault on `main`; wrote the code, the fake runtime, and the
+  tests; found that an out-of-range position holds one token and so cannot fund a two-sided
+  range without a swap, and reported it with live-pool numbers on #37. The humans decided the
+  chains (both Robinhood networks) and own the contract side.
+- **Plan:** [`docs/plans/2026-09-05-cre-forwarder-delivery.md`](docs/plans/2026-09-05-cre-forwarder-delivery.md).
+- **Verified:** `typecheck`, `test` (74 pass: the arithmetic grid against the SDK, the read
+  path against a fake JSON-RPC answering by selector, the report bytes and `writeReport`
+  payload), `bun run check`. Not yet run against a deployed vault: the vault's `onReport` is
+  pending, so the simulator run for the delivery path is recorded as pending, not done.
+
 <!--
 Template for the next entry:
 
