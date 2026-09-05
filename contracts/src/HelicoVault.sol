@@ -12,6 +12,10 @@ import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/Pau
 // support for that could not be verified from here.
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import {
+    EIP712Upgradeable
+} from "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -55,6 +59,7 @@ contract HelicoVault is
     PausableUpgradeable,
     ReentrancyGuard,
     UUPSUpgradeable,
+    EIP712Upgradeable,
     IUnlockCallback
 {
     using SafeERC20 for IERC20;
@@ -75,6 +80,23 @@ contract HelicoVault is
     uint256 public constant UPGRADE_GRACE = 7 days;
 
     uint256 private constant BPS = 10_000;
+
+    /// @dev The EIP-712 types the enclave signs. Written out rather than assembled, because
+    ///      `encodeType` appends referenced structs after the primary one and a single character
+    ///      out of place produces a different digest and a silent, permanent rejection. Mirrored
+    ///      in `packages/plugins/cre/src/sign.ts`, and a test pins both to one literal.
+    string private constant RECENTER_PARAMS_TYPE = "RecenterParams(address owner,int24 tickLower,"
+        "int24 tickUpper,uint256 liquidityToMint,uint128 amount0Min,uint128 amount1Min,"
+        "uint128 amount0Max,uint128 amount1Max,bool zeroForOne,uint256 amountIn,"
+        "uint256 minAmountOut,uint256 deadline)";
+
+    bytes32 private constant RECENTER_PARAMS_TYPEHASH = keccak256(bytes(RECENTER_PARAMS_TYPE));
+
+    bytes32 private constant RECENTER_TYPEHASH = keccak256(
+        abi.encodePacked(
+            "Recenter(RecenterParams params,bytes32 mandateHash,uint256 nonce)", RECENTER_PARAMS_TYPE
+        )
+    );
 
     // v4 action opcodes, verified against v4-periphery `src/libraries/Actions.sol`.
     uint8 private constant DECREASE_LIQUIDITY = 0x01;
@@ -119,6 +141,9 @@ contract HelicoVault is
 
     mapping(address => ScheduledUpgrade) public scheduledUpgrades;
 
+    /// @notice One-use counter per position owner, so an authorisation cannot be replayed.
+    mapping(address => uint256) public nonces;
+
     IPoolManager public poolManager;
 
     /// @dev Set for the duration of one `recenter`, so `unlockCallback` can tell a callback it
@@ -127,7 +152,7 @@ contract HelicoVault is
     bool private _recentring;
 
     /// @dev Reserved so later versions can add state without shifting what is already stored.
-    uint256[44] private __gap;
+    uint256[43] private __gap;
 
     event MandateSet(address indexed owner, uint256 indexed tokenId, bytes32 mandateHash);
     event Revoked(address indexed owner, uint256 indexed tokenId);
@@ -178,6 +203,9 @@ contract HelicoVault is
     error UpgradeNotReady();
     error UpgradeExpired();
     error ImplementationChanged();
+    error SignerLacksAgentRole(address signer);
+    error WrongNonce();
+    error MandateChanged();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -198,6 +226,7 @@ contract HelicoVault is
         // UUPSUpgradeable carries no state in OpenZeppelin 5.x, so it has no initializer.
         __AccessControl_init();
         __Pausable_init();
+        __EIP712_init("HelicoVault", "1");
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         positionManager = IPositionManager(positionManager_);
@@ -325,6 +354,74 @@ contract HelicoVault is
         nonReentrant
         returns (uint256 newTokenId)
     {
+        return _recenter(p);
+    }
+
+    /// @notice Carry out a re-centre that an agent authorised by signature rather than by
+    ///         sending the transaction.
+    ///
+    /// @dev **Anyone may call this.** The authority is the signature, not the caller, which is
+    ///      the whole point: it lets the decision be made somewhere that cannot hold gas or
+    ///      send transactions — a Chainlink CRE enclave — and lets any relayer carry it. The
+    ///      agent key exists only inside that enclave, so `AGENT_ROLE` stops being a key
+    ///      somebody operates and becomes one nobody can read.
+    ///
+    ///      `mandateHash` binds the authorisation to the mandate the vault holds **now**. An
+    ///      authorisation signed against terms the user has since replaced is refused rather
+    ///      than executed against the new ones.
+    ///
+    ///      The nonce makes it single use, and `deadline` is enforced by the PositionManager on
+    ///      the batch itself, so a stale authorisation cannot be held and replayed later.
+    function recenterWithSignature(
+        RecenterParams calldata p,
+        bytes32 mandateHash,
+        uint256 nonce,
+        bytes calldata signature
+    ) external whenNotPaused nonReentrant returns (uint256 newTokenId) {
+        if (nonce != nonces[p.owner]) revert WrongNonce();
+        if (_accounts[p.owner].mandate.hash() != mandateHash) revert MandateChanged();
+
+        address signer = ECDSA.recover(_authorisationDigest(p, mandateHash, nonce), signature);
+        if (!hasRole(AGENT_ROLE, signer)) revert SignerLacksAgentRole(signer);
+
+        // Consumed before the interaction, so a re-entrant relay of the same authorisation
+        // finds the counter already moved on.
+        nonces[p.owner] = nonce + 1;
+
+        return _recenter(p);
+    }
+
+    /// @notice The digest an agent has to sign. Public so a relayer can check its authorisation
+    ///         before spending gas on it.
+    /// @dev `RecenterParams` is nested as its own struct, so this is
+    ///      `keccak256(abi.encode(RECENTER_TYPEHASH, hashStruct(params), mandateHash, nonce))`
+    ///      wrapped in the domain separator — what `hashTypedData` produces off-chain.
+    function authorisationDigest(RecenterParams calldata p, bytes32 mandateHash, uint256 nonce)
+        external
+        view
+        returns (bytes32)
+    {
+        return _authorisationDigest(p, mandateHash, nonce);
+    }
+
+    function _authorisationDigest(RecenterParams calldata p, bytes32 mandateHash, uint256 nonce)
+        internal
+        view
+        returns (bytes32)
+    {
+        // Split only to stay off the stack limit. Every field here is a static type, so the
+        // concatenation is byte-identical to one `abi.encode` of all thirteen.
+        bytes32 paramsHash = keccak256(
+            bytes.concat(
+                abi.encode(RECENTER_PARAMS_TYPEHASH, p.owner, p.tickLower, p.tickUpper, p.liquidityToMint),
+                abi.encode(p.amount0Min, p.amount1Min, p.amount0Max, p.amount1Max),
+                abi.encode(p.zeroForOne, p.amountIn, p.minAmountOut, p.deadline)
+            )
+        );
+        return _hashTypedDataV4(keccak256(abi.encode(RECENTER_TYPEHASH, paramsHash, mandateHash, nonce)));
+    }
+
+    function _recenter(RecenterParams calldata p) internal returns (uint256 newTokenId) {
         Account storage a = _accounts[p.owner];
         Mandate memory m = a.mandate;
         uint256 tokenId = a.tokenId;

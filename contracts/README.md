@@ -45,7 +45,7 @@ The agent chooses *whether* and *where* to re-centre. The contract decides what 
 | Measured liquidity within `maxLiquidity` | `LiquidityTooLarge` |
 | Delivered liquidity at least `minRetainedBps` of what was withdrawn | `LiquidityNotRetained` |
 | Mandate not expired and not revoked | `MandateExpired`, `MandateInactive` |
-| Caller holds `AGENT_ROLE` | `AccessControlUnauthorizedAccount` |
+| Caller holds `AGENT_ROLE`, or an `AGENT_ROLE` holder signed for it | `AccessControlUnauthorizedAccount`, `SignerLacksAgentRole` |
 
 And afterwards, that the position it asked for is the position that exists:
 `PositionNotDelivered`, `RangeNotDelivered`.
@@ -84,6 +84,20 @@ expiry, and `revoke` all stay attached to the person.
 The mint is funded entirely by the burn. If the proposed liquidity costs more than the
 withdrawal credited, the batch is left owing and reverts — which is why the vault never needs
 to hold or pay tokens, and why `recenter` is not `payable`.
+
+### An agent that cannot send transactions
+
+`recenterWithSignature` takes an EIP-712 authorisation instead of requiring the caller to hold
+the role. **Anyone may relay it**; the authority is the signature.
+
+That exists so the decision can be made somewhere that cannot hold gas or send a transaction —
+a Chainlink CRE enclave — and so `AGENT_ROLE` can be held by a key that exists **only inside
+it**, released by the Vault DON and readable by nobody, including us.
+
+The authorisation carries the mandate hash, so one signed against terms the user has since
+replaced is refused rather than executed against the new ones. A nonce makes it single use.
+Every mandate rule still applies: the signature says *who* authorised an action, never *what*
+they were allowed to authorise.
 
 ## Roles
 
@@ -150,7 +164,7 @@ the block time is 0.101 seconds, so a pinned fork works on the machine that warm
 cache and fails for everyone else within the hour. They fork `latest` and derive what they need
 from what they read.
 
-62 tests, 6 of them on a fork. `VaultAttacks.t.sol` holds the audit's findings as regression tests — each one was
+71 tests, 7 of them on a fork. `VaultAttacks.t.sol` holds the audit's findings as regression tests — each one was
 written before the contract could pass it, and the commit that added them is red on all nine.
 `HelicoVault.t.sol` covers every rejection path above, all three exits (paused, agent removed,
 upgrade pending), the upgrade path, and the hash agreement with the CRE workflow — pinned to a literal
