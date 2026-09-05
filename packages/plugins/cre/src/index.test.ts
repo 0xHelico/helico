@@ -132,7 +132,15 @@ describe('initWorkflow', () => {
 		expect(handlers).toHaveLength(1)
 		expect(handlers[0].fn).toBe(onCronTrigger)
 
-		// handlerInTee attaches TEE requirements; cre.handler does not.
-		expect(handlers[0].requirements).toBeDefined()
+		// handlerInTee attaches TEE requirements; cre.handler does not. Assert the constraint itself,
+		// not just its presence: AWS Nitro (type 1) in us-west-2, the only registered TEE today.
+		expect(handlers[0].requirements).toMatchObject({
+			tee: {
+				item: {
+					case: 'teeTypesAndRegions',
+					value: { teeTypeAndRegions: [{ type: 1, regions: ['us-west-2'] }] },
+				},
+			},
+		})
 	})
 })

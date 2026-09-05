@@ -13,7 +13,7 @@ proven to work**.
 | Tool | Model | Used for |
 |---|---|---|
 | Claude Code | Opus 5 | Hackathon rule research, repository scaffolding, workshop session notes |
-| Claude Code | Fable 5.1 | Monorepo tooling — pnpm workspaces, Turborepo, `packages/` scaffold |
+| Claude Code | Fable 5.1 | Monorepo tooling — bun workspaces (started on pnpm), Turborepo, Biome, Husky, `packages/` scaffold |
 | Claude Code | Fable 5.1 | Chainlink CRE plugin scaffold (`packages/plugins/cre`), its plan and README |
 
 ## Log
@@ -85,6 +85,15 @@ Format: date · what was done · the AI's role · what a human verified.
 - **Plan:** not needed — tooling only.
 - **Verified:** `bun run check` exits 0 on the whole repo; a commit with the message
   `bad message` is rejected by the hook; the real commits pass the staged check.
+
+### 2026-09-05 — CRE plugin review fixes
+
+- **Done:** README anchors point at the whole `initWorkflow` (`L118-L136`); the TEE test
+  asserts the actual constraint (Nitro, `us-west-2`) instead of presence; the package README
+  states that the test file is the template's too; the plan carries a status note; `apps/cre`
+  points at the package and at #20/#21.
+- **AI's role:** applied the collaborator's review findings; ran the checks.
+- **Verified:** `bun run --filter @helico/plugin-cre typecheck` and `test` (9 pass), `bun run check`.
 
 <!--
 Template for the next entry:

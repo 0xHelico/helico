@@ -60,7 +60,8 @@ be updated until the deadline — submit early, refine afterwards.
 - **Never squash** working history into one large commit.
 - **Never rewrite published history** once real work has started. *(Team convention — not
   an ETHGlobal rule, but rewriting destroys the development history they do require.)*
-- Use branches and pull requests for larger changes.
+- **Every change starts as an issue, gets a branch named `<type>/<short-topic>`, and lands
+  through a pull request.** Never commit straight to `main`.
 - The repository **must stay public** for the duration of the event and judging.
 - These rules apply to **every** repository connected to the submission, not just the primary.
 
