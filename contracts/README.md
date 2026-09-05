@@ -3,9 +3,14 @@
 `HelicoVault` enforces a user's committed mandate on an agent that re-centres their Uniswap v4
 liquidity position.
 
-The vault holds nothing — no tokens, no NFTs. The user keeps their position NFT and approves
-the vault to act on it; **revoking that approval, or calling `revoke`, ends the agent's
-authority immediately** and cannot be blocked by the agent, the guardian, or a pending upgrade.
+The user keeps their position NFT and approves the vault to act on it; **revoking that
+approval, or calling `revoke`, ends the agent's authority immediately** and cannot be blocked by
+the agent, the guardian, or a pending upgrade.
+
+The vault holds nothing **across a transaction**. It is not a custodian and holds no balance
+between calls, but tokens do exist in it between the burn and the mint of a single re-centre,
+because a swap has to sit there. The contract asserts on chain, at the end of every re-centre,
+that it kept none of what passed through.
 
 ## What a rogue agent can do
 
@@ -45,11 +50,24 @@ The agent chooses *whether* and *where* to re-centre. The contract decides what 
 And afterwards, that the position it asked for is the position that exists:
 `PositionNotDelivered`, `RangeNotDelivered`.
 
-### The vault builds the payload
+### The vault builds the payload, and takes the pool lock
 
-`recenter` takes numbers, not router calldata, and assembles the v4 action plan itself:
-`DECREASE_LIQUIDITY · BURN_POSITION · MINT_POSITION · TAKE_PAIR`, with the owner as the only
-address in it.
+`recenter` takes numbers, not router calldata. It calls `poolManager.unlock` and, inside its own
+callback, runs `DECREASE_LIQUIDITY · BURN_POSITION · TAKE_PAIR` to withdraw, swaps the excess
+side through the position's own pool, then `MINT_POSITION · SETTLE · SETTLE · SWEEP` to mint the
+new range to the owner. The owner is the only address written into any of it.
+
+The swap is there because **a position that has drifted out of range holds exactly one token**,
+and minting a range that contains the current price needs both. Without it the core case mints
+nothing.
+
+**The swap's price limit comes from the committed range.** It is the sqrt price at the edge of
+the band the user signed, so the pool itself halts the swap there and the price cannot be pushed
+out of that range — not by the agent, not by us. That matters because the range was checked
+against the price *before* the swap: without the limit, an agent moves the price afterwards and
+mints single-sided while every post-condition still passes. The tick is re-read after the swap
+as well, `amountIn` is capped at what the burn actually returned, and `minAmountOut` is a
+convenience rather than a guard, because a cap the agent sets is not a cap.
 
 An earlier draft accepted validated parameters *and* an opaque `unlockData` blob, and forwarded
 the blob. Two disjoint sets, where only the unvalidated one reached the pool — every mandate
@@ -103,9 +121,12 @@ Written down rather than glossed over.
 - **`maxLiquidity` is a cap on the whole position**, not on a slice of it. Re-centring always
   moves everything, so a position above the cap cannot be re-centred at all rather than being
   moved in parts. Set it above the position you intend to manage.
+- **A re-centre pays a swap through the position's own pool.** On a high-fee pool that can cost
+  more than it recovers — v4 fees are hundredths of a bip, and pools on this chain run to 20%.
+  Nothing in the contract can fix that; it is the pool the user chose.
 - **The mock is not Uniswap.** `RealisticPositionManager` models authorisation and settlement
-  faithfully; it does not model the sqrt-price curve. These tests prove who may act and where
-  value lands, not that the liquidity math is right. That needs a fork test.
+  faithfully; it does not model the sqrt-price curve, and `MockPoolManager` refuses to model a
+  swap at all. Anything asserted about the swap is asserted on a fork or not at all.
 
 ## Running
 
@@ -113,9 +134,17 @@ Written down rather than glossed over.
 cd contracts
 forge build
 forge test
+
+# The fork suite needs an endpoint. Without one it reports SKIP, not PASS.
+ROBINHOOD_RPC_URL=https://rpc.mainnet.chain.robinhood.com forge test
 ```
 
-49 tests. `VaultAttacks.t.sol` holds the audit's findings as regression tests — each one was
+The fork tests do **not** pin a block. The public RPC keeps roughly 6,100 blocks of state and
+the block time is 0.101 seconds, so a pinned fork works on the machine that warmed Foundry's
+cache and fails for everyone else within the hour. They fork `latest` and derive what they need
+from what they read.
+
+60 tests, 4 of them on a fork. `VaultAttacks.t.sol` holds the audit's findings as regression tests — each one was
 written before the contract could pass it, and the commit that added them is red on all nine.
 `HelicoVault.t.sol` covers every rejection path above, all three exits (paused, agent removed,
 upgrade pending), the upgrade path, and the hash agreement with the CRE workflow — pinned to a literal
