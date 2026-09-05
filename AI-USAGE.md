@@ -159,6 +159,24 @@ Format: date · what was done · the AI's role · what a human verified.
 - **AI's role:** applied the collaborator's review findings; ran the checks.
 - **Verified:** `bun run --filter @helico/plugin-cre typecheck` and `test` (9 pass), `bun run check`.
 
+### 2026-09-05 — Uniswap plugin: any chain, Robinhood Chain, review fixes
+
+- **Done:** `addresses()` resolves any chain (SDK, documented deployments, or
+  `registerV4Addresses()`) and picks the Universal Router version per chain; encoders build
+  the 2.1.1 structs where needed; `networks.ts` registry with Robinhood Chain mainnet and
+  testnet definitions; scripts take `CHAIN`; the e2e is self-contained (native/wrapped pool);
+  review fixes from #8.
+- **AI's role:** researched Robinhood Chain (docs, explorers, on-chain bytecode comparison,
+  `Initialize` logs), the SDK's router version tables, and the v4-periphery router source;
+  wrote the code, tests, and docs; ran the checks. The human chose the chains and the
+  any-chain requirement.
+- **Plan:** revision in
+  [`docs/plans/2026-09-05-plugin-uniswap-complete.md`](docs/plans/2026-09-05-plugin-uniswap-complete.md).
+- **Verified:** `typecheck` (all packages), `test` (48 pass), `bun run check`; e2e on Base
+  Sepolia with the new self-contained flow: 12 transactions, all `status: success`, including
+  `initializePool` and `increaseLiquidity`. Robinhood runs pending: the read-only smoke needs
+  a verified reference pool, the e2e needs testnet faucet ETH.
+
 <!--
 Template for the next entry:
 

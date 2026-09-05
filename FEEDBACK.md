@@ -57,6 +57,17 @@ must link to this file. Everything below was observed while building
   PositionManager ran out of gas at the node's own estimate (110k estimated, 162k needed a
   block later). A note in the liquidity docs that estimates for position-manager calls need a
   cushion would save a reverted transaction.
+- Robinhood Chain only has Universal Router 2.1.1, whose v4 swap structs carry
+  `minHopPriceX36`. `V4Planner` supports it through an optional `urVersion` argument, but
+  nothing in the SDK types ties a chain to a router version: `UNIVERSAL_ROUTER_ADDRESS(V2_0,
+  4663)` simply throws. A `latestUniversalRouter(chainId)` helper returning address and
+  version would remove a whole class of "works on Base, throws on Robinhood" bugs.
+- Uniswap v4 is deployed on Robinhood Chain Testnet (46630) at the mainnet addresses
+  (PoolManager, Quoter, and StateView bytecode is identical), but neither the deployments
+  page nor `@uniswap/sdk-core` lists it. Documenting it would let people test there before
+  spending real ETH on the mainnet.
+- `SENDER_AS_RECIPIENT` and `ROUTER_AS_RECIPIENT` live in `@uniswap/universal-router-sdk`'s
+  constants, but only the second is exported from the package index.
 
 ## Suggestions
 
@@ -72,3 +83,5 @@ must link to this file. Everything below was observed while building
 - Type the `Actions` a `V4Planner` may carry per execution context (router vs position
   manager), or document the router's supported subset next to `handlerInTee`-style examples.
 - Update the `v4-sdk-integration` multi-hop snippet to the current SDK surface.
+- Ship the router version alongside the address in the SDK's per-chain config, and list the
+  Robinhood Chain Testnet deployment.

@@ -137,3 +137,32 @@ caught it because scripts and tests were excluded. Now the reads take
 `types: ["bun"]` with no excludes, and the tests fake the client at the `request` level so they
 exercise the real ABI encoding. Also: 3-digit numeric separators and `.at(-1)`, both flagged
 by the editor's linter.
+
+## Revision — any chain, Robinhood Chain first
+
+Issue [#14](https://github.com/0xHelico/helico/issues/14), plus the review on #8. The user
+asked for Robinhood Chain mainnet and testnet, then for a shape that scales to any chain.
+
+- **Resolver:** `addresses(chainId)` reads the SDKs first, picks the Universal Router version
+  per chain (2.0 where it exists, else 2.1.1, else 2.2.0) and exposes it. Chains the SDKs do
+  not list resolve from `deployments.ts` or from `registerV4Addresses()` at runtime, so any
+  chain works without editing the package.
+- **Encoders follow the router:** routers from 2.1.1 on read swap structs with a
+  `minHopPriceX36` field; the encoders build the layout the resolved version expects and the
+  tests parse both layouts with the SDK's own parser.
+- **Network registry:** `networks.ts` carries chain definitions (viem has none for Robinhood
+  Chain; `chains.ts` defines mainnet 4663 and testnet 46630 from Robinhood's docs), wrapped
+  native, the quote stablecoin, and reference pools. `registerNetwork()` adds a chain.
+- **Scripts:** `CHAIN=<key>` picks the network. The e2e no longer needs a stablecoin: it wraps
+  native into the chain's WETH, initialises a native/wrapped pool of its own when none exists,
+  and runs every builder against it, which also executes `initializePool` and
+  `increaseLiquidity`. First run on Base Sepolia: 12 transactions, all successful.
+- **Robinhood facts checked on 2026-09-05:** mainnet RPC `https://rpc.mainnet.chain.robinhood.com`,
+  explorer `https://robinhoodchain.blockscout.com`; testnet RPC
+  `https://rpc.testnet.chain.robinhood.com/rpc`, faucet `https://faucet.testnet.chain.robinhood.com`.
+  All six v4 contracts have code on both networks; PoolManager, Quoter, and StateView bytecode
+  is identical across them. The quote asset of most mainnet pools is USDG (Global Dollar,
+  `0x5fc5…d168`, 6 decimals), not USDC, and most ETH/USDG pools use a dynamic-fee hook.
+- **Review items from #8:** the e2e never rebuilds once a hash exists (only the receipt is
+  polled); Permit2 approvals default to 30 days; Base Sepolia is pinned in the tests;
+  `permitSingleTypedData` is documented as not consumed by this package's own commands.
