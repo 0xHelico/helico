@@ -59,7 +59,7 @@ The lines that prove the integration, for reviewers:
 |---|---|
 | Universal Router `execute` with V4_SWAP and the router-level SWEEP | [`src/swap.ts#L100-L121`](src/swap.ts#L100-L121) |
 | v4 `SWAP_EXACT_IN_SINGLE` action, router-version aware | [`src/swap.ts#L135-L170`](src/swap.ts#L135-L170) |
-| v4 `Quoter` through a read-only `eth_call` | [`src/quote.ts#L17-L19`](src/quote.ts#L17-L19) |
+| v4 `Quoter` through a read-only `eth_call` | [`src/quote.ts#L17-L28`](src/quote.ts#L17-L28) |
 | Protocol state through `StateView` | [`src/pool.ts#L64-L82`](src/pool.ts#L64-L82) |
 | `PoolId` derivation | [`src/pool.ts#L39-L52`](src/pool.ts#L39-L52) |
 | Addresses and router version from the official SDKs | [`src/addresses.ts#L46-L67`](src/addresses.ts#L46-L67) |

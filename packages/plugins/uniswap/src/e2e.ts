@@ -49,7 +49,7 @@ import type { Transaction } from './types'
  */
 const pk = process.env.PRIVATE_KEY
 if (!pk?.startsWith('0x'))
-	throw new Error('Set PRIVATE_KEY to a test wallet holding native ETH on the chosen chain')
+	throw new Error('Set PRIVATE_KEY to a test wallet holding the native coin on the chosen chain')
 const net = network(process.env.CHAIN ?? 'robinhood-testnet')
 const account = privateKeyToAccount(pk as Hex)
 const transport = http(process.env.RPC_URL)
@@ -188,7 +188,7 @@ if (start.weth < wrapAmount) {
 // 2. The pool: ETH/WRAPPED at 1:1, ours if nobody made it before.
 let pool = await snapshot()
 if (pool.sqrtPriceX96 === 0n) {
-	await send('initialize the ETH/WRAPPED pool at 1:1', () =>
+	await send(`initialize the ${NATIVE}/wrapped pool at 1:1`, () =>
 		encodeInitializePool({
 			chainId,
 			poolKey,
@@ -246,24 +246,27 @@ const liquidity = mint.liquidity + increase.liquidity
 
 // 4. Swaps: exact-in and exact-out with native input, then WRAPPED in through the Permit2 allowance.
 const swapAmount = budget / 50n
-const exactIn = await send(`swap exact-in: ${formatEther(swapAmount)} ETH -> wrapped`, async () => {
-	const quote = await quoteExactInputSingle(client, {
-		poolKey,
-		zeroForOne: true,
-		amountIn: swapAmount,
-	})
-	return encodeSwapExactInSingle({
-		chainId,
-		poolKey,
-		zeroForOne: true,
-		amountIn: swapAmount,
-		amountOutMinimum: minimumAfterSlippage(quote.amountOut, SLIPPAGE_BPS),
-		deadline: deadlineFromNow(600),
-	})
-})
+const exactIn = await send(
+	`swap exact-in: ${formatEther(swapAmount)} ${NATIVE} -> wrapped`,
+	async () => {
+		const quote = await quoteExactInputSingle(client, {
+			poolKey,
+			zeroForOne: true,
+			amountIn: swapAmount,
+		})
+		return encodeSwapExactInSingle({
+			chainId,
+			poolKey,
+			zeroForOne: true,
+			amountIn: swapAmount,
+			amountOutMinimum: minimumAfterSlippage(quote.amountOut, SLIPPAGE_BPS),
+			deadline: deadlineFromNow(600),
+		})
+	},
+)
 const before = await balancesAt(exactIn.receipt.blockNumber)
 const exactOut = await send(
-	`swap exact-out: ETH -> exactly ${formatEther(swapAmount)} wrapped`,
+	`swap exact-out: ${NATIVE} -> exactly ${formatEther(swapAmount)} wrapped`,
 	async () => {
 		const quote = await quoteExactOutputSingle(client, {
 			poolKey,

@@ -26,10 +26,12 @@ describe('networks', () => {
 	test('a reference pool is always a native pool against the network stablecoin', () => {
 		for (const key of networkKeys()) {
 			const n = network(key)
-			if (!n.nativeUsdPool) continue
-			expect(n.usd).toBeDefined()
+			if (!n.nativeUsdPool || !n.usd) {
+				expect(n.nativeUsdPool).toBeUndefined()
+				continue
+			}
 			expect(n.nativeUsdPool.currency0).toBe('0x0000000000000000000000000000000000000000')
-			expect(n.nativeUsdPool.currency1).toBe(n.usd?.address)
+			expect(n.nativeUsdPool.currency1).toBe(n.usd.address)
 		}
 	})
 

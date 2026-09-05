@@ -1,7 +1,7 @@
 // biome-ignore-all lint/suspicious/noConsole: this script exists to print what it finds
 import { createPublicClient, http, parseAbiItem, zeroAddress } from 'viem'
 import { addresses } from './addresses'
-import { network } from './networks'
+import { type Network, network, type Token } from './networks'
 import { getPoolState, sqrtPriceX96ToPrice } from './pool'
 import type { PoolKey } from './types'
 
@@ -17,8 +17,12 @@ const client = createPublicClient({
 	transport: http(process.env.RPC_URL, { timeout: 90_000 }),
 })
 const { poolManager } = addresses(net.chain.id)
-const usd = net.usd
-if (!usd) throw new Error(`No stablecoin configured for "${net.key}"; add one to networks.ts first`)
+const requireUsd = (n: Network): Token => {
+	if (!n.usd)
+		throw new Error(`No stablecoin configured for "${n.key}"; add one to networks.ts first`)
+	return n.usd
+}
+const usd = requireUsd(net)
 const span = BigInt(process.env.SPAN ?? 3_000_000)
 const window = BigInt(process.env.WINDOW ?? 500_000)
 
