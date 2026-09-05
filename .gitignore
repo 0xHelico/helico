@@ -22,3 +22,6 @@ artifacts/
 
 # Astro generated types
 .astro/
+
+# CRE simulator scratch files
+.cre_build_tmp.*
