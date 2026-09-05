@@ -14,6 +14,7 @@ Submission for [ETHOnline 2026](https://ethglobal.com/events/ethonline2026)
 | [`contracts/`](contracts/) | Smart contracts |
 | [`apps/cre/`](apps/cre/) | Chainlink CRE workflows |
 | [`apps/be/`](apps/be/) | Backend |
+| [`apps/landing/`](apps/landing/) | Landing page, Astro |
 | [`packages/core/`](packages/core/) | Shared library, `@helico/core` |
 | [`packages/plugins/`](packages/plugins/) | Plugins, one package each, `@helico/plugin-<name>` |
 | [`docs/plans/`](docs/plans/) | Implementation plans, written before the code |

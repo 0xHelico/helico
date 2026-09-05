@@ -14,6 +14,7 @@ proven to work**.
 |---|---|---|
 | Claude Code | Opus 5 | Hackathon rule research, repository scaffolding, workshop session notes |
 | Claude Code | Fable 5.1 | Monorepo tooling — pnpm workspaces, Turborepo, `packages/` scaffold |
+| Claude Code | Fable 5.1 | Landing page starter (`apps/landing`), its plan and README |
 
 ## Log
 
@@ -67,6 +68,21 @@ Format: date · what was done · the AI's role · what a human verified.
 - **Plan:** not needed — tooling only.
 - **Verified:** `bun run check` exits 0 on the whole repo; a commit with the message
   `bad message` is rejected by the hook; the real commits pass the staged check.
+
+### 2026-09-05 — Landing page starter
+
+- **Done:** `apps/landing` (`@helico/landing`): Astro 7 from the official `minimal` template
+  via `create-astro`, `tsconfig` on `astro/tsconfigs/strict`, a typed base layout, one
+  placeholder page, `astro check` as the workspace `typecheck`. Root Biome config now skips
+  `.astro` files and `public/` assets.
+- **AI's role:** read Astro's build-with-AI, TypeScript, Bun, and v7 upgrade guides and
+  Biome's language-support page first; trial-scaffolded and built in a scratch directory;
+  wrote the plan, layout, page, README; ran the checks. The human chose Astro and the scope.
+- **Plan:** [`docs/plans/2026-09-05-landing-starter.md`](docs/plans/2026-09-05-landing-starter.md),
+  prompt included.
+- **Verified:** `bun install`, `bun run --filter @helico/landing typecheck` (`astro check`:
+  0 errors, 0 warnings), `build` (1 page, `dist/index.html`), `bun run typecheck --force`
+  (Turborepo, all packages), `bun run check` (Biome clean). Not deployed anywhere yet.
 
 <!--
 Template for the next entry:

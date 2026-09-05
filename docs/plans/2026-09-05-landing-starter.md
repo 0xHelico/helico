@@ -32,9 +32,12 @@ use `npm create astro`"), then fold into the workspace:
 ### Rejected alternatives
 
 - **Tailwind or a UI kit now.** No design exists. `astro add tailwind` is one command later.
-- **Biome on `.astro` files.** Biome's Astro support is experimental and off by default in
-  2.5; enabling it could reformat templates. `astro check` type-checks `.astro` files, and
-  Biome still covers `astro.config.mjs` and any `.ts`.
+- **Biome on `.astro` files.** Biome's full Astro support is experimental and off by default
+  in 2.5, but even without it Biome lints the frontmatter on its own and cannot see the
+  template, so every prop used in the markup is reported as unused and the layout import
+  is flagged as removable. `.astro` files and `public/` assets are therefore excluded in the
+  root `biome.json`; `astro check` type-checks `.astro` files, and Biome still covers
+  `astro.config.mjs` and any `.ts`.
 - **Astro 5-era patterns.** Astro is at 7.3.1; the Rust compiler is stricter about unclosed
   tags and `compressHTML` defaults to JSX whitespace rules. The layout is written with
   explicit closing tags and no inline-element whitespace tricks.
