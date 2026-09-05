@@ -107,6 +107,6 @@ describe('quotes', () => {
 		const { client } = fakeClient(999999, [])
 		await expect(
 			quoteExactInputSingle(client, { poolKey: ethUsdc, zeroForOne: true, amountIn: 1n }),
-		).rejects.toThrow('not deployed')
+		).rejects.toThrow('not known')
 	})
 })
