@@ -45,8 +45,8 @@ Format: date · what was done · the AI's role · what a human verified.
 
 - **Done:** `packages/plugins/cre` (`@helico/plugin-cre`), a reusable package holding the
   confidential handler from Chainlink's `hello-confidential-workflows-ts` template,
-  scaffolded with `cre init`. `src/index.ts` is the template's `workflow.ts` unchanged; the
-  package layout, tsconfig, tests location, and README are ours. `apps/cre` untouched.
+  scaffolded with `cre init`. `src/index.ts` is the template's `workflow.ts`, unchanged apart from
+  Biome formatting; the package layout, tsconfig, tests location, and README are ours. `apps/cre` untouched.
 - **AI's role:** researched the CRE docs, the template repository, and Chainlink's agent
   skill first; wrote the plan and its revision, the package layout, and the README; ran the
   checks. The handler logic is Chainlink's, and the README says so.

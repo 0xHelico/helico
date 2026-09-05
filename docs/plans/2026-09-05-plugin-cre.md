@@ -159,7 +159,8 @@ The first cut put the whole CRE project (project.yaml, workflow dir, simulate sc
 So the scope of this PR is the **reusable package only**:
 
 - `packages/plugins/cre` exports `configSchema`, `initWorkflow`, `onCronTrigger` from
-  `src/index.ts` (the template's `workflow.ts`, unchanged) and ships the `bun test` suite.
+  `src/index.ts` (the template's `workflow.ts`, unchanged apart from Biome formatting once
+  Biome landed, see issue #6) and ships the `bun test` suite.
 - `apps/cre` is untouched. Wiring the package into a runnable CRE project there is a
   separate task.
 - Verification of step 4 (WASM compile + simulate) therefore ran from a **throwaway CRE
