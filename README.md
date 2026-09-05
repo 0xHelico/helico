@@ -16,13 +16,16 @@ not yet true rather than left to be assumed — see [Rules](#rules) for why that
 
 | Directory | Contents |
 |---|---|
-| [`contracts/`](contracts/) | Smart contracts |
-| [`apps/cre/`](apps/cre/) | Chainlink CRE workflows |
-| [`apps/be/`](apps/be/) | Backend |
-| [`apps/landing/`](apps/landing/) | Landing page, Astro |
+| [`contracts/`](contracts/) | `HelicoVault` and its tests |
+| [`packages/plugins/uniswap/`](packages/plugins/uniswap/) | Uniswap v4 on-chain package, `@helico/plugin-uniswap` |
+| [`packages/plugins/cre/`](packages/plugins/cre/) | Chainlink CRE confidential workflow, `@helico/plugin-cre` |
 | [`packages/core/`](packages/core/) | Shared library, `@helico/core` |
-| [`packages/plugins/`](packages/plugins/) | Plugins, one package each, `@helico/plugin-<name>` |
+| [`apps/landing/`](apps/landing/) | Landing page, Astro |
 | [`docs/plans/`](docs/plans/) | Implementation plans, written before the code |
+
+`apps/be/` and `apps/cre/` are scaffolding from the initial layout and are **empty**. They are
+left in place rather than linked as though they held something; the CRE workflow lives in
+`packages/plugins/cre`, because every integration is a reusable package here.
 
 ## Partner integrations
 
