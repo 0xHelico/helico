@@ -147,9 +147,10 @@ if (import.meta.main) {
 	const sized = sizeForState(state)
 	if (abi) {
 		if (!encode) throw new Error('--abi needs --owner and --deadline')
-		process.stdout.write(encodeRecenterParams(sized, encode))
+		await Bun.write(Bun.stdout, encodeRecenterParams(sized, encode))
 	} else {
-		process.stdout.write(
+		await Bun.write(
+			Bun.stdout,
 			`${json({ ...sized, encoded: encode ? encodeRecenterParams(sized, encode) : undefined })}
 `,
 		)

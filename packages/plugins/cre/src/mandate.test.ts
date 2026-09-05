@@ -20,7 +20,7 @@ describe('mandateHash', () => {
 				parseAbiParameters(
 					'(bytes32 poolId, uint16 rangeWidthTicks, uint16 minImprovementBps, uint32 cooldownSeconds, uint128 maxLiquidity, uint64 expiry, uint16 minRetainedBps)',
 				),
-				[mandate],
+				[{ ...mandate, expiry: BigInt(mandate.expiry) }],
 			),
 		)
 		expect(mandateHash(mandate)).toBe(solidityStyle)
