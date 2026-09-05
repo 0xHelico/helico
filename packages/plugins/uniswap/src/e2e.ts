@@ -42,8 +42,8 @@ import {
 import type { Transaction } from './types'
 
 /**
- * End to end on any chain the package knows, with nothing but native ETH: wrap some into WETH,
- * make an ETH/WETH pool of our own if none exists, then run every builder against it.
+ * End to end on any chain the package knows, with nothing but native ETH: wrap some into WRAPPED,
+ * make an ETH/WRAPPED pool of our own if none exists, then run every builder against it.
  * CHAIN picks the network (default Robinhood Chain Testnet). PRIVATE_KEY comes from the
  * environment (bun loads a gitignored .env next to package.json) and is never written anywhere.
  */
@@ -57,8 +57,9 @@ const client = createPublicClient({ chain: net.chain, transport })
 const wallet = createWalletClient({ account, chain: net.chain, transport })
 const chainId = net.chain.id
 const a = addresses(chainId)
-const WETH = net.weth
+const WRAPPED = net.wrappedNative
 const SLIPPAGE_BPS = 100
+const NATIVE = net.chain.nativeCurrency.symbol
 // Total ETH the run may lock in the pool at once; swaps and gas come on top. Everything is withdrawn at the end.
 const budget = parseEther(process.env.E2E_ETH ?? '0.002')
 
@@ -117,7 +118,7 @@ const balancesAt = async (blockNumber: bigint) => {
 			return {
 				eth: await client.getBalance({ address: account.address, blockNumber }),
 				weth: await client.readContract({
-					address: WETH,
+					address: WRAPPED,
 					abi: wethAbi,
 					functionName: 'balanceOf',
 					args: [account.address],
@@ -133,7 +134,7 @@ const balancesAt = async (blockNumber: bigint) => {
 
 const poolKey = createPoolKey({
 	currencyA: zeroAddress,
-	currencyB: WETH,
+	currencyB: WRAPPED,
 	fee: 500,
 	tickSpacing: 10,
 })
@@ -150,16 +151,20 @@ const snapshot = async (): Promise<PoolSnapshot> => {
 }
 
 const ensureApprovals = async (spender: Hex, amount: bigint) => {
-	const allowances = await getAllowances(client, { token: WETH, owner: account.address, spender })
+	const allowances = await getAllowances(client, {
+		token: WRAPPED,
+		owner: account.address,
+		spender,
+	})
 	const needed = approvalsNeeded(allowances, { amount })
 	const who = spender === a.positionManager ? 'PositionManager' : 'UniversalRouter'
 	if (needed.token)
-		await send('approve WETH -> Permit2', () =>
-			encodeApproveTokenToPermit2({ chainId, token: WETH }),
+		await send('approve wrapped -> Permit2', () =>
+			encodeApproveTokenToPermit2({ chainId, token: WRAPPED }),
 		)
 	if (needed.permit2)
 		await send(`approve Permit2 -> ${who}`, () =>
-			encodeApprovePermit2({ chainId, token: WETH, spender }),
+			encodeApprovePermit2({ chainId, token: WRAPPED, spender }),
 		)
 	if (!needed.token && !needed.permit2) console.log(`approvals already in place for ${who}`)
 }
@@ -168,22 +173,22 @@ console.log(
 	`${net.chain.name} (${chainId}), router ${a.universalRouterVersion}, wallet ${account.address}`,
 )
 const start = await balancesAt(await client.getBlockNumber())
-console.log(`balances: ${formatEther(start.eth)} ETH, ${formatEther(start.weth)} WETH`)
+console.log(`balances: ${formatEther(start.eth)} ${NATIVE}, ${formatEther(start.weth)} wrapped`)
 
 // 1. Wrap part of the budget so the run owns an ERC-20 side too.
 const wrapAmount = budget / 2n
 if (start.weth < wrapAmount) {
-	await send(`wrap ${formatEther(wrapAmount - start.weth)} ETH into WETH`, () => ({
-		to: WETH,
+	await send(`wrap ${formatEther(wrapAmount - start.weth)} ${NATIVE} into wrapped`, () => ({
+		to: WRAPPED,
 		data: encodeFunctionData({ abi: wethAbi, functionName: 'deposit' }),
 		value: wrapAmount - start.weth,
 	}))
 }
 
-// 2. The pool: ETH/WETH at 1:1, ours if nobody made it before.
+// 2. The pool: ETH/WRAPPED at 1:1, ours if nobody made it before.
 let pool = await snapshot()
 if (pool.sqrtPriceX96 === 0n) {
-	await send('initialize the ETH/WETH pool at 1:1', () =>
+	await send('initialize the ETH/WRAPPED pool at 1:1', () =>
 		encodeInitializePool({
 			chainId,
 			poolKey,
@@ -199,7 +204,7 @@ const range = {
 	tickUpper: nearestUsableTick(pool.tick + 1000, 10),
 }
 
-// 3. Mint, then increase, with Permit2 pulling the WETH side.
+// 3. Mint, then increase, with Permit2 pulling the WRAPPED side.
 await ensureApprovals(a.positionManager, wrapAmount)
 const { tx: mint, receipt: mintReceipt } = await send('mint position', async () =>
 	encodeMintPosition({
@@ -239,9 +244,9 @@ const { tx: increase } = await send('increase liquidity', async () =>
 )
 const liquidity = mint.liquidity + increase.liquidity
 
-// 4. Swaps: exact-in and exact-out with native input, then WETH in through the Permit2 allowance.
+// 4. Swaps: exact-in and exact-out with native input, then WRAPPED in through the Permit2 allowance.
 const swapAmount = budget / 50n
-const exactIn = await send(`swap exact-in: ${formatEther(swapAmount)} ETH -> WETH`, async () => {
+const exactIn = await send(`swap exact-in: ${formatEther(swapAmount)} ETH -> wrapped`, async () => {
 	const quote = await quoteExactInputSingle(client, {
 		poolKey,
 		zeroForOne: true,
@@ -258,7 +263,7 @@ const exactIn = await send(`swap exact-in: ${formatEther(swapAmount)} ETH -> WET
 })
 const before = await balancesAt(exactIn.receipt.blockNumber)
 const exactOut = await send(
-	`swap exact-out: ETH -> exactly ${formatEther(swapAmount)} WETH`,
+	`swap exact-out: ETH -> exactly ${formatEther(swapAmount)} wrapped`,
 	async () => {
 		const quote = await quoteExactOutputSingle(client, {
 			poolKey,
@@ -277,11 +282,11 @@ const exactOut = await send(
 )
 const after = await balancesAt(exactOut.receipt.blockNumber)
 console.log(
-	`  received ${formatEther(after.weth - before.weth)} WETH, spent ${formatEther(before.eth - after.eth)} ETH including gas`,
+	`  received ${formatEther(after.weth - before.weth)} wrapped, spent ${formatEther(before.eth - after.eth)} ${NATIVE} including gas`,
 )
 await ensureApprovals(a.universalRouter, swapAmount)
 await send(
-	`swap exact-in: ${formatEther(swapAmount)} WETH -> ETH via the Permit2 allowance`,
+	`swap exact-in: ${formatEther(swapAmount)} wrapped -> ${NATIVE} via the Permit2 allowance`,
 	async () => {
 		const quote = await quoteExactInputSingle(client, {
 			poolKey,
@@ -326,7 +331,7 @@ const burn = await send('decrease 100 % and burn the position', async () =>
 	}),
 )
 const end = await balancesAt(burn.receipt.blockNumber)
-console.log(`balances: ${formatEther(end.eth)} ETH, ${formatEther(end.weth)} WETH`)
+console.log(`balances: ${formatEther(end.eth)} ${NATIVE}, ${formatEther(end.weth)} wrapped`)
 console.log(
-	`net: ${formatEther(end.eth + end.weth - start.eth - start.weth)} ETH-equivalent (gas and fees included)`,
+	`net: ${formatEther(end.eth + end.weth - start.eth - start.weth)} ${NATIVE} incl. wrapped (gas and fees included)`,
 )

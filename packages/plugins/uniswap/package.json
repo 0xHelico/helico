@@ -9,7 +9,8 @@
 		"typecheck": "tsc --noEmit",
 		"test": "bun test",
 		"smoke": "bun run src/smoke.ts",
-		"e2e": "bun run src/e2e.ts"
+		"e2e": "bun run src/e2e.ts",
+		"discover": "bun run src/discover.ts"
 	},
 	"dependencies": {
 		"@uniswap/permit2-sdk": "1.4.0",

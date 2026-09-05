@@ -31,20 +31,20 @@ const a = addresses(chainId)
 console.log(
 	`${net.chain.name} (${chainId}), router ${a.universalRouterVersion} at ${a.universalRouter}`,
 )
-if (!net.usd || !net.ethUsdPool) {
+if (!net.usd || !net.nativeUsdPool) {
 	console.log(
 		`no reference ETH/usd pool configured for "${net.key}" (known networks: ${networkKeys().join(', ')})`,
 	)
 	process.exit(0)
 }
-const { usd, ethUsdPool: poolKey } = net
+const { usd, nativeUsdPool: poolKey } = net
 const oneEth = 10n ** 18n
 const deadline = deadlineFromNow(600)
 
 // An address that holds native ETH is a valid eth_call sender; the canonical WETH contract or the
 // PoolManager (which custodies every native pool) always does.
 const sender = async () => {
-	for (const candidate of [net.weth, a.poolManager]) {
+	for (const candidate of [net.wrappedNative, a.poolManager]) {
 		if ((await client.getBalance({ address: candidate })) >= oneEth) return candidate
 	}
 	throw new Error('no ETH-holding sender found for simulation')
