@@ -10,6 +10,7 @@ const mandate: Mandate = {
 	cooldownSeconds: 3600,
 	maxLiquidity: 10n ** 18n,
 	expiry: 1_800_000_000,
+	minRetainedBps: 9000,
 }
 
 describe('mandateHash', () => {
@@ -17,20 +18,21 @@ describe('mandateHash', () => {
 		const solidityStyle = keccak256(
 			encodeAbiParameters(
 				parseAbiParameters(
-					'(bytes32 poolId, uint16 rangeWidthTicks, uint16 minImprovementBps, uint32 cooldownSeconds, uint128 maxLiquidity, uint64 expiry)',
+					'(bytes32 poolId, uint16 rangeWidthTicks, uint16 minImprovementBps, uint32 cooldownSeconds, uint128 maxLiquidity, uint64 expiry, uint16 minRetainedBps)',
 				),
 				[mandate],
 			),
 		)
 		expect(mandateHash(mandate)).toBe(solidityStyle)
 		expect(mandateHash(mandate)).toBe(
-			'0x71df72a84aad31ddb66ad186d70927767ee26feededa7a4f9f64ae96b4c527e5',
+			'0x134be6bb4e1c442551c22dfe96cb5b7c3c31babb386e2e9a051e57ee329a6225',
 		)
 	})
 
 	test('any field change changes the hash', () => {
 		expect(mandateHash({ ...mandate, minImprovementBps: 51 })).not.toBe(mandateHash(mandate))
 		expect(mandateHash({ ...mandate, expiry: mandate.expiry + 1 })).not.toBe(mandateHash(mandate))
+		expect(mandateHash({ ...mandate, minRetainedBps: 9001 })).not.toBe(mandateHash(mandate))
 	})
 })
 
@@ -41,6 +43,7 @@ describe('mandateFromSecrets', () => {
 		[MANDATE_SECRET_IDS.cooldownSeconds]: { value: '3600' },
 		[MANDATE_SECRET_IDS.maxLiquidity]: { value: '1000000000000000000' },
 		[MANDATE_SECRET_IDS.expiry]: { value: '1800000000' },
+		[MANDATE_SECRET_IDS.minRetainedBps]: { value: '9000' },
 	}
 
 	test('rebuilds the mandate the hash was computed from', () => {

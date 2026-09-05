@@ -90,7 +90,8 @@ contract VaultAttacksTest is Test {
             minImprovementBps: 500,
             cooldownSeconds: 1 hours,
             maxLiquidity: cap,
-            expiry: uint64(block.timestamp + 30 days)
+            expiry: uint64(block.timestamp + 30 days),
+            minRetainedBps: 9_000
         });
     }
 
@@ -255,31 +256,21 @@ contract VaultAttacksTest is Test {
         vault.recenter(again);
     }
 
-    /// @notice A known gap, pinned so it cannot change silently.
-    ///
-    /// @dev `liquidityToMint` is the agent's choice, and nothing requires it to be near what
-    ///      the burn produced. A rogue agent can mint dust and let `TAKE_PAIR` return the rest
-    ///      to the owner's wallet. Every guarantee this contract makes still holds - the value
-    ///      goes to the owner, the range is compliant, the cooldown binds - but the position
-    ///      stops earning, which is a griefing vector the README has to name.
-    ///
-    ///      This test asserts the current behaviour rather than the desired one. Closing it
-    ///      needs a floor on `liquidityToMint` relative to the withdrawn liquidity, and an
-    ///      honest floor is a mandate field, which changes the hash the enclave computes. When
-    ///      that lands, this test flips to an expected revert.
-    function test_KnownGap_AgentCanMintDustAndEndTheEarningPosition() public {
+    /// @notice The dust mint, closed. `liquidityToMint` is still the agent's number, but the
+    ///         mandate now says how much of the position has to survive the round trip.
+    /// @dev This was a characterisation test asserting the gap existed, because the honest fix
+    ///      was a mandate field and that changes the hash the enclave computes. Both sides
+    ///      moved together in #38, so it is an expected revert now.
+    function test_AgentCannotMintDustAndEndTheEarningPosition() public {
         vm.prank(alice);
         vault.setMandate(aliceToken, _mandate(type(uint128).max));
 
         vm.prank(agent);
-        uint256 dust = vault.recenter(_params(alice, -50, 50));
+        vm.expectRevert(HelicoVault.LiquidityNotRetained.selector);
+        vault.recenter(_params(alice, -50, 50)); // liquidityToMint = 1
 
-        assertEq(pm.getPositionLiquidity(dust), 1, "the position is now dust");
-        assertEq(pm.ownerOf(dust), alice, "it is still the owner's");
-        assertEq(t0.balanceOf(alice), ALICE_LIQUIDITY - 1, "and the rest went to their wallet");
-        assertEq(t1.balanceOf(alice), ALICE_LIQUIDITY - 1, "not to the agent");
-        assertEq(t0.balanceOf(agent), 0, "the agent gains nothing");
-        assertEq(t1.balanceOf(agent), 0, "the agent gains nothing");
+        assertEq(pm.getPositionLiquidity(aliceToken), ALICE_LIQUIDITY, "the position is untouched");
+        assertEq(t0.balanceOf(alice), 0, "and was not cashed out from under them");
     }
 
     // --- upgrades ------------------------------------------------------------------------

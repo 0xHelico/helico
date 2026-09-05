@@ -19,11 +19,10 @@ The new NFT and every token that leaves the old position go to the position's ow
 those are the only destinations the contract will write into a payload. There is no path that
 pays an agent, and no path that touches a position whose owner did not commit a mandate.
 
-**It can still end your earning position.** How much liquidity to mint into the new range is
-the agent's choice, and nothing yet requires it to be close to what the old range held. A
-rogue agent can mint dust and send the remainder to your wallet — you keep every token, but
-you are out of the pool until you act. `test_KnownGap_AgentCanMintDustAndEndTheEarningPosition`
-pins that behaviour so it cannot change unnoticed.
+How much liquidity survives the round trip is capped from below by `minRetainedBps`, so an
+agent cannot mint dust and send the remainder to your wallet — leaving you with every token
+and no earning position. That check is measured from the liquidity actually delivered, not
+from the number the agent asked for.
 
 ## What the contract decides
 
@@ -39,6 +38,7 @@ The agent chooses *whether* and *where* to re-centre. The contract decides what 
 | Range is closer to the market by at least `minImprovementBps` | `NotEnoughImprovement` |
 | Cooldown elapsed since the last action | `CooldownNotElapsed` |
 | Measured liquidity within `maxLiquidity` | `LiquidityTooLarge` |
+| Delivered liquidity at least `minRetainedBps` of what was withdrawn | `LiquidityNotRetained` |
 | Mandate not expired and not revoked | `MandateExpired`, `MandateInactive` |
 | Caller holds `AGENT_ROLE` | `AccessControlUnauthorizedAccount` |
 
@@ -103,9 +103,6 @@ Written down rather than glossed over.
 - **`maxLiquidity` is a cap on the whole position**, not on a slice of it. Re-centring always
   moves everything, so a position above the cap cannot be re-centred at all rather than being
   moved in parts. Set it above the position you intend to manage.
-- **A floor on the minted liquidity is missing**, which is the gap described above. The honest
-  version is a mandate field, so it changes the hash the CRE workflow computes and has to land
-  on both sides at once.
 - **The mock is not Uniswap.** `RealisticPositionManager` models authorisation and settlement
   faithfully; it does not model the sqrt-price curve. These tests prove who may act and where
   value lands, not that the liquidity math is right. That needs a fork test.
@@ -118,7 +115,9 @@ forge build
 forge test
 ```
 
-45 tests. `VaultAttacks.t.sol` holds the audit's findings as regression tests — each one was
+49 tests. `VaultAttacks.t.sol` holds the audit's findings as regression tests — each one was
 written before the contract could pass it, and the commit that added them is red on all nine.
 `HelicoVault.t.sol` covers every rejection path above, all three exits (paused, agent removed,
-upgrade pending), the upgrade path, and the hash agreement with the CRE workflow.
+upgrade pending), the upgrade path, and the hash agreement with the CRE workflow — pinned to a literal
+vector that `packages/plugins/cre` asserts too, generated with `cast` so neither side marks
+its own homework.

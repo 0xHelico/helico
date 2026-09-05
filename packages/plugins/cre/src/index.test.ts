@@ -24,6 +24,7 @@ const secretValues = {
 	[MANDATE_SECRET_IDS.cooldownSeconds]: '3600',
 	[MANDATE_SECRET_IDS.maxLiquidity]: '1000000000000000000',
 	[MANDATE_SECRET_IDS.expiry]: '1800000000',
+	[MANDATE_SECRET_IDS.minRetainedBps]: '9000',
 }
 const committedHash = mandateHash({
 	poolId,
@@ -32,6 +33,7 @@ const committedHash = mandateHash({
 	cooldownSeconds: 3600,
 	maxLiquidity: 10n ** 18n,
 	expiry: 1_800_000_000,
+	minRetainedBps: 9000,
 })
 const config: Config = {
 	schedule: '0 */5 * * * *',

@@ -6,6 +6,7 @@ const mandate = {
 	minImprovementBps: 50,
 	cooldownSeconds: 3600,
 	expiry: 2_000,
+	minRetainedBps: 9000,
 }
 const position = { tickLower: 0, tickUpper: 1000, lastActionAt: 0 }
 const base = { tickSpacing: 10, position, mandate, now: 1_000 }

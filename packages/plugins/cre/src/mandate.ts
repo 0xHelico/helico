@@ -15,6 +15,13 @@ export type Mandate = {
 	/** Ceiling on the liquidity `L` a single action may move. */
 	maxLiquidity: bigint
 	expiry: number
+	/**
+	 * The smallest share of the position's liquidity, in bps, that must survive a re-centre.
+	 * Re-centring withdraws everything and mints again, and how much to mint is the agent's
+	 * number; without this an agent can mint dust and send the rest to the owner's wallet.
+	 * Zero permits that, explicitly. The vault rejects anything above 10,000.
+	 */
+	minRetainedBps: number
 }
 
 const MANDATE_ABI = [
@@ -24,6 +31,7 @@ const MANDATE_ABI = [
 	{ type: 'uint32' },
 	{ type: 'uint128' },
 	{ type: 'uint64' },
+	{ type: 'uint16' },
 ] as const
 
 /** Same bytes as Solidity's `keccak256(abi.encode(Mandate))` for a static struct. */
@@ -36,6 +44,7 @@ export function mandateHash(m: Mandate): Hex {
 			m.cooldownSeconds,
 			m.maxLiquidity,
 			BigInt(m.expiry),
+			m.minRetainedBps,
 		]),
 	)
 }
@@ -47,6 +56,7 @@ export const MANDATE_SECRET_IDS = {
 	cooldownSeconds: 'MANDATE_COOLDOWN_SECONDS',
 	maxLiquidity: 'MANDATE_MAX_LIQUIDITY',
 	expiry: 'MANDATE_EXPIRY',
+	minRetainedBps: 'MANDATE_MIN_RETAINED_BPS',
 } as const
 
 const integer = (raw: string | undefined, id: string): number => {
@@ -75,5 +85,6 @@ export function mandateFromSecrets(
 		cooldownSeconds: integer(read('cooldownSeconds'), MANDATE_SECRET_IDS.cooldownSeconds),
 		maxLiquidity: unsigned(read('maxLiquidity'), MANDATE_SECRET_IDS.maxLiquidity),
 		expiry: integer(read('expiry'), MANDATE_SECRET_IDS.expiry),
+		minRetainedBps: integer(read('minRetainedBps'), MANDATE_SECRET_IDS.minRetainedBps),
 	}
 }

@@ -71,7 +71,8 @@ await runner.run(initWorkflow)
 
 Config: `{ schedule, rpcUrl, stateView, poolId, tickSpacing, position: { tickLower, tickUpper, lastActionAt }, mandateHash }`.
 `secrets.yaml` must map `MANDATE_RANGE_WIDTH_TICKS`, `MANDATE_MIN_IMPROVEMENT_BPS`,
-`MANDATE_COOLDOWN_SECONDS`, `MANDATE_MAX_LIQUIDITY`, `MANDATE_EXPIRY` to env vars, with the
+`MANDATE_COOLDOWN_SECONDS`, `MANDATE_MAX_LIQUIDITY`, `MANDATE_EXPIRY`,
+`MANDATE_MIN_RETAINED_BPS` to env vars, with the
 same values the user passed to `setMandate`. Any chain
 with a v4 `StateView` works; the RPC URL is config.
 
