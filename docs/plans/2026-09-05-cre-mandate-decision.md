@@ -75,3 +75,21 @@ project, #21, not on this side), deployment.
 *"Faucet is funded, my friend handles the form, and continue according to my friend's
 wishes."* The friend's wishes are issues #20 and #21 and the product plan #31; `apps/` is
 explicitly not on this side ("jangan kerjain apps/cre sama apps/be ya").
+
+## Revisions — same day, while implementing
+
+- **SDK 1.19.1.** Bumped from 1.18.0 before writing the handler; `handlerInTee` and the
+  handler object shape (`requirements.tee.item`) are unchanged, the existing test still passes.
+- **No `z.string().url()` in config.** zod backs it with `new URL()`, which the WASM runtime
+  (QuickJS) does not provide: the simulator failed config validation with "Invalid url". A
+  regex does the job.
+- **Negative `int24` must be a `bigint`.** `encodeAbiParameters` with `-560` as a Number
+  threw "not in safe 24-bit signed integer range" under QuickJS only (Bun was fine). The
+  verdict encoder passes `BigInt(tick)`; the test suite now includes the negative case.
+- **A hash mismatch is still reported**, as `act = false` with the hash the enclave actually
+  computed, so the vault sees the mismatch too and the RPC is never called.
+- **Cooldown** is skipped when `lastActionAt` is 0 (no action yet), so a fresh position can
+  be re-centred immediately.
+- The simulation ran against the ETH/WETH pool this team created on Robinhood Chain Testnet
+  (poolId `0xea84630b…7fd9c5`, tick −65, no liquidity), because it is the only v4 pool there
+  we control. Results are in the package README.
