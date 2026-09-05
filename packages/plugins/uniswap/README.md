@@ -1,48 +1,58 @@
 # @helico/plugin-uniswap
 
 Uniswap v4 on-chain through the official SDKs and viem. No API key, no wallet: the package
-reads pool state, quotes, and builds Universal Router calldata. It never signs or sends.
+reads, quotes, and builds calldata. It never signs or sends. Plans:
+[`2026-09-05-plugin-uniswap.md`](../../../docs/plans/2026-09-05-plugin-uniswap.md),
+[`2026-09-05-plugin-uniswap-complete.md`](../../../docs/plans/2026-09-05-plugin-uniswap-complete.md).
 
-Exports from [`src/index.ts`](src/index.ts): `addresses`, `poolId`, `getPoolState`,
-`quoteExactInputSingle`, `encodeSwapExactInSingle`.
-Plan: [`docs/plans/2026-09-05-plugin-uniswap.md`](../../../docs/plans/2026-09-05-plugin-uniswap.md).
+## Modules
 
-## Status
+| Module | Exports | Proven by |
+|---|---|---|
+| [`addresses`](src/addresses.ts) | `addresses(chainId)`, `supportedChainIds()` — v4 contracts, PositionManager, Permit2, from the SDKs | test pins Base to the official deployments page |
+| [`pool`](src/pool.ts) | `createPoolKey`, `sortCurrencies`, `poolId`, `getPoolState`, `nearestUsableTick`, `sqrtPriceX96ToPrice`, `tickToPrice`, `priceToTick` | tests; live `StateView` read on Base |
+| [`quote`](src/quote.ts) | `quoteExactInputSingle`, `quoteExactOutputSingle`, `quoteExactInput`, `quoteExactOutput` | tests; live v4 `Quoter` calls on Base |
+| [`swap`](src/swap.ts) | `encodeSwapExactInSingle`, `encodeSwapExactOutSingle`, `encodeSwapExactIn`, `encodeSwapExactOut`, `buildPath`, `minimumAfterSlippage`, `maximumAfterSlippage`, `deadlineFromNow` | tests decode every action; all four shapes accepted by the Universal Router in a live `eth_call` on Base |
+| [`approval`](src/approval.ts) | `getAllowances`, `approvalsNeeded`, `encodeApproveTokenToPermit2`, `encodeApprovePermit2`, `permitSingleTypedData` | tests; live allowance read on Base |
+| [`liquidity`](src/liquidity.ts) | `encodeInitializePool`, `encodeMintPosition`, `encodeIncreaseLiquidity`, `encodeDecreaseLiquidity`, `encodeCollectFees`, `sqrtPriceX96FromAmounts` | tests decode the `V4PositionManager` calldata; **not simulated on-chain** (needs an account holding both tokens) |
 
-| | |
-|---|---|
-| Addresses per chain, from `@uniswap/sdk-core` | ✅ Base pinned to the official deployments page in the tests |
-| Pool state via `StateView`, quote via v4 `Quoter` | ✅ live on Base, see `smoke` |
-| Universal Router swap calldata via `V4Planner` | ✅ accepted by the router in an `eth_call` on Base |
-| Sending a swap, approvals, Permit2, liquidity, hooks | ❌ out of scope |
-| Trading API (Uniswap's recommended backend path) | ❌ needs an API key the team does not have |
-| Wired into an app under `apps/` | ❌ |
+Not here: sending anything, the Trading API (needs a key), UniswapX, hooks development, CCA.
 
 ## Use
 
 ```ts
 import { createPublicClient, http, zeroAddress } from 'viem'
 import { base } from 'viem/chains'
-import { encodeSwapExactInSingle, quoteExactInputSingle } from '@helico/plugin-uniswap'
+import * as uni from '@helico/plugin-uniswap'
 
 const client = createPublicClient({ chain: base, transport: http() })
-const poolKey = { currency0: zeroAddress, currency1: '0x8335…2913', fee: 500, tickSpacing: 10, hooks: zeroAddress }
+const poolKey = uni.createPoolKey({ currencyA: zeroAddress, currencyB: '0x8335…2913', fee: 500, tickSpacing: 10 })
 
-const { amountOut } = await quoteExactInputSingle(client, { poolKey, zeroForOne: true, amountIn: 10n ** 18n })
-const tx = encodeSwapExactInSingle({ chainId: base.id, poolKey, zeroForOne: true, amountIn: 10n ** 18n, amountOutMinimum: (amountOut * 995n) / 1000n, deadline })
-// tx = { to, data, value }: sign and send it yourself, or simulate it with client.call
+const { amountOut } = await uni.quoteExactInputSingle(client, { poolKey, zeroForOne: true, amountIn: 10n ** 18n })
+const tx = uni.encodeSwapExactInSingle({
+	chainId: base.id, poolKey, zeroForOne: true, amountIn: 10n ** 18n,
+	amountOutMinimum: uni.minimumAfterSlippage(amountOut, 50), deadline: uni.deadlineFromNow(600),
+})
+// tx = { to, data, value }: simulate with client.call, or sign and send it yourself
 ```
+
+Multi-hop: `const route = uni.buildPath({ currencies: [ETH, USDC, USDT], pools: [p, p] })`, then
+`quoteExactInput` / `encodeSwapExactIn` with `route.exactInPath`, or the exact-output pair with
+`route.exactOutPath`. ERC-20 inputs need `getAllowances` → `approvalsNeeded` → the two
+approvals (or a signed `permitSingleTypedData`) first.
 
 ## Check
 
 ```bash
 bun run --filter @helico/plugin-uniswap typecheck
-bun run --filter @helico/plugin-uniswap test    # offline
-bun run --filter @helico/plugin-uniswap smoke   # live, read-only, Base public RPC
+bun run --filter @helico/plugin-uniswap test    # offline, one file per module
+bun run --filter @helico/plugin-uniswap smoke   # live, read-only, Base; RPC_URL overrides the endpoint
 ```
 
 ## Do not forget
 
-- `amountOutMinimum` is the only slippage guard. Derive it from a fresh quote.
-- An ERC-20 input needs token → Permit2 → Universal Router approvals first. Native ETH does not.
-- The V4_SWAP input is `V4Planner.finalize()`. `RoutePlanner.inputs` looks right and reverts.
+- `amountOutMinimum` / `amountInMaximum` are the only slippage guards. Derive them from a fresh quote.
+- The V4_SWAP input is `V4Planner.finalize()`; `RoutePlanner.inputs` is wrong for it.
+- Native-input exact-output swaps leave ETH in the router; the encoders add a router-level
+  `SWEEP` back to the caller. The v4 action set has no sweep and the router rejects one.
+- A route that ends in its own input currency nets its deltas out and reverts; use distinct endpoints.
