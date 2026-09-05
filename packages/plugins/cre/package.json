@@ -7,7 +7,8 @@
 	},
 	"scripts": {
 		"typecheck": "tsc --noEmit",
-		"test": "bun test"
+		"test": "bun test",
+		"size": "bun src/size.ts"
 	},
 	"dependencies": {
 		"@chainlink/cre-sdk": "1.19.1",

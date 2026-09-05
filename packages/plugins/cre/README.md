@@ -80,6 +80,24 @@ mandateHash, gasLimit, slippageBps, maxPoolFeePips, deadlineSeconds }`. Hex valu
 values the user passed to `setMandate`. Any chain with a v4 `StateView` and a CRE forwarder works; on Robinhood that is
 the testnet (`robinhood-testnet`).
 
+## Cross-check the sizing against the vault
+
+`size.ts` prints what the enclave would size for an explicit chain state, as JSON or, with
+`--abi`, as the ABI-encoded `RecenterParams` a Foundry fork test can take through `vm.ffi`:
+
+```bash
+bun run --filter @helico/plugin-cre size -- --sqrt-price=53939763502276186533003357195988 \
+  --tick=130472 --pool-liquidity=56068990832105925359211 --fee=10000 --spacing=10 \
+  --liquidity=15826862144268253831 --lower=130200 --upper=130400 --width=20 --slippage=50
+```
+
+That state is the ETH/par 1% pool on Robinhood Chain at block 55182962 and a position of
+`L = 15826862144268253831` at `[130200, 130400)`, entirely below the price. The enclave
+proposes `[130460, 130480)`, sells `40997342171976214693` par for at least `87127370604119`
+wei, and mints `L = 155568528444722780435` (a 20-tick range holds ten times the liquidity of
+a 200-tick one for the same value). Rebuild the state on a fork and the vault should deliver
+that mint or more.
+
 ## Check
 
 ```bash

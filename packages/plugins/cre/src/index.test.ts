@@ -74,6 +74,9 @@ type Chain = {
 	tick: number
 	liquidity: bigint
 	range: [number, number]
+	poolLiquidity?: bigint
+	lpFee?: number
+	poolKeyOverride?: Partial<typeof poolKey>
 }
 
 const sel = (sig: string): Hex => toFunctionSelector(sig)
