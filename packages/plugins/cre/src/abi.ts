@@ -13,6 +13,7 @@ export const positionManagerAbi = parseAbi([
 
 export const stateViewAbi = parseAbi([
 	'function getSlot0(bytes32 poolId) view returns (uint160 sqrtPriceX96, int24 tick, uint24 protocolFee, uint24 lpFee)',
+	'function getLiquidity(bytes32 poolId) view returns (uint128 liquidity)',
 ])
 
 /** The vault's own struct, in its own order; the report carries it verbatim. */
@@ -27,6 +28,9 @@ export const recenterParamsAbi = {
 		{ name: 'amount1Min', type: 'uint128' },
 		{ name: 'amount0Max', type: 'uint128' },
 		{ name: 'amount1Max', type: 'uint128' },
+		{ name: 'zeroForOne', type: 'bool' },
+		{ name: 'amountIn', type: 'uint256' },
+		{ name: 'minAmountOut', type: 'uint256' },
 		{ name: 'deadline', type: 'uint256' },
 	],
 } as const

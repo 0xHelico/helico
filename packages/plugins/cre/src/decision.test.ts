@@ -67,6 +67,30 @@ describe('decideRecentre', () => {
 		})
 	})
 
+	test('an odd width centres by flooring the half: spacing 1, width 3, tick 1234 gives [1233, 1236)', () => {
+		expect(
+			decideRecentre({
+				...base,
+				tick: 1_234,
+				tickSpacing: 1,
+				mandate: { ...mandate, rangeWidthTicks: 3 },
+			}),
+		).toEqual({ act: true, tickLower: 1_233, tickUpper: 1_236 })
+	})
+
+	test('the cooldown is over exactly at lastActionAt + cooldownSeconds', () => {
+		const now = 10_000
+		const live = { ...base, now, mandate: { ...mandate, expiry: 20_000 }, tick: 1_234 }
+		const acted = { ...position, lastActionAt: now - 3_600 }
+		expect(decideRecentre({ ...live, position: acted }).act).toBe(true)
+		expect(
+			decideRecentre({ ...live, position: { ...acted, lastActionAt: acted.lastActionAt + 1 } }),
+		).toEqual({
+			act: false,
+			reason: 'cooldown',
+		})
+	})
+
 	test('holds instead of emitting a width the vault would reject', () => {
 		expect(
 			decideRecentre({ ...base, tick: 5_000, mandate: { ...mandate, rangeWidthTicks: 1_005 } }),
@@ -115,6 +139,51 @@ describe('decideRecentre', () => {
 describe('vaultRejects', () => {
 	const m = { rangeWidthTicks: 1000, minImprovementBps: 50 }
 	const current = { tickLower: 0, tickUpper: 1000 }
+
+	test('accepts an improvement exactly at the threshold, as the vault does (<=, not <)', () => {
+		// gapNow = 1400 - 500 = 900; with 50% required, gapNext may be at most 450: centre 950 passes, 940 does not.
+		const half = { rangeWidthTicks: 1000, minImprovementBps: 5_000 }
+		expect(
+			vaultRejects({
+				tick: 1_400,
+				tickSpacing: 10,
+				current,
+				proposed: { tickLower: 450, tickUpper: 1_450 },
+				mandate: half,
+			}),
+		).toBeNull()
+		expect(
+			vaultRejects({
+				tick: 1_400,
+				tickSpacing: 10,
+				current,
+				proposed: { tickLower: 440, tickUpper: 1_440 },
+				mandate: half,
+			}),
+		).toBe('NotEnoughImprovement')
+	})
+
+	test('the upper edge is exclusive: a tick equal to tickUpper is off market', () => {
+		expect(
+			vaultRejects({
+				tick: 1_500,
+				tickSpacing: 10,
+				current,
+				proposed: { tickLower: 500, tickUpper: 1_500 },
+				mandate: m,
+			}),
+		).toBe('RangeOffMarket')
+		expect(
+			vaultRejects({
+				tick: 1_499,
+				tickSpacing: 10,
+				current,
+				proposed: { tickLower: 500, tickUpper: 1_500 },
+				mandate: m,
+			}),
+		).toBeNull()
+	})
+
 	test.each([
 		['unordered ticks', { tickLower: 1000, tickUpper: 1000 }, 'TicksNotOrdered'],
 		['ticks off the spacing', { tickLower: 1005, tickUpper: 2005 }, 'TicksNotSpaced'],

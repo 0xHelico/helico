@@ -29,11 +29,11 @@ export function ethCallBatch(runtime: TeeRuntime<unknown>, rpcUrl: string, calls
 		})
 		.result()
 	if (!ok(response)) throw new Error(`RPC returned status ${response.statusCode}`)
-	const replies = JSON.parse(text(response)) as {
-		id: number
-		result?: Hex
-		error?: { message?: string }
-	}[]
+	const parsed: unknown = JSON.parse(text(response))
+	if (!Array.isArray(parsed)) {
+		throw new Error(`RPC did not answer the batch: ${JSON.stringify(parsed).slice(0, 200)}`)
+	}
+	const replies = parsed as { id: number; result?: Hex; error?: { message?: string } }[]
 	return calls.map((_, id) => {
 		const reply = replies.find((r) => r.id === id)
 		if (!reply?.result)
@@ -81,6 +81,10 @@ export type ChainState = {
 	active: boolean
 	sqrtPriceX96: bigint
 	tick: number
+	/** The pool's current LP fee in pips; for a dynamic-fee pool this is the fee in force now. */
+	lpFee: number
+	/** The pool's active liquidity, what a swap trades against inside the current tick. */
+	poolLiquidity: bigint
 	liquidity: bigint
 	tickLower: number
 	tickUpper: number
@@ -95,30 +99,42 @@ export function readChainState(
 	owner: Address,
 	poolId: Hex,
 ): ChainState {
-	const [positionOf, lastActionAt, isActive, slot0] = ethCallBatch(runtime, rpcUrl, [
-		{
-			to: vault,
-			data: encodeFunctionData({ abi: vaultAbi, functionName: 'positionOf', args: [owner] }),
-		},
-		{
-			to: vault,
-			data: encodeFunctionData({ abi: vaultAbi, functionName: 'lastActionAt', args: [owner] }),
-		},
-		{
-			to: vault,
-			data: encodeFunctionData({ abi: vaultAbi, functionName: 'isActive', args: [owner] }),
-		},
-		{
-			to: stateView,
-			data: encodeFunctionData({ abi: stateViewAbi, functionName: 'getSlot0', args: [poolId] }),
-		},
-	]) as [Hex, Hex, Hex, Hex]
+	const [positionOf, lastActionAt, isActive, slot0, poolLiquidityHex] = ethCallBatch(
+		runtime,
+		rpcUrl,
+		[
+			{
+				to: vault,
+				data: encodeFunctionData({ abi: vaultAbi, functionName: 'positionOf', args: [owner] }),
+			},
+			{
+				to: vault,
+				data: encodeFunctionData({ abi: vaultAbi, functionName: 'lastActionAt', args: [owner] }),
+			},
+			{
+				to: vault,
+				data: encodeFunctionData({ abi: vaultAbi, functionName: 'isActive', args: [owner] }),
+			},
+			{
+				to: stateView,
+				data: encodeFunctionData({ abi: stateViewAbi, functionName: 'getSlot0', args: [poolId] }),
+			},
+			{
+				to: stateView,
+				data: encodeFunctionData({
+					abi: stateViewAbi,
+					functionName: 'getLiquidity',
+					args: [poolId],
+				}),
+			},
+		],
+	) as [Hex, Hex, Hex, Hex, Hex]
 	const tokenId = decodeFunctionResult({
 		abi: vaultAbi,
 		functionName: 'positionOf',
 		data: positionOf,
 	})
-	const [sqrtPriceX96, tick] = decodeFunctionResult({
+	const [sqrtPriceX96, tick, , lpFee] = decodeFunctionResult({
 		abi: stateViewAbi,
 		functionName: 'getSlot0',
 		data: slot0,
@@ -156,6 +172,12 @@ export function readChainState(
 		active: decodeFunctionResult({ abi: vaultAbi, functionName: 'isActive', data: isActive }),
 		sqrtPriceX96,
 		tick,
+		lpFee,
+		poolLiquidity: decodeFunctionResult({
+			abi: stateViewAbi,
+			functionName: 'getLiquidity',
+			data: poolLiquidityHex,
+		}),
 		liquidity: decodeFunctionResult({
 			abi: positionManagerAbi,
 			functionName: 'getPositionLiquidity',

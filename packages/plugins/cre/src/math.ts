@@ -122,3 +122,41 @@ export function maxLiquidityForAmounts(
 	}
 	return maxLiquidityForAmount1(lo, hi, amount1)
 }
+
+/** The pool's next sqrt price after `amountIn` (fee already removed) at constant liquidity (SqrtPriceMath.getNextSqrtPriceFromInput). */
+export function getNextSqrtPriceFromInput(
+	sqrtP: bigint,
+	liquidity: bigint,
+	amountIn: bigint,
+	zeroForOne: boolean,
+): bigint {
+	if (sqrtP <= 0n || liquidity <= 0n) throw new RangeError('price and liquidity must be positive')
+	if (zeroForOne) {
+		if (amountIn === 0n) return sqrtP
+		const numerator1 = liquidity << 96n
+		return divRoundingUp(numerator1 * sqrtP, numerator1 + amountIn * sqrtP)
+	}
+	return sqrtP + (amountIn << 96n) / liquidity
+}
+
+export type SwapEstimate = { sqrtPriceAfter: bigint; amountOut: bigint }
+
+/**
+ * One constant-liquidity swap step as the pool computes it: the LP fee comes off the input, the
+ * price moves, the output is the delta between the two prices. Tick crossings are ignored, so
+ * this is exact inside the active tick and optimistic beyond it; the caller keeps a margin.
+ */
+export function estimateSwap(
+	sqrtP: bigint,
+	liquidity: bigint,
+	amountIn: bigint,
+	zeroForOne: boolean,
+	feePips: number,
+): SwapEstimate {
+	const amountInLessFee = (amountIn * (1_000_000n - BigInt(feePips))) / 1_000_000n
+	const sqrtPriceAfter = getNextSqrtPriceFromInput(sqrtP, liquidity, amountInLessFee, zeroForOne)
+	const amountOut = zeroForOne
+		? getAmount1Delta(sqrtPriceAfter, sqrtP, liquidity, false)
+		: getAmount0Delta(sqrtP, sqrtPriceAfter, liquidity, false)
+	return { sqrtPriceAfter, amountOut }
+}

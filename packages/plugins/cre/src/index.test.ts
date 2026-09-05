@@ -62,6 +62,7 @@ const config: Config = {
 	mandateHash: committedHash,
 	gasLimit: '1500000',
 	slippageBps: 50,
+	maxPoolFeePips: 10_000,
 	deadlineSeconds: 600,
 }
 const now = 1_700_000_000
@@ -89,23 +90,38 @@ const handlers = (c: Chain) => ({
 			sqrtPriceX96,
 			c.tick,
 			0,
-			500,
+			c.lpFee ?? 500,
 		]),
+	[sel('function getLiquidity(bytes32)')]: () => u256(c.poolLiquidity ?? 0n),
 	[sel('function getPositionLiquidity(uint256)')]: () => u256(c.liquidity),
 	[sel('function getPoolAndPositionInfo(uint256)')]: () =>
 		encodeAbiParameters(parseAbiParameters('(address,address,uint24,int24,address), uint256'), [
-			[poolKey.currency0, poolKey.currency1, poolKey.fee, poolKey.tickSpacing, poolKey.hooks],
+			[
+				c.poolKeyOverride?.currency0 ?? poolKey.currency0,
+				c.poolKeyOverride?.currency1 ?? poolKey.currency1,
+				c.poolKeyOverride?.fee ?? poolKey.fee,
+				c.poolKeyOverride?.tickSpacing ?? poolKey.tickSpacing,
+				c.poolKeyOverride?.hooks ?? poolKey.hooks,
+			],
 			((BigInt(c.range[1]) & 0xffffffn) << 32n) | ((BigInt(c.range[0]) & 0xffffffn) << 8n),
 		]),
 })
 
-const run = (chain: Chain, overrides: Partial<Config> = {}, writeStatus?: number) => {
+type Faults = {
+	writeStatus?: number
+	httpStatus?: number
+	rpcBody?: string
+	secrets?: Record<string, string>
+}
+const run = (chain: Chain, overrides: Partial<Config> = {}, faults: Faults = {}) => {
 	const fake = fakeRuntime({
-		config: { ...config, ...overrides },
-		secrets,
+		config: configSchema.parse({ ...config, ...overrides }),
+		secrets: faults.secrets ?? secrets,
 		now,
 		handlers: handlers(chain),
-		writeStatus,
+		writeStatus: faults.writeStatus,
+		httpStatus: faults.httpStatus,
+		rpcBody: faults.rpcBody,
 	})
 	const result = onCronTrigger(fake.runtime)
 	return { ...fake, result }
@@ -130,9 +146,18 @@ const offCentre: Chain = {
 // ─── Tests ───────────────────────────────────────────────────
 describe('configSchema', () => {
 	test('carries no threshold and no position: both are read from secrets and the vault', () => {
-		expect(configSchema.parse(config)).toEqual(config)
-		expect(Object.keys(configSchema.shape)).not.toContain('position')
-		expect(Object.keys(configSchema.shape)).not.toContain('minImprovementBps')
+		for (const key of ['position', 'tickSpacing', 'minImprovementBps', 'minRetainedBps']) {
+			expect(Object.keys(configSchema.shape)).not.toContain(key)
+		}
+	})
+
+	test('lowercases hex values so a checksummed config compares equal to keccak output', () => {
+		const parsed = configSchema.parse({
+			...config,
+			poolId: poolId.toUpperCase().replace('0X', '0x'),
+		})
+		expect(parsed.poolId).toBe(poolId)
+		expect(parsed.vault).toBe(config.vault.toLowerCase())
 	})
 })
 
@@ -147,20 +172,20 @@ describe('onCronTrigger', () => {
 	test('reads the account and the pool, then the position, in two batches from inside the enclave', () => {
 		const { rpcRequests } = run({ ...offCentre, range: [-2_000, -1_000], tick: -65 })
 		expect(rpcRequests).toHaveLength(2)
-		expect(rpcRequests[0]?.map((r) => r.params[0].to)).toEqual([
-			config.vault,
-			config.vault,
-			config.vault,
-			config.stateView,
-		])
-		expect(rpcRequests[1]?.map((r) => r.params[0].to)).toEqual([
-			config.positionManager,
-			config.positionManager,
-		])
+		const lower = (a: string) => a.toLowerCase()
+		expect(rpcRequests[0]?.map((r) => r.params[0].to)).toEqual(
+			[config.vault, config.vault, config.vault, config.stateView, config.stateView].map(lower),
+		)
+		expect(rpcRequests[1]?.map((r) => r.params[0].to)).toEqual(
+			[config.positionManager, config.positionManager].map(lower),
+		)
 		expect(rpcRequests[1]?.[0]?.params[0].data).toBe(
 			`${sel('function getPositionLiquidity(uint256)')}${'0'.repeat(63)}7`,
 		)
 	})
+
+	// Out of range below, with a pool deep enough to swap into a two-sided range.
+	const belowRange: Chain = { ...offCentre, range: [100, 1_100], poolLiquidity: 10n ** 18n }
 
 	test.each([
 		['a revoked mandate', { ...offCentre, active: false }, 'HOLD (mandate revoked)'],
@@ -169,25 +194,31 @@ describe('onCronTrigger', () => {
 			{ ...offCentre, range: [-560, 440] as [number, number] },
 			'HOLD (in range)',
 		],
-		[
-			'the cooldown',
-			{ ...offCentre, range: [100, 1_100] as [number, number], lastActionAt: BigInt(now - 60) },
-			'HOLD (cooldown)',
-		],
+		['the cooldown', { ...belowRange, lastActionAt: BigInt(now - 60) }, 'HOLD (cooldown)'],
 		[
 			'an empty position',
-			{ ...offCentre, range: [100, 1_100] as [number, number], liquidity: 0n },
+			{ ...belowRange, liquidity: 0n },
 			'HOLD (vault would reject: NothingToMove)',
 		],
 		[
 			'a position over the cap',
-			{ ...offCentre, range: [100, 1_100] as [number, number], liquidity: 10n ** 19n },
+			{ ...belowRange, liquidity: 10n ** 19n },
 			'HOLD (vault would reject: LiquidityTooLarge)',
 		],
 		[
-			'an out-of-range position, which holds one token and cannot fund a two-sided range',
+			'a pool whose fee is above the enclave ceiling',
+			{ ...belowRange, lpFee: 200_000 },
+			'HOLD (pool fee above the enclave ceiling)',
+		],
+		[
+			'a position in a pool other than the mandated one',
+			{ ...belowRange, poolKeyOverride: { fee: 3_000 } },
+			'HOLD (position is not in the mandated pool)',
+		],
+		[
+			'an out-of-range position in a pool with no liquidity to swap against',
 			{ ...offCentre, range: [100, 1_100] as [number, number] },
-			'HOLD (the burn cannot fund the new range without a swap)',
+			'HOLD (vault would reject: NothingToMint)',
 		],
 	])('holds on %s without writing anything', (_, chain, expected) => {
 		const { result, writes } = run(chain)
@@ -195,19 +226,101 @@ describe('onCronTrigger', () => {
 		expect(writes).toHaveLength(0)
 	})
 
-	test('an in-range but off-centre position: this needs a policy change to act, so it holds today', () => {
-		expect(run(offCentre).result).toBe('HOLD (in range)')
+	test('a retention floor of zero does not let a zero mint through', () => {
+		const zeroFloor = { ...secrets, [MANDATE_SECRET_IDS.minRetainedBps]: '0' }
+		const hash = mandateHash({
+			poolId,
+			rangeWidthTicks: 1000,
+			minImprovementBps: 50,
+			cooldownSeconds: 3600,
+			maxLiquidity: 10n ** 18n,
+			expiry: 1_800_000_000,
+			minRetainedBps: 0,
+		})
+		const { result, writes } = run(
+			{ ...offCentre, range: [100, 1_100] },
+			{ mandateHash: hash },
+			{ secrets: zeroFloor },
+		)
+		expect(result).toBe('HOLD (vault would reject: NothingToMint)')
+		expect(writes).toHaveLength(0)
 	})
 
-	test('an out-of-range position always holds today: one token cannot fund a two-sided range', () => {
-		for (const range of [
-			[-1_000, -70],
-			[100, 1_100],
-		] as [number, number][]) {
-			const { result, writes } = run({ ...offCentre, range })
-			expect(result).toBe('HOLD (the burn cannot fund the new range without a swap)')
-			expect(writes).toHaveLength(0)
-		}
+	test('holds below the retention floor rather than shrinking the position', () => {
+		const strict = { ...secrets, [MANDATE_SECRET_IDS.minRetainedBps]: '9999' }
+		const hash = mandateHash({
+			poolId,
+			rangeWidthTicks: 1000,
+			minImprovementBps: 50,
+			cooldownSeconds: 3600,
+			maxLiquidity: 10n ** 18n,
+			expiry: 1_800_000_000,
+			minRetainedBps: 9999,
+		})
+		const { result, writes } = run(belowRange, { mandateHash: hash }, { secrets: strict })
+		expect(result).toBe("HOLD (below the mandate's retention floor)")
+		expect(writes).toHaveLength(0)
+	})
+
+	test('re-centres an out-of-range position by swapping through the pool and delivers the sized params', () => {
+		const { result, writes, reports } = run(belowRange)
+		expect(result).toBe(`RECENTER -560..440 tx 0x${'ab'.repeat(32)}`)
+		expect(writes).toHaveLength(1)
+		const write = writes[0] as NonNullable<(typeof writes)[0]>
+		expect(bytesToHex(write.receiver)).toBe(config.vault.toLowerCase())
+		expect(write.gasConfig?.gasLimit).toBe(1_500_000n)
+		const [act, hash, p] = decodeReport(write.report?.rawReport ?? new Uint8Array())
+		expect(act).toBe(true)
+		expect(hash).toBe(committedHash)
+		expect(p.owner).toBe(owner)
+		expect([p.tickLower, p.tickUpper]).toEqual([-560, 440])
+		// Below its range the position is all token0, so the swap sells token0.
+		expect(p.zeroForOne).toBe(true)
+		expect(p.amountIn).toBeGreaterThan(0n)
+		expect(p.amountIn).toBeLessThan(p.amount0Min)
+		expect(p.minAmountOut).toBeGreaterThan(0n)
+		expect(p.liquidityToMint).toBeGreaterThan(0n)
+		expect(p.liquidityToMint).toBeLessThan(belowRange.liquidity)
+		// The floors are the burn's, the ceilings are what is held after the swap.
+		expect(p.amount0Max).toBeLessThan(p.amount0Min)
+		expect(p.amount1Min).toBe(0n)
+		expect(p.amount1Max).toBeGreaterThan(0n)
+		expect(p.deadline).toBe(BigInt(now + 600))
+		expect(reports).toHaveLength(1)
+	})
+
+	test('above its range the position is all token1, so the swap sells token1', () => {
+		const { result, writes } = run({
+			...offCentre,
+			range: [-2_000, -1_000],
+			poolLiquidity: 10n ** 18n,
+		})
+		expect(result).toBe(`RECENTER -560..440 tx 0x${'ab'.repeat(32)}`)
+		const [, , p] = decodeReport(writes[0]?.report?.rawReport ?? new Uint8Array())
+		expect(p.zeroForOne).toBe(false)
+		expect(p.amount0Min).toBe(0n)
+		expect(p.amountIn).toBeLessThan(p.amount1Min)
+	})
+
+	test('the cooldown ends exactly at lastActionAt + cooldownSeconds, as in the vault', () => {
+		expect(run({ ...belowRange, lastActionAt: BigInt(now - 3_600) }).result).toStartWith('RECENTER')
+		expect(run({ ...belowRange, lastActionAt: BigInt(now - 3_599) }).result).toBe('HOLD (cooldown)')
+	})
+
+	test.each([
+		['a non-200 answer', { httpStatus: 502 }, 'RPC returned status 502'],
+		[
+			'a single error object instead of the batch',
+			{ rpcBody: '{"jsonrpc":"2.0","error":{"message":"rate limited"}}' },
+			'did not answer the batch',
+		],
+		[
+			'a reply with a missing result',
+			{ rpcBody: '[{"jsonrpc":"2.0","id":0,"error":{"message":"execution reverted"}}]' },
+			'eth_call 0 failed: execution reverted',
+		],
+	])('fails loudly on %s rather than deciding on a partial view', (_, faults, message) => {
+		expect(() => run(belowRange, {}, faults)).toThrow(message)
 	})
 })
 
@@ -221,8 +334,19 @@ describe('deliver', () => {
 		amount1Min: 45_299_872_474_506n,
 		amount0Max: 3_251_223_757_021n,
 		amount1Max: 45_527_510_024_630n,
+		zeroForOne: true,
+		amountIn: 1_000_000_000_000n,
+		minAmountOut: 995_000_000_000n,
 		deadline: BigInt(now + 600),
 	}
+
+	test("encodes the tuple in the vault's field order: pinned to an encoding produced by cast", () => {
+		// cast abi-encode "f(bool,bytes32,(address,int24,int24,uint256,uint128,uint128,uint128,uint128,bool,uint256,uint256,uint256))" \
+		//   true 0x134be6bb…6225 "(0x7461…88C0,-560,440,129997405203692,3234967638235,45299872474506,3251223757021,45527510024630,true,1000000000000,995000000000,1700000600)"
+		expect(encodeReport(true, committedHash, params)).toBe(
+			'0x0000000000000000000000000000000000000000000000000000000000000001134be6bb4e1c442551c22dfe96cb5b7c3c31babb386e2e9a051e57ee329a6225000000000000000000000000746182d0cccc5cefc69853bb0325c850029388c0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffdd000000000000000000000000000000000000000000000000000000000000001b80000000000000000000000000000000000000000000000000000763b6128acec000000000000000000000000000000000000000000000000000002f13318d0db0000000000000000000000000000000000000000000000000000293332cea58a000000000000000000000000000000000000000000000000000002f4fc0980dd00000000000000000000000000000000000000000000000000002968331001b60000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000e8d4a51000000000000000000000000000000000000000000000000000000000e7aa9f1e00000000000000000000000000000000000000000000000000000000006553f358',
+		)
+	})
 
 	test('signs the report through the DON and writes it to the vault on the configured chain', () => {
 		const fake = fakeRuntime({ config, secrets, now, handlers: {} })
@@ -281,7 +405,7 @@ describe('encodeReport', () => {
 		expect(act).toBe(false)
 		expect(hash).toBe(committedHash)
 		expect(p.owner).toBe('0x0000000000000000000000000000000000000000' as Address)
-		expect(encodeReport(false, committedHash).length).toBe(2 + 11 * 64)
+		expect(encodeReport(false, committedHash).length).toBe(2 + 14 * 64)
 	})
 })
 

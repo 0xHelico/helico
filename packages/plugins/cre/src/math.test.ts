@@ -2,9 +2,11 @@ import { describe, expect, test } from 'bun:test'
 import { SqrtPriceMath, maxLiquidityForAmounts as sdkMaxLiquidity, TickMath } from '@uniswap/v3-sdk'
 import JSBI from 'jsbi'
 import {
+	estimateSwap,
 	getAmount0Delta,
 	getAmount1Delta,
 	getAmountsForLiquidity,
+	getNextSqrtPriceFromInput,
 	getSqrtRatioAtTick,
 	maxLiquidityForAmounts,
 } from './math'
@@ -101,5 +103,67 @@ describe('getAmountsForLiquidity', () => {
 			// Rounding costs a few parts per trillion, never more.
 			expect(back).toBeGreaterThan(l - l / 1_000_000_000n)
 		}
+	})
+
+	test("matches the SDK's deltas branch by branch, rounding down", () => {
+		for (const p of [-1_000, -560, -65, 439, 440, 1_000]) {
+			const sp = getSqrtRatioAtTick(p)
+			const expected = {
+				amount0:
+					sp >= sb
+						? 0n
+						: BigInt(
+								SqrtPriceMath.getAmount0Delta(
+									big(sp > sa ? sp : sa),
+									big(sb),
+									big(l),
+									false,
+								).toString(),
+							),
+				amount1:
+					sp <= sa
+						? 0n
+						: BigInt(
+								SqrtPriceMath.getAmount1Delta(
+									big(sa),
+									big(sp < sb ? sp : sb),
+									big(l),
+									false,
+								).toString(),
+							),
+			}
+			expect(getAmountsForLiquidity(sp, sa, sb, l)).toEqual(expected)
+		}
+	})
+})
+
+describe('getNextSqrtPriceFromInput', () => {
+	const sp = getSqrtRatioAtTick(-65)
+	test.each([
+		[10n ** 18n, 10n ** 12n, true],
+		[10n ** 18n, 10n ** 12n, false],
+		[10n ** 15n, 48_524_977_311_541n, true],
+		[10n ** 15n, 45_527_510_024_630n, false],
+		[1n, 1n, true],
+	])(
+		'matches the SDK for liquidity %s, input %s, zeroForOne %s',
+		(liquidity, amountIn, zeroForOne) => {
+			expect(getNextSqrtPriceFromInput(sp, liquidity, amountIn, zeroForOne).toString()).toBe(
+				SqrtPriceMath.getNextSqrtPriceFromInput(
+					big(sp),
+					big(liquidity),
+					big(amountIn),
+					zeroForOne,
+				).toString(),
+			)
+		},
+	)
+
+	test('estimateSwap takes the fee off the input and pays out the price delta', () => {
+		const { sqrtPriceAfter, amountOut } = estimateSwap(sp, 10n ** 18n, 10n ** 12n, true, 500)
+		const inLessFee = (10n ** 12n * 999_500n) / 1_000_000n
+		expect(sqrtPriceAfter).toBe(getNextSqrtPriceFromInput(sp, 10n ** 18n, inLessFee, true))
+		expect(amountOut).toBe(getAmount1Delta(sqrtPriceAfter, sp, 10n ** 18n, false))
+		expect(estimateSwap(sp, 10n ** 18n, 10n ** 12n, true, 0).amountOut).toBeGreaterThan(amountOut)
 	})
 })

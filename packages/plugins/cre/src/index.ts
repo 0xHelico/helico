@@ -23,7 +23,12 @@ export * from './mandate'
 export * from './math'
 export * from './sizing'
 
-const hex = (bytes: number) => z.string().regex(new RegExp(`^0x[0-9a-fA-F]{${bytes * 2}}$`))
+// Lowercased so a checksummed value in config compares equal to keccak output and to what we encode.
+const hex = (bytes: number) =>
+	z
+		.string()
+		.regex(new RegExp(`^0x[0-9a-fA-F]{${bytes * 2}}$`))
+		.transform((v) => v.toLowerCase())
 
 // ─── Public config ───────────────────────────────────────────
 // Everything here is visible to node operators. The mandate's thresholds come from secrets;
@@ -44,8 +49,10 @@ export const configSchema = z.object({
 	/** `keccak256(abi.encode(mandate))` as committed in the vault. */
 	mandateHash: hex(32),
 	gasLimit: z.string().regex(/^\d+$/),
-	/** Enclave policy, not mandate: slippage on the burn and the mint. */
+	/** Enclave policy, not mandate: slippage on the burn, the swap, and the mint. */
 	slippageBps: z.number().int().min(0).max(5000),
+	/** Enclave policy: refuse to route a re-centre through a pool whose LP fee is above this, in pips. */
+	maxPoolFeePips: z.number().int().min(0).max(1_000_000),
 	deadlineSeconds: z.number().int().positive(),
 })
 export type Config = z.infer<typeof configSchema>
@@ -59,6 +66,9 @@ export type RecenterParams = {
 	amount1Min: bigint
 	amount0Max: bigint
 	amount1Max: bigint
+	zeroForOne: boolean
+	amountIn: bigint
+	minAmountOut: bigint
 	deadline: bigint
 }
 
@@ -73,6 +83,9 @@ const noParams: RecenterParams = {
 	amount1Min: 0n,
 	amount0Max: 0n,
 	amount1Max: 0n,
+	zeroForOne: false,
+	amountIn: 0n,
+	minAmountOut: 0n,
 	deadline: 0n,
 }
 
@@ -87,6 +100,10 @@ export function decide(config: Config, mandate: Mandate, state: ChainState, now:
 	if (!state.active) return { act: false, reason: 'mandate revoked' }
 	if (poolIdOf(state.poolKey) !== config.poolId)
 		return { act: false, reason: 'position is not in the mandated pool' }
+	// A re-centre swaps through the position's own pool; on a launch pool at 20% that costs more
+	// than it recovers, and no mandate field can express that judgement.
+	if (state.lpFee > config.maxPoolFeePips)
+		return { act: false, reason: 'pool fee above the enclave ceiling' }
 
 	const verdict: Verdict = decideRecentre({
 		tick: state.tick,
@@ -109,12 +126,17 @@ export function decide(config: Config, mandate: Mandate, state: ChainState, now:
 		sqrtPriceX96: state.sqrtPriceX96,
 		current: { tickLower: state.tickLower, tickUpper: state.tickUpper },
 		proposed: verdict,
+		poolLiquidity: state.poolLiquidity,
+		feePips: state.lpFee,
 		slippageBps: config.slippageBps,
 	})
-	// The mandate's floor, applied before the vault has to: below it the burn would return most of
-	// the value to the wallet and the vault would revert LiquidityNotRetained anyway.
+	// Never a zero mint, whatever the floor says: a mandate with minRetainedBps = 0 would let
+	// 0 < 0 pass and turn a re-centre into a withdrawal.
+	if (sizing.liquidityToMint === 0n)
+		return { act: false, reason: 'vault would reject: NothingToMint' }
+	// The mandate's floor, applied before the vault has to revert LiquidityNotRetained.
 	if (sizing.liquidityToMint * 10_000n < state.liquidity * BigInt(mandate.minRetainedBps)) {
-		return { act: false, reason: 'the burn cannot fund the new range without a swap' }
+		return { act: false, reason: "below the mandate's retention floor" }
 	}
 	return {
 		act: true,
@@ -127,6 +149,9 @@ export function decide(config: Config, mandate: Mandate, state: ChainState, now:
 			amount1Min: sizing.amount1Min,
 			amount0Max: sizing.amount0Max,
 			amount1Max: sizing.amount1Max,
+			zeroForOne: sizing.zeroForOne,
+			amountIn: sizing.amountIn,
+			minAmountOut: sizing.minAmountOut,
 			deadline: BigInt(now + config.deadlineSeconds),
 		},
 	}

@@ -24,6 +24,9 @@ export function fakeRuntime(input: {
 	now: number
 	handlers: Record<Hex, EthCallHandler>
 	writeStatus?: number
+	/** Fault injection for the RPC leg: an HTTP status other than 200, or a body that replaces the batch reply. */
+	httpStatus?: number
+	rpcBody?: string
 }) {
 	const rpcRequests: Batch[] = []
 	const writes: WriteReportCall[] = []
@@ -56,8 +59,8 @@ export function fakeRuntime(input: {
 			}))
 			return {
 				result: () => ({
-					statusCode: 200,
-					body: new TextEncoder().encode(JSON.stringify(replies)),
+					statusCode: input.httpStatus ?? 200,
+					body: new TextEncoder().encode(input.rpcBody ?? JSON.stringify(replies)),
 				}),
 			}
 		}
