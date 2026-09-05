@@ -13,7 +13,7 @@ proven to work**.
 | Tool | Model | Used for |
 |---|---|---|
 | Claude Code | Opus 5 | Hackathon rule research, repository scaffolding, workshop session notes |
-| Claude Code | Fable 5.1 | Monorepo tooling — pnpm workspaces, Turborepo, `packages/` scaffold |
+| Claude Code | Fable 5.1 | Monorepo tooling — bun workspaces (started on pnpm), Turborepo, Biome, Husky, `packages/` scaffold |
 | Claude Code | Fable 5.1 | Landing page starter (`apps/landing`), its plan and README |
 
 ## Log
