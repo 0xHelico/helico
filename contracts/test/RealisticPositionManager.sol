@@ -3,6 +3,7 @@ pragma solidity 0.8.28;
 
 import {PoolKey} from "../src/Mandate.sol";
 import {IPositionManager} from "../src/IPositionManager.sol";
+import {IPoolManager, IUnlockCallback} from "../src/IPoolManager.sol";
 
 /// @notice A minimal ERC-20 for settlement in the mock. Balances only; no allowances, because
 ///         nothing in these tests pulls funds from a third party.
@@ -62,6 +63,14 @@ contract RealisticPositionManager is IPositionManager {
     /// @dev Amount of each token one unit of liquidity is worth. Uniform across ranges on
     ///      purpose — see the note above on what this mock does not model.
     uint256 public costPerLiquidity = 1;
+
+    /// @dev Tokens backing live positions. Anything above this is what a caller transferred in
+    ///      for the batch in progress, which is what `SETTLE` may spend and `SWEEP` returns.
+    uint256 public reserved0;
+    uint256 public reserved1;
+
+    uint256 internal _owed0;
+    uint256 internal _owed1;
 
     error NotApproved();
     error DeltaNotPositive();
@@ -131,6 +140,8 @@ contract RealisticPositionManager is IPositionManager {
         uint256 backing = uint256(liquidity) * costPerLiquidity;
         token0.mint(address(this), backing);
         token1.mint(address(this), backing);
+        reserved0 += backing;
+        reserved1 += backing;
     }
 
     // --- the action loop -----------------------------------------------------------------
@@ -138,7 +149,10 @@ contract RealisticPositionManager is IPositionManager {
     function modifyLiquidities(bytes calldata unlockData, uint256 deadline) external payable {
         require(block.timestamp <= deadline, "deadline passed");
         (bytes memory actions, bytes[] memory params) = abi.decode(unlockData, (bytes, bytes[]));
+        _run(actions, params);
+    }
 
+    function _run(bytes memory actions, bytes[] memory params) internal {
         uint256 credit0;
         uint256 credit1;
 
@@ -156,6 +170,8 @@ contract RealisticPositionManager is IPositionManager {
                 if (out < amount0Min || out < amount1Min) revert DeltaNotPositive();
 
                 p.liquidity -= uint128(liquidity);
+                reserved0 -= out;
+                reserved1 -= out;
                 credit0 += out;
                 credit1 += out;
             } else if (action == 0x02) {
@@ -171,11 +187,20 @@ contract RealisticPositionManager is IPositionManager {
 
                 uint256 cost = liquidity * costPerLiquidity;
                 if (cost > amount0Max || cost > amount1Max) revert MaximumAmountExceeded();
-                // v4 nets deltas across the batch; a mint the batch cannot fund leaves a debt
-                // and the settlement step reverts. Same outcome, reached the same way.
-                if (cost > credit0 || cost > credit1) revert DeltaNotPositive();
-                credit0 -= cost;
-                credit1 -= cost;
+                // v4 nets deltas across the batch. Credit from an earlier action in the same
+                // batch covers the mint first; whatever is left becomes a debt for `SETTLE`.
+                // Credit from an earlier action in the same batch pays first, and that part is
+                // backed immediately. The remainder is a debt, and only becomes backing once
+                // `SETTLE` collects it.
+                uint256 fromCredit0 = cost < credit0 ? cost : credit0;
+                credit0 -= fromCredit0;
+                reserved0 += fromCredit0;
+                _owed0 += cost - fromCredit0;
+
+                uint256 fromCredit1 = cost < credit1 ? cost : credit1;
+                credit1 -= fromCredit1;
+                reserved1 += fromCredit1;
+                _owed1 += cost - fromCredit1;
 
                 uint256 newId = nextTokenId++;
                 _owners[newId] = owner;
@@ -197,6 +222,8 @@ contract RealisticPositionManager is IPositionManager {
                 credit0 += out + p.fees0;
                 credit1 += out + p.fees1;
                 p.liquidity = 0;
+                reserved0 -= out;
+                reserved1 -= out;
                 delete _owners[tokenId];
                 delete _positions[tokenId];
             } else if (action == 0x11) {
@@ -205,18 +232,52 @@ contract RealisticPositionManager is IPositionManager {
                 if (credit1 > 0) token1.transfer(recipient, credit1);
                 credit0 = 0;
                 credit1 = 0;
+            } else if (action == 0x0b) {
+                // SETTLE(currency, amount, payerIsUser). v4 pays from its own balance when
+                // `payerIsUser` is false, which is how the vault funds a mint without granting
+                // anyone a Permit2 allowance.
+                (address currency,, bool payerIsUser) = abi.decode(params[i], (address, uint256, bool));
+                require(!payerIsUser, "mock only models payerIsUser=false");
+                if (currency == address(token0)) {
+                    require(_free0() >= _owed0, "DeltaNotSettled");
+                    reserved0 += _owed0;
+                    _owed0 = 0;
+                } else {
+                    require(_free1() >= _owed1, "DeltaNotSettled");
+                    reserved1 += _owed1;
+                    _owed1 = 0;
+                }
+            } else if (action == 0x14) {
+                // SWEEP(currency, to) returns whatever the batch did not consume.
+                (address currency, address to) = abi.decode(params[i], (address, address));
+                uint256 free = currency == address(token0) ? _free0() : _free1();
+                if (free > 0) {
+                    if (currency == address(token0)) token0.transfer(to, free);
+                    else token1.transfer(to, free);
+                }
             } else {
                 revert UnsupportedAction(action);
             }
         }
     }
 
-    /// @dev Present so this mock satisfies `IPositionManager`, and deliberately unusable.
-    ///      The swap path it belongs to changes the pool price, which this mock does not model,
-    ///      and proving anything about a swap against a linear-cost mock is exactly the mistake
-    ///      that produced a green suite for a drainable vault. That path is tested on a fork.
-    function modifyLiquiditiesWithoutUnlock(bytes calldata, bytes[] calldata) external payable {
-        revert("use a fork test for the swap path");
+    /// @dev The same action loop, for a caller that already holds the pool lock. This is the
+    ///      entry point the vault uses now that it takes the lock itself.
+    function modifyLiquiditiesWithoutUnlock(bytes calldata actions, bytes[] calldata params)
+        external
+        payable
+    {
+        _run(actions, params);
+    }
+
+    function _free0() internal view returns (uint256) {
+        uint256 balance = token0.balanceOf(address(this));
+        return balance > reserved0 ? balance - reserved0 : 0;
+    }
+
+    function _free1() internal view returns (uint256) {
+        uint256 balance = token1.balanceOf(address(this));
+        return balance > reserved1 ? balance - reserved1 : 0;
     }
 
     function _approvedOrOwner(address spender, uint256 tokenId) internal view returns (bool) {
@@ -236,5 +297,41 @@ contract MockStateView {
 
     function getSlot0(bytes32 poolId) external view returns (uint160, int24, uint24, uint24) {
         return (0, tickOf[poolId], 0, 0);
+    }
+}
+
+/// @notice Stands in for v4's singleton PoolManager, for the parts the vault uses outside a swap.
+///
+/// @dev `unlock` is modelled because the vault now takes the lock itself. `swap` is not, and
+///      deliberately reverts: modelling a price curve here would let a test assert something
+///      about the swap that only holds against this mock's arithmetic, which is how a drainable
+///      vault shipped with twenty green tests once already. The swap is proven on a fork.
+contract MockPoolManager is IPoolManager {
+    error SwapIsForkTestedOnly();
+
+    bool public unlocked;
+
+    function unlock(bytes calldata data) external returns (bytes memory) {
+        require(!unlocked, "AlreadyUnlocked");
+        unlocked = true;
+        bytes memory result = IUnlockCallback(msg.sender).unlockCallback(data);
+        unlocked = false;
+        return result;
+    }
+
+    function swap(PoolKey memory, SwapParams memory, bytes calldata) external pure returns (int256) {
+        revert SwapIsForkTestedOnly();
+    }
+
+    function sync(address) external pure {
+        revert SwapIsForkTestedOnly();
+    }
+
+    function settle() external payable returns (uint256) {
+        revert SwapIsForkTestedOnly();
+    }
+
+    function take(address, address, uint256) external pure {
+        revert SwapIsForkTestedOnly();
     }
 }
