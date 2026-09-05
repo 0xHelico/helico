@@ -1,144 +1,180 @@
-import { describe, expect } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import type { TeeRuntime } from '@chainlink/cre-sdk'
-import { test } from '@chainlink/cre-sdk/test'
-import { initWorkflow, onCronTrigger } from './index'
+import {
+	bytesToHex,
+	decodeAbiParameters,
+	encodeAbiParameters,
+	type Hex,
+	parseAbiParameters,
+} from 'viem'
+import {
+	type Config,
+	configSchema,
+	initWorkflow,
+	MANDATE_SECRET_IDS,
+	mandateHash,
+	onCronTrigger,
+} from './index'
 
-const API_TOKEN = 'test-token'
-
-const makeConfig = () => ({
-	schedule: '0 */1 * * * *',
-	url: 'https://postman-echo.com/headers',
-	secretId: 'API_TOKEN',
-	scoreThreshold: 500,
+// ─── Fixtures ────────────────────────────────────────────────
+const poolId = '0xea84630b1ccfd69145b791334c55a7d8be1565910cb6e290c489413c977fd9c5'
+const secretValues = {
+	[MANDATE_SECRET_IDS.rangeWidthBps]: '1000',
+	[MANDATE_SECRET_IDS.minImprovementBps]: '50',
+	[MANDATE_SECRET_IDS.cooldownSeconds]: '3600',
+	[MANDATE_SECRET_IDS.maxNotional]: '1000000000000000000',
+	[MANDATE_SECRET_IDS.expiry]: '1800000000',
+}
+const committedHash = mandateHash({
+	poolId,
+	rangeWidthBps: 1000,
+	minImprovementBps: 50,
+	cooldownSeconds: 3600,
+	maxNotional: 10n ** 18n,
+	expiry: 1_800_000_000,
 })
-
-// The public test surface does not yet ship a TEE runtime factory
-// (`newTestRuntime` returns a DON `Runtime`), so we stand up the small slice of
-// `TeeRuntime` the handler actually uses: config, getSecret, callCapability
-// (which HTTPClient.sendRequest goes through), log, and usingTheDons.
-type FakeTeeRuntimeOptions = {
-	statusCode?: number
-	body?: string
+const config: Config = {
+	schedule: '0 */5 * * * *',
+	rpcUrl: 'https://rpc.testnet.chain.robinhood.com/rpc',
+	stateView: '0xF3334192D15450CDd385C8B70e03F9a6bD9e673b',
+	poolId,
+	tickSpacing: 10,
+	position: { tickLower: 100, tickUpper: 1100, lastActionAt: 0 },
+	mandateHash: committedHash,
 }
 
-const makeFakeTeeRuntime = ({ statusCode = 200, body = 'hello' }: FakeTeeRuntimeOptions = {}) => {
-	const capturedHeaders: string[] = []
-	const reports: unknown[] = []
-	const logs: string[] = []
+/** What StateView.getSlot0 returns for a pool sitting at `tick`. */
+const slot0 = (tick: number): Hex =>
+	encodeAbiParameters(parseAbiParameters('uint160, int24, uint24, uint24'), [
+		79_228_162_514_264_337_593_543_950_336n,
+		tick,
+		0,
+		500,
+	])
 
+const base64ToHex = (b64: string): Hex => bytesToHex(Buffer.from(b64, 'base64'))
+
+type Report = {
+	encodedPayload: string
+	encoderName: string
+	signingAlgo: string
+	hashingAlgo: string
+}
+
+/** A TeeRuntime that records what leaves the enclave and what the enclave asked for. */
+const fakeRuntime = (tick: number, overrides: Partial<Config> = {}) => {
+	const reports: Report[] = []
+	const httpRequests: { url: string; body: string }[] = []
 	const runtime = {
-		config: makeConfig(),
-		getSecret: (request: { id?: string }) => ({
-			result: () => ({ id: request.id, value: API_TOKEN }),
+		config: { ...config, ...overrides },
+		now: () => new Date(1_700_000_000 * 1000),
+		log: () => {},
+		getSecrets: (requests: { id: string }[]) => ({
+			result: () =>
+				Object.fromEntries(
+					requests.map((r) => [
+						r.id,
+						{ id: r.id, namespace: 'main', value: secretValues[r.id] ?? '' },
+					]),
+				),
 		}),
-		callCapability: ({ payload }: { payload: { multiHeaders?: Record<string, unknown> } }) => {
-			const auth = payload.multiHeaders?.Authorization as { values?: string[] } | undefined
-			capturedHeaders.push(...(auth?.values ?? []))
+		callCapability: ({ payload }: { payload: { url: string; body: string } }) => {
+			httpRequests.push({ url: payload.url, body: Buffer.from(payload.body, 'base64').toString() })
 			return {
 				result: () => ({
-					statusCode,
-					body: new TextEncoder().encode(body),
+					statusCode: 200,
+					body: new TextEncoder().encode(
+						JSON.stringify({ jsonrpc: '2.0', id: 1, result: slot0(tick) }),
+					),
 				}),
 			}
 		},
-		log: (message: string) => logs.push(message),
 		usingTheDons: () => ({
-			report: (input: unknown) => {
+			report: (input: Report) => {
 				reports.push(input)
 				return { result: () => ({}) }
 			},
 		}),
 	}
-
-	return {
-		runtime: runtime as unknown as TeeRuntime<ReturnType<typeof makeConfig>>,
-		capturedHeaders,
-		reports,
-		logs,
-	}
+	return { runtime: runtime as unknown as TeeRuntime<Config>, reports, httpRequests }
 }
 
+const decodeReport = (r: Report) =>
+	decodeAbiParameters(
+		parseAbiParameters('bool act, int24 tickLower, int24 tickUpper, bytes32 mandateHash'),
+		base64ToHex(r.encodedPayload),
+	)
+
+// ─── Tests ───────────────────────────────────────────────────
+describe('configSchema', () => {
+	test('accepts the shape the enclave needs and nothing secret', () => {
+		expect(configSchema.parse(config)).toEqual(config)
+		expect(Object.keys(configSchema.shape)).not.toContain('minImprovementBps')
+		expect(() => configSchema.parse({ ...config, mandateHash: '0x1234' })).toThrow()
+	})
+})
+
 describe('onCronTrigger', () => {
-	test('injects the enclave-fetched secret into the outbound request', () => {
-		const { runtime, capturedHeaders } = makeFakeTeeRuntime()
-
+	test('reads the tick through eth_call from inside the enclave', () => {
+		const { runtime, httpRequests } = fakeRuntime(1_500)
 		onCronTrigger(runtime)
-
-		expect(capturedHeaders).toEqual([`Bearer ${API_TOKEN}`])
+		expect(httpRequests).toHaveLength(1)
+		expect(httpRequests[0]?.url).toBe(config.rpcUrl)
+		const rpc = JSON.parse(httpRequests[0]?.body ?? '{}') as {
+			method: string
+			params: [{ to: string; data: string }]
+		}
+		expect(rpc.method).toBe('eth_call')
+		expect(rpc.params[0].to).toBe(config.stateView)
+		expect(rpc.params[0].data).toBe(`0xc815641c${poolId.slice(2)}`)
 	})
 
-	test('confirms the secret reached the API when the response echoes it back', () => {
-		const { runtime } = makeFakeTeeRuntime({ body: `{"authorization":"Bearer ${API_TOKEN}"}` })
-
-		expect(onCronTrigger(runtime)).toContain('secret reached API: true')
-	})
-
-	test('reports the secret did not reach the API when it is absent', () => {
-		const { runtime } = makeFakeTeeRuntime({ body: '{"authorization":"Bearer other"}' })
-
-		expect(onCronTrigger(runtime)).toContain('secret reached API: false')
-	})
-
-	test('crosses back to the DON to generate a report', () => {
-		const { runtime, reports } = makeFakeTeeRuntime()
-
-		onCronTrigger(runtime)
-
+	test('reports a re-centre with only the verdict and the mandate hash crossing out', () => {
+		const { runtime, reports } = fakeRuntime(1_500)
+		expect(onCronTrigger(runtime)).toBe('RECENTER 1000..2000')
 		expect(reports).toHaveLength(1)
 		expect(reports[0]).toMatchObject({
 			encoderName: 'evm',
 			signingAlgo: 'ecdsa',
 			hashingAlgo: 'keccak256',
 		})
+		expect(decodeReport(reports[0] as Report)).toEqual([true, 1_000, 2_000, committedHash])
+		// Four ABI words, nothing else: the thresholds and the tick are not in the payload.
+		expect(base64ToHex(reports[0]?.encodedPayload ?? '').length).toBe(2 + 4 * 64)
 	})
 
-	test('APPROVEs when the confidential score clears the threshold', () => {
-		// 'zzzzzzzz' sums to 976, above the 500 threshold.
-		const { runtime } = makeFakeTeeRuntime({ body: 'zzzzzzzz' })
-
-		expect(onCronTrigger(runtime)).toContain('APPROVE')
+	test('handles a negative tick: the Robinhood testnet pool at tick -65 re-centres to -560..440', () => {
+		const { runtime, reports } = fakeRuntime(-65)
+		expect(onCronTrigger(runtime)).toBe('RECENTER -560..440')
+		expect(decodeReport(reports[0] as Report)).toEqual([true, -560, 440, committedHash])
 	})
 
-	test('REJECTs when the confidential score is below the threshold', () => {
-		// 'a' sums to 97, below the 500 threshold.
-		const { runtime } = makeFakeTeeRuntime({ body: 'a' })
-
-		expect(onCronTrigger(runtime)).toContain('REJECT')
+	test('reports a hold when the position is still in range', () => {
+		const { runtime, reports } = fakeRuntime(600)
+		expect(onCronTrigger(runtime)).toBe('HOLD (in range)')
+		expect(decodeReport(reports[0] as Report)).toEqual([false, 0, 0, committedHash])
 	})
 
-	test('throws on a non-2xx response and never reaches the DON', () => {
-		const { runtime, reports } = makeFakeTeeRuntime({ statusCode: 401 })
-
-		expect(() => onCronTrigger(runtime)).toThrow('status: 401')
-		expect(reports).toHaveLength(0)
-	})
-
-	test('does not log the secret or the raw response body', () => {
-		const { runtime, logs } = makeFakeTeeRuntime({ body: 'sensitive-response' })
-
-		onCronTrigger(runtime)
-
-		for (const line of logs) {
-			expect(line).not.toContain(API_TOKEN)
-			expect(line).not.toContain('sensitive-response')
-		}
+	test('refuses to act, and never reads the chain, when the secrets do not match the committed hash', () => {
+		const tampered = `0x${'ab'.repeat(32)}` as const
+		const { runtime, reports, httpRequests } = fakeRuntime(1_500, { mandateHash: tampered })
+		expect(onCronTrigger(runtime)).toBe('HOLD (mandate hash mismatch)')
+		expect(httpRequests).toHaveLength(0)
+		// The report carries the hash the enclave actually computed, so the vault sees the mismatch too.
+		expect(decodeReport(reports[0] as Report)).toEqual([false, 0, 0, committedHash])
 	})
 })
 
 describe('initWorkflow', () => {
-	test('registers the cron handler with a Nitro TEE constraint', () => {
-		const handlers = initWorkflow(makeConfig())
-
-		expect(handlers).toHaveLength(1)
-		expect(handlers[0].fn).toBe(onCronTrigger)
-
-		// handlerInTee attaches TEE requirements; cre.handler does not. Assert the constraint itself,
-		// not just its presence: AWS Nitro (type 1) in us-west-2, the only registered TEE today.
-		expect(handlers[0].requirements).toMatchObject({
-			tee: {
-				item: {
-					case: 'teeTypesAndRegions',
-					value: { teeTypeAndRegions: [{ type: 1, regions: ['us-west-2'] }] },
+	test('registers the cron handler inside a Nitro enclave in us-west-2', () => {
+		const [handler] = initWorkflow(config)
+		expect(handler).toMatchObject({
+			requirements: {
+				tee: {
+					item: {
+						case: 'teeTypesAndRegions',
+						value: { teeTypeAndRegions: [{ type: 1, regions: ['us-west-2'] }] },
+					},
 				},
 			},
 		})

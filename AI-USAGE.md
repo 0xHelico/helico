@@ -194,6 +194,23 @@ Format: date · what was done · the AI's role · what a human verified.
   quotes and both swap shapes accepted via `eth_call`); the testnet e2e ran with faucet ETH: 12 transactions, all
   `status: success`, through router 2.1.1 (hashes in the package README).
 
+### 2026-09-05 — CRE plugin: the mandate decision inside the enclave
+
+- **Done:** replaced the template's placeholder with Helico's logic in
+  `packages/plugins/cre`: `mandate.ts` (struct, `keccak256(abi.encode(...))` hash, secrets
+  parsing), `decision.ts` (pure re-centre rule), and the enclave callback in `src/index.ts`
+  (hash check, `eth_call` to `StateView.getSlot0` through the HTTP capability, verdict-only
+  report). SDK bumped to 1.19.1.
+- **AI's role:** read the SDK 1.19.1 declarations (`TeeRuntime`, `getSecrets`, HTTP request
+  shape), wrote the code, tests, and docs, ran the simulator and debugged two WASM-runtime
+  differences (no `URL`, negative `int24` needs a `bigint`). The humans decided the product
+  shape in #30/#31 and the split between public config and secrets.
+- **Plan:** [`docs/plans/2026-09-05-cre-mandate-decision.md`](docs/plans/2026-09-05-cre-mandate-decision.md).
+- **Verified:** `typecheck`, `test` (26 pass; the hash vector is cross-checked against
+  `cast abi-encode` + `cast keccak`), `bun run check`; three `cre workflow simulate` runs
+  from a throwaway project against the Robinhood Chain Testnet ETH/WETH pool: `RECENTER
+  -560..440`, `HOLD (in range)`, `HOLD (mandate hash mismatch)` (table in the package README).
+
 <!--
 Template for the next entry:
 

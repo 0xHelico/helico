@@ -1,134 +1,144 @@
-import { cre, hexToBase64, ok, type TeeRuntime, text } from '@chainlink/cre-sdk'
-import { encodeAbiParameters, parseAbiParameters } from 'viem'
+import { bytesToBase64, cre, hexToBase64, ok, type TeeRuntime, text } from '@chainlink/cre-sdk'
+import {
+	type AbiParameter,
+	decodeFunctionResult,
+	encodeAbiParameters,
+	encodeFunctionData,
+	type Hex,
+	parseAbi,
+} from 'viem'
 import { z } from 'zod'
+import { decideRecentre, type Verdict } from './decision'
+import { MANDATE_SECRET_IDS, mandateFromSecrets, mandateHash } from './mandate'
 
-// ─── Config Schema ──────────────────────────────────────────
+export * from './decision'
+export * from './mandate'
+
+const hex = (bytes: number) => z.string().regex(new RegExp(`^0x[0-9a-fA-F]{${bytes * 2}}$`))
+
+// ─── Public config ───────────────────────────────────────────
+// Everything here is visible to node operators; the thresholds are not here on purpose.
+// No `.url()`: zod backs it with `new URL()`, which the WASM runtime does not provide.
 export const configSchema = z.object({
 	schedule: z.string(),
-	url: z.string(),
-	secretId: z.string(),
-	scoreThreshold: z.number(),
+	/** JSON-RPC endpoint the enclave reads the pool from; any chain with a v4 StateView. */
+	rpcUrl: z.string().regex(/^https?:\/\/\S+$/),
+	stateView: hex(20),
+	poolId: hex(32),
+	tickSpacing: z.number().int().positive(),
+	position: z.object({
+		tickLower: z.number().int(),
+		tickUpper: z.number().int(),
+		lastActionAt: z.number().int().nonnegative(),
+	}),
+	/** `keccak256(abi.encode(mandate))` as committed in the vault. */
+	mandateHash: hex(32),
 })
-type Config = z.infer<typeof configSchema>
+export type Config = z.infer<typeof configSchema>
 
-// ─── Logic to be executed over confidential data ────────────
-// Some logic needs to be computed over sensitive data while preserving the
-// confidentiality of that data from node operators: risk thresholds, API
-// credentials, centralised exchange stablecoin reserves for reasoning, identity
-// details. Leaking this data could have adverse effects, including enabling
-// front-running attacks, exposing sensitive financial information, and
-// compromising individual privacy.
-//
-// Note what is and is not confidential here: a confidential workflow, despite
-// running inside the enclave, is part of the binary the Workflow DON provides to
-// the enclave — so the binary, including this logic, is revealed. What the
-// enclave keeps confidential is the data this logic computes over: Vault DON
-// secrets, the request and response payloads of HTTP calls made from the
-// enclave, and other intermediate values.
-//
-// Keep it deterministic for a given input — the enclave result is attested and
-// verified by DON consensus before the workflow completes.
-const scoreResponse = (body: string): number => {
-	let score = 0
-	for (let i = 0; i < body.length; i++) {
-		score = (score + body.charCodeAt(i)) % 1000
+const stateViewAbi = parseAbi([
+	'function getSlot0(bytes32 poolId) view returns (uint160 sqrtPriceX96, int24 tick, uint24 protocolFee, uint24 lpFee)',
+])
+
+/** `StateView.getSlot0` through `eth_call`, made from inside the enclave so the read stays confidential. */
+const readTick = (runtime: TeeRuntime<Config>): number => {
+	const { rpcUrl, stateView, poolId } = runtime.config
+	const call = {
+		to: stateView,
+		data: encodeFunctionData({
+			abi: stateViewAbi,
+			functionName: 'getSlot0',
+			args: [poolId as Hex],
+		}),
 	}
-	return score
+	const body = JSON.stringify({
+		jsonrpc: '2.0',
+		id: 1,
+		method: 'eth_call',
+		params: [call, 'latest'],
+	})
+	const response = new cre.capabilities.HTTPClient()
+		.sendRequest(runtime, {
+			url: rpcUrl,
+			method: 'POST',
+			body: bytesToBase64(new TextEncoder().encode(body)),
+			multiHeaders: { 'Content-Type': { values: ['application/json'] } },
+		})
+		.result()
+	if (!ok(response)) throw new Error(`RPC returned status ${response.statusCode}`)
+	const parsed = JSON.parse(text(response)) as { result?: Hex; error?: { message?: string } }
+	if (!parsed.result) throw new Error(`eth_call failed: ${parsed.error?.message ?? 'no result'}`)
+	const [, tick] = decodeFunctionResult({
+		abi: stateViewAbi,
+		functionName: 'getSlot0',
+		data: parsed.result,
+	})
+	return tick
 }
 
-// ─── TEE Cron Callback ──────────────────────────────────────
-// Receives a `TeeRuntime`, not a `Runtime`. Everything here runs inside the
-// enclave until we explicitly cross back with `usingTheDons()`.
+// Loosely typed on purpose: the ticks go in as BigInt. Under the WASM runtime (QuickJS) viem's
+// Number-vs-BigInt range check rejects a negative int24 given as a Number; a BigInt is compared correctly.
+const VERDICT_ABI: AbiParameter[] = [
+	{ type: 'bool' },
+	{ type: 'int24' },
+	{ type: 'int24' },
+	{ type: 'bytes32' },
+]
+
+/** The only thing that crosses back to the DON: what to do, where, and against which mandate. */
+export const encodeVerdict = (verdict: Verdict, hash: Hex): Hex =>
+	encodeAbiParameters(
+		VERDICT_ABI,
+		verdict.act
+			? [true, BigInt(verdict.tickLower), BigInt(verdict.tickUpper), hash]
+			: [false, 0n, 0n, hash],
+	)
+
+// ─── TEE cron callback ───────────────────────────────────────
 export const onCronTrigger = (runtime: TeeRuntime<Config>): string => {
 	const config = runtime.config
 
-	// ── Step 2: Fetch a secret inside the enclave ──
-	// The Vault DON releases this secret only into an attested enclave, and it is
-	// decrypted at the moment `getSecret()` runs. There is nothing to declare
-	// upfront (unlike Confidential HTTP's `vaultDonSecrets`).
-	const apiToken = runtime.getSecret({ id: config.secretId }).result().value
-
-	// ── Step 3: Make a capability call from inside the enclave ──
-	// `HTTPClient.sendRequest()` has a `TeeRuntime` overload, so passing the TEE
-	// runtime executes the request from inside the enclave, keeping the request
-	// and response payloads confidential from node operators. The Workflow DON
-	// offers consensus verification of enclave attestations, proving the integrity
-	// of the logic executed within the enclave.
-	//
-	// Note: do NOT reach for `ConfidentialHTTPClient` here — it has no
-	// `TeeRuntime` overload and is not meant to be called from a TEE handler.
-	const response = new cre.capabilities.HTTPClient()
-		.sendRequest(runtime, {
-			url: config.url,
-			method: 'GET',
-			multiHeaders: {
-				Authorization: { values: [`Bearer ${apiToken}`] },
-			},
-		})
+	// 1. The private half of the mandate, released by the Vault DON into this enclave only.
+	const secrets = runtime
+		.getSecrets(Object.values(MANDATE_SECRET_IDS).map((id) => ({ id })))
 		.result()
+	const mandate = mandateFromSecrets(config.poolId as Hex, secrets)
+	const hash = mandateHash(mandate)
 
-	if (!ok(response)) {
-		throw new Error(`Confidential request failed with status: ${response.statusCode}`)
-	}
+	// 2. Refuse thresholds the user did not sign: the recomputed hash must match the committed one.
+	// 3. Otherwise read the tick from inside the enclave and decide.
+	const verdict: Verdict =
+		hash === config.mandateHash
+			? decideRecentre({
+					tick: readTick(runtime),
+					tickSpacing: config.tickSpacing,
+					position: config.position,
+					mandate,
+					now: Math.floor(runtime.now().getTime() / 1000),
+				})
+			: { act: false, reason: 'mandate hash mismatch' }
 
-	const body = text(response)
-
-	// The default endpoint echoes the request headers back, so we can confirm the
-	// secret really was injected inside the enclave — as a boolean, never by
-	// logging the token itself. Drop this once `url` points at a real API.
-	const secretReachedApi = body.includes(apiToken)
-
-	// Decision logic executed over the confidential response payload.
-	const score = scoreResponse(body)
-	const verdict = score >= config.scoreThreshold ? 'APPROVE' : 'REJECT'
-
-	// ⚠️ Logs should be used for simulations only, and MUST be removed before
-	// deploying to production to preserve the confidentiality offered by enclaves.
-	// Avoid logging inside the enclave in general — sensitive or not.
-	runtime.log(`Enclave computation complete. verdict=${verdict}`)
-
-	// ── Step 4: Cross back to the DON for anything that needs consensus ──
-	// `usingTheDons()` returns a regular `Runtime`. Anything passed into a
-	// capability call on it executes on Workflow DON nodes and is NO LONGER
-	// confidential — so we cross over the verdict and score only, never the
-	// secret or the raw response body.
-	const donRuntime = runtime.usingTheDons()
-
-	const encodedPayload = encodeAbiParameters(parseAbiParameters('string verdict, uint256 score'), [
-		verdict,
-		BigInt(score),
-	])
-
-	donRuntime
+	// 4. Cross back with the verdict only. The thresholds, the tick, and the RPC response stay here.
+	runtime
+		.usingTheDons()
 		.report({
-			encodedPayload: hexToBase64(encodedPayload),
+			encodedPayload: hexToBase64(encodeVerdict(verdict, hash)),
 			encoderName: 'evm',
 			signingAlgo: 'ecdsa',
 			hashingAlgo: 'keccak256',
 		})
 		.result()
 
-	// The signed report is now a normal CRE report. To deliver it on-chain, pass
-	// it to `evmClient.writeReport(donRuntime, report)` — see the Keeper Bot or
-	// Event Reactor templates for the full write path.
-	return `${verdict} (score: ${score}, secret reached API: ${secretReachedApi})`
+	return verdict.act
+		? `RECENTER ${verdict.tickLower}..${verdict.tickUpper}`
+		: `HOLD (${verdict.reason})`
 }
 
-// ─── Workflow Init ──────────────────────────────────────────
+// ─── Workflow init ───────────────────────────────────────────
 export function initWorkflow(config: Config) {
 	const cronTrigger = new cre.capabilities.CronCapability()
-
 	return [
-		// ── Step 1: Register a TEE handler ──
-		// `cre.handlerInTee` instead of `cre.handler`. The third argument is a
-		// `TeeConstraint` describing which enclaves this handler will accept.
-		//
-		// Alternatives:
-		//   {}                        — any registered TEE, any region
-		//   { regions: ['us-west-2'] } — any TEE, restricted to a region
-		//
-		// AWS Nitro in us-west-2 is currently the only registered TEE type and
-		// region; check your SDK version if you expect otherwise.
+		// AWS Nitro in us-west-2 is currently the only registered TEE type and region.
 		cre.handlerInTee(cronTrigger.trigger({ schedule: config.schedule }), onCronTrigger, [
 			{ tee: 'nitro', regions: ['us-west-2'] },
 		]),
