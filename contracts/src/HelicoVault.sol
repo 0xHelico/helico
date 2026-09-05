@@ -15,18 +15,35 @@ import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/U
 
 import {Mandate, MandateLib, PoolKey} from "./Mandate.sol";
 import {IPositionManager} from "./IPositionManager.sol";
+import {IStateView} from "./IStateView.sol";
 
 /// @title HelicoVault
 /// @notice Enforces a user's committed mandate on an agent that re-centres their Uniswap v4
 ///         liquidity position.
 ///
 /// @dev The vault is non-custodial. The user keeps their position NFT and approves this
-///      contract to act on it; the vault never holds it. Revoking that approval, or calling
-///      `revoke`, ends the agent's authority immediately and cannot be blocked by anyone —
-///      not the agent, not the guardian, not an upgrade.
+///      contract to act on it; the vault never holds it, never holds tokens, and never names
+///      itself as a destination.
 ///
-///      The agent chooses *whether* and *where* to re-centre. The contract decides what is
-///      allowed. Every rejection path is a test in `HelicoVault.t.sol`.
+///      **The vault builds the action plan.** It does not accept router calldata. An earlier
+///      draft took validated parameters *and* an opaque `unlockData` blob and forwarded the
+///      blob — two disjoint sets, where only the unvalidated one reached the pool. Every
+///      mandate check was decorative. The lesson is in the shape of `recenter`: the only
+///      things a caller supplies are numbers this contract checks, and the payload is
+///      assembled here from them.
+///
+///      **What a rogue agent can do.** Holding `AGENT_ROLE` lets you re-range a position that
+///      committed a mandate, into a band of the committed width, containing the current market
+///      price, measurably closer to it than the band already is, no more often than the
+///      cooldown allows, before the mandate expires. The new NFT and every token that leaves
+///      the old one go to the position's owner, because those two addresses are the only
+///      destinations this contract will write into a payload. There is no path that pays an
+///      agent, and no path that touches a position whose owner did not commit a mandate.
+///
+///      **What it cannot promise.** The agent picks the slippage bounds on the withdrawal, so
+///      a dishonest one can still choose bad ones and let the re-range be sandwiched. That is
+///      bounded by `amount0Min`/`amount1Min` reaching the pool unmodified, and it is the next
+///      thing to tighten - see `docs/plans`. It is written down rather than glossed over.
 contract HelicoVault is AccessControlUpgradeable, PausableUpgradeable, ReentrancyGuard, UUPSUpgradeable {
     using MandateLib for Mandate;
     using MandateLib for PoolKey;
@@ -40,52 +57,101 @@ contract HelicoVault is AccessControlUpgradeable, PausableUpgradeable, Reentranc
 
     /// @notice How long an upgrade waits before it may be executed, giving users a window to leave.
     uint256 public constant UPGRADE_DELAY = 2 days;
+    /// @notice How long an upgrade stays executable once ready. A schedule that never expires
+    ///         is a permanent standing authorisation, not a notice period.
+    uint256 public constant UPGRADE_GRACE = 7 days;
 
-    struct Position {
+    uint256 private constant BPS = 10_000;
+
+    // v4 action opcodes, verified against v4-periphery `src/libraries/Actions.sol`.
+    uint8 private constant DECREASE_LIQUIDITY = 0x01;
+    uint8 private constant MINT_POSITION = 0x02;
+    uint8 private constant BURN_POSITION = 0x03;
+    uint8 private constant TAKE_PAIR = 0x11;
+
+    /// @dev v4 maps recipient `address(1)` to the caller and `address(2)` to the PositionManager
+    ///      itself. Both would send a payout somewhere other than the owner, so an owner address
+    ///      below this is refused rather than encoded.
+    uint160 private constant FIRST_REAL_ADDRESS = 3;
+
+    struct Account {
         Mandate mandate;
+        /// @dev The position currently under the mandate. Re-centring in v4 is burn-and-mint,
+        ///      so this changes on every action and the mandate follows it.
+        uint256 tokenId;
         uint64 lastActionAt;
         bool active;
     }
 
-    /// @dev tokenId => the mandate committed for it.
-    mapping(uint256 => Position) private _positions;
+    struct ScheduledUpgrade {
+        uint64 readyAt;
+        /// @dev Pins the announcement to the code users were given a window to inspect. Without
+        ///      it, an address can hold different code by the time the window closes.
+        bytes32 codehash;
+    }
+
+    /// @dev Keyed by the address that committed the mandate, not by tokenId. A tokenId is
+    ///      destroyed by the very action it authorises, and it changes hands when the NFT is
+    ///      sold; neither is true of the person who agreed to the terms.
+    mapping(address => Account) private _accounts;
 
     IPositionManager public positionManager;
+    IStateView public stateView;
 
-    /// @dev implementation => timestamp it becomes executable. Zero means not scheduled.
-    mapping(address => uint256) public upgradeReadyAt;
+    mapping(address => ScheduledUpgrade) public scheduledUpgrades;
 
     /// @dev Reserved so later versions can add state without shifting what is already stored.
-    uint256[44] private __gap;
+    uint256[46] private __gap;
 
-    event MandateSet(uint256 indexed tokenId, address indexed owner, bytes32 mandateHash);
-    event Revoked(uint256 indexed tokenId, address indexed owner);
+    event MandateSet(address indexed owner, uint256 indexed tokenId, bytes32 mandateHash);
+    event Revoked(address indexed owner, uint256 indexed tokenId);
     event Recentred(
-        uint256 indexed tokenId, int24 tickLower, int24 tickUpper, uint128 notional, address agent
+        address indexed owner,
+        uint256 indexed fromTokenId,
+        uint256 indexed toTokenId,
+        int24 tickLower,
+        int24 tickUpper,
+        uint128 liquidityMoved,
+        address agent
     );
-    event UpgradeScheduled(address indexed implementation, uint256 readyAt);
+    event UpgradeScheduled(address indexed implementation, uint64 readyAt, bytes32 codehash);
     event UpgradeCancelled(address indexed implementation);
 
     error NotPositionOwner();
     error MandateInactive();
     error MandateExpired();
     error PoolNotPermitted();
+    error RangeWidthZero();
+    error RangeWidthNotSpaced();
     error RangeWidthMismatch();
     error TicksNotSpaced();
     error TicksNotOrdered();
+    error RangeOffMarket();
+    error NotEnoughImprovement();
+    error ImprovementOutOfRange();
     error CooldownNotElapsed();
-    error NotionalTooLarge();
+    error MaxLiquidityZero();
+    error LiquidityTooLarge();
+    error NothingToMove();
+    error UnusableOwner();
+    error PositionNotDelivered();
+    error RangeNotDelivered();
     error ZeroAddress();
+    error NotAContract();
     error UpgradeNotScheduled();
     error UpgradeNotReady();
+    error UpgradeExpired();
+    error ImplementationChanged();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
     }
 
-    function initialize(address admin, address positionManager_) external initializer {
-        if (admin == address(0) || positionManager_ == address(0)) revert ZeroAddress();
+    function initialize(address admin, address positionManager_, address stateView_) external initializer {
+        if (admin == address(0) || positionManager_ == address(0) || stateView_ == address(0)) {
+            revert ZeroAddress();
+        }
 
         // UUPSUpgradeable carries no state in OpenZeppelin 5.x, so it has no initializer.
         __AccessControl_init();
@@ -93,105 +159,222 @@ contract HelicoVault is AccessControlUpgradeable, PausableUpgradeable, Reentranc
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         positionManager = IPositionManager(positionManager_);
+        stateView = IStateView(stateView_);
     }
 
     // --- user ---------------------------------------------------------------------------
 
-    /// @notice Commit the rules the agent must stay inside for one position.
-    /// @dev Only the position's owner may set it, and setting it again replaces it outright.
-    function setMandate(uint256 tokenId, Mandate calldata mandate) external nonReentrant {
+    /// @notice Commit the rules the agent must stay inside, for one position you own.
+    /// @dev One mandate per address. Setting it again replaces it outright and re-points it at
+    ///      `tokenId`. `lastActionAt` is deliberately left alone, so the cooldown runs
+    ///      continuously across a change of terms.
+    function setMandate(uint256 tokenId, Mandate calldata m) external nonReentrant {
         if (positionManager.ownerOf(tokenId) != msg.sender) revert NotPositionOwner();
+        if (m.expiry <= block.timestamp) revert MandateExpired();
+        if (m.rangeWidthTicks == 0) revert RangeWidthZero();
+        if (m.maxLiquidity == 0) revert MaxLiquidityZero();
+        if (m.minImprovementBps >= BPS) revert ImprovementOutOfRange();
 
-        Position storage p = _positions[tokenId];
-        p.mandate = mandate;
-        p.active = true;
+        // The pool is read from the position rather than taken on trust, so a mandate cannot
+        // commit to a pool the position is not in.
+        (PoolKey memory key,) = positionManager.getPoolAndPositionInfo(tokenId);
+        if (key.hashPoolKey() != m.poolId) revert PoolNotPermitted();
+        if (int24(uint24(m.rangeWidthTicks)) % key.tickSpacing != 0) revert RangeWidthNotSpaced();
 
-        emit MandateSet(tokenId, msg.sender, mandate.hash());
+        Account storage a = _accounts[msg.sender];
+        a.mandate = m;
+        a.tokenId = tokenId;
+        a.active = true;
+
+        emit MandateSet(msg.sender, tokenId, m.hash());
     }
 
-    /// @notice End the agent's authority over a position.
-    /// @dev Deliberately not pausable and not role-gated beyond ownership. A user must be able
-    ///      to leave while the contract is paused, while the agent is gone, and while an
-    ///      upgrade is pending. Revoking the NFT approval achieves the same thing without
-    ///      touching this contract at all.
-    function revoke(uint256 tokenId) external nonReentrant {
-        if (positionManager.ownerOf(tokenId) != msg.sender) revert NotPositionOwner();
-
-        _positions[tokenId].active = false;
-        emit Revoked(tokenId, msg.sender);
+    /// @notice End the agent's authority.
+    /// @dev Deliberately not pausable and not role-gated. A user must be able to leave while
+    ///      the contract is paused, while the agent is gone, and while an upgrade is pending.
+    ///      It reads no external contract, so it still works if the position no longer exists.
+    ///
+    ///      This is the in-protocol exit. The authority it ends is this contract's alone -
+    ///      the approval on the NFT is the user's to revoke directly on the PositionManager,
+    ///      and doing that stops the agent whatever this contract says.
+    function revoke() external nonReentrant {
+        Account storage a = _accounts[msg.sender];
+        if (!a.active) revert MandateInactive();
+        a.active = false;
+        emit Revoked(msg.sender, a.tokenId);
     }
 
-    function mandateOf(uint256 tokenId) external view returns (Mandate memory) {
-        return _positions[tokenId].mandate;
+    function mandateOf(address owner) external view returns (Mandate memory) {
+        return _accounts[owner].mandate;
     }
 
-    function isActive(uint256 tokenId) external view returns (bool) {
-        return _positions[tokenId].active;
+    function isActive(address owner) external view returns (bool) {
+        return _accounts[owner].active;
     }
 
-    function lastActionAt(uint256 tokenId) external view returns (uint64) {
-        return _positions[tokenId].lastActionAt;
+    function positionOf(address owner) external view returns (uint256) {
+        return _accounts[owner].tokenId;
+    }
+
+    function lastActionAt(address owner) external view returns (uint64) {
+        return _accounts[owner].lastActionAt;
     }
 
     // --- agent --------------------------------------------------------------------------
 
-    /// @notice Re-centre a position. Every parameter is checked against the committed mandate.
-    /// @dev Takes typed parameters rather than router calldata. The vault makes the
-    ///      PositionManager call itself, because it cannot validate calldata it would have to
-    ///      decode on-chain.
-    function recenter(
-        uint256 tokenId,
-        PoolKey calldata key,
-        int24 tickLower,
-        int24 tickUpper,
-        uint128 notional,
-        bytes calldata unlockData,
-        uint256 deadline
-    ) external onlyRole(AGENT_ROLE) whenNotPaused nonReentrant {
-        Position storage p = _positions[tokenId];
-        Mandate memory m = p.mandate;
+    /// @param owner The address whose mandate authorises this. Not a recipient the caller
+    ///        chooses: it is checked against the position's actual owner, and it is the only
+    ///        address written into the payload.
+    struct RecenterParams {
+        address owner;
+        int24 tickLower;
+        int24 tickUpper;
+        uint256 liquidityToMint;
+        uint128 amount0Min;
+        uint128 amount1Min;
+        uint128 amount0Max;
+        uint128 amount1Max;
+        uint256 deadline;
+    }
 
-        if (!p.active) revert MandateInactive();
+    /// @notice Move a position into a new range. The agent chooses whether and where; this
+    ///         contract decides what is allowed and builds the plan that carries it out.
+    ///
+    /// @dev v4 has no re-range action, so this is DECREASE_LIQUIDITY, BURN_POSITION,
+    ///      MINT_POSITION, TAKE_PAIR - and the mint issues a new tokenId, which the account
+    ///      follows. The mint is funded entirely by the burn: if `liquidityToMint` costs more
+    ///      than the withdrawal credited, the batch is left owing and reverts. That is why the
+    ///      vault never needs to hold or pay tokens, and why this function is not payable.
+    ///
+    /// @return newTokenId The position the user now owns.
+    function recenter(RecenterParams calldata p)
+        external
+        onlyRole(AGENT_ROLE)
+        whenNotPaused
+        nonReentrant
+        returns (uint256 newTokenId)
+    {
+        Account storage a = _accounts[p.owner];
+        Mandate memory m = a.mandate;
+        uint256 tokenId = a.tokenId;
+
+        if (!a.active) revert MandateInactive();
         if (block.timestamp > m.expiry) revert MandateExpired();
-        if (key.hashPoolKey() != m.poolId) revert PoolNotPermitted();
-        if (notional > m.maxNotional) revert NotionalTooLarge();
-        // A fresh mandate has never acted, so there is nothing to cool down from. Without
-        // this guard the first action would be blocked until `cooldownSeconds` after the
-        // epoch, which is a silent trap on any chain with a low block timestamp.
-        if (p.lastActionAt != 0 && block.timestamp < uint256(p.lastActionAt) + m.cooldownSeconds) {
+        if (uint160(p.owner) < FIRST_REAL_ADDRESS) revert UnusableOwner();
+        // A sold position carries no mandate: the buyer never agreed to one.
+        if (positionManager.ownerOf(tokenId) != p.owner) revert NotPositionOwner();
+        if (a.lastActionAt != 0 && block.timestamp < uint256(a.lastActionAt) + m.cooldownSeconds) {
             revert CooldownNotElapsed();
         }
 
-        _checkRange(key.tickSpacing, tickLower, tickUpper, m.rangeWidthBps);
+        // Measured, not declared. The cap is on what actually moves.
+        uint128 liquidity = positionManager.getPositionLiquidity(tokenId);
+        if (liquidity == 0) revert NothingToMove();
+        if (liquidity > m.maxLiquidity) revert LiquidityTooLarge();
 
-        p.lastActionAt = uint64(block.timestamp);
+        (PoolKey memory key, uint256 info) = positionManager.getPoolAndPositionInfo(tokenId);
+        if (key.hashPoolKey() != m.poolId) revert PoolNotPermitted();
+        _checkRange(m, key, info, p.tickLower, p.tickUpper);
 
-        positionManager.modifyLiquidities(unlockData, deadline);
+        // Effects before the interaction: the cooldown starts and the account follows the
+        // token v4 is about to mint, so a re-entrant call finds an account already moved on.
+        a.lastActionAt = uint64(block.timestamp);
+        newTokenId = positionManager.nextTokenId();
+        a.tokenId = newTokenId;
 
-        emit Recentred(tokenId, tickLower, tickUpper, notional, msg.sender);
+        positionManager.modifyLiquidities(_buildPlan(tokenId, liquidity, key, p), p.deadline);
+
+        _assertDelivered(newTokenId, m.poolId, p);
+
+        emit Recentred(p.owner, tokenId, newTokenId, p.tickLower, p.tickUpper, liquidity, msg.sender);
     }
 
-    /// @dev Ticks must be ordered, aligned to the pool's spacing, and span the width the user
-    ///      committed to. The agent snapping differently from the contract is the failure this
-    ///      prevents.
-    function _checkRange(int24 tickSpacing, int24 tickLower, int24 tickUpper, uint16 rangeWidthBps)
+    /// @dev The whole payload. Both addresses in it are `p.owner`, which was checked against
+    ///      `ownerOf` above - there is no parameter through which a caller names a recipient.
+    function _buildPlan(uint256 tokenId, uint128 liquidity, PoolKey memory key, RecenterParams calldata p)
         internal
         pure
+        returns (bytes memory)
+    {
+        bytes memory actions = abi.encodePacked(DECREASE_LIQUIDITY, BURN_POSITION, MINT_POSITION, TAKE_PAIR);
+
+        bytes[] memory params = new bytes[](4);
+        // Withdraw the whole position, with the agent's slippage floor.
+        params[0] = abi.encode(tokenId, uint256(liquidity), p.amount0Min, p.amount1Min, bytes(""));
+        // Burn the now-empty NFT and collect fees. The floor is zero because the decrease
+        // above already enforced it on the principal; applying it twice would reject a
+        // position whose fees are simply small.
+        params[1] = abi.encode(tokenId, uint128(0), uint128(0), bytes(""));
+        // Mint the new range to the owner.
+        params[2] = abi.encode(
+            key, p.tickLower, p.tickUpper, p.liquidityToMint, p.amount0Max, p.amount1Max, p.owner, bytes("")
+        );
+        // Whatever the mint did not consume goes to the owner, not to this contract.
+        params[3] = abi.encode(key.currency0, key.currency1, p.owner);
+
+        return abi.encode(actions, params);
+    }
+
+    /// @dev Encoding the right plan is not the same as the plan having happened. These read
+    ///      the result back out of the PositionManager.
+    function _assertDelivered(uint256 newTokenId, bytes32 poolId, RecenterParams calldata p) internal view {
+        if (positionManager.ownerOf(newTokenId) != p.owner) revert PositionNotDelivered();
+
+        (PoolKey memory newKey, uint256 newInfo) = positionManager.getPoolAndPositionInfo(newTokenId);
+        if (newKey.hashPoolKey() != poolId) revert PoolNotPermitted();
+        if (_tickLower(newInfo) != p.tickLower || _tickUpper(newInfo) != p.tickUpper) {
+            revert RangeNotDelivered();
+        }
+    }
+
+    /// @dev Three things about the proposed range: it is the committed shape, it contains the
+    ///      market, and it is an improvement on where the liquidity already is.
+    function _checkRange(Mandate memory m, PoolKey memory key, uint256 info, int24 tickLower, int24 tickUpper)
+        internal
+        view
     {
         if (tickLower >= tickUpper) revert TicksNotOrdered();
-        if (tickLower % tickSpacing != 0 || tickUpper % tickSpacing != 0) revert TicksNotSpaced();
+        if (tickLower % key.tickSpacing != 0 || tickUpper % key.tickSpacing != 0) revert TicksNotSpaced();
+        // Exactly the committed width. `setMandate` already refused a width that is not a whole
+        // number of spacings, so there is nothing left to snap - and snapping here is how a
+        // user ends up in a range they did not agree to.
+        if (tickUpper - tickLower != int24(uint24(m.rangeWidthTicks))) revert RangeWidthMismatch();
 
-        // One tick is a 1.0001x price step, so a width in ticks approximates basis points
-        // closely enough at these sizes: 1 bp ≈ 1 tick.
-        int24 wanted = int24(uint24(rangeWidthBps));
-        int24 spacing = tickSpacing;
-        // forge-lint: disable-next-line(divide-before-multiply)
-        // Truncating first is the point: this snaps the requested width down to a whole
-        // number of tick spacings. Multiplying first would defeat it.
-        int24 snapped = (wanted / spacing) * spacing;
-        if (snapped == 0) snapped = spacing;
+        (, int24 current,,) = stateView.getSlot0(m.poolId);
 
-        if (tickUpper - tickLower != snapped) revert RangeWidthMismatch();
+        // Liquidity outside the range earns nothing. Constraining width without constraining
+        // location leaves the whole product open to a band parked where no trade will reach it.
+        if (current < tickLower || current >= tickUpper) revert RangeOffMarket();
+
+        // And it has to be worth doing. Without this, an agent can move the range sideways
+        // every cooldown for as long as the mandate lasts, paying gas and fees out of the
+        // user's position each time.
+        uint256 gapNow = _gapToCentre(current, _tickLower(info), _tickUpper(info));
+        uint256 gapNext = _gapToCentre(current, tickLower, tickUpper);
+        if (gapNext >= gapNow) revert NotEnoughImprovement();
+        if (gapNext * BPS > gapNow * (BPS - uint256(m.minImprovementBps))) revert NotEnoughImprovement();
+    }
+
+    /// @dev How far the middle of a range sits from the current tick.
+    function _gapToCentre(int24 current, int24 tickLower, int24 tickUpper) internal pure returns (uint256) {
+        int256 centre = (int256(tickLower) + int256(tickUpper)) / 2;
+        int256 distance = int256(current) - centre;
+        return uint256(distance < 0 ? -distance : distance);
+    }
+
+    /// @dev v4 packs a position's range into one word:
+    ///      200 bits poolId | 24 bits tickUpper | 24 bits tickLower | 8 bits hasSubscriber.
+    ///      Offsets and the sign extension are taken from v4-periphery `PositionInfoLibrary`.
+    function _tickLower(uint256 info) internal pure returns (int24 tick) {
+        assembly ("memory-safe") {
+            tick := signextend(2, shr(8, info))
+        }
+    }
+
+    function _tickUpper(uint256 info) internal pure returns (int24 tick) {
+        assembly ("memory-safe") {
+            tick := signextend(2, shr(32, info))
+        }
     }
 
     // --- guardian -----------------------------------------------------------------------
@@ -207,25 +390,34 @@ contract HelicoVault is AccessControlUpgradeable, PausableUpgradeable, Reentranc
 
     // --- upgrades -----------------------------------------------------------------------
 
-    /// @notice Announce an upgrade. It becomes executable after `UPGRADE_DELAY`.
+    /// @notice Announce an upgrade. It becomes executable after `UPGRADE_DELAY` and stops being
+    ///         executable `UPGRADE_GRACE` later.
     /// @dev The delay is what keeps "you do not have to trust us" honest while the contract is
-    ///      upgradeable: users can see a change coming and leave before it takes effect.
+    ///      upgradeable: users can see a change coming and leave before it takes effect. That
+    ///      only holds if the thing announced is the thing deployed, hence the codehash, and if
+    ///      the announcement is not open-ended, hence the grace window.
     function scheduleUpgrade(address implementation) external onlyRole(UPGRADER_ROLE) {
         if (implementation == address(0)) revert ZeroAddress();
-        uint256 readyAt = block.timestamp + UPGRADE_DELAY;
-        upgradeReadyAt[implementation] = readyAt;
-        emit UpgradeScheduled(implementation, readyAt);
+        if (implementation.code.length == 0) revert NotAContract();
+
+        uint64 readyAt = uint64(block.timestamp + UPGRADE_DELAY);
+        bytes32 codehash = implementation.codehash;
+        scheduledUpgrades[implementation] = ScheduledUpgrade({readyAt: readyAt, codehash: codehash});
+
+        emit UpgradeScheduled(implementation, readyAt, codehash);
     }
 
     function cancelUpgrade(address implementation) external onlyRole(UPGRADER_ROLE) {
-        delete upgradeReadyAt[implementation];
+        delete scheduledUpgrades[implementation];
         emit UpgradeCancelled(implementation);
     }
 
     function _authorizeUpgrade(address implementation) internal override onlyRole(UPGRADER_ROLE) {
-        uint256 readyAt = upgradeReadyAt[implementation];
-        if (readyAt == 0) revert UpgradeNotScheduled();
-        if (block.timestamp < readyAt) revert UpgradeNotReady();
-        delete upgradeReadyAt[implementation];
+        ScheduledUpgrade memory s = scheduledUpgrades[implementation];
+        if (s.readyAt == 0) revert UpgradeNotScheduled();
+        if (block.timestamp < s.readyAt) revert UpgradeNotReady();
+        if (block.timestamp > uint256(s.readyAt) + UPGRADE_GRACE) revert UpgradeExpired();
+        if (implementation.codehash != s.codehash) revert ImplementationChanged();
+        delete scheduledUpgrades[implementation];
     }
 }

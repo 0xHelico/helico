@@ -2,6 +2,7 @@
 pragma solidity 0.8.28;
 
 import {PoolKey} from "../src/Mandate.sol";
+import {IPositionManager} from "../src/IPositionManager.sol";
 
 /// @notice A minimal ERC-20 for settlement in the mock. Balances only; no allowances, because
 ///         nothing in these tests pulls funds from a third party.
@@ -39,7 +40,7 @@ contract MockERC20 {
 ///
 ///      Opcodes verified against v4-periphery `src/libraries/Actions.sol` @ main:
 ///      DECREASE_LIQUIDITY 0x01 · MINT_POSITION 0x02 · BURN_POSITION 0x03 · TAKE_PAIR 0x11.
-contract RealisticPositionManager {
+contract RealisticPositionManager is IPositionManager {
     struct Position {
         PoolKey key;
         int24 tickLower;
@@ -124,8 +125,9 @@ contract RealisticPositionManager {
     {
         tokenId = nextTokenId++;
         _owners[tokenId] = to;
-        _positions[tokenId] =
-            Position({key: key, tickLower: tickLower, tickUpper: tickUpper, liquidity: liquidity, fees0: 0, fees1: 0});
+        _positions[tokenId] = Position({
+            key: key, tickLower: tickLower, tickUpper: tickUpper, liquidity: liquidity, fees0: 0, fees1: 0
+        });
         uint256 backing = uint256(liquidity) * costPerLiquidity;
         token0.mint(address(this), backing);
         token1.mint(address(this), backing);

@@ -8,14 +8,18 @@ import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 
 import {HelicoVault} from "../src/HelicoVault.sol";
 import {Mandate, MandateLib, PoolKey} from "../src/Mandate.sol";
-import {MockPositionManager} from "./MockPositionManager.sol";
+import {MockERC20, MockStateView, RealisticPositionManager} from "./RealisticPositionManager.sol";
 import {VaultV2} from "./VaultV2.sol";
 
 contract HelicoVaultTest is Test {
     using MandateLib for PoolKey;
+    using MandateLib for Mandate;
 
     HelicoVault vault;
-    MockPositionManager pm;
+    RealisticPositionManager pm;
+    MockStateView stateView;
+    MockERC20 t0;
+    MockERC20 t1;
 
     address admin = makeAddr("admin");
     address agent = makeAddr("agent");
@@ -24,18 +28,22 @@ contract HelicoVaultTest is Test {
     address user = makeAddr("user");
     address stranger = makeAddr("stranger");
 
-    uint256 constant TOKEN_ID = 1;
     int24 constant SPACING = 10;
+    uint16 constant WIDTH = 100;
+    uint128 constant LIQUIDITY = 1_000_000;
 
     PoolKey poolKey;
     Mandate mandate;
+    uint256 tokenId;
 
     function setUp() public {
-        pm = new MockPositionManager();
-        pm.setOwner(TOKEN_ID, user);
+        t0 = new MockERC20();
+        t1 = new MockERC20();
+        pm = new RealisticPositionManager(t0, t1);
+        stateView = new MockStateView();
 
         HelicoVault impl = new HelicoVault();
-        bytes memory data = abi.encodeCall(HelicoVault.initialize, (admin, address(pm)));
+        bytes memory data = abi.encodeCall(HelicoVault.initialize, (admin, address(pm), address(stateView)));
         vault = HelicoVault(address(new ERC1967Proxy(address(impl), data)));
 
         vm.startPrank(admin);
@@ -45,139 +53,213 @@ contract HelicoVaultTest is Test {
         vm.stopPrank();
 
         poolKey = PoolKey({
-            currency0: address(0xA),
-            currency1: address(0xB),
-            fee: 3000,
-            tickSpacing: SPACING,
-            hooks: address(0)
+            currency0: address(t0), currency1: address(t1), fee: 3000, tickSpacing: SPACING, hooks: address(0)
         });
+        stateView.setTick(poolKey.hashPoolKey(), 0);
+
+        // The position sits at [-300, -200] while the market is at tick 0, so re-centring it
+        // onto [-50, 50] is a real improvement: the gap to the middle goes 250 -> 0.
+        tokenId = pm.mintTo(user, poolKey, -300, -200, LIQUIDITY);
+        vm.prank(user);
+        pm.setApprovalForAll(address(vault), true);
 
         mandate = Mandate({
             poolId: poolKey.hashPoolKey(),
-            rangeWidthBps: 100,
-            minImprovementBps: 50,
+            rangeWidthTicks: WIDTH,
+            minImprovementBps: 500,
             cooldownSeconds: 1 hours,
-            maxNotional: 10 ether,
+            maxLiquidity: LIQUIDITY,
             expiry: uint64(block.timestamp + 30 days)
         });
 
         vm.prank(user);
-        vault.setMandate(TOKEN_ID, mandate);
+        vault.setMandate(tokenId, mandate);
     }
 
-    // rangeWidthBps 100 snapped to spacing 10 is 100 ticks wide.
-    function _validTicks() internal pure returns (int24, int24) {
-        return (-50, 50);
+    function _params(int24 lower, int24 upper) internal view returns (HelicoVault.RecenterParams memory) {
+        return HelicoVault.RecenterParams({
+            owner: user,
+            tickLower: lower,
+            tickUpper: upper,
+            liquidityToMint: LIQUIDITY,
+            amount0Min: 0,
+            amount1Min: 0,
+            amount0Max: type(uint128).max,
+            amount1Max: type(uint128).max,
+            deadline: block.timestamp + 60
+        });
     }
 
-    function _recenter(int24 lower, int24 upper) internal {
+    function _recenter(int24 lower, int24 upper) internal returns (uint256) {
         vm.prank(agent);
-        vault.recenter(TOKEN_ID, poolKey, lower, upper, 1 ether, hex"1234", block.timestamp + 60);
+        return vault.recenter(_params(lower, upper));
     }
 
     // --- the happy path -----------------------------------------------------------------
 
     function test_AgentCanRecentreWithinMandate() public {
-        (int24 lower, int24 upper) = _validTicks();
-        _recenter(lower, upper);
+        uint256 newTokenId = _recenter(-50, 50);
 
-        assertEq(pm.callCount(), 1, "vault should forward to the position manager");
-        assertEq(pm.lastUnlockData(), hex"1234");
-        assertEq(vault.lastActionAt(TOKEN_ID), uint64(block.timestamp));
+        assertEq(pm.ownerOf(newTokenId), user, "the new position belongs to the user");
+        assertEq(pm.getPositionLiquidity(newTokenId), LIQUIDITY, "liquidity moved across intact");
+        assertEq(vault.lastActionAt(user), uint64(block.timestamp));
+    }
+
+    /// @notice v4 has no re-range action: re-centring burns the position and mints a new one
+    ///         with a new id. A mandate keyed to the old id would be left pointing at a token
+    ///         that no longer exists, and the cooldown with it.
+    function test_MandateFollowsTheNewTokenId() public {
+        uint256 newTokenId = _recenter(-50, 50);
+
+        assertTrue(newTokenId != tokenId, "the id changes, as v4 requires");
+        assertEq(vault.positionOf(user), newTokenId, "the mandate follows the position");
+        assertTrue(vault.isActive(user), "and stays active");
+
+        vm.expectRevert();
+        pm.ownerOf(tokenId);
+    }
+
+    /// @notice Nothing may be left sitting in the vault. It is not a custodian.
+    function test_VaultHoldsNothingAfterAnAction() public {
+        pm.setFees(tokenId, 500, 700);
+        _recenter(-50, 50);
+
+        assertEq(t0.balanceOf(address(vault)), 0, "vault holds no token0");
+        assertEq(t1.balanceOf(address(vault)), 0, "vault holds no token1");
+        assertEq(t0.balanceOf(user), 500, "fees reached the user");
+        assertEq(t1.balanceOf(user), 700, "fees reached the user");
     }
 
     // --- every rejection path -----------------------------------------------------------
 
     function test_RejectsCallerWithoutAgentRole() public {
-        (int24 lower, int24 upper) = _validTicks();
         bytes32 role = vault.AGENT_ROLE();
         vm.prank(stranger);
         vm.expectRevert(
             abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, stranger, role)
         );
-        vault.recenter(TOKEN_ID, poolKey, lower, upper, 1 ether, hex"", block.timestamp + 60);
-    }
-
-    function test_RejectsWrongPool() public {
-        PoolKey memory other = poolKey;
-        other.fee = 500;
-        (int24 lower, int24 upper) = _validTicks();
-
-        vm.prank(agent);
-        vm.expectRevert(HelicoVault.PoolNotPermitted.selector);
-        vault.recenter(TOKEN_ID, other, lower, upper, 1 ether, hex"", block.timestamp + 60);
+        vault.recenter(_params(-50, 50));
     }
 
     function test_RejectsWrongRangeWidth() public {
+        vm.prank(agent);
         vm.expectRevert(HelicoVault.RangeWidthMismatch.selector);
-        _recenter(-100, 100);
+        vault.recenter(_params(-100, 100));
     }
 
     function test_RejectsUnspacedTicks() public {
+        vm.prank(agent);
         vm.expectRevert(HelicoVault.TicksNotSpaced.selector);
-        _recenter(-55, 45);
+        vault.recenter(_params(-45, 55));
     }
 
     function test_RejectsUnorderedTicks() public {
+        vm.prank(agent);
         vm.expectRevert(HelicoVault.TicksNotOrdered.selector);
-        _recenter(50, -50);
+        vault.recenter(_params(50, -50));
     }
 
-    function test_RejectsNotionalOverCap() public {
-        (int24 lower, int24 upper) = _validTicks();
+    function test_RejectsRangeThatDoesNotContainTheMarket() public {
         vm.prank(agent);
-        vm.expectRevert(HelicoVault.NotionalTooLarge.selector);
-        vault.recenter(TOKEN_ID, poolKey, lower, upper, 11 ether, hex"", block.timestamp + 60);
+        vm.expectRevert(HelicoVault.RangeOffMarket.selector);
+        vault.recenter(_params(1000, 1100));
+    }
+
+    /// @notice A range must be closer to the market than the one it replaces, by the margin
+    ///         the user committed to. Closer by a hair is not what a 5% mandate asked for.
+    /// @dev Market at tick 4. The position's middle sits at 50, so it is 46 ticks off. The
+    ///      proposed middle at -40 is 44 ticks off - an improvement of 4.3%, under the 5%
+    ///      committed. Both ranges are the committed width and both contain the market, so
+    ///      this is the check that has to catch it.
+    function test_RejectsMovementBelowTheCommittedImprovement() public {
+        uint256 offset = pm.mintTo(user, poolKey, 0, 100, LIQUIDITY);
+        vm.prank(user);
+        vault.setMandate(offset, mandate);
+        stateView.setTick(poolKey.hashPoolKey(), 4);
+
+        vm.prank(agent);
+        vm.expectRevert(HelicoVault.NotEnoughImprovement.selector);
+        vault.recenter(_params(-90, 10));
+    }
+
+    function test_AcceptsMovementAtTheCommittedImprovement() public {
+        uint256 offset = pm.mintTo(user, poolKey, 0, 100, LIQUIDITY);
+        vm.prank(user);
+        vault.setMandate(offset, mandate);
+        stateView.setTick(poolKey.hashPoolKey(), 4);
+
+        // Middle at 10, so 6 ticks off against 46 - comfortably past the 5% asked for.
+        vm.prank(agent);
+        uint256 moved = vault.recenter(_params(-40, 60));
+        assertEq(pm.ownerOf(moved), user);
+    }
+
+    function test_RejectsLiquidityOverCap() public {
+        Mandate memory tight = mandate;
+        tight.maxLiquidity = LIQUIDITY - 1;
+        vm.prank(user);
+        vault.setMandate(tokenId, tight);
+
+        vm.prank(agent);
+        vm.expectRevert(HelicoVault.LiquidityTooLarge.selector);
+        vault.recenter(_params(-50, 50));
     }
 
     function test_RejectsBeforeCooldownElapsed() public {
-        (int24 lower, int24 upper) = _validTicks();
-        _recenter(lower, upper);
+        _recenter(-50, 50);
 
-        vm.warp(block.timestamp + 59 minutes);
+        // Move the market so a second action would otherwise be a genuine improvement.
+        stateView.setTick(poolKey.hashPoolKey(), 500);
+
+        vm.prank(agent);
         vm.expectRevert(HelicoVault.CooldownNotElapsed.selector);
-        _recenter(lower, upper);
+        vault.recenter(_params(450, 550));
+    }
 
-        vm.warp(block.timestamp + 2 minutes);
-        _recenter(lower, upper);
-        assertEq(pm.callCount(), 2, "should act once the cooldown has passed");
+    function test_AllowsActionOnceCooldownElapsed() public {
+        _recenter(-50, 50);
+        stateView.setTick(poolKey.hashPoolKey(), 500);
+        skip(1 hours);
+
+        vm.prank(agent);
+        uint256 third = vault.recenter(_params(450, 550));
+        assertEq(pm.ownerOf(third), user);
     }
 
     function test_RejectsExpiredMandate() public {
-        vm.warp(block.timestamp + 31 days);
-        (int24 lower, int24 upper) = _validTicks();
+        skip(31 days);
+        vm.prank(agent);
         vm.expectRevert(HelicoVault.MandateExpired.selector);
-        _recenter(lower, upper);
+        vault.recenter(_params(-50, 50));
     }
 
     function test_RejectsAfterRevoke() public {
         vm.prank(user);
-        vault.revoke(TOKEN_ID);
+        vault.revoke();
 
-        (int24 lower, int24 upper) = _validTicks();
+        vm.prank(agent);
         vm.expectRevert(HelicoVault.MandateInactive.selector);
-        _recenter(lower, upper);
+        vault.recenter(_params(-50, 50));
     }
 
     function test_RejectsWhenPaused() public {
         vm.prank(guardian);
         vault.pause();
 
-        (int24 lower, int24 upper) = _validTicks();
+        vm.prank(agent);
         vm.expectRevert(Pausable.EnforcedPause.selector);
-        _recenter(lower, upper);
+        vault.recenter(_params(-50, 50));
     }
 
-    // --- the exit must always work -------------------------------------------------------
+    // --- the exit is always open --------------------------------------------------------
 
     function test_UserCanRevokeWhilePaused() public {
         vm.prank(guardian);
         vault.pause();
 
         vm.prank(user);
-        vault.revoke(TOKEN_ID);
-
-        assertFalse(vault.isActive(TOKEN_ID), "pause must never trap a user");
+        vault.revoke();
+        assertFalse(vault.isActive(user));
     }
 
     function test_UserCanRevokeWithAgentRemoved() public {
@@ -186,89 +268,188 @@ contract HelicoVaultTest is Test {
         vault.revokeRole(role, agent);
 
         vm.prank(user);
-        vault.revoke(TOKEN_ID);
-
-        assertFalse(vault.isActive(TOKEN_ID));
+        vault.revoke();
+        assertFalse(vault.isActive(user));
     }
 
-    function test_OnlyOwnerCanSetOrRevoke() public {
-        vm.prank(stranger);
-        vm.expectRevert(HelicoVault.NotPositionOwner.selector);
-        vault.setMandate(TOKEN_ID, mandate);
+    function test_UserCanRevokeWithAnUpgradePending() public {
+        VaultV2 v2 = new VaultV2();
+        vm.prank(upgrader);
+        vault.scheduleUpgrade(address(v2));
 
-        vm.prank(stranger);
-        vm.expectRevert(HelicoVault.NotPositionOwner.selector);
-        vault.revoke(TOKEN_ID);
+        vm.prank(user);
+        vault.revoke();
+        assertFalse(vault.isActive(user));
     }
 
-    // --- upgrades ------------------------------------------------------------------------
+    // --- committing a mandate -----------------------------------------------------------
+
+    function test_OnlyOwnerCanSetAMandate() public {
+        vm.prank(stranger);
+        vm.expectRevert(HelicoVault.NotPositionOwner.selector);
+        vault.setMandate(tokenId, mandate);
+    }
+
+    function test_RevokeWithoutAMandateReverts() public {
+        vm.prank(stranger);
+        vm.expectRevert(HelicoVault.MandateInactive.selector);
+        vault.revoke();
+    }
+
+    function test_RejectsMandateForAnotherPool() public {
+        Mandate memory wrong = mandate;
+        wrong.poolId = keccak256("some other pool");
+        vm.prank(user);
+        vm.expectRevert(HelicoVault.PoolNotPermitted.selector);
+        vault.setMandate(tokenId, wrong);
+    }
+
+    /// @notice A width that is not a whole number of tick spacings is refused outright, rather
+    ///         than snapped to something the user did not choose.
+    function test_RejectsWidthThatIsNotAWholeNumberOfSpacings() public {
+        Mandate memory odd = mandate;
+        odd.rangeWidthTicks = 105;
+        vm.prank(user);
+        vm.expectRevert(HelicoVault.RangeWidthNotSpaced.selector);
+        vault.setMandate(tokenId, odd);
+    }
+
+    function test_RejectsMandateAlreadyExpired() public {
+        Mandate memory stale = mandate;
+        stale.expiry = uint64(block.timestamp);
+        vm.prank(user);
+        vm.expectRevert(HelicoVault.MandateExpired.selector);
+        vault.setMandate(tokenId, stale);
+    }
+
+    function test_RejectsImprovementOfAHundredPercentOrMore() public {
+        Mandate memory impossible = mandate;
+        impossible.minImprovementBps = 10_000;
+        vm.prank(user);
+        vm.expectRevert(HelicoVault.ImprovementOutOfRange.selector);
+        vault.setMandate(tokenId, impossible);
+    }
+
+    function test_RejectsZeroCaps() public {
+        Mandate memory zeroWidth = mandate;
+        zeroWidth.rangeWidthTicks = 0;
+        vm.prank(user);
+        vm.expectRevert(HelicoVault.RangeWidthZero.selector);
+        vault.setMandate(tokenId, zeroWidth);
+
+        Mandate memory zeroCap = mandate;
+        zeroCap.maxLiquidity = 0;
+        vm.prank(user);
+        vm.expectRevert(HelicoVault.MaxLiquidityZero.selector);
+        vault.setMandate(tokenId, zeroCap);
+    }
+
+    // --- upgrades -----------------------------------------------------------------------
 
     function test_UpgradeRequiresSchedulingAndDelay() public {
-        VaultV2 next = new VaultV2();
+        VaultV2 v2 = new VaultV2();
 
         vm.prank(upgrader);
         vm.expectRevert(HelicoVault.UpgradeNotScheduled.selector);
-        vault.upgradeToAndCall(address(next), "");
+        vault.upgradeToAndCall(address(v2), "");
 
         vm.prank(upgrader);
-        vault.scheduleUpgrade(address(next));
+        vault.scheduleUpgrade(address(v2));
 
         vm.prank(upgrader);
         vm.expectRevert(HelicoVault.UpgradeNotReady.selector);
-        vault.upgradeToAndCall(address(next), "");
+        vault.upgradeToAndCall(address(v2), "");
 
-        vm.warp(block.timestamp + 2 days);
+        skip(2 days);
         vm.prank(upgrader);
-        vault.upgradeToAndCall(address(next), "");
+        vault.upgradeToAndCall(address(v2), "");
 
-        assertEq(VaultV2(address(vault)).version(), 2, "upgrade should land after the delay");
+        assertEq(VaultV2(address(vault)).version(), 2);
     }
 
     function test_UpgradeRejectsCallerWithoutRole() public {
-        VaultV2 next = new VaultV2();
+        VaultV2 v2 = new VaultV2();
+        vm.prank(upgrader);
+        vault.scheduleUpgrade(address(v2));
+        skip(2 days);
 
         bytes32 role = vault.UPGRADER_ROLE();
         vm.prank(stranger);
         vm.expectRevert(
             abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, stranger, role)
         );
-        vault.scheduleUpgrade(address(next));
+        vault.upgradeToAndCall(address(v2), "");
     }
 
     function test_UpgradeCanBeCancelled() public {
-        VaultV2 next = new VaultV2();
-
+        VaultV2 v2 = new VaultV2();
         vm.startPrank(upgrader);
-        vault.scheduleUpgrade(address(next));
-        vault.cancelUpgrade(address(next));
-        vm.warp(block.timestamp + 2 days);
-
+        vault.scheduleUpgrade(address(v2));
+        vault.cancelUpgrade(address(v2));
+        skip(2 days);
         vm.expectRevert(HelicoVault.UpgradeNotScheduled.selector);
-        vault.upgradeToAndCall(address(next), "");
+        vault.upgradeToAndCall(address(v2), "");
         vm.stopPrank();
     }
 
     function test_AgentCannotUpgrade() public {
-        VaultV2 next = new VaultV2();
+        VaultV2 v2 = new VaultV2();
         bytes32 role = vault.UPGRADER_ROLE();
         vm.prank(agent);
         vm.expectRevert(
             abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, agent, role)
         );
-        vault.scheduleUpgrade(address(next));
+        vault.scheduleUpgrade(address(v2));
     }
 
-    // --- initialisation ------------------------------------------------------------------
+    // --- the agreement with the enclave -------------------------------------------------
+
+    /// @notice The workflow inside the enclave recomputes the mandate hash from a flat tuple
+    ///         of the same six types. If a field here is reordered or resized, that hash stops
+    ///         matching and every action is rejected on-chain for no visible reason.
+    /// @dev Deliberately spelled out rather than derived, so the encoding cannot drift on this
+    ///      side without the test being edited too. The mirror of this lives in
+    ///      `packages/plugins/cre/test/mandate.test.ts`.
+    function test_MandateHashMatchesTheTupleTheEnclaveEncodes() public view {
+        bytes32 fromStruct = MandateLib.hash(mandate);
+        bytes32 fromTuple = keccak256(
+            abi.encode(
+                mandate.poolId,
+                mandate.rangeWidthTicks,
+                mandate.minImprovementBps,
+                mandate.cooldownSeconds,
+                mandate.maxLiquidity,
+                mandate.expiry
+            )
+        );
+        assertEq(fromStruct, fromTuple, "bytes32,uint16,uint16,uint32,uint128,uint64");
+    }
+
+    // --- deployment ---------------------------------------------------------------------
 
     function test_ImplementationCannotBeInitialised() public {
         HelicoVault impl = new HelicoVault();
         vm.expectRevert();
-        impl.initialize(admin, address(pm));
+        impl.initialize(admin, address(pm), address(stateView));
     }
 
     function test_RejectsZeroAddressesOnInitialize() public {
         HelicoVault impl = new HelicoVault();
+
         vm.expectRevert(HelicoVault.ZeroAddress.selector);
-        new ERC1967Proxy(address(impl), abi.encodeCall(HelicoVault.initialize, (address(0), address(pm))));
+        new ERC1967Proxy(
+            address(impl),
+            abi.encodeCall(HelicoVault.initialize, (address(0), address(pm), address(stateView)))
+        );
+
+        vm.expectRevert(HelicoVault.ZeroAddress.selector);
+        new ERC1967Proxy(
+            address(impl), abi.encodeCall(HelicoVault.initialize, (admin, address(0), address(stateView)))
+        );
+
+        vm.expectRevert(HelicoVault.ZeroAddress.selector);
+        new ERC1967Proxy(
+            address(impl), abi.encodeCall(HelicoVault.initialize, (admin, address(pm), address(0)))
+        );
     }
 }
