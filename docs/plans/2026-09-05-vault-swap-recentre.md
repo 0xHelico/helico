@@ -53,21 +53,100 @@ Verified against v4-periphery `main` before writing any of it:
 
 ## What the contract must still refuse
 
-Everything it refuses today, unchanged, plus the swap leg:
+Everything it refuses today, unchanged, plus the swap leg. An adversarial review of this plan
+**before** any of it was written found the first item below, and it invalidated the plan's
+original safety claim. That claim is struck out further down rather than deleted.
 
-- `unlockCallback` reverts unless `msg.sender == poolManager`, and unless a re-centre is
-  actually in flight. A transient flag set in `recenter` and cleared after `unlock` returns.
-- The swap runs on **the mandate's own pool**, never a key the caller supplies. Same `PoolKey`
-  the position is in, read from `getPoolAndPositionInfo`.
-- `minAmountOut` comes from the agent and bounds the swap. The agent can still choose it badly;
-  what stops that mattering is the floor below.
-- **`minRetainedBps` is what makes this safe to attempt.** It is measured from the liquidity
-  read back after the batch, and it does not care whether the tokens arrived from a burn or a
-  swap. A mis-sized, sandwiched or badly routed swap yields a position under the floor and the
-  whole transaction reverts. The swap arithmetic has to be right for the action to *succeed*,
-  not for the vault to stay *safe*.
-- Nothing may be left in the vault when the callback returns. Both currencies are swept to the
-  owner, and the test asserts a zero balance rather than trusting the plan.
+### The price the range was checked against is the price the swap moves
+
+`_checkRange` reads the tick before `unlock`. `_assertDelivered` re-reads owner, pool, ticks
+and liquidity — **not the price**. In between, the swap moves that price by an amount the agent
+chooses. That is the original defect's exact shape, validate one state and execute against
+another, reintroduced inside a single transaction.
+
+An agent proposes a range bracketing the current tick, so `RangeOffMarket` passes; pushes the
+price out of that range with an oversized swap; and mints single-sided. `_assertDelivered`
+waves it through, because every check it makes is about *where the range is*, not where the
+price is. The victim pays the slippage and the fee, and lands in a position that is immediately
+out of range again — held there by the cooldown.
+
+Four guards, all of them, not one:
+
+1. **The swap's `sqrtPriceLimitX96` comes from the committed range**, not from `MIN`/`MAX`. The
+   limit is the sqrt price at `tickLower` when swapping down and at `tickUpper` when swapping
+   up, so the pool itself halts the swap at the boundary the user committed to. The price
+   cannot be pushed out of the range by anyone, us included. Needs `TickMath.getSqrtPriceAtTick`,
+   pure and MIT in v4-core.
+2. **Re-read `getSlot0` inside the callback after the swap** and re-assert
+   `tickLower <= tick < tickUpper`. Belt to (1)'s braces, at the cost of one `staticcall`.
+3. **`amountIn` is capped at what the burn actually returned** on the input side.
+4. **`minAmountOut` bounds nothing on its own.** The agent sets it, and a cap the agent sets is
+   not a cap. It stays a convenience, not a guard.
+
+### Native currency, or: the pools we are targeting do not work at all
+
+`currency0 == address(0)` on most pools on this chain. `Currency.transfer` for native is a bare
+`call` with all gas and empty calldata, so `TAKE_PAIR(vault)` reverts against a contract with no
+`receive()` — which the vault is today. **Every re-centre on a native pool would revert before
+reaching the swap.**
+
+So: add `receive()`, forward `value` when settling native into the PositionManager
+(`modifyLiquiditiesWithoutUnlock` is `payable`), and delete the NatSpec paragraph explaining why
+`recenter` is not payable, which stops being true.
+
+### Sweep computed amounts, never a balance
+
+The vault's balance is shared across users. Sweeping `balanceOf(this)` hands one user whatever
+another left behind, anything a third party donated, or ETH sent to the `receive()` the previous
+point forces us to add. `nonReentrant` serialises calls; it does not partition balances.
+Fee-on-transfer and rebasing tokens land in the same hole, and they are plausible on a chain
+hosting 20%-fee launch pools.
+
+Sweep amounts the callback computed, and assert both currency balances are zero **on-chain at
+the end of the callback**, not only in a test.
+
+### The callback
+
+- Reverts unless `msg.sender == poolManager` and a re-centre is in flight.
+- **Must not be `nonReentrant`.** It runs inside `recenter`, which already holds OpenZeppelin's
+  single guard flag, so the modifier would make every re-centre revert with
+  `ReentrancyGuardReentrantCall`. The in-flight flag is the mechanism; the guard stays on
+  `recenter` alone.
+- The swap runs on the mandate's own pool, read from `getPoolAndPositionInfo`, never a key the
+  caller supplies.
+
+## The claim this plan started with, and why it was wrong
+
+> ~~A mis-sized, sandwiched or badly routed swap yields a position under the floor and the whole
+> transaction reverts, so the swap arithmetic has to be right for the action to *succeed*, not
+> for the vault to stay *safe*.~~
+
+**`minRetainedBps` is denominated in liquidity, and liquidity is not value.** Worse, the value
+required per unit of `L` is *minimised* at exactly the range edge a manipulated price would sit
+at. For a range `[1, 4]` minting `L = 100`:
+
+| Price at mint | token0 | token1 | Value in token1 |
+|---|---|---|---|
+| mid-range | 20.7 | 41.4 | **82.8** |
+| pushed to the bottom edge | 50 | 0 | **50** |
+
+Same `L`, same verdict from the floor, 40% less value consumed — the rest bled out as slippage
+and fees. The floor is satisfied **more easily** after the manipulation than without it.
+
+The floor bounds *dilution* and never *slippage*. The swap leg has to be bounded on its own
+terms, which is what the four guards do.
+
+## The fee problem, which is about this chain and not the design
+
+v4 fees are hundredths of a bip against `MAX_LP_FEE = 1_000_000`, so pools sampled on Robinhood
+mainnet carry **20%** (`200000`), **10%** and **6%**. Routing a position through a 20%-fee pool
+destroys a fifth of the swapped side before slippage, and no mandate field makes that a good
+trade.
+
+No contract can fix it; it is the pool the user chose. What follows is that the demo runs on a
+low-fee pool chosen deliberately, and the README says plainly that a re-centre costs a swap
+through the position's own pool, so on a high-fee pool it can cost more than it recovers.
+Guard (1) helps, since a swap that would cross the range boundary stops there.
 
 ## The honesty cost
 
@@ -91,8 +170,13 @@ all:
    one.
 3. `unlockCallback` called directly by anyone reverts.
 4. `unlockCallback` called by the PoolManager with no re-centre in flight reverts.
-5. A swap sized to leave the position under the floor reverts the whole transaction.
-6. The vault's balance of both currencies is zero after every successful case.
+5. **An agent-sized swap that tries to push the price out of the committed range is stopped at
+   the price limit, and the post-swap tick assertion holds.** This is the finding above, and it
+   gets the most careful test in the file.
+6. A swap sized to leave the position under the floor reverts the whole transaction.
+7. A native-currency pool completes end to end, which is what most pools on this chain are.
+8. The vault's balance of both currencies is zero after every successful case, asserted on
+   chain as well as in the test.
 
 ## Report shape
 
@@ -105,4 +189,9 @@ withdrawn amounts and the target ratio he already computes, and carries them in 
 
 - Swapping through any pool but the position's own. Routing is a larger surface and buys
   nothing for a re-centre.
-- Bounding the agent's slippage choice from the mandate. Still listed under known limitations.
+- Bounding the agent's slippage choice from the mandate. The price limit bounds the direction
+  and extent of the move, which is the part that matters; the residual is ordinary MEV on a
+  bounded swap and stays in known limitations.
+- A hook in the user's own pool can mint during our callback and consume the `tokenId` we
+  reserved, making `_assertDelivered` revert. Fails safe, costs gas, and the hook is committed
+  in `poolId` so the user chose it. Known limitation, not a fix.
