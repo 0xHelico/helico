@@ -202,7 +202,7 @@ describe('vaultRejects', () => {
 		['range no closer than the old one', { tickLower: 1000, tickUpper: 2000 }, null],
 	])('%s', (_, proposed, expected) => {
 		expect(vaultRejects({ tick: 1_500, tickSpacing: 10, current, proposed, mandate: m })).toBe(
-			expected,
+			expected as VaultRejection | null,
 		)
 	})
 
@@ -229,6 +229,6 @@ describe('nearestUsableTick', () => {
 		[-887_275, 10, -887_270],
 		[887_275, 10, 887_270],
 	])('rounds %d at spacing %d to %d', (tick, spacing, expected) => {
-		expect(nearestUsableTick(tick, spacing)).toBe(expected as VaultRejection | null)
+		expect(nearestUsableTick(tick, spacing)).toBe(expected)
 	})
 })
