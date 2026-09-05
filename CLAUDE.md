@@ -5,7 +5,13 @@ Working guide for Claude Code in this repository.
 ## What this is
 
 An **ETHOnline 2026** hackathon submission. Monorepo: `contracts/` for Solidity, `apps/` for
-runnable services (`apps/cre/`, `apps/be/`).
+runnable services (`apps/cre/`, `apps/be/`), `packages/plugins/` for partner integrations.
+
+**Every partner integration goes in `packages/plugins/<name>` as `@helico/plugin-<name>`** —
+apps consume them, apps never talk to a protocol directly. This is not only tidiness: the
+Uniswap bounty rewards tooling built for the broader ecosystem, and both partner prizes
+require a README pointing at the exact lines proving the integration, which stays far easier
+when each partner owns one package.
 
 The rules below come from ETHGlobal's official workshops and the event prize page, not
 from guesswork. The research notes behind them are kept outside this repository.

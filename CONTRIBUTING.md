@@ -129,7 +129,7 @@ worth the small overhead on anything substantial.
 | [`apps/cre/`](apps/cre/) | Chainlink CRE workflows — see its README for the mandatory `handlerInTee` requirement |
 | [`apps/be/`](apps/be/) | Backend |
 | [`packages/core/`](packages/core/) | Shared library, `@helico/core` |
-| [`packages/plugins/`](packages/plugins/) | Plugins, one package each, `@helico/plugin-<name>` |
+| [`packages/plugins/`](packages/plugins/) | **Every partner integration**, one package each, `@helico/plugin-<name>` — see [its README](packages/plugins/README.md) |
 | [`docs/plans/`](docs/plans/) | Implementation plans, written before the code |
 
 ## What must not be committed
