@@ -126,3 +126,14 @@ What the runs taught:
   a 50 % cushion over `estimateGas`.
 - The liquidity row of the status table moves from "decoded only" to "executed", except
   `initializePool` and `increase`, which are still decoded only.
+
+## Revision — any viem client, everything type-checked
+
+Issue [#13](https://github.com/0xHelico/helico/issues/13). The editor showed that a
+`createPublicClient({ chain: baseSepolia })` client did not fit the `PublicClient` parameter:
+chains with OP-stack formatters give the client chain-specific return types. `tsc` had not
+caught it because scripts and tests were excluded. Now the reads take
+`Client<Transport, Chain | undefined>` and call viem's actions, the package tsconfig uses
+`types: ["bun"]` with no excludes, and the tests fake the client at the `request` level so they
+exercise the real ABI encoding. Also: 3-digit numeric separators and `.at(-1)`, both flagged
+by the editor's linter.

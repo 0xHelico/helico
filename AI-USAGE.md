@@ -120,6 +120,18 @@ Format: date · what was done · the AI's role · what a human verified.
   `initializePool` and `increaseLiquidity` remain decoded in tests only. The key was never
   written to the repository.
 
+### 2026-09-05 — Uniswap plugin accepts any viem client
+
+- **Done:** reads take a generic viem `Client` and use `viem/actions`; scripts and tests are
+  type-checked (`@types/bun`, `types: ["bun"]`); a `request`-level fake client for tests;
+  `.env.example`; numeric separators and `.at(-1)` per the editor's linter.
+- **AI's role:** diagnosed the editor diagnostics the human pasted, applied viem's own
+  guidance for libraries, rewrote the fakes, ran the checks.
+- **Plan:** revision in
+  [`docs/plans/2026-09-05-plugin-uniswap-complete.md`](docs/plans/2026-09-05-plugin-uniswap-complete.md).
+- **Verified:** `typecheck` clean over `src/**` including `e2e.ts`; `test` 40 pass; `smoke`
+  live on Base; `bun run check` clean.
+
 <!--
 Template for the next entry:
 
