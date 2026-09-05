@@ -19,3 +19,30 @@ jobs:
       # Runs every package's `test` script through Turborepo. A package without one is skipped,
       # so this step proves only what the packages define.
       - run: bun run test
+
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+      # `contracts/lib` is not committed, so CI installs the same pinned versions the
+      # remappings expect. Pinned rather than floating: a security suite that silently
+      # changes what it compiles against proves less each time it runs.
+      - name: Install Solidity dependencies
+        working-directory: contracts
+        run: |
+          forge install --no-git --shallow \
+            foundry-rs/forge-std@v1.16.2 \
+            OpenZeppelin/openzeppelin-contracts@v5.7.0 \
+            OpenZeppelin/openzeppelin-contracts-upgradeable@v5.7.0
+      - name: Check formatting
+        working-directory: contracts
+        run: forge fmt --check
+      - name: Build
+        working-directory: contracts
+        run: forge build
+      - name: Test
+        working-directory: contracts
+        run: forge test -vv
