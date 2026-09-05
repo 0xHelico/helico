@@ -19,18 +19,18 @@ import {
 // ─── Fixtures ────────────────────────────────────────────────
 const poolId = '0xea84630b1ccfd69145b791334c55a7d8be1565910cb6e290c489413c977fd9c5'
 const secretValues = {
-	[MANDATE_SECRET_IDS.rangeWidthBps]: '1000',
+	[MANDATE_SECRET_IDS.rangeWidthTicks]: '1000',
 	[MANDATE_SECRET_IDS.minImprovementBps]: '50',
 	[MANDATE_SECRET_IDS.cooldownSeconds]: '3600',
-	[MANDATE_SECRET_IDS.maxNotional]: '1000000000000000000',
+	[MANDATE_SECRET_IDS.maxLiquidity]: '1000000000000000000',
 	[MANDATE_SECRET_IDS.expiry]: '1800000000',
 }
 const committedHash = mandateHash({
 	poolId,
-	rangeWidthBps: 1000,
+	rangeWidthTicks: 1000,
 	minImprovementBps: 50,
 	cooldownSeconds: 3600,
-	maxNotional: 10n ** 18n,
+	maxLiquidity: 10n ** 18n,
 	expiry: 1_800_000_000,
 })
 const config: Config = {

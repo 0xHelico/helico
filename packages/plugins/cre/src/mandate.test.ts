@@ -5,10 +5,10 @@ import { MANDATE_SECRET_IDS, type Mandate, mandateFromSecrets, mandateHash } fro
 const poolId = '0xea84630b1ccfd69145b791334c55a7d8be1565910cb6e290c489413c977fd9c5'
 const mandate: Mandate = {
 	poolId,
-	rangeWidthBps: 1000,
+	rangeWidthTicks: 1000,
 	minImprovementBps: 50,
 	cooldownSeconds: 3600,
-	maxNotional: 10n ** 18n,
+	maxLiquidity: 10n ** 18n,
 	expiry: 1_800_000_000,
 }
 
@@ -17,7 +17,7 @@ describe('mandateHash', () => {
 		const solidityStyle = keccak256(
 			encodeAbiParameters(
 				parseAbiParameters(
-					'(bytes32 poolId, uint16 rangeWidthBps, uint16 minImprovementBps, uint32 cooldownSeconds, uint128 maxNotional, uint64 expiry)',
+					'(bytes32 poolId, uint16 rangeWidthTicks, uint16 minImprovementBps, uint32 cooldownSeconds, uint128 maxLiquidity, uint64 expiry)',
 				),
 				[mandate],
 			),
@@ -36,10 +36,10 @@ describe('mandateHash', () => {
 
 describe('mandateFromSecrets', () => {
 	const secrets = {
-		[MANDATE_SECRET_IDS.rangeWidthBps]: { value: '1000' },
+		[MANDATE_SECRET_IDS.rangeWidthTicks]: { value: '1000' },
 		[MANDATE_SECRET_IDS.minImprovementBps]: { value: '50' },
 		[MANDATE_SECRET_IDS.cooldownSeconds]: { value: '3600' },
-		[MANDATE_SECRET_IDS.maxNotional]: { value: '1000000000000000000' },
+		[MANDATE_SECRET_IDS.maxLiquidity]: { value: '1000000000000000000' },
 		[MANDATE_SECRET_IDS.expiry]: { value: '1800000000' },
 	}
 
@@ -51,7 +51,7 @@ describe('mandateFromSecrets', () => {
 		const { MANDATE_EXPIRY: _, ...missing } = secrets
 		expect(() => mandateFromSecrets(poolId, missing)).toThrow('MANDATE_EXPIRY')
 		expect(() =>
-			mandateFromSecrets(poolId, { ...secrets, MANDATE_MAX_NOTIONAL: { value: '1e18' } }),
-		).toThrow('MANDATE_MAX_NOTIONAL')
+			mandateFromSecrets(poolId, { ...secrets, MANDATE_MAX_LIQUIDITY: { value: '1e18' } }),
+		).toThrow('MANDATE_MAX_LIQUIDITY')
 	})
 })

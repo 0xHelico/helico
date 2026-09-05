@@ -7,10 +7,13 @@ import { encodeAbiParameters, type Hex, keccak256 } from 'viem'
  */
 export type Mandate = {
 	poolId: Hex
-	rangeWidthBps: number
+	/** Exact width of the range to re-centre into, in ticks; a whole number of the pool's spacings. */
+	rangeWidthTicks: number
+	/** How much closer to the market the range must move, in bps of the gap it already sits at. */
 	minImprovementBps: number
 	cooldownSeconds: number
-	maxNotional: bigint
+	/** Ceiling on the liquidity `L` a single action may move. */
+	maxLiquidity: bigint
 	expiry: number
 }
 
@@ -28,10 +31,10 @@ export function mandateHash(m: Mandate): Hex {
 	return keccak256(
 		encodeAbiParameters(MANDATE_ABI, [
 			m.poolId,
-			m.rangeWidthBps,
+			m.rangeWidthTicks,
 			m.minImprovementBps,
 			m.cooldownSeconds,
-			m.maxNotional,
+			m.maxLiquidity,
 			BigInt(m.expiry),
 		]),
 	)
@@ -39,10 +42,10 @@ export function mandateHash(m: Mandate): Hex {
 
 /** Vault DON secret ids that hold the private half of the mandate. */
 export const MANDATE_SECRET_IDS = {
-	rangeWidthBps: 'MANDATE_RANGE_WIDTH_BPS',
+	rangeWidthTicks: 'MANDATE_RANGE_WIDTH_TICKS',
 	minImprovementBps: 'MANDATE_MIN_IMPROVEMENT_BPS',
 	cooldownSeconds: 'MANDATE_COOLDOWN_SECONDS',
-	maxNotional: 'MANDATE_MAX_NOTIONAL',
+	maxLiquidity: 'MANDATE_MAX_LIQUIDITY',
 	expiry: 'MANDATE_EXPIRY',
 } as const
 
@@ -67,10 +70,10 @@ export function mandateFromSecrets(
 	const read = (key: keyof typeof MANDATE_SECRET_IDS) => secrets[MANDATE_SECRET_IDS[key]]?.value
 	return {
 		poolId,
-		rangeWidthBps: integer(read('rangeWidthBps'), MANDATE_SECRET_IDS.rangeWidthBps),
+		rangeWidthTicks: integer(read('rangeWidthTicks'), MANDATE_SECRET_IDS.rangeWidthTicks),
 		minImprovementBps: integer(read('minImprovementBps'), MANDATE_SECRET_IDS.minImprovementBps),
 		cooldownSeconds: integer(read('cooldownSeconds'), MANDATE_SECRET_IDS.cooldownSeconds),
-		maxNotional: unsigned(read('maxNotional'), MANDATE_SECRET_IDS.maxNotional),
+		maxLiquidity: unsigned(read('maxLiquidity'), MANDATE_SECRET_IDS.maxLiquidity),
 		expiry: integer(read('expiry'), MANDATE_SECRET_IDS.expiry),
 	}
 }
