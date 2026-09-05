@@ -16,3 +16,6 @@ artifacts/
 
 # CRE
 .cre/
+
+# Turborepo
+.turbo/
