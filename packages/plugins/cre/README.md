@@ -31,8 +31,8 @@ Every run (cron trigger, `handlerInTee`):
 | Tick read from inside the enclave | [`src/index.ts#L44-L77`](src/index.ts#L44-L77) |
 | What crosses out | [`src/index.ts#L89-L95`](src/index.ts#L89-L95) |
 | Mandate struct and hash | [`src/mandate.ts`](src/mandate.ts) |
-| The vault's range rule, mirrored | [`src/decision.ts#L55-L73`](src/decision.ts#L55-L73) `vaultRejects` |
-| Policy on top of it | [`src/decision.ts#L90-L107`](src/decision.ts#L90-L107) `decideRecentre` |
+| The vault's range rule, mirrored | [`src/decision.ts#L59-L78`](src/decision.ts#L59-L78) `vaultRejects` |
+| Policy on top of it | [`src/decision.ts#L95-L118`](src/decision.ts#L95-L118) `decideRecentre` |
 
 ## Status
 
