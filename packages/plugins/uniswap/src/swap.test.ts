@@ -1,8 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import { V4BaseActionsParser } from '@uniswap/v4-sdk'
+import { URVersion, V4BaseActionsParser } from '@uniswap/v4-sdk'
 import { decodeAbiParameters, decodeFunctionData, zeroAddress } from 'viem'
 import { universalRouterAbi } from './abi/universalRouter'
 import { addresses } from './addresses'
+import { robinhood } from './chains'
 import {
 	buildPath,
 	deadlineFromNow,
@@ -30,14 +31,16 @@ const pool = { fee: 500, tickSpacing: 10 }
 const deadline = 1_700_000_000n
 
 /** Decodes execute() and the single V4_SWAP input into named actions. */
-const decode = (tx: Transaction) => {
+const decode = (tx: Transaction, urVersion: URVersion = URVersion.V2_0) => {
 	const { functionName, args } = decodeFunctionData({ abi: universalRouterAbi, data: tx.data })
 	if (functionName !== 'execute' || !args) throw new Error('not execute')
 	const [commands, inputs, txDeadline] = args
-	const parsed = V4BaseActionsParser.parseCalldata(inputs[0] as string)
+	const parsed = V4BaseActionsParser.parseCalldata(inputs[0] as string, urVersion)
 	const actions = parsed.actions.map((a) => ({
 		name: a.actionName,
 		params: Object.fromEntries(a.params.map((p) => [p.name, String(p.value).toLowerCase()])),
+		/** The swap struct itself, for actions whose single param is a nested struct. */
+		struct: a.params[0]?.value as Record<string, unknown> | undefined,
 	}))
 	const sweep =
 		inputs.length > 1
@@ -203,5 +206,60 @@ describe('multi-hop swaps', () => {
 		expect(d.commands).toBe('0x1004')
 		expect(d.actions.map((a) => a.name)).toEqual(['SWAP_EXACT_OUT', 'SETTLE_ALL', 'TAKE_ALL'])
 		expect(d.sweep).toEqual([zeroAddress, MSG_SENDER, 0n])
+	})
+})
+
+describe('router 2.1.1 chains', () => {
+	const chainId = robinhood.id
+	const usdg = '0x5fc5360d0400a0fd4f2af552add042d716f1d168'
+	const ethUsdg: PoolKey = {
+		currency0: zeroAddress,
+		currency1: usdg,
+		fee: 500,
+		tickSpacing: 10,
+		hooks: zeroAddress,
+	}
+
+	test('single-hop structs carry minHopPriceX36 and parse under the 2.1.1 layout', () => {
+		const tx = encodeSwapExactInSingle({
+			chainId,
+			poolKey: ethUsdg,
+			zeroForOne: true,
+			amountIn: 10n ** 15n,
+			amountOutMinimum: 1n,
+			deadline,
+		})
+		const d = decode(tx, URVersion.V2_1_1)
+		expect(tx.to).toBe(addresses(chainId).universalRouter)
+		expect(d.actions.map((a) => a.name)).toEqual(['SWAP_EXACT_IN_SINGLE', 'SETTLE_ALL', 'TAKE_ALL'])
+		expect(String(d.actions[0]?.struct?.minHopPriceX36)).toBe('0')
+	})
+
+	test('multi-hop structs carry an empty minHopPriceX36 list', () => {
+		const route = buildPath({ currencies: [zeroAddress, usdg, WETH], pools: [pool, pool] })
+		const tx = encodeSwapExactOut({
+			chainId,
+			...route,
+			path: route.exactOutPath,
+			amountOut: 1n,
+			amountInMaximum: 10n ** 15n,
+			deadline,
+		})
+		const d = decode(tx, URVersion.V2_1_1)
+		expect(d.commands).toBe('0x1004')
+		expect(d.actions[0]?.name).toBe('SWAP_EXACT_OUT')
+		expect(Array.isArray(d.actions[0]?.struct?.minHopPriceX36)).toBe(true)
+	})
+
+	test('Base keeps the 2.0 layout', () => {
+		const tx = encodeSwapExactInSingle({
+			chainId: BASE,
+			poolKey: ethUsdc,
+			zeroForOne: true,
+			amountIn: 1n,
+			amountOutMinimum: 1n,
+			deadline,
+		})
+		expect(decode(tx, URVersion.V2_0).actions[0]?.struct).not.toHaveProperty('minHopPriceX36')
 	})
 })

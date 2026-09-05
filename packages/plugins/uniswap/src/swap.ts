@@ -1,5 +1,5 @@
 import { CommandType, RoutePlanner } from '@uniswap/universal-router-sdk'
-import { Actions, V4Planner } from '@uniswap/v4-sdk'
+import { Actions, isAtLeastV2_1_1, type URVersion, V4Planner } from '@uniswap/v4-sdk'
 import { type Address, encodeFunctionData, type Hex, zeroAddress } from 'viem'
 import { universalRouterAbi } from './abi/universalRouter'
 import { addresses } from './addresses'
@@ -71,6 +71,13 @@ const toPlannerPath = (path: PathKey[]) =>
 		hookData: hop.hookData,
 	}))
 
+/**
+ * Routers from 2.1.1 on read swap structs with a `minHopPriceX36` guard (0 / [] disables it).
+ * The struct layout is chosen per chain from the router version `addresses()` resolved.
+ */
+const hopPriceGuard = (urVersion: URVersion, multiHop: boolean) =>
+	isAtLeastV2_1_1(urVersion) ? { minHopPriceX36: multiHop ? [] : '0' } : {}
+
 type Settlement = {
 	chainId: number
 	deadline: bigint
@@ -134,17 +141,23 @@ export function encodeSwapExactInSingle({
 	deadline,
 	hookData = '0x',
 }: SingleHopSwapInput & { amountIn: bigint; amountOutMinimum: bigint }): Transaction {
+	const { universalRouterVersion: urVersion } = addresses(chainId)
 	const [currencyIn, currencyOut] = direction(poolKey, zeroForOne)
 	const planner = new V4Planner()
-	planner.addAction(Actions.SWAP_EXACT_IN_SINGLE, [
-		{
-			poolKey,
-			zeroForOne,
-			amountIn: amountIn.toString(),
-			amountOutMinimum: amountOutMinimum.toString(),
-			hookData,
-		},
-	])
+	planner.addAction(
+		Actions.SWAP_EXACT_IN_SINGLE,
+		[
+			{
+				poolKey,
+				zeroForOne,
+				amountIn: amountIn.toString(),
+				amountOutMinimum: amountOutMinimum.toString(),
+				...hopPriceGuard(urVersion, false),
+				hookData,
+			},
+		],
+		urVersion,
+	)
 	return executeSwap(planner, {
 		chainId,
 		deadline,
@@ -166,17 +179,23 @@ export function encodeSwapExactOutSingle({
 	deadline,
 	hookData = '0x',
 }: SingleHopSwapInput & { amountOut: bigint; amountInMaximum: bigint }): Transaction {
+	const { universalRouterVersion: urVersion } = addresses(chainId)
 	const [currencyIn, currencyOut] = direction(poolKey, zeroForOne)
 	const planner = new V4Planner()
-	planner.addAction(Actions.SWAP_EXACT_OUT_SINGLE, [
-		{
-			poolKey,
-			zeroForOne,
-			amountOut: amountOut.toString(),
-			amountInMaximum: amountInMaximum.toString(),
-			hookData,
-		},
-	])
+	planner.addAction(
+		Actions.SWAP_EXACT_OUT_SINGLE,
+		[
+			{
+				poolKey,
+				zeroForOne,
+				amountOut: amountOut.toString(),
+				amountInMaximum: amountInMaximum.toString(),
+				...hopPriceGuard(urVersion, false),
+				hookData,
+			},
+		],
+		urVersion,
+	)
 	return executeSwap(planner, {
 		chainId,
 		deadline,
@@ -191,6 +210,9 @@ export function encodeSwapExactOutSingle({
 export type MultiHopSwapInput = {
 	chainId: number
 	deadline: bigint
+	currencyIn: Address
+	currencyOut: Address
+	path: PathKey[]
 }
 
 /** Exact input along `exactInPath` from `buildPath`. */
@@ -202,22 +224,22 @@ export function encodeSwapExactIn({
 	amountIn,
 	amountOutMinimum,
 	deadline,
-}: MultiHopSwapInput & {
-	currencyIn: Address
-	currencyOut: Address
-	path: PathKey[]
-	amountIn: bigint
-	amountOutMinimum: bigint
-}): Transaction {
+}: MultiHopSwapInput & { amountIn: bigint; amountOutMinimum: bigint }): Transaction {
+	const { universalRouterVersion: urVersion } = addresses(chainId)
 	const planner = new V4Planner()
-	planner.addAction(Actions.SWAP_EXACT_IN, [
-		{
-			currencyIn,
-			path: toPlannerPath(path),
-			amountIn: amountIn.toString(),
-			amountOutMinimum: amountOutMinimum.toString(),
-		},
-	])
+	planner.addAction(
+		Actions.SWAP_EXACT_IN,
+		[
+			{
+				currencyIn,
+				path: toPlannerPath(path),
+				...hopPriceGuard(urVersion, true),
+				amountIn: amountIn.toString(),
+				amountOutMinimum: amountOutMinimum.toString(),
+			},
+		],
+		urVersion,
+	)
 	return executeSwap(planner, {
 		chainId,
 		deadline,
@@ -238,22 +260,22 @@ export function encodeSwapExactOut({
 	amountOut,
 	amountInMaximum,
 	deadline,
-}: MultiHopSwapInput & {
-	currencyIn: Address
-	currencyOut: Address
-	path: PathKey[]
-	amountOut: bigint
-	amountInMaximum: bigint
-}): Transaction {
+}: MultiHopSwapInput & { amountOut: bigint; amountInMaximum: bigint }): Transaction {
+	const { universalRouterVersion: urVersion } = addresses(chainId)
 	const planner = new V4Planner()
-	planner.addAction(Actions.SWAP_EXACT_OUT, [
-		{
-			currencyOut,
-			path: toPlannerPath(path),
-			amountOut: amountOut.toString(),
-			amountInMaximum: amountInMaximum.toString(),
-		},
-	])
+	planner.addAction(
+		Actions.SWAP_EXACT_OUT,
+		[
+			{
+				currencyOut,
+				path: toPlannerPath(path),
+				...hopPriceGuard(urVersion, true),
+				amountOut: amountOut.toString(),
+				amountInMaximum: amountInMaximum.toString(),
+			},
+		],
+		urVersion,
+	)
 	return executeSwap(planner, {
 		chainId,
 		deadline,
