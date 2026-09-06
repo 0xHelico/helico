@@ -296,6 +296,9 @@ const menus: Menu[] = [
 	}
 	.nav__links a,
 	.nav__links button {
+		/* Never break a label across two lines: before the webfont loads the fallback is wider,
+		   and "How It Works" is the first thing to wrap. */
+		white-space: nowrap;
 		display: inline-flex;
 		align-items: center;
 		height: 32px;
@@ -520,7 +523,9 @@ const menus: Menu[] = [
 		gap: 1rem;
 		margin-top: 2rem;
 	}
+	/* The button ends the sheet, across the full width, rather than sitting beside a card. */
 	.nav__group--foot .btn {
+		grid-column: 1 / -1;
 		justify-self: stretch;
 	}
 	@media (min-width: 640px) {
@@ -536,11 +541,13 @@ const menus: Menu[] = [
 			gap: 1.25rem;
 		}
 		.nav__group--foot {
-			grid-template-columns: 1fr auto;
+			grid-template-columns: repeat(2, 1fr);
 			align-items: center;
 		}
 	}
-	@media (min-width: 900px) {
+	/* Seven entries and a button need room to breathe. Below this the bar still fits on one row,
+	   but only just, and it reads as cramped rather than as a choice — so the sheet takes over. */
+	@media (min-width: 1240px) {
 		.nav__links {
 			display: flex;
 		}
@@ -548,7 +555,7 @@ const menus: Menu[] = [
 			display: none;
 		}
 	}
-	@media (max-width: 899px) {
+	@media (max-width: 1239px) {
 		.nav {
 			height: 64px;
 		}
