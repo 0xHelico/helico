@@ -10,7 +10,8 @@
 		"test": "bun test",
 		"smoke": "bun run src/smoke.ts",
 		"e2e": "bun run src/e2e.ts",
-		"discover": "bun run src/discover.ts"
+		"discover": "bun run src/discover.ts",
+		"e2e:plan": "bun run src/plan.e2e.ts"
 	},
 	"dependencies": {
 		"@uniswap/permit2-sdk": "1.4.0",
