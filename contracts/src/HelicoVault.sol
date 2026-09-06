@@ -8,8 +8,9 @@ import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/Pau
 // OpenZeppelin 5.7 dropped ReentrancyGuardUpgradeable: the base guard keeps its flag in an
 // ERC-7201 namespaced slot and reads it as `value == ENTERED`, so an uninitialised slot
 // already behaves as "not entered" and no initializer is needed behind a proxy. The
-// transient variant is avoided on purpose - it requires EIP-1153, and Robinhood Chain's
-// support for that could not be verified from here.
+// transient variant is left for a separate change: it would swap a storage slot for a
+// transient one, which is cheaper but is a behaviour change to the guard itself, and this
+// contract is already deployed behind a proxy in the deploy rehearsal.
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {
