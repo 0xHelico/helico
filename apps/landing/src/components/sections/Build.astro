@@ -59,7 +59,7 @@ const packages = [
 				<h3>Open by default.</h3>
 				<p>The code above is the actual check the contract runs, read from the source when this page is built. Every count below points at the code that proves it.</p>
 			</div>
-			<a class="btn btn--secondary" href={`${docs}/builders`}>Learn More</a>
+			<a class="btn btn--secondary" href={`${docs}/builders`}>Docs for Builders</a>
 		</div>
 		<div class="cards" style="text-align:left">
 			{packages.map((p) => (
@@ -67,7 +67,7 @@ const packages = [
 					<span class="label">{p.name}</span>
 					<span class="stat">{p.stat} <small>{p.unit}</small></span>
 					<p>{p.copy}</p>
-					<a class="link" href={p.href}>Read the source ↗</a>
+					<a class="link" href={p.href} aria-label={`Read the source of ${p.name}`}>Read the source ↗</a>
 				</div>
 			))}
 		</div>

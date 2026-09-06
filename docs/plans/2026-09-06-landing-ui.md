@@ -444,3 +444,29 @@ permalinks stay on GitHub, because that is where those things live.
 
 - "Can the landing redirect to https://docs.helico.site/ instead? Linking to a GitHub README
   feels odd, unless the context really is GitHub." and "In the nav as well as in the content."
+
+## Revision — a Lighthouse pass, and four links that all said the same thing
+
+Run against the live site rather than a local build:
+
+| | Performance | Accessibility | Best practices | SEO |
+|---|---|---|---|---|
+| Landing, mobile | 82 | 100 | 100 | 92 → **100** |
+| Landing, desktop | 98 | 100 | 100 | 92 → **100** |
+| Blog, mobile | 90 | 100 | 100 | 100 |
+
+The only thing marked down was link text: **four buttons all said "Learn More"** and went to four
+different places, which tells a search engine nothing and a reader less. They now say what they
+are: *Read the Docs*, *See the Contract*, *About the Rules*, *Docs for Builders*, and the FAQ's
+closing link is *Read the Helico docs*. The three *Read the source ↗* links keep their words and
+gain an accessible name naming the package, so a screen reader reading links out of context can
+tell them apart.
+
+Performance is left where it is. On mobile the whole page is 286 KiB with a blocking time of
+zero and a layout shift of 0.015; the 3.6s paint is throttled 4G against a hero that carries the
+canvas. Desktop is 0.9s. Trading the canvas for a number would cost the page its one moving
+explanation of what the product does.
+
+### Prompt, verbatim in translation
+
+- "Run a Lighthouse audit of the landing."
