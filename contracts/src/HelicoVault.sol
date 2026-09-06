@@ -733,8 +733,23 @@ contract HelicoVault is
 
         bytes memory actions = abi.encodePacked(MINT_POSITION, SETTLE, SETTLE, SWEEP, SWEEP);
         bytes[] memory params = new bytes[](5);
+        // The maxima are what this call is holding, not what the agent predicted it would hold.
+        //
+        // They used to be `u.p.amount0Max` / `u.p.amount1Max`, sized off-chain from a model of a
+        // swap that had not happened. That is the same mistake `toMint` above stopped making,
+        // one line later: a swap returning *more* of the binding token than the model expected
+        // still reverted on `MaximumAmountExceeded`, with the vault holding plenty.
+        //
+        // Nothing is given up by dropping them. The vault transferred exactly `got0`/`got1` to
+        // the PositionManager and sweeps back what the mint does not spend, so it cannot spend
+        // more than this whatever the numbers say, and `_settleUp` asserts the remainder reaches
+        // the owner. The agent's maxima bounded the agent's own transaction and protected
+        // nobody; `minRetainedBps` is the user's protection and it lives in the mandate.
+        //
+        // `amount0Min` / `amount1Min` are untouched. They bound the burn, which is a different
+        // thing and genuinely protective.
         params[0] = abi.encode(
-            u.key, u.p.tickLower, u.p.tickUpper, toMint, u.p.amount0Max, u.p.amount1Max, u.p.owner, bytes("")
+            u.key, u.p.tickLower, u.p.tickUpper, toMint, _cap(got0), _cap(got1), u.p.owner, bytes("")
         );
         params[1] = abi.encode(u.key.currency0, uint256(OPEN_DELTA), false);
         params[2] = abi.encode(u.key.currency1, uint256(OPEN_DELTA), false);
@@ -747,6 +762,13 @@ contract HelicoVault is
     }
 
     /// @dev Pay the owner exactly what this call produced, and prove the vault kept none of it.
+    /// @dev A balance as a `uint128` bound. Saturating rather than reverting: these are upper
+    ///      bounds on what the mint may spend, and a balance above `uint128.max` is not a
+    ///      reason to refuse a re-centre. No ERC-20 the vault can hold reaches it.
+    function _cap(uint256 amount) internal pure returns (uint128) {
+        return amount > type(uint128).max ? type(uint128).max : uint128(amount);
+    }
+
     function _settleUp(Unlock memory u, uint256 held0, uint256 held1) internal {
         _payOut(u.key.currency0, u.p.owner, _balanceOf(u.key.currency0) - held0);
         _payOut(u.key.currency1, u.p.owner, _balanceOf(u.key.currency1) - held1);

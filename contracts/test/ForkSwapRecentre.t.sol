@@ -361,4 +361,72 @@ contract ForkSwapRecentreTest is ForkBase {
         emit log_named_uint("asked for", type(uint128).max);
         emit log_named_uint("minted", minted);
     }
+
+    /// @notice The agent's predicted maxima are below what the swap actually returned.
+    ///
+    /// @dev The other half of #78, and the one #80 left behind: the vault stopped trusting the
+    ///      enclave's `liquidityToMint` but still passed the enclave's guess about its own
+    ///      balances to v4 as the mint's ceiling. A swap that returns *more* of the binding
+    ///      token than predicted then reverts on `MaximumAmountExceeded` while the vault is
+    ///      holding plenty.
+    ///
+    ///      One wei is that failure with the guesswork removed. No mint fits under it, so if
+    ///      the vault still honours the agent's ceiling this reverts; it has to use what it
+    ///      actually holds. Nothing is lost by that — the vault cannot spend more than it
+    ///      transferred in, and `_settleUp` asserts the rest reaches the owner, both of which
+    ///      the assertions below check.
+    function test_TheAgentsMaximaCannotBlockAMintTheVaultCanPayFor() public {
+        _fork();
+        _setUpVault();
+
+        (uint256 tokenId,,) = _mintOutOfRangePosition();
+        uint128 liquidityBefore = POSITION_MANAGER.getPositionLiquidity(tokenId);
+
+        vm.prank(owner);
+        vault.setMandate(tokenId, _mandate());
+
+        int24 spacing = demoPool.tickSpacing;
+        int24 tick = _tickOf(demoPool);
+        int24 newUpper = (tick / spacing) * spacing + spacing;
+        int24 newLower = newUpper - int24(uint24(WIDTH_TICKS));
+
+        uint256 parAfterSwap = (PAR_IN * 85) / 100;
+        uint128 toMint =
+            _liquidityForAmount1(TickMath.getSqrtPriceAtTick(newLower), _sqrtPriceOf(demoPool), parAfterSwap);
+
+        uint256 ownerEthBefore = owner.balance;
+
+        vm.prank(agent);
+        uint256 newTokenId = vault.recenter(
+            HelicoVault.RecenterParams({
+                owner: owner,
+                tickLower: newLower,
+                tickUpper: newUpper,
+                liquidityToMint: toMint,
+                amount0Min: 0,
+                amount1Min: 0,
+                // A ceiling no mint on any pool fits under.
+                amount0Max: 1,
+                amount1Max: 1,
+                zeroForOne: false,
+                amountIn: PAR_IN / 10,
+                minAmountOut: 0,
+                deadline: block.timestamp + 60
+            })
+        );
+
+        assertTrue(_isInRange(newTokenId, demoPool), "it re-centred anyway");
+        assertEq(POSITION_MANAGER.ownerOf(newTokenId), owner, "for the owner");
+        assertGe(
+            uint256(POSITION_MANAGER.getPositionLiquidity(newTokenId)) * 10_000,
+            uint256(liquidityBefore) * RETAIN_BPS,
+            "and still cleared the floor"
+        );
+
+        // Dropping the ceiling did not let the vault keep or misroute anything.
+        assertEq(address(vault).balance, 0, "no native left in the vault");
+        assertEq(IERC20(demoPool.currency1).balanceOf(address(vault)), 0, "no token1 left");
+        assertGe(owner.balance, ownerEthBefore, "leftovers went to the owner");
+        assertEq(agent.balance, 0, "the agent gained nothing");
+    }
 }
