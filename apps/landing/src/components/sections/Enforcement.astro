@@ -12,6 +12,44 @@ const fields = [
 	{ field: 'minRetainedBps', value: '≥ 90%', rule: 'The share a move must keep, read back from the mint.', line: 718 },
 	{ field: 'the price', value: 'tick inside', rule: 'The new range must contain the current tick.', line: 739 },
 ]
+// The other tabs, illustrative like the mandate: the canvas's numbers for the position and the
+// enclave, the vault's rules, and the fork rehearsal for the evidence.
+const position = [
+	['Pool', 'ETH / ARB 0.05%, Uniswap v4, Arbitrum One'],
+	['Range', '[130460, 130480), 20 ticks'],
+	['Tick now', '130472, inside the range'],
+	['Status', 'earning; last move kept 98% of the liquidity'],
+	['Cooldown', 'until 15:32, then the enclave may move again'],
+	['Owner', 'you; the vault is an operator, the NFT stays in your wallet'],
+]
+const enclave = [
+	['Reads', 'the pool and your position, from inside the TEE'],
+	['Recomputes', 'the mandate hash from thresholds released only into the enclave; 0x134be6bb…6225 must match'],
+	['Decides', 'hold while in range or on cooldown; otherwise a range of exactly the committed width around the price'],
+	['Sizes', 'the swap that funds both sides of the new range, and the mint'],
+	['Leaves', 'only the verdict: a DON report through the forwarder, or an EIP-712 signature from a key that exists only here'],
+]
+const vaultRows = [
+	['Holds', 'the mandate hash, never the thresholds'],
+	['Checks', 'the hash in the verdict, then every rule again: pool, width, improvement, cooldown, cap, expiry, retained share, price inside'],
+	['Moves', 'burn, swap capped at the edge of the new range, mint, all inside its own lock'],
+	['Ends', 'holding nothing; the tokens the call did not mint go back to you'],
+	['Refuses', 'anything else; there is no other entry point'],
+]
+const evidence = [
+	['Fork rehearsal', 'a report through the mock forwarder re-centred a real out-of-range position on the ETH/ARB pool: RECENTER 94370..94570'],
+	['Kept', '94.3% of the liquidity; the mandate\'s floor was 50%'],
+	['Second run', 'HOLD (cooldown), no transaction'],
+	['Tests', '240+ unit tests, 9 fork tests against a fork of Arbitrum One'],
+	['Caveats', 'a fork, not a live network; the simulator is not a TEE; the mock forwarder verifies no signatures'],
+]
+const tabs = [
+	{ id: 'mandate', label: 'Mandate' },
+	{ id: 'position', label: 'Position' },
+	{ id: 'enclave', label: 'Enclave' },
+	{ id: 'vault', label: 'Vault' },
+	{ id: 'evidence', label: 'Evidence' },
+]
 const templates = [
 	{
 		label: 'Keep in range',
@@ -47,10 +85,12 @@ const templates = [
 		<div class="panel" aria-label="An example mandate and the rule the vault enforces for each field">
 			<div class="panel__bar"><i></i><i></i><i></i><span>helico · vault · Arbitrum One · not deployed yet</span></div>
 			<div class="panel__body">
-				<div class="panel__side">
-					<span class="is-active">Mandate</span><span>Position</span><span>Enclave</span><span>Vault</span><span>Evidence</span>
+				<div class="panel__side" role="tablist" aria-label="Panel sections" data-tabs>
+					{tabs.map((t, i) => (
+						<button type="button" role="tab" id={`tab-${t.id}`} aria-controls={`panel-${t.id}`} aria-selected={i === 0 ? 'true' : 'false'} tabindex={i === 0 ? 0 : -1}>{t.label}</button>
+					))}
 				</div>
-				<div class="panel__main">
+				<div class="panel__main" role="tabpanel" id="panel-mandate" aria-labelledby="tab-mandate">
 					<div class="panel__head">
 						<div>
 							<div class="panel__title">Mandate · example position</div>
@@ -69,6 +109,27 @@ const templates = [
 					</ol>
 					<p class="fields__foot">Seven fields, one extra rule for the price. A re-centre that fails any of them reverts; there is no other entry point.</p>
 				</div>
+				{[
+					{ id: 'position', title: 'Position · example', sub: 'What the vault and the enclave see right now', rows: position },
+					{ id: 'enclave', title: 'Enclave · one run', sub: 'A Chainlink CRE confidential workflow, every five minutes', rows: enclave },
+					{ id: 'vault', title: 'Vault · every move', sub: 'The part that does not trust the enclave', rows: vaultRows },
+					{ id: 'evidence', title: 'Evidence · what has run', sub: 'On a fork of Arbitrum One, 2026-09-06', rows: evidence },
+				].map((t) => (
+					<div class="panel__main" role="tabpanel" id={`panel-${t.id}`} aria-labelledby={`tab-${t.id}`} hidden>
+						<div class="panel__head">
+							<div>
+								<div class="panel__title">{t.title}</div>
+								<div class="panel__sub">{t.sub}</div>
+							</div>
+							<span class="panel__badge">example</span>
+						</div>
+						<dl class="rows">
+							{t.rows.map(([k, v]) => (
+								<div><dt>{k}</dt><dd>{v}</dd></div>
+							))}
+						</dl>
+					</div>
+				))}
 			</div>
 		</div>
 		<p class="panel__caption">Illustrative. Nothing is deployed yet; the fields are the seven the vault stores.</p>
@@ -92,6 +153,32 @@ const templates = [
 		</div>
 	</div>
 </section>
+
+<script>
+	// Tabs: click or arrow keys move between them; only the selected panel is shown.
+	for (const list of document.querySelectorAll<HTMLElement>('[data-tabs]')) {
+		const tabs = Array.from(list.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
+		const select = (tab: HTMLButtonElement) => {
+			for (const t of tabs) {
+				const on = t === tab
+				t.setAttribute('aria-selected', String(on))
+				t.tabIndex = on ? 0 : -1
+				const panel = document.getElementById(t.getAttribute('aria-controls') ?? '')
+				if (panel) panel.hidden = !on
+			}
+			tab.focus()
+		}
+		tabs.forEach((tab, i) => {
+			tab.addEventListener('click', () => select(tab))
+			tab.addEventListener('keydown', (e) => {
+				const step = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? -1 : 0
+				if (step === 0) return
+				e.preventDefault()
+				select(tabs[(i + step + tabs.length) % tabs.length] as HTMLButtonElement)
+			})
+		})
+	}
+</script>
 
 <style>
 	.enforcement {
@@ -138,14 +225,6 @@ const templates = [
 		border-right: 1px solid rgba(255, 255, 255, 0.08);
 		font-size: 0.8rem;
 		color: #8d8ca3;
-	}
-	.panel__side span {
-		padding: 0.45rem 0.7rem;
-		border-radius: 8px;
-	}
-	.panel__side .is-active {
-		background: rgba(124, 107, 255, 0.18);
-		color: #ffffff;
 	}
 	.panel__main {
 		padding: 1.25rem;
@@ -246,6 +325,64 @@ const templates = [
 		.fields__name {
 			flex-direction: column;
 			gap: 0.15rem;
+		}
+	}
+	.panel__side button {
+		display: block;
+		width: 100%;
+		padding: 0.55rem 0.75rem;
+		border: 0;
+		border-radius: 10px;
+		background: none;
+		text-align: left;
+		font: inherit;
+		font-size: 0.875rem;
+		color: rgba(255, 255, 255, 0.6);
+		cursor: pointer;
+	}
+	.panel__side button:hover {
+		color: #ffffff;
+		background: rgba(255, 255, 255, 0.05);
+	}
+	.panel__side button[aria-selected='true'] {
+		color: #ffffff;
+		background: rgba(124, 107, 255, 0.18);
+	}
+	.panel__side button:focus-visible {
+		outline: 2px solid #b7abff;
+		outline-offset: 2px;
+	}
+	.panel__main[hidden] {
+		display: none;
+	}
+	.rows {
+		margin: 1rem 0 0;
+		border-top: 1px solid rgba(255, 255, 255, 0.08);
+	}
+	.rows div {
+		display: grid;
+		grid-template-columns: 1fr;
+		gap: 0.2rem 1.25rem;
+		padding: 0.8rem 0;
+		border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+		text-align: left;
+	}
+	.rows dt {
+		font-family: var(--font-mono);
+		font-size: 0.8rem;
+		color: #b7abff;
+	}
+	.rows dd {
+		margin: 0;
+		font-size: 0.9rem;
+		line-height: 1.45;
+		letter-spacing: -0.01em;
+		color: rgba(255, 255, 255, 0.85);
+	}
+	@media (min-width: 720px) {
+		.rows div {
+			grid-template-columns: 9rem 1fr;
+			align-items: baseline;
 		}
 	}
 </style>

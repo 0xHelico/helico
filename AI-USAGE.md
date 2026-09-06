@@ -465,6 +465,15 @@ Format: date · what was done · the AI's role · what a human verified.
   the API (4 posts each way); the Playwright audit on `/blog` and two articles at seven
   viewports, zero findings; the landing audit unchanged at zero.
 
+### 2026-09-06 — Landing page: the panel's tabs
+
+- **Done:** the dark card's sidebar became real tabs (roles, arrow keys) with a panel each:
+  mandate, position, enclave, vault, evidence, every line from the knowledge the repository
+  records, caveats included.
+- **AI's role:** wrote the markup, the script and the copy; exercised click and keyboard in a
+  headless browser. The user asked for it.
+- **Verified:** `astro check` (0 errors), `astro build`, the Playwright audit at seven viewports.
+
 <!--
 Template for the next entry:
 

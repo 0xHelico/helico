@@ -253,3 +253,17 @@ on the column's edge, the hero card at y = 0.
 
 - "The nav is too tall, and it should be the logo on the left and the rest on the right."
 
+## Revision — the panel's sections are tabs
+
+The user found the dark card's panel confusing: a sidebar that looked like tabs but did nothing.
+The five entries are now real tabs (roles, arrow keys, one panel shown at a time) with content
+of their own, every line drawn from what the repository records: the mandate's fields as
+before; the position as the canvas shows it; what the enclave reads, recomputes, decides, sizes
+and leaves; what the vault holds, checks, moves, ends with and refuses; and the evidence from
+the fork rehearsal with its caveats.
+
+### Prompt, verbatim in translation
+
+- "I think this is still confusing and the UI is not clear; make the tabs clickable, with
+  content."
+
