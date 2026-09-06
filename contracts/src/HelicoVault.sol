@@ -229,6 +229,7 @@ contract HelicoVault is
     error LiquidityNotRetained();
     error RetentionOutOfRange();
     error CooldownZero();
+    error MandateAlreadyActive(uint256 tokenId);
     error ZeroAddress();
     error NotAContract();
     error UpgradeNotScheduled();
@@ -304,6 +305,21 @@ contract HelicoVault is
         if (int24(uint24(m.rangeWidthTicks)) % key.tickSpacing != 0) revert RangeWidthNotSpaced();
 
         Account storage a = _accounts[msg.sender];
+        // One position per address, and the user is told rather than left to find out.
+        //
+        // Accounts are keyed by owner, not by tokenId, and that was the right call: a tokenId
+        // is destroyed by the very action it authorises and it changes hands when the NFT is
+        // sold, so the mandate has to follow the person. But it turned "one mandate per
+        // position" into "one mandate per person" without anyone deciding that, and a second
+        // `setMandate` used to overwrite the first — leaving a position the user still believed
+        // was managed, silently unmanaged.
+        //
+        // Refusing is the honest version of the same limit. Re-committing terms on the position
+        // already under mandate still works, which is what changing your mind looks like;
+        // moving to a different position means `revoke()` first, so the moment the old one
+        // stops being managed is a transaction the user sent.
+        if (a.active && a.tokenId != tokenId) revert MandateAlreadyActive(a.tokenId);
+
         a.mandate = m;
         a.tokenId = tokenId;
         a.active = true;
@@ -733,8 +749,23 @@ contract HelicoVault is
 
         bytes memory actions = abi.encodePacked(MINT_POSITION, SETTLE, SETTLE, SWEEP, SWEEP);
         bytes[] memory params = new bytes[](5);
+        // The maxima are what this call is holding, not what the agent predicted it would hold.
+        //
+        // They used to be `u.p.amount0Max` / `u.p.amount1Max`, sized off-chain from a model of a
+        // swap that had not happened. That is the same mistake `toMint` above stopped making,
+        // one line later: a swap returning *more* of the binding token than the model expected
+        // still reverted on `MaximumAmountExceeded`, with the vault holding plenty.
+        //
+        // Nothing is given up by dropping them. The vault transferred exactly `got0`/`got1` to
+        // the PositionManager and sweeps back what the mint does not spend, so it cannot spend
+        // more than this whatever the numbers say, and `_settleUp` asserts the remainder reaches
+        // the owner. The agent's maxima bounded the agent's own transaction and protected
+        // nobody; `minRetainedBps` is the user's protection and it lives in the mandate.
+        //
+        // `amount0Min` / `amount1Min` are untouched. They bound the burn, which is a different
+        // thing and genuinely protective.
         params[0] = abi.encode(
-            u.key, u.p.tickLower, u.p.tickUpper, toMint, u.p.amount0Max, u.p.amount1Max, u.p.owner, bytes("")
+            u.key, u.p.tickLower, u.p.tickUpper, toMint, _cap(got0), _cap(got1), u.p.owner, bytes("")
         );
         params[1] = abi.encode(u.key.currency0, uint256(OPEN_DELTA), false);
         params[2] = abi.encode(u.key.currency1, uint256(OPEN_DELTA), false);
@@ -747,6 +778,13 @@ contract HelicoVault is
     }
 
     /// @dev Pay the owner exactly what this call produced, and prove the vault kept none of it.
+    /// @dev A balance as a `uint128` bound. Saturating rather than reverting: these are upper
+    ///      bounds on what the mint may spend, and a balance above `uint128.max` is not a
+    ///      reason to refuse a re-centre. No ERC-20 the vault can hold reaches it.
+    function _cap(uint256 amount) internal pure returns (uint128) {
+        return amount > type(uint128).max ? type(uint128).max : uint128(amount);
+    }
+
     function _settleUp(Unlock memory u, uint256 held0, uint256 held1) internal {
         _payOut(u.key.currency0, u.p.owner, _balanceOf(u.key.currency0) - held0);
         _payOut(u.key.currency1, u.p.owner, _balanceOf(u.key.currency1) - held1);

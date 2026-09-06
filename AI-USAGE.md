@@ -506,6 +506,23 @@ Format: date · what was done · the AI's role · what a human verified.
   through `rehearse.sh`, 93.19e18 in and 74.72e18 out, and a second run held on the cooldown.
   Also fixed `MockStateView`, which returned a zero price and so covered none of this.
 
+### 2026-09-06 — Vault: the mint's ceiling is the vault's balance, not the enclave's guess
+
+- **Done:** `_mint` passes `got0`/`got1` as the mint's maxima instead of the agent's predicted
+  ones. #80 stopped the vault trusting the enclave's `liquidityToMint` and left it trusting the
+  enclave's guess about its own balances one line later, so a swap returning *more* of the
+  binding token than predicted still reverted with the vault holding plenty. Found by
+  @rifkyeasy reviewing #80.
+- **AI's role:** wrote the change and the fork test. The reviewer found the gap; the test gap
+  was mine — `test_MintsWhatItCanAffordWhenTheAgentAsksForMore` passes `uint128.max` for both
+  maxima, so it covered the half I was thinking about and not the other.
+- **Plan:** tracked in #87; a one-line change, no separate plan document.
+- **Verified:** `forge test` 96 pass with an Arbitrum RPC. Mutation — restoring the agent's
+  maxima fails exactly the new test with `MaximumAmountExceeded(1, 87.9e18)`. The first
+  mutation attempt reported a false negative because the replacement did not match the
+  formatted source; identical gas figures across runs were the tell, and a mutation must be
+  confirmed to have applied before its result means anything. Storage layout unchanged.
+
 ### 2026-09-06 — The CRE project a judge can actually run
 
 - **Done:** `apps/cre` becomes a real CRE project — `project.yaml`, `secrets.yaml`,
@@ -523,6 +540,22 @@ Format: date · what was done · the AI's role · what a human verified.
   unchanged. Tested rather than assumed: raising `slippageBps` 50 → 500 moved the requested
   amount 4.4% and left the cap unmoved, which is what says the cap is not a function of the
   budget. The script is left failing on that.
+
+### 2026-09-06 — Vault: say the one-position limit out loud
+
+- **Done:** `setMandate` on a second position reverts with `MandateAlreadyActive` instead of
+  silently replacing the first, and `contracts/README.md` states the limit and why it exists.
+  Closes #53, where a user could be left holding a position they believed was managed and was
+  not. Re-committing terms on the same position still works; moving means `revoke()` first.
+- **AI's role:** chose the cheap option of the three on the issue and said why the other two
+  were wrong here — re-keying accounts by `(owner, tokenId)` changes storage and the mandate
+  hash six days before the deadline, and one mandate across many positions cannot work because
+  the mandate commits a `poolId`.
+- **Plan:** the options are on #53; a guard and four tests did not warrant a separate document.
+- **Verified:** `forge test` 89 pass, 10 fork skip without an RPC. Mutation — deleting the guard
+  fails exactly `test_ASecondPositionIsRefusedRatherThanSwappedIn` and nothing else. Three
+  existing tests were quietly relying on the silent replacement and now `revoke()` first, which
+  is the flow a user has.
 
 <!--
 Template for the next entry:
