@@ -1,0 +1,19 @@
+{
+	"name": "@helico/cre",
+	"version": "0.0.0",
+	"private": true,
+	"scripts": {
+		"typecheck": "tsc --noEmit",
+		"simulate": "cre workflow simulate ./workflow --target staging-settings --env .env --trigger-index 0 --non-interactive",
+		"rehearse": "./rehearse.sh"
+	},
+	"dependencies": {
+		"@chainlink/cre-sdk": "1.19.1",
+		"@helico/plugin-cre": "workspace:*",
+		"viem": "2.34.0",
+		"zod": "3.25.76"
+	},
+	"devDependencies": {
+		"typescript": "5.9.3"
+	}
+}
