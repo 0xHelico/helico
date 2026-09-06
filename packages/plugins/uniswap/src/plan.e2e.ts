@@ -17,22 +17,27 @@ import {
 	formatUnits,
 	type Hex,
 	http,
-	keccak256,
 	parseEther,
 	toHex,
 } from 'viem'
-import { privateKeyToAccount } from 'viem/accounts'
+import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
 import { arbitrum } from 'viem/chains'
 import { NATIVE, planSwap, type SwapPlan } from './plan'
 
 const RPC = process.env.FORK_RPC_URL ?? 'http://127.0.0.1:8545'
 /**
- * Not anvil's default account. On an Arbitrum fork that address has code: someone deployed a
+ * A new account every run, for two reasons.
+ *
+ * Not anvil's default one: on an Arbitrum fork that address has code — someone deployed a
  * contract at the well-known test address whose fallback forwards its whole balance away, so
  * the first payment the swap makes to it takes the other 9,999 ETH with it. The swap is fine;
- * the account is not. Anything derived from a seed nobody has used is, and it is checked below.
+ * the account is not, and the check below refuses any address that has code.
+ *
+ * And not a fixed one: a second run against the same fork would find the approvals the first
+ * run made, and the assertion that a fresh ERC-20 input needs them would pass without being
+ * tested.
  */
-const KEY = (process.env.FORK_PRIVATE_KEY ?? keccak256(toHex('helico-plan-e2e'))) as Hex
+const KEY = (process.env.FORK_PRIVATE_KEY ?? generatePrivateKey()) as Hex
 const USDC = '0xaf88d065e77c8cC2239327C5EDb3A432268e5831'
 
 const account = privateKeyToAccount(KEY)
