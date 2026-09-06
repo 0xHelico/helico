@@ -63,12 +63,12 @@ It is upgradeable behind a timelock, non-custodial, and every rejection path is 
 | What | Where |
 |---|---|
 | The mandate a user commits | [`Mandate.sol#L20-L62`](https://github.com/0xHelico/helico/blob/e4582449a984340cfede5d6453c81b1a7e0b5154/contracts/src/Mandate.sol#L20-L62) |
-| Committing it, checked against the position's real pool | [`HelicoVault.sol#L275-L298`](https://github.com/0xHelico/helico/blob/e4582449a984340cfede5d6453c81b1a7e0b5154/contracts/src/HelicoVault.sol#L275-L298) |
-| The action the agent may propose | [`HelicoVault.sol#L457-L510`](https://github.com/0xHelico/helico/blob/e4582449a984340cfede5d6453c81b1a7e0b5154/contracts/src/HelicoVault.sol#L457-L510) |
-| Every range rule, including the one the price must satisfy | [`HelicoVault.sol#L724-L748`](https://github.com/0xHelico/helico/blob/e4582449a984340cfede5d6453c81b1a7e0b5154/contracts/src/HelicoVault.sol#L724-L748) |
-| The swap that makes an out-of-range position recoverable | [`HelicoVault.sol#L517-L533`](https://github.com/0xHelico/helico/blob/e4582449a984340cfede5d6453c81b1a7e0b5154/contracts/src/HelicoVault.sol#L517-L533) |
-| An agent that cannot send transactions: the signed authorisation | [`HelicoVault.sol#L405-L425`](https://github.com/0xHelico/helico/blob/e4582449a984340cfede5d6453c81b1a7e0b5154/contracts/src/HelicoVault.sol#L405-L425) |
-| The exit, which nothing can block | [`HelicoVault.sol#L308-L320`](https://github.com/0xHelico/helico/blob/e4582449a984340cfede5d6453c81b1a7e0b5154/contracts/src/HelicoVault.sol#L308-L320) |
+| Committing it, checked against the position's real pool | [`HelicoVault.sol#L287-L310`](https://github.com/0xHelico/helico/blob/e4582449a984340cfede5d6453c81b1a7e0b5154/contracts/src/HelicoVault.sol#L287-L310) |
+| The action the agent may propose | [`HelicoVault.sol#L519-L572`](https://github.com/0xHelico/helico/blob/e4582449a984340cfede5d6453c81b1a7e0b5154/contracts/src/HelicoVault.sol#L519-L572) |
+| Every range rule, including the one the price must satisfy | [`HelicoVault.sol#L786-L810`](https://github.com/0xHelico/helico/blob/e4582449a984340cfede5d6453c81b1a7e0b5154/contracts/src/HelicoVault.sol#L786-L810) |
+| The swap that makes an out-of-range position recoverable | [`HelicoVault.sol#L579-L595`](https://github.com/0xHelico/helico/blob/e4582449a984340cfede5d6453c81b1a7e0b5154/contracts/src/HelicoVault.sol#L579-L595) |
+| An agent that cannot send transactions: the signed authorisation | [`HelicoVault.sol#L417-L437`](https://github.com/0xHelico/helico/blob/e4582449a984340cfede5d6453c81b1a7e0b5154/contracts/src/HelicoVault.sol#L417-L437) |
+| The exit, which nothing can block | [`HelicoVault.sol#L320-L332`](https://github.com/0xHelico/helico/blob/e4582449a984340cfede5d6453c81b1a7e0b5154/contracts/src/HelicoVault.sol#L320-L332) |
 
 ### Chainlink CRE — Confidential Workflows
 

@@ -19,9 +19,14 @@ import {HelicoVault} from "../src/HelicoVault.sol";
 ///        forge script script/Deploy.s.sol:Deploy --rpc-url $ARBITRUM_RPC_URL --broadcast
 ///
 ///      Environment:
-///        AGENT_ADDRESS   the enclave's signer. Not an EOA we hold — the key exists only
-///                        inside the enclave, which is the whole point of the signature path.
-///        ADMIN_ADDRESS   optional; defaults to the broadcaster. Should be a multisig.
+///        AGENT_ADDRESS     the enclave's signer. Not an EOA we hold — the key exists only
+///                          inside the enclave, which is the whole point of the signature path.
+///        ADMIN_ADDRESS     optional; defaults to the broadcaster. Should be a multisig.
+///        FORWARDER_ADDRESS optional; the Chainlink CRE `KeystoneForwarder` whose reports the
+///                          vault will honour. Left unset the report path is simply off, and an
+///                          admin can point the vault at one later without a redeploy — which
+///                          is how the same deployment moves from the CLI's mock forwarder to
+///                          the production one.
 contract Deploy is Script {
     uint256 constant ARBITRUM_ONE = 42161;
 
@@ -52,6 +57,8 @@ contract Deploy is Script {
         address admin = vm.envOr("ADMIN_ADDRESS", deployer);
         if (admin == address(0)) revert NoAdminAddress();
 
+        address forwarder = vm.envOr("FORWARDER_ADDRESS", address(0));
+
         // The addresses above are constants, so this catches a chain that answers with the
         // right id but is not the chain we think it is.
         _requireCode(POSITION_MANAGER);
@@ -59,12 +66,13 @@ contract Deploy is Script {
         _requireCode(POOL_MANAGER);
 
         vm.startBroadcast();
-        vault = _deploy(deployer, admin, agent);
+        vault = _deploy(deployer, admin, agent, forwarder);
         vm.stopBroadcast();
 
         console.log("vault (proxy)  ", address(vault));
         console.log("admin          ", admin);
         console.log("agent (enclave)", agent);
+        console.log("forwarder      ", forwarder);
         console.log("chain          ", block.chainid);
     }
 
@@ -80,7 +88,10 @@ contract Deploy is Script {
     ///      broadcast is a signed *sequence*, not one transaction, so those steps land in
     ///      separate blocks — the deployer is briefly the sole admin, which is why it should be
     ///      a key you control and discard, and why `ADMIN_ADDRESS` should be a multisig.
-    function _deploy(address deployer, address admin, address agent) internal returns (HelicoVault vault) {
+    function _deploy(address deployer, address admin, address agent, address forwarder)
+        internal
+        returns (HelicoVault vault)
+    {
         HelicoVault implementation = new HelicoVault();
         vault = HelicoVault(
             payable(address(
@@ -99,6 +110,10 @@ contract Deploy is Script {
         vault.grantRole(vault.GUARDIAN_ROLE(), admin);
         vault.grantRole(vault.UPGRADER_ROLE(), admin);
 
+        // Set while the deployer still holds the admin role, so a deployment that wants the
+        // report path does not need a second, separately-authorised transaction later.
+        if (forwarder != address(0)) vault.setForwarder(forwarder);
+
         bytes32 adminRole = vault.DEFAULT_ADMIN_ROLE();
         vault.grantRole(adminRole, admin);
         if (admin != deployer) vault.renounceRole(adminRole, deployer);
@@ -107,8 +122,8 @@ contract Deploy is Script {
     }
 
     /// @dev Kept for fork tests, which call it as the deployer themselves.
-    function deploy(address admin, address agent) public returns (HelicoVault) {
-        return _deploy(address(this), admin, agent);
+    function deploy(address admin, address agent, address forwarder) public returns (HelicoVault) {
+        return _deploy(address(this), admin, agent, forwarder);
     }
 
     function _requireCode(address dependency) internal view {

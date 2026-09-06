@@ -15,6 +15,9 @@ contract ForkDeployTest is ForkBase {
 
     address admin = makeAddr("admin");
     address enclave = makeAddr("enclave signer");
+    /// @dev The production `KeystoneForwarder` on Arbitrum One, checked to have code by
+    ///      `packages/plugins/cre`. Passed here so the deploy sequence's own setter runs.
+    address forwarder = 0xF8344CFd5c43616a4366C34E3EEE75af79a74482;
 
     function test_DeploysAnInitialisedVaultAgainstTheRealChain() public {
         _fork();
@@ -24,7 +27,7 @@ contract ForkDeployTest is ForkBase {
         // version of this test used `deploy(admin, enclave)` with the script itself as the
         // implicit deployer, which is exactly why it could not catch that `run()` was refused
         // outright by Foundry for relying on `address(this)`.
-        HelicoVault vault = script.deploy(admin, enclave);
+        HelicoVault vault = script.deploy(admin, enclave, forwarder);
 
         // Wired to the real periphery, not to whatever was in the constructor's comment.
         assertEq(address(vault.positionManager()), address(POSITION_MANAGER), "position manager");
@@ -39,6 +42,9 @@ contract ForkDeployTest is ForkBase {
         assertTrue(vault.hasRole(vault.DEFAULT_ADMIN_ROLE(), admin), "admin");
         assertTrue(vault.hasRole(vault.AGENT_ROLE(), enclave), "the enclave may propose");
         assertFalse(vault.hasRole(vault.AGENT_ROLE(), admin), "and the admin may not, by default");
+
+        // Set inside the deploy sequence, while the deployer still held the admin role.
+        assertEq(vault.forwarder(), forwarder, "the CRE forwarder the vault will honour");
 
         // The EIP-712 domain has to match what the enclave signs against, and it binds this
         // chain and this address — so it can only be checked once deployed.
@@ -59,7 +65,7 @@ contract ForkDeployTest is ForkBase {
         _fork();
         script = new Deploy();
 
-        HelicoVault vault = script.deploy(admin, enclave);
+        HelicoVault vault = script.deploy(admin, enclave, forwarder);
         bytes32 adminRole = vault.DEFAULT_ADMIN_ROLE();
 
         assertTrue(vault.hasRole(adminRole, admin), "the named admin holds it");
