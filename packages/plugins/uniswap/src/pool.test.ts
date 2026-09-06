@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { Ether, Token } from '@uniswap/sdk-core'
 import { Pool } from '@uniswap/v4-sdk'
-import { zeroAddress } from 'viem'
+import { type Address, zeroAddress } from 'viem'
 import { stateViewAbi } from './abi/stateView'
 import { addresses } from './addresses'
 import {
@@ -167,5 +167,19 @@ describe('bestPoolFor', () => {
 			},
 		])
 		expect((await bestPoolFor(client, zeroAddress, USDC, [odd]))?.key.fee).toBe(87)
+	})
+})
+
+describe('bestPoolFor when the node itself fails', () => {
+	// This exact confusion cost an afternoon: an app pointed at a chain it could not reach was
+	// told there was no pool, and went looking for the liquidity rather than for the RPC.
+	test('a failure that is not a revert is raised, not reported as an empty pair', async () => {
+		const unreachable = {
+			address: '0x0000000000000000000000000000000000009999' as Address,
+			abi: stateViewAbi,
+			results: { getSlot0: [0n, 0, 0, 0], getLiquidity: 0n },
+		}
+		const { client } = fakeClient(BASE, [unreachable])
+		expect(bestPoolFor(client, zeroAddress, USDC)).rejects.toThrow(/no contract at/i)
 	})
 })

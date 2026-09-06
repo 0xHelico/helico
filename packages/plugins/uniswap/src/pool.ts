@@ -1,5 +1,13 @@
 import { nearestUsableTick as sdkNearestUsableTick, TickMath } from '@uniswap/v3-sdk'
-import { type Address, encodeAbiParameters, type Hex, keccak256, zeroAddress } from 'viem'
+import {
+	type Address,
+	BaseError,
+	ContractFunctionRevertedError,
+	encodeAbiParameters,
+	type Hex,
+	keccak256,
+	zeroAddress,
+} from 'viem'
 import { readContract } from 'viem/actions'
 import { stateViewAbi } from './abi/stateView'
 import { addresses } from './addresses'
@@ -118,9 +126,19 @@ export async function bestPoolFor(
 	)
 	const found = await Promise.all(
 		keys.map(async (key) => {
-			// StateView answers zeros for a key nobody initialised. A revert means the node or the
-			// address is wrong, and that tier is simply not a candidate.
-			const state = await getPoolState(client, key).catch(() => undefined)
+			// StateView answers zeros for a key nobody initialised, so the ordinary "no such pool"
+			// case is not an error at all. A revert still means this tier is not a candidate. A
+			// transport failure means we do not know, and saying "no pool" then is a lie that sends
+			// someone looking for liquidity that is there — so it propagates.
+			const state = await getPoolState(client, key).catch((error: unknown) => {
+				if (
+					error instanceof BaseError &&
+					error.walk((e) => e instanceof ContractFunctionRevertedError)
+				) {
+					return undefined
+				}
+				throw error
+			})
 			return state && state.sqrtPriceX96 > 0n && state.liquidity > 0n ? { key, state } : undefined
 		}),
 	)
