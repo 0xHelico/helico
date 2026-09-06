@@ -5,7 +5,9 @@ import { zeroAddress } from 'viem'
 import { stateViewAbi } from './abi/stateView'
 import { addresses } from './addresses'
 import {
+	bestPoolFor,
 	createPoolKey,
+	FEE_TIERS,
 	getPoolState,
 	nearestUsableTick,
 	poolId,
@@ -100,5 +102,70 @@ describe('ticks and prices', () => {
 		const tick = priceToTick(price, 18, 6)
 		expect(tickToPrice(tick, 18, 6)).toBeLessThanOrEqual(price)
 		expect(tickToPrice(tick + 1, 18, 6)).toBeGreaterThan(price)
+	})
+})
+
+describe('bestPoolFor', () => {
+	const stateViewOf = (liquidityByTier: Record<number, bigint>) => {
+		const byId = new Map<string, bigint>()
+		for (const { fee, tickSpacing } of FEE_TIERS) {
+			const liquidity = liquidityByTier[fee]
+			if (liquidity !== undefined) {
+				byId.set(
+					poolId(createPoolKey({ currencyA: zeroAddress, currencyB: USDC, fee, tickSpacing })),
+					liquidity,
+				)
+			}
+		}
+		return {
+			address: addresses(BASE).stateView,
+			abi: stateViewAbi,
+			results: {
+				// An uninitialised key answers zeros rather than reverting, which is what StateView does.
+				getSlot0: (id: unknown) =>
+					byId.has(id as string) ? [SQRT_PRICE, TICK, 0, 500] : [0n, 0, 0, 0],
+				getLiquidity: (id: unknown) => byId.get(id as string) ?? 0n,
+			},
+		}
+	}
+
+	test('picks the deepest initialised tier', async () => {
+		const { client } = fakeClient(BASE, [stateViewOf({ 500: 100n, 3000: 900n, 10000: 5n })])
+		const found = await bestPoolFor(client, zeroAddress, USDC)
+		expect(found?.key.fee).toBe(3000)
+		expect(found?.state.liquidity).toBe(900n)
+	})
+
+	test('reads every tier once, and only the tiers', async () => {
+		const { client, calls } = fakeClient(BASE, [stateViewOf({ 500: 1n })])
+		await bestPoolFor(client, zeroAddress, USDC)
+		expect(calls.filter((c) => c.functionName === 'getSlot0')).toHaveLength(FEE_TIERS.length)
+	})
+
+	test('a pair with no pool is undefined, not an exception', async () => {
+		const { client } = fakeClient(BASE, [stateViewOf({})])
+		expect(await bestPoolFor(client, zeroAddress, USDC)).toBeUndefined()
+	})
+
+	test('an initialised pool that has been fully withdrawn is not a candidate', async () => {
+		const { client } = fakeClient(BASE, [stateViewOf({ 500: 0n })])
+		expect(await bestPoolFor(client, zeroAddress, USDC)).toBeUndefined()
+	})
+
+	test('a chain whose liquidity sits off the standard tiers is served by its own list', async () => {
+		const odd = { fee: 87, tickSpacing: 1 }
+		const key = createPoolKey({ currencyA: zeroAddress, currencyB: USDC, ...odd })
+		const { client } = fakeClient(BASE, [
+			{
+				address: addresses(BASE).stateView,
+				abi: stateViewAbi,
+				results: {
+					getSlot0: (id: unknown) =>
+						id === poolId(key) ? [SQRT_PRICE, TICK, 0, 87] : [0n, 0, 0, 0],
+					getLiquidity: (id: unknown) => (id === poolId(key) ? 42n : 0n),
+				},
+			},
+		])
+		expect((await bestPoolFor(client, zeroAddress, USDC, [odd]))?.key.fee).toBe(87)
 	})
 })
