@@ -128,10 +128,22 @@ worth the small overhead on anything substantial.
 automatically, so there is nothing to remember — GitHub skips the author, so each of us is
 asked only for the other's work.
 
-Small and obvious changes can still merge once the reviewer has looked; the point is that
-someone else looked, not that the process is heavy. Judges on the finalist track expect
-proper branch and pull request practice, and a second pair of eyes is how mistakes get
-caught before they reach `main`.
+**The reviewer merges. The author does not.** @rifkyeasy merges @ghozzza's pull requests;
+@ghozzza merges @rifkyeasy's. Requesting a reviewer and then merging the moment CI goes green
+is a request, not a review — moving the button makes "somebody else looked" a fact rather than
+an intention.
+
+If a reviewer is unreachable and something is genuinely blocking, that goes to Ghoza. It is
+not the author's call to skip the review.
+
+Small and obvious changes can still merge as soon as the reviewer has looked; the point is
+that someone else looked, not that the process is heavy. Judges on the finalist track expect
+proper branch and pull request practice, and a history where authors merge their own work does
+not show what we want it to show.
+
+A second pair of eyes is also not a formality here. The review of #70 ran an independent
+mutation of the one line the whole forwarder path rests on. The review of #67 found five
+claims on the landing page that were not true. Neither would have come from a green tick.
 
 ## Where things live
 
