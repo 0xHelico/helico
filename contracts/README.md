@@ -204,13 +204,13 @@ ARBITRUM_RPC_URL=https://arb1.arbitrum.io/rpc forge test
 ```
 
 CI leaves `ARBITRUM_RPC_URL` unset, so the fork suite reports `SKIP` there — read the tick
-count as 56 executed, not 62, unless the endpoint is set.
+count as **85 executed, not 96**, unless the endpoint is set.
 
 The fork tests run against **Arbitrum One** and do **not** pin a block: they fork `latest` and
 derive what they need from what they read, so a fixture cannot go stale and a pinned block
 cannot quietly stop testing what it claims.
 
-78 tests, 9 of them on a fork. `VaultAttacks.t.sol` holds the audit's findings as regression tests — each one was
+**96 tests, 11 of them on a fork.** `VaultAttacks.t.sol` holds the audit's findings as regression tests — each one was
 written before the contract could pass it, and the commit that added them is red on all nine.
 `HelicoVault.t.sol` covers every rejection path above, all three exits (paused, agent removed,
 upgrade pending), the upgrade path, and the hash agreement with the CRE workflow — pinned to a literal
