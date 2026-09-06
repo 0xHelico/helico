@@ -476,6 +476,9 @@ Format: date · what was done · the AI's role · what a human verified.
 - **Review follow-up:** the Position tab's 98% (removed in #67 as unsourced) became the
   rehearsal's 94.3%, and the Solidity test counts are read from `contracts/test/` at build time
   instead of typed, checked against `forge test --list` (95, 10 fork).
+- **Copy overhaul:** after the user pointed at aave.com and morpho.org, the tabs, rule labels,
+  values, template chips, nav titles and one new FAQ were rewritten in the words a savings app
+  would use, with the field names kept beside the plain labels for builders. Facts unchanged.
 
 ### 2026-09-06 — Landing page: plain words
 

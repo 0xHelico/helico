@@ -298,3 +298,37 @@ and for the fork suite those in `Fork*.t.sol` that are not `pure`, which is exac
 - Review on #84: "98% is back … Suggest 94.3%, so the Position tab and the Evidence tab
   describe the same world." and "`9 fork tests` is 10 … the fork count could be derived at
   build time the way `_checkRange` already is."
+
+## Revision — the words a savings app would use
+
+The user pointed at aave.com and morpho.org again: both are readable by someone who has never
+held crypto, because every heading is a promise in ordinary words and the mechanism is a click
+away. The landing's copy is redone to that standard, keeping every fact and caveat:
+
+- the hero says what the problem is before what the product does ("Money in a trading pool
+  earns only while the price stays where you put it. When it drifts, Helico moves your deposit
+  back…");
+- the panel's tabs are "Your rules", "Your deposit", "The decider", "The contract", "Evidence";
+  each rule has a plain label first ("Which market", "How wide", "Worth the move", "How often",
+  "How much at once", "Until when", "How much to keep", "Where the price is") with the field
+  name beside it in small type for builders, and a plain value ("once an hour at most",
+  "at least 0.5% closer") instead of `1 h` and `≥ 50 bps`;
+- "pool" and "range" become "market" and "band" everywhere a reader meets them, the template
+  chips say "narrow band · keep 90% · hourly at most", and the nav's "Mandate" and "The
+  enclave" become "Your rules" and "The decider";
+- one FAQ is added for the reader who has nothing yet: "What do I need to start?", answered
+  honestly (a wallet and an existing deposit; nothing is live).
+
+The builder material (the code figure, the package cards, the Developers menu) keeps its
+vocabulary; it is labelled for builders and sits below the fold.
+
+Found while checking the result on a phone: the tab sidebar was hidden below 768px, so the
+other four tabs could not be reached at all there. It is now a strip that scrolls sideways on
+phones and a sidebar from tablet up.
+
+### Prompt, verbatim in translation
+
+- "And do not forget to overhaul the content on the landing; the aim is that users are
+  general, not all crypto-native. Look at aave.com and morpho.org."
+- "Look at aave.com: even a web2 person or someone who does not know crypto understands it
+  easily, right?"
