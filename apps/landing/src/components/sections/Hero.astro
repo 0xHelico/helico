@@ -2,18 +2,16 @@
 import { Image } from 'astro:assets'
 import logo from '../../assets/logo.webp'
 import { HeroCanvas } from '../canvas/HeroCanvas'
-const repo = 'https://github.com/0xHelico/helico'
 ---
 
 <section class="wrap hero-wrap" id="hero" aria-labelledby="hero-title">
 	<div class="section-card center hero">
 		<div class="hero__copy">
 			<span class="eyebrow"><Image src={logo} alt="" width={20} height={20} densities={[1, 2]} /> Helico Vault</span>
-			<h1 class="headline" id="hero-title">Your Deposit, on Autopilot</h1>
-			<p class="lede">Money in a trading pool earns only while the price stays where you put it. When it drifts, Helico moves your deposit back, under rules you write once. It can move your money. It can never keep it.</p>
+			<h1 class="headline" id="hero-title">Your Funds, on Autopilot</h1>
+			<p class="lede">Your funds keep earning while prices move.</p>
 			<div class="actions">
-				<a class="btn btn--primary cta" href={`${repo}#readme`}>Read the Docs</a>
-				<a class="btn btn--secondary" href="#enforcement">How It Works</a>
+				<a class="btn btn--primary cta" href="https://docs.helico.site">Learn More</a>
 			</div>
 		</div>
 		<div class="hero__canvas" id="canvas">

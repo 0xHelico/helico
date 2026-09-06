@@ -2,40 +2,76 @@
 import '../styles/global.css'
 
 interface Props {
-	title: string
+	/** Page name; the home page passes none and gets the tagline. */
+	title?: string
 	description?: string
+	type?: 'website' | 'article'
+	/** Extra JSON-LD for the page, already an object. */
+	jsonLd?: Record<string, unknown>
 }
 
-// Absolute URLs for the social cards come from `site` in astro.config once the page is deployed.
+const site = 'Helico'
+const tagline = 'Your Funds, on Autopilot'
 const origin = (Astro.site ?? Astro.url).origin
+const canonical = new URL(Astro.url.pathname, origin).href
 const {
 	title,
-	description = 'Commit a mandate once. A Chainlink CRE enclave watches your Uniswap v4 position and decides when to re-centre; the vault refuses anything outside what you signed.',
+	description = 'Helico keeps your funds working while prices move, under rules you set once. It can move your money. It can never keep it.',
+	type = 'website',
+	jsonLd,
 } = Astro.props
+const fullTitle = title ? `${title} | ${site}` : `${site} | ${tagline}`
+const image = `${origin}/og.webp`
+const organisation = {
+	'@context': 'https://schema.org',
+	'@type': 'Organization',
+	name: site,
+	url: origin,
+	logo: `${origin}/icon-512.webp`,
+	sameAs: ['https://x.com/0xhelico', 'https://github.com/0xHelico/helico'],
+}
+const website = {
+	'@context': 'https://schema.org',
+	'@type': 'WebSite',
+	name: site,
+	url: origin,
+}
 ---
 
 <html lang="en">
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>{title}</title>
+		<title>{fullTitle}</title>
 		<meta name="description" content={description} />
 		<meta name="generator" content={Astro.generator} />
+		<meta name="robots" content="index, follow, max-image-preview:large" />
 		<meta name="theme-color" content="#ffffff" />
+		<link rel="canonical" href={canonical} />
+		<link rel="sitemap" href="/sitemap.xml" />
 		<link rel="icon" href="/favicon.ico" sizes="any" />
 		<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
 		<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
 		<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
 		<link rel="manifest" href="/site.webmanifest" />
-		<meta property="og:type" content="website" />
-		<meta property="og:site_name" content="Helico" />
-		<meta property="og:title" content={title} />
+		<meta property="og:type" content={type} />
+		<meta property="og:site_name" content={site} />
+		<meta property="og:locale" content="en_US" />
+		<meta property="og:url" content={canonical} />
+		<meta property="og:title" content={fullTitle} />
 		<meta property="og:description" content={description} />
-		<meta property="og:image" content={`${origin}/og.webp`} />
+		<meta property="og:image" content={image} />
+		<meta property="og:image:width" content="512" />
+		<meta property="og:image:height" content="512" />
+		<meta property="og:image:alt" content="The Helico mark" />
 		<meta name="twitter:card" content="summary" />
-		<meta name="twitter:title" content={title} />
+		<meta name="twitter:site" content="@0xhelico" />
+		<meta name="twitter:title" content={fullTitle} />
 		<meta name="twitter:description" content={description} />
-		<meta name="twitter:image" content={`${origin}/og.webp`} />
+		<meta name="twitter:image" content={image} />
+		<script type="application/ld+json" set:html={JSON.stringify(organisation)} />
+		<script type="application/ld+json" set:html={JSON.stringify(website)} />
+		{jsonLd && <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />}
 		<link rel="preconnect" href="https://fonts.googleapis.com" />
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 		<link

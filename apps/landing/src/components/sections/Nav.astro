@@ -3,6 +3,7 @@ import { solidityTests } from '../../lib/solidity-tests'
 import { Image } from 'astro:assets'
 import logoNav from '../../assets/logo-nav.webp'
 const repo = 'https://github.com/0xHelico/helico'
+const app = 'https://app.helico.site'
 
 // Two-tone 40px icons supplied by the user, in the reference's style; the colours are ours.
 const icons: Record<string, string> = {
@@ -40,7 +41,7 @@ const menus: Menu[] = [
 		id: 'product',
 		label: 'Product',
 		items: [
-			{ title: 'Helico Vault', sub: 'Keeps your deposit earning', href: '/#hero', icon: 'bank' },
+			{ title: 'Helico Vault', sub: 'Keeps your funds earning', href: '/#hero', icon: 'bank' },
 			{ title: 'Your rules', badge: '7 rules', sub: 'Seven rules you write once', href: '/#enforcement', icon: 'document' },
 			{ title: 'Live canvas', sub: 'Watch a move happen', href: '/#canvas', icon: 'layers' },
 		],
@@ -68,7 +69,7 @@ const menus: Menu[] = [
 		id: 'evidence',
 		label: 'Evidence',
 		items: [
-			{ title: 'Verified by default', sub: 'Tests and records, nothing else', href: '/#verified', icon: 'scales' },
+			{ title: 'Your money stays yours', sub: 'Never held, never outside your rules', href: '/#verified', icon: 'scales' },
 			{ title: 'AI usage', sub: 'What was AI-assisted, and how', href: `${repo}/blob/main/AI-USAGE.md`, icon: 'arcs', external: true },
 			{ title: 'Uniswap feedback', sub: 'FEEDBACK.md for the Foundation', href: `${repo}/blob/main/FEEDBACK.md`, icon: 'wings', external: true },
 		],
@@ -90,7 +91,7 @@ const menus: Menu[] = [
 				<a href="/#faq">FAQ</a>
 				<a href="/blog/">Blog</a>
 			</nav>
-			<a class="btn btn--ink btn--small nav__cta" href={repo}>Get Started</a>
+			<a class="btn btn--ink btn--small nav__cta" href={app}>Launch App</a>
 			<button type="button" class="nav__burger" data-burger aria-expanded="false" aria-controls="nav-sheet" aria-label="Open menu">
 				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
 			</button>
@@ -158,7 +159,7 @@ const menus: Menu[] = [
 		<a class="nav__card nav__card--sheet" href="/blog/" data-sheet-link>
 			<span class="nav__text"><span class="nav__title">Blog</span><span class="nav__sub">Notes from building Helico</span></span>
 		</a>
-		<a class="btn btn--ink" href={repo} data-sheet-link>Get Started</a>
+		<a class="btn btn--ink" href={app} data-sheet-link>Launch App</a>
 	</section>
 </div>
 

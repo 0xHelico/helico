@@ -332,3 +332,79 @@ phones and a sidebar from tablet up.
   general, not all crypto-native. Look at aave.com and morpho.org."
 - "Look at aave.com: even a web2 person or someone who does not know crypto understands it
   easily, right?"
+
+## Revision — what a user actually needs to know
+
+Looking at the result, the user found four places still written for us rather than for a
+reader who only wants to know whether their money keeps earning and stays theirs:
+
+- the rule rows in the panel carried a label, a field name, a value and a sentence each; now
+  one line per rule (label, value, a few muted words, the link), field names moved into the
+  link's tooltip;
+- the three templates read "Tight / Steady / Guarded" with tick chips; now "Active / Relaxed /
+  Cautious", each labelled by what it is for ("Earns the most", "Moves the least", "Keeps the
+  most") with two plain chips;
+- the "Verified by default" grid of six counts and a two-bar chart is gone; in its place
+  "Your money stays yours" with three promises (never held, never outside your rules, nothing
+  hidden) and the one number a reader can hold, 94% kept working in the rehearsal, with its
+  caveat. The live price marker went with it: a number no reader could use;
+- the builders' section is labelled "For builders" and "Built in the Open", with the code
+  figure and package cards shown directly, as the user asked, rather than behind a toggle.
+
+The FAQ answers now unfold downward (`::details-content` height transition, instant where the
+browser lacks it, off under reduced motion).
+
+SEO in the same pass: titles as `Page | Helico` with the tagline on the home page, a
+consumer-language default description, canonical and `og:url`, image size and alt, the X
+handle, `robots.txt`, a generated `sitemap.xml` listing the posts, and JSON-LD for the
+organisation, the site and each blog post. `site` in the Astro config is `https://helico.site`.
+
+### Prompts, verbatim in translation
+
+- "Too much; it becomes less clear." (the rule rows)
+- "The language is too complex." (the templates)
+- "Does the user need to know this?" (the package cards) and "Again, what is a user supposed
+  to do with this; a user only cares about profit." (the counts)
+- "Too complex." (the chart)
+- "And when an FAQ is clicked, give the answer a downward animation."
+- "Improve all the SEO, and use a pipe as the site title separator."
+- "Just show it directly, no need for this button." (the builders' toggle)
+- "No need for a Read the FAQ button, is there?"
+
+And one word: "deposit" is "funds" everywhere a reader meets it ("Your Funds, on Autopilot",
+"your funds stay in your wallet"), because a deposit sounds like something handed over.
+
+- Prompt: "Can the word deposit be changed to funds?"
+
+The logo grid is "Built with", and OpenZeppelin, Foundry and ETHGlobal (wordmarks, no logo
+files) are replaced by the three logos the user supplied: Ethereum, FREE-PI and One Dollar
+Audit. The last two are not referenced anywhere else in the repository; the user is asked to
+confirm they were in fact used, since a claim the repository cannot back does not belong here.
+
+- Prompt: "Use these to replace OpenZeppelin, Foundry, ETHGlobal." (three images)
+
+The hero's lede is one sentence: "Your funds keep earning while prices move, under rules you
+set once." The three-sentence version explained the mechanism first, and the user found it too
+long and unclear for a general reader; the safety line lives in "Your money stays yours".
+
+- Prompt: "'Money in a trading pool earns only while…' is too long and not clear enough for a
+  general user."
+
+Shorter still, at the reference's length ("The World's Savings App / Get paid every second
+with global rates and Balance Protection."): "Your funds keep earning while prices move."
+The rules are the next section's subject.
+
+- Prompt: "Aave is like this: 'The World's Savings App / Get paid every second…'. Ours is too
+  long."
+
+The nav's button is "Launch App", pointing at `https://app.helico.site` (not live yet; the
+user's decision), on desktop and in the phone sheet. The hero has one button, "Learn More",
+to the next section.
+
+- Prompt: "The top-right nav button 'Launch App', later pointing at app.helico.site. In the
+  hero just a 'Learn More' button."
+
+The hero's "Learn More" goes to `https://docs.helico.site` (not live yet; the user's
+decision).
+
+- Prompt: "And Learn More later goes to docs.helico.site."
