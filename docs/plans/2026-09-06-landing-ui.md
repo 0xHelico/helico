@@ -462,10 +462,23 @@ closing link is *Read the Helico docs*. The three *Read the source ↗* links ke
 gain an accessible name naming the package, so a screen reader reading links out of context can
 tell them apart.
 
-Performance is left where it is. On mobile the whole page is 286 KiB with a blocking time of
-zero and a layout shift of 0.015; the 3.6s paint is throttled 4G against a hero that carries the
-canvas. Desktop is 0.9s. Trading the canvas for a number would cost the page its one moving
-explanation of what the product does.
+Performance had one real cause, and it was not the canvas. **Nothing painted until the
+stylesheet from `fonts.googleapis.com` answered**: first paint and largest paint were the same
+moment, 3.6s on throttled 4G, because a third-party render-blocking request has to finish before
+anything is drawn. The fonts are served from this origin now, through `@fontsource`, and the
+Google origins are gone from the page and from the container's Content-Security-Policy.
+
+Measured on the same machine, same throttling, both builds served locally so the comparison is
+fair:
+
+| | Performance | First paint | SEO |
+|---|---|---|---|
+| Before | 89 | 2.9s | 92 |
+| After | 93 | **2.2s** | **100** |
+
+Largest paint is unchanged at 2.9s and blocking time is still zero; what moved is the wait
+before anything appeared. The canvas stays: it is the page's one moving explanation of what the
+product does, and it was never the thing holding the paint.
 
 ### Prompt, verbatim in translation
 
