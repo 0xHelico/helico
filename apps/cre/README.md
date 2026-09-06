@@ -43,15 +43,16 @@ run against a deployed vault through the production forwarder is
 swallows it and the transaction still succeeds.** So the workflow prints
 `RECENTER … tx 0x…`, the receipt says `status 1`, and nothing moved.
 
-This is not hypothetical: it is what the first run of this script did, and it is why
-`rehearse.sh` reads `positionOf`, `ownerOf` and `getPositionLiquidity` back from the chain
-afterwards and replays the transaction with `cast run` when they disagree. **Never quote a
-transaction hash from this path as proof that a re-centre happened.**
+This is not hypothetical: it is what the first run of this script did. So the script reads
+`positionOf` **before and after**, and only a position that actually changed counts as a
+re-centre. When it has not, the script replays the transaction with `cast run` to show what the
+vault refused, and exits non-zero.
 
-At the time of writing the run stops there, on
-[#78](https://github.com/0xHelico/helico/issues/78): the enclave's mint maxima are its own
-estimate with no buffer, so a swap that lands even slightly off the model reverts the whole
-re-centre with `MaximumAmountExceeded`. The script is left failing rather than made to pass.
+**Never quote a transaction hash from this path as proof that a re-centre happened.** Not the
+hash, and not the receipt status either — the receipt said `status 1` for a run in which
+nothing moved.
+
+That check is what found [#78](https://github.com/0xHelico/helico/issues/78).
 
 ## The files
 

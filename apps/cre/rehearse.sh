@@ -74,27 +74,28 @@ jq --tab --arg v "$VAULT" --arg h "$HASH" --arg o "$OWNER" \
 jq -c '{vault, mandateHash, owner, delivery}' workflow/config.staging.json
 
 say "6/6  simulate the workflow, broadcasting through the forwarder"
+BEFORE=$(cast call "$VAULT" 'positionOf(address)(uint256)' "$OWNER" --rpc-url "$RPC" | awk '{print $1}')
 cre workflow simulate ./workflow --target staging-settings --env .env \
 	--trigger-index 0 --non-interactive --broadcast | tee /tmp/helico-sim.$$
 
 say "what the fork says now"
-# The workflow prints a transaction hash whether or not the transaction succeeded, so the
-# hash on its own is not evidence. Check the receipt, and if it reverted, say why.
-TX=$(grep -oE '0x[0-9a-f]{64}' /tmp/helico-sim.$$ | tail -1 || true)
-if [ -n "${TX:-}" ]; then
-	STATUS=$(cast receipt "$TX" status --rpc-url "$RPC" 2>/dev/null || echo "?")
-	echo "tx         $TX  status=$STATUS"
-	if [ "$STATUS" != "1" ]; then
-		echo
-		echo "The re-centre did not land. What the vault said:"
-		cast run --rpc-url "$RPC" "$TX" 2>&1 | tail -20
-		exit 1
-	fi
-fi
+# The forwarder calls the vault inside a `try`. A reverting `onReport` is caught and the outer
+# transaction still succeeds, so neither the hash the workflow prints nor the receipt status
+# says anything about whether a position moved. Only the position does.
 NEW=$(cast call "$VAULT" 'positionOf(address)(uint256)' "$OWNER" --rpc-url "$RPC" | awk '{print $1}')
-echo "position   $NEW"
-echo "owner      $(cast call 0xd88F38F930b7952f2DB2432Cb002E7abbF3dD869 'ownerOf(uint256)(address)' "$NEW" --rpc-url "$RPC")"
-echo "liquidity  $(cast call 0xd88F38F930b7952f2DB2432Cb002E7abbF3dD869 'getPositionLiquidity(uint256)(uint128)' "$NEW" --rpc-url "$RPC")"
+TX=$(grep -oE '0x[0-9a-f]{64}' /tmp/helico-sim.$$ | tail -1 || true)
+echo "tx         ${TX:-none}"
+echo "position   $BEFORE -> $NEW"
+if [ "$NEW" = "$BEFORE" ]; then
+	echo
+	echo "The re-centre did NOT land, whatever the transaction says. What the vault refused:"
+	cast run --rpc-url "$RPC" "$TX" 2>&1 | grep -E 'Revert|custom error' | tail -3
+	exit 1
+fi
+
+PM=0xd88F38F930b7952f2DB2432Cb002E7abbF3dD869
+echo "owner      $(cast call $PM 'ownerOf(uint256)(address)' "$NEW" --rpc-url "$RPC")"
+echo "liquidity  $(cast call $PM 'getPositionLiquidity(uint256)(uint128)' "$NEW" --rpc-url "$RPC")"
 echo "vault ETH  $(cast balance "$VAULT" --rpc-url "$RPC")"
 echo "vault ARB  $(cast call $ARB 'balanceOf(address)(uint256)' "$VAULT" --rpc-url "$RPC")"
 
