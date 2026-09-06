@@ -474,6 +474,15 @@ Format: date · what was done · the AI's role · what a human verified.
   headless browser. The user asked for it.
 - **Verified:** `astro check` (0 errors), `astro build`, the Playwright audit at seven viewports.
 
+### 2026-09-06 — Landing page: plain words
+
+- **Done:** the landing's copy rewritten for a reader who may not know crypto: the idea before
+  the mechanism, terms explained or avoided, numbers explained, the panel tabs in the same
+  register, the code figure marked for builders. Facts and caveats unchanged.
+- **AI's role:** rewrote the copy against the knowledge the repository records. The user asked
+  for the register.
+- **Verified:** `astro check` (0 errors), `astro build`, the Playwright audit at seven viewports.
+
 <!--
 Template for the next entry:
 

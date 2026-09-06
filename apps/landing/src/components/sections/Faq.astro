@@ -2,28 +2,28 @@
 const repo = 'https://github.com/0xHelico/helico'
 const faqs = [
 	{
-		q: 'What is Helico?',
-		a: 'A vault that keeps a Uniswap v4 liquidity position in range under rules you commit to once: the pool, a range width, an improvement floor, a cooldown, a cap, an expiry, and how much liquidity a move must keep. A Chainlink CRE confidential workflow decides when to move; the vault checks every rule on chain before anything happens.',
+		q: 'What is Helico, in plain words?',
+		a: 'When you put money into a trading pool, it only earns while the price stays inside a range you chose. Prices drift, and then the money sits idle. Helico watches for that and moves your deposit back into a range that earns, under rules you write down once: which pool, how wide, how often, how much must be kept. A contract checks every rule before anything moves, and blocks anything else.',
 	},
 	{
-		q: 'Who holds my position?',
-		a: 'You do. The position NFT stays in your wallet; you approve the vault as an operator, and a re-centre mints the new position straight back to you. Between the burn and the mint the vault holds the tokens for one call, and asserts on chain that it kept none of them before the call returns.',
+		q: 'Who holds my money?',
+		a: 'You do. Your deposit stays in your wallet as a token that proves you own it. You give the contract permission to move it, not to keep it. A move takes your deposit out, exchanges what is needed, and puts a new deposit straight back in your name. The contract holds the funds for one step and proves, before that step ends, that it kept none.',
 	},
 	{
-		q: 'What can the enclave do to my position?',
-		a: 'One thing: propose a re-centre inside your mandate. No path in the vault pays an agent, the swap may only spend what the burn returned, and the only addresses in the plan are yours and the pool\'s. A rogue agent can move you inside your own terms, and nothing else.',
+		q: 'What can the automation do to it?',
+		a: 'One thing: propose a move inside your rules. It cannot pay itself, it cannot spend more than your deposit released, and it cannot send anything anywhere but back to you or into the pool. A misbehaving automation could move you within your own rules, and nothing else.',
 	},
 	{
 		q: 'When does it do nothing?',
-		a: 'Most of the time. The enclave holds while the cooldown runs and whenever the best new range would not close the gap by the minimum improvement, so no swap and no gas are spent. The vault refuses an authorisation whose mandate hash it no longer holds, before it reads anything else.',
+		a: 'Most of the time. It waits while your cooldown runs, and whenever a move would not bring the deposit meaningfully closer to the price, because every move costs a little. And the contract refuses any instruction that does not match the rules it holds for you.',
 	},
 	{
-		q: 'What stays confidential?',
-		a: 'The decision process: which positions the enclave watches, when it reads the pool, the RPC traffic, and how it sizes the swap and the mint. The mandate itself is public on chain; its hash in every report proves the enclave decided against the terms the vault holds, not stale ones.',
+		q: 'What stays private?',
+		a: 'How the decision is made. The program that decides runs inside a sealed environment: which deposits it watches, when it looks, and how it sizes a move never leave it. The rules themselves are public on the chain, so anyone can check that a move followed them.',
 	},
 	{
 		q: 'Is it live? Is it audited?',
-		a: 'Neither, yet. It targets Arbitrum One, where Uniswap v4 and a Chainlink CRE forwarder both exist. The vault has a rehearsed deploy script, the signature path is proven end to end in tests, and the forwarder path has been run end to end on a fork of Arbitrum One: a report through the mock forwarder re-centred a real position on the ETH/ARB pool, keeping 94.3% of its liquidity, and a second run held on the cooldown. That is a fork, not a live network; the simulator is not a TEE; and the mock forwarder verifies no signatures. Twelve AI audit agents and a six-agent pass ran over the vault; that is not a professional audit, and this page does not call it one.',
+		a: 'Neither, yet. It is built for Arbitrum One. The contract has a rehearsed deployment, and the whole flow has been run end to end on a snapshot of the real market: an automated decision moved a real deposit and kept 94% of it working, and a second run correctly did nothing. That was a snapshot, not the live network, and the sealed environment was simulated. Twelve AI reviewers and then six more went over the contract; that is not a professional audit, and this page does not call it one.',
 	},
 ]
 ---

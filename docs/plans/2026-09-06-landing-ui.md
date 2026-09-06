@@ -267,3 +267,17 @@ the fork rehearsal with its caveats.
 - "I think this is still confusing and the UI is not clear; make the tabs clickable, with
   content."
 
+## Revision — plain words for readers outside crypto
+
+The user asked that the landing not read like it was written for developers: someone who does
+not know crypto may still want to understand Helico, so the topics should stay general. The
+copy is rewritten with the idea before the mechanism, terms explained or avoided ("a trading
+pool", "a deposit", "a sealed program", "a snapshot of the real market"), numbers explained
+("kept 94% of the deposit working"), the tab panels in the same register, and the code figure
+marked as being for builders. Every fact and caveat is unchanged.
+
+### Prompt, verbatim in translation
+
+- "And on the landing too, the writing should not be too developer; there may be people who
+  do not understand crypto yet but want to know about Helico, so keep the topics general."
+
