@@ -668,6 +668,27 @@ Format: date · what was done · the AI's role · what a human verified.
 - **Not done, and said so:** the deployed chat answers "the swap service is not answering" until
   #115 merges, and the mandate page says the vault is not deployed until #85.
 
+### 2026-09-07 — The sidebar back, and the session that makes it mean something
+
+- **Done:** the template's shell restored — `SidebarProvider`, the collapsible sidebar with New
+  chat above a history grouped by age, and the account block in the footer — plus what it needs
+  to be real: EIP-712 sign-in and per-address conversations in `apps/be`
+  (`internal/session`, `internal/chat`, nine routes), and the browser's side of them.
+- **AI's role:** all of it, on the owner's correction that the shell should match the template
+  first and be changed after. The instruction is quoted in the plan.
+- **Plan:** docs/plans/2026-09-07-app-sidebar-and-sessions.md
+- **Verified:** the digest a wallet signs was computed in Go and in viem and matched byte for
+  byte, and that value is pinned in a test — everything else would have agreed with itself even
+  if the domain string were wrong. In a browser with a wallet injected: signed in, sent two
+  messages, reloaded, and the sidebar showed the conversation with both messages still in it; a
+  second wallet in its own context saw none of them. Go tests cover a signature from the wrong
+  address, a replayed nonce, a stale one, a tampered payload, a forged cookie, and an
+  authenticated stranger trying every chat route.
+- **Two bugs the work found rather than review:** turns were ordered by a second-resolution
+  timestamp with a random id as the tiebreak, so a question and its answer came back reversed
+  about half the time; and the session was a plain hook, so every component had its own copy and
+  signing in from the sidebar left the chat still believing it was signed out.
+
 <!--
 Template for the next entry:
 
