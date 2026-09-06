@@ -69,6 +69,63 @@ must link to this file. Everything below was observed while building
 - `SENDER_AS_RECIPIENT` and `ROUTER_AS_RECIPIENT` live in `@uniswap/universal-router-sdk`'s
   constants, but only the second is exported from the package index.
 
+## Building a position manager on top of v4
+
+A second body of work — a non-custodial contract that re-centres someone's position under rules
+they commit to on chain — ran into a different set of edges. These cost the most time, so they
+are listed in the order we hit them rather than by severity.
+
+**There is no re-range action, and that has consequences the docs do not draw out.** Moving a
+position is `DECREASE_LIQUIDITY` + `BURN_POSITION` + `MINT_POSITION`, and the mint issues a
+*new* `tokenId`. Anything keyed to the old id is silently orphaned: our first design stored a
+user's policy against the tokenId, so the very action it authorised destroyed the thing it was
+attached to. A sentence in the liquidity guide saying that re-ranging is identity-destroying,
+and that `nextTokenId()` is how you learn the new id, would have saved a rewrite.
+
+**An out-of-range position holds exactly one token, so re-centring it needs a swap.** Below its
+range a position is entirely `currency0`; above, entirely `currency1`. Minting a range that
+contains the price needs both, so `maxLiquidityForAmounts` over the withdrawn amounts is
+`min(L0, L1)` with one side zero — the mint is **zero**. For the case a keep-in-range product
+exists for, burn-and-mint alone cannot work. We measured it before believing it: at tick −65, a
+position of `L = 1e15` at `[100, 1100)` withdraws 48,524,977,311,541 of one token and can mint
+nothing at all. This is the single most important thing a builder of an LP manager needs to
+know, and we found it by arithmetic rather than by reading.
+
+**`modifyLiquidities` takes the pool lock itself, which leaves no room for that swap.** The way
+through is `poolManager.unlock` from your own contract and then
+`modifyLiquiditiesWithoutUnlock`. That function exists and is public, but nothing says what it
+is *for* — its NatSpec describes the mechanism, not the situation. "Use this when you need to
+interleave your own pool operations with position operations" would point people straight at
+it.
+
+**`_mapPayer(payerIsUser: false)` makes the PositionManager pay from its own balance.** This is
+the detail that made an in-callback swap tractable: the mint can be funded by transferring
+tokens to the PositionManager and settling, with no Permit2 allowance from our contract to
+anybody. It is load-bearing and, as far as we could find, documented nowhere outside the
+source.
+
+**Native currency reverts silently against a contract without `receive()`.** `Currency.transfer`
+for the zero address is a bare `call` with all gas and empty calldata, so `TAKE_PAIR` to a
+contract recipient fails with `NativeTransferFailed` and no hint about the cause. On the chain
+we target, most pools have `currency0 == address(0)`, so this was not an edge case — it was
+every re-centre.
+
+**`tickUpper` is exclusive, which bites on `sqrtPriceLimitX96`.** Limiting a swap to
+`getSqrtPriceAtTick(tickUpper)` lets it land on exactly that tick, which the subsequent mint
+then rejects — the guard reverts the transaction precisely when it does its job. The limit has
+to be one below. Obvious once written down; not obvious while writing it.
+
+**LP fees are hundredths of a bip, and pools in the wild use the whole range.** `MAX_LP_FEE` is
+`1_000_000`, so a `fee` of `200000` is **20%**, not 20 bps. Pools on Robinhood Chain mainnet
+carry 20%, 10% and 6%. Anything that swaps through a position's own pool has to check the fee
+before it decides the trade is worth making, and a reader who pattern-matches `3000` → 0.30%
+will misread `200000` by three orders of magnitude.
+
+**The `poolId` inside `PositionInfo` is not the canonical `PoolId`.** It is truncated to 25
+bytes for an internal lookup. The library says so; a comparison against
+`keccak256(abi.encode(PoolKey))` will still be written by somebody, and it will fail in a way
+that looks like a hashing bug.
+
 ## Suggestions
 
 - In the SDK docs and the skill, say explicitly that `V4Planner.finalize()` is the V4_SWAP
@@ -85,3 +142,15 @@ must link to this file. Everything below was observed while building
 - Update the `v4-sdk-integration` multi-hop snippet to the current SDK surface.
 - Ship the router version alongside the address in the SDK's per-chain config, and list the
   Robinhood Chain Testnet deployment.
+- State in the liquidity guide that re-ranging destroys the `tokenId`, and that anything built
+  on top has to follow the new one.
+- Say plainly, where people will look before building a keep-in-range product, that an
+  out-of-range position is single-sided and cannot fund a two-sided range without a swap. It
+  changes the architecture, not just the implementation.
+- Document what `modifyLiquiditiesWithoutUnlock` is for, and that `payerIsUser: false` settles
+  from the PositionManager's own balance. Together they are the supported way to interleave a
+  swap with position operations, and both currently read as internals.
+- Note in the periphery docs that a contract receiving native currency from `TAKE_PAIR` or
+  `SWEEP` needs `receive()`, since the failure is a bare `call` with no diagnostic.
+- Put the fee unit next to the fee field in the docs. `MAX_LP_FEE = 1_000_000` is stated in the
+  library, but every example uses `3000`, and pools charging 20% exist.
