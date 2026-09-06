@@ -1,192 +1,40 @@
 ---
-import { forkTests, solidityTests } from '../../lib/solidity-tests'
 const repo = 'https://github.com/0xHelico/helico'
-const swapPlan = `${repo}/blob/main/docs/plans/2026-09-05-vault-swap-recentre.md`
-const facts = [
-	{ n: '240+', unit: 'automated tests', copy: `Run on every change: 52 on the Uniswap piece, 116 on the decision piece, ${solidityTests} on the contract.` },
-	{ n: String(forkTests), unit: 'tests on a copy of the real market', copy: 'Deposit, swap, and move a real position on a snapshot of Arbitrum One.' },
-	{ n: '12', unit: 'automated reviews', copy: 'AI reviewers went over the contract, then six more. That is not a professional audit, and we do not call it one.' },
-	{ n: '4', unit: 'networks tried', copy: 'Real transactions on two test networks, read-only on Robinhood Chain, and a snapshot of Arbitrum One.' },
-	{ n: '3', unit: 'independent checks of one approval', copy: 'The same permission was checked by the program, by the contract, and by a separate tool.' },
-]
-const bars = [
-	{ label: 'Price outside the range', pct: 0, note: 'nothing keeps working' },
-	{ label: 'Price inside the range', pct: 13, note: 'the rest went back to the wallet' },
+const record = `${repo}/blob/main/docs/plans/2026-09-05-cre-forwarder-delivery.md`
+const cards = [
+	{ label: 'Never held', title: 'Your deposit stays in your wallet.', copy: 'The contract moves it for one step, and proves it kept none before that step ends.' },
+	{ label: 'Never outside your rules', title: 'Break a rule and the move is refused.', copy: 'The contract checks every rule itself. 240+ automated checks run on every change.' },
+	{ label: 'Nothing hidden', title: 'All of the code is public.', copy: 'Twelve automated reviewers went over it. That is not a professional audit, and nothing is live yet.' },
 ]
 ---
 
 <section class="wrap" id="verified" aria-labelledby="verified-title">
 	<div class="section-card center">
 		<span class="eyebrow">Helico</span>
-		<h2 class="headline" id="verified-title">Verified by Default</h2>
-		<p class="lede">Every claim on this page has a test or a record behind it.</p>
-		<div class="actions">
-			<a class="btn btn--secondary" href={`${repo}#readme`}>Learn More</a>
-		</div>
-
-		<div class="cards facts" style="text-align:left">
-			{facts.map((f) => (
+		<h2 class="headline" id="verified-title">Your Money Stays Yours</h2>
+		<p class="lede">It can move your deposit. It can never keep it.</p>
+		<div class="cards" style="text-align:left">
+			{cards.map((c) => (
 				<div class="card">
-					<span class="stat">{f.n} <small>{f.unit}</small></span>
-					<p>{f.copy}</p>
+					<span class="label">{c.label}</span>
+					<h3>{c.title}</h3>
+					<p>{c.copy}</p>
 				</div>
 			))}
-			<div class="card">
-				<span class="stat"><span data-live-tick>…</span> <small>price marker, <span data-live-note>reading</span></small></span>
-				<p>The price marker of the demo pool on Arbitrum One, read from the chain when this page loads.</p>
-			</div>
 		</div>
 
 		<div class="split">
 			<div>
-				<h3>Moves that keep your money working.</h3>
-				<p>Move a deposit without exchanging tokens first and most of it comes back to your wallet unused: nothing at all when the price has left the range, and 13% when it has not. Helico exchanges inside the move, so the deposit keeps working.</p>
+				<h3>94% kept working.</h3>
+				<p>In a rehearsal on a copy of the real market, a deposit that had drifted out of its band was moved back with 94% of it still working. The rules asked for at least 50%. A rehearsal, not the live network.</p>
 			</div>
-		</div>
-		<div class="card chart" style="text-align:left">
-			<div class="chart__head">
-				<span>How much of a deposit keeps working after a move, without the exchange step</span>
-				<span class="chart__legend">share of the deposit</span>
-			</div>
-			<ul class="bars">
-				{bars.map((b) => (
-					<li>
-						<span class="bars__label">{b.label}</span>
-						<span class="bars__track"><span class="bars__fill" style={`width:${Math.max(b.pct, 1)}%`}></span></span>
-						<span class="bars__pct">{b.pct}%</span>
-						<span class="bars__note">{b.note}</span>
-					</li>
-				))}
-			</ul>
-			<p class="chart__foot">
-				Measured on a real pool before the exchange step existed and recorded in
-				<a href={swapPlan}>the project's notes</a>. How much the exchange step keeps depends on the pool at the
-				time, so it is not charted here.
-			</p>
+			<a class="btn btn--secondary" href={record}>See the Record</a>
 		</div>
 	</div>
 </section>
 
-<script>
-	// One eth_call to Uniswap v4's StateView on Arbitrum One: getSlot0(poolId) for the demo pool.
-	// The address and the pool id are the ones packages/plugins/uniswap resolves from the SDK.
-	const STATE_VIEW = '0x76Fd297e2D437cd7f76d50F01AfE6160f86e9990'
-	const POOL_ID = 'b37da7d5beb04539b6c497a15794748fc0ce1da7afc61133e3253eff76229ae5'
-	const GET_SLOT0 = '0xc815641c'
-	const tick = document.querySelector('[data-live-tick]')
-	const note = document.querySelector('[data-live-note]')
-	const show = (value: string, label: string) => {
-		if (tick) tick.textContent = value
-		if (note) note.textContent = label
-	}
-	;(async () => {
-		try {
-			const res = await fetch('https://arb1.arbitrum.io/rpc', {
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({
-					jsonrpc: '2.0',
-					id: 1,
-					method: 'eth_call',
-					params: [{ to: STATE_VIEW, data: `${GET_SLOT0}${POOL_ID}` }, 'latest'],
-				}),
-			})
-			const { result } = (await res.json()) as { result?: string }
-			if (!result || result.length < 2 + 128) throw new Error('short result')
-			// slot0 is (sqrtPriceX96, tick, protocolFee, lpFee); the tick is an int24, sign-extended
-			// to the second 32-byte word.
-			let value = BigInt(`0x${result.slice(2 + 64, 2 + 128)}`)
-			if (value >= 1n << 255n) value -= 1n << 256n
-			show(Number(value).toLocaleString('en-US'), 'live')
-		} catch {
-			show('unavailable', 'the public RPC did not answer')
-		}
-	})()
-</script>
-
 <style>
-	.facts {
-		margin-top: clamp(2rem, 4vw, 3rem);
-	}
-	.chart {
-		padding: 1.5rem;
-	}
-	.chart__head {
-		display: flex;
-		flex-wrap: wrap;
-		justify-content: space-between;
-		gap: 0.5rem;
-		font-weight: 600;
-		font-size: 0.95rem;
-	}
-	.chart__legend {
-		font-weight: 500;
-		font-size: 0.75rem;
-		color: #5b6270;
-	}
-	.bars {
-		list-style: none;
-		margin: 1.25rem 0 0;
-		padding: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 0.9rem;
-	}
-	.bars li {
-		display: grid;
-		grid-template-columns: 1fr auto;
-		grid-template-areas:
-			'label pct'
-			'track track'
-			'note note';
-		gap: 0.3rem 0.75rem;
-		align-items: center;
-		font-size: 0.85rem;
-	}
-	.bars__label {
-		grid-area: label;
-		font-weight: 500;
-	}
-	.bars__pct {
-		grid-area: pct;
-		font-family: var(--font-mono);
-		font-size: 0.8rem;
-		color: #4c3fd6;
-	}
-	.bars__track {
-		grid-area: track;
-		height: 0.6rem;
-		border-radius: 9999px;
-		background: #efecff;
-		overflow: hidden;
-	}
-	.bars__fill {
-		display: block;
-		height: 100%;
-		border-radius: inherit;
-		background: linear-gradient(90deg, #7c6bff, #b7abff);
-	}
-	.bars__note {
-		grid-area: note;
-		font-size: 0.75rem;
-		color: #5b6270;
-	}
-	@media (min-width: 640px) {
-		.bars li {
-			grid-template-columns: 14rem 1fr 3.5rem;
-			grid-template-areas:
-				'label track pct'
-				'label note pct';
-		}
-	}
-	.chart__foot {
-		margin: 1rem 0 0;
-		font-size: 0.78rem;
-		line-height: 1.55;
-		color: #5b6270;
-	}
-	.chart__foot a {
-		color: #5d4ce6;
-		font-weight: 600;
+	.cards {
+		margin-top: 2rem;
 	}
 </style>
