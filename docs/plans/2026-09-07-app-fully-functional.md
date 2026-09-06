@@ -92,13 +92,20 @@ argument passed only by the workflow silently does not arrive.
 CLAUDE.md forbids claiming an integration that is not proven, and the honest problem here
 is that the vault is not on a live network. The answer is a fork, not a promise:
 
-| Claim | Proof |
-|---|---|
-| The plugin bundles into a Next client build | done before this plan was written: `next build` compiled it |
-| `bestPoolFor` finds the real ETH/USDC pool | unit test plus a read against Arbitrum One |
-| Approvals and swap calldata are correct | anvil forked from Arbitrum One, funded account, the swap actually executed and the balance checked |
-| The mandate reads and writes | anvil fork with the vault deployed by `Deploy.s.sol`, which reads `contracts/` and changes nothing in it |
-| The app is deployed | the URL answers, over TLS, with a live container |
+| Claim | Proof | Result |
+|---|---|---|
+| The plugin bundles into a Next client build | `next build` | compiled, before the rest was written |
+| `bestPoolFor` finds the real pools | unit tests plus a read of Arbitrum One | ETH/USDC at the 0.05% tier, ARB/USDC at 0.3%, quotes to match |
+| The approvals and calldata are right | anvil fork, funded account, the swap sent | 0.1 ETH bought 248.974068 USDC; half came back as 0.049937 ETH through approve → approve → swap |
+| The app swaps | a browser driving the app, wallet injected, against the fork | 0.5 ETH in, 1244.280761 USDC arrived, no console errors |
+| The mandate reads and writes | a browser driving `/mandate`, vault deployed by `Deploy.s.sol` on the fork | committed (`isActive` true, `positionOf` the token) and revoked (`isActive` false) |
+| The app is deployed | the URL, over TLS | `https://app.helico.site` answers 200 on `/` and `/mandate`, 404 elsewhere, HSTS, certificate to 2026-12-05 |
+
+Two things that cost time and are worth writing down. anvil's default account **has code on
+an Arbitrum fork** — a contract at that well-known address forwards its whole balance away,
+so the first payment a swap makes to it takes the other 9,999 ETH with it. And `bestPoolFor`
+swallowed every read failure, so a browser pointed at a node that was not the fork was told
+there was no pool; a revert is now the only failure it treats as "not a candidate".
 
 A fork proves the calldata against real pool state and real router code. It does not prove
 a mainnet deployment, and nothing here will say it does. `contracts/` and `apps/cre` are
@@ -112,6 +119,7 @@ not modified, and nothing is deployed to a live network from this machine.
 4. The mandate read and write in the app.
 5. The container image and the deploy.
 
-Steps 1 and 2 are independent of everything. Step 3 needs 1. Step 4 needs 2 and, to be
-verified, an anvil fork. Step 5 needs nothing and can be done in parallel, but the chat is
-useless in production until #115 merges, because `POST /api/swap/intent` only exists there.
+All five are done. One thing is not, and it is not ours to finish: **the deployed chat
+answers "the swap service is not answering"** until #115 merges, because
+`POST /api/swap/intent` only exists on that branch. The mandate page works today and says
+the vault is not deployed, which is true until #85.
