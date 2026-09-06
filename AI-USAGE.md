@@ -593,6 +593,9 @@ Format: date · what was done · the AI's role · what a human verified.
   Closes #100 once the Coolify application exists, which only the owner can create.
 - **AI's role:** the survey, the files and the server steps. The owner's instruction, verbatim
   in translation, is in the plan.
+- **Follow-up:** the forced command now waits for a new container to answer the public URL
+  before it returns, so a deploy that never came up fails the workflow; the script is committed
+  at `scripts/coolify-deploy.sh`. Both workflows clean their key files with a `trap`.
 - **Follow-up (#108):** the deploy call moved from an HTTP bearer token to SSH with a
   forced command on the server; the exposed tokens were revoked. Verified by a run.
 - **Follow-up:** the Coolify project and application created through Coolify's API from the

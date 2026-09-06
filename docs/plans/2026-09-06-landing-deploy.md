@@ -121,3 +121,24 @@ mode-600 file on the box. The two tokens that had crossed HTTP were revoked. Ver
 run with any other command answers `unknown app`; a hand-triggered run redeployed the site.
 
 - Prompt: "check issues and PRs" (the fix follows the collaborator's #108).
+
+## Follow-up — a deploy that reports success and changed nothing
+
+Raised three times in review, and right each time: the workflow was green whether or not the
+container came up, because triggering Coolify is asynchronous and the old container answers 200
+throughout a failed build. That is the same shape as the CRE forwarder swallowing a revert and
+leaving a successful transaction, which is the mistake this project has already made once.
+
+So the server's forced command now waits. It notes the container id published on the
+application's loopback port, triggers the deploy, and returns only when a **different** container
+id is serving **and** the public URL answers 200, or fails after ten minutes. A queued job is no
+longer evidence; a new container serving the page is.
+
+The script is committed at `scripts/coolify-deploy.sh` so it can be reviewed, and installed at
+`~/bin/coolify-deploy` on the server. Application ids, ports and URLs live in a mode-600 file on
+the box rather than in a public repository. Both workflows also `trap 'rm -f deploy_key
+known_hosts' EXIT`, so a failed step cannot leave either file behind.
+
+Verified: `SSH_ORIGINAL_COMMAND=id` still answers `unknown app` and exits 2; a real run against
+the docs application printed *"serving from a new container, https://docs.helico.site/docs/introduction
+answered 200 after 40s"* and exited 0.
