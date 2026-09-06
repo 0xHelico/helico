@@ -486,6 +486,8 @@ Format: date · what was done · the AI's role · what a human verified.
 - **Wording:** "deposit" became "funds" throughout the page at the user's request; grammar fixed by hand.
 - **Logos:** the "Built with" grid swaps three wordmarks for logos the user supplied (Ethereum, FREE-PI, One Dollar Audit), converted to lossless webp; the user is asked to confirm the last two were used.
 - **Motion:** the canvas loop bug (timer keyed on duration, two neighbours share one) fixed; sections reveal their parts in sequence on first view, JS- and reduced-motion-guarded. Watched headless: the loop returns to Mandate; 53 parts arm and complete; audit at zero.
+- **Links:** reading links repointed from GitHub READMEs to docs.helico.site, in the nav and
+  every section; code links unchanged. All eight docs URLs checked live, audit at zero.
 
 ### 2026-09-06 — Landing page: plain words
 
