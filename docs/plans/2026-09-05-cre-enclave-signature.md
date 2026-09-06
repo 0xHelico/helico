@@ -46,3 +46,15 @@ The user said "cek lagi" (check again) and earlier "ngikut ghozza aja" (follow t
 collaborator's decisions). The collaborator accepted the typed struct on #41 and said he would
 add the domain and `nonces(owner)` to the vault after the swap leg lands. This plan builds the
 enclave side against that agreement, with names as config.
+
+## Revision — 2026-09-06, the chain moved to Arbitrum One (#58)
+
+The project moved from Robinhood Chain to Arbitrum One because Arbitrum has both Uniswap v4 (all
+addresses from the SDK) and a CRE `KeystoneForwarder`, at a twentieth of the gas. For this plan
+that means the forwarder path is back on the critical path: `chainSelectorName:
+'ethereum-mainnet-arbitrum-1'`, production forwarder `0xF8344CFd5c43616a4366C34E3EEE75af79a74482`,
+and `cre workflow simulate --broadcast` through the `MockKeystoneForwarder`
+`0xd770499057619c9a76205fd4168161cf94abc532`. The signature path stays as the chain-independent
+design and the reason `AGENT_ROLE` can be a key that exists only inside an enclave. Nothing in
+the package changed for the move; this revision records the config and the dependency on the
+vault's `onReport` (#37). Tracked in #61.

@@ -278,6 +278,27 @@ Format: date · what was done · the AI's role · what a human verified.
   binary and not run against a deployed vault: the vault's `nonces` and
   `recenterWithSignature` do not exist yet, so the simulation is recorded as pending.
 
+### 2026-09-06 — CRE plugin: docs for the move to Arbitrum One
+
+- **Done:** package README and the two delivery plans point at Arbitrum One (#58): the CRE
+  selector, both forwarders and what each verifies, the v4 addresses from the SDK, the demo
+  pool, and the dependency on the vault's `onReport`. No code change; the chain was config.
+- **AI's role:** verified the addresses on chain (`typeAndVersion()` on both forwarders, the pool's
+  id and liquidity) and wrote the docs. The collaborator made the chain decision on #58.
+- **Plan:** revisions in the two plans; tracked in #61.
+- **Verified:** `bun run check`, `python3 scripts/check-readme-links.py` (root README untouched).
+
+### 2026-09-06 — Uniswap plugin: reference pool and smoke on Arbitrum One
+
+- **Done:** `networks.ts` gains the hook-less ETH/USDC 0.05 % pool as Arbitrum One's reference
+  pool, after reading its liquidity from `StateView`; the keyless smoke runs there and the README
+  records it.
+- **AI's role:** read the pool live, made the one-line change, ran the smoke, wrote the docs. The
+  chain move is the collaborator's decision (#58).
+- **Plan:** one-line change tracked in #63; no separate plan document.
+- **Verified:** `typecheck`, `test` (52 pass), `bun run check`; `CHAIN=arbitrum bun run smoke`
+  output quoted in the package README.
+
 ### 2026-09-06 — Landing page
 
 - **Done:** `apps/landing` replaced the starter with a long single page in the style of a

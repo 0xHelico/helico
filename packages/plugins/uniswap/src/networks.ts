@@ -44,7 +44,7 @@ const nativePool = (usd: Address): PoolKey => ({
 /**
  * Built-in networks. Wrapped-native and stablecoin addresses are the canonical ones from each
  * chain's documentation; `nativeUsdPool` is present only where a hook-less 0.05 % pool was read
- * with liquidity on 2026-09-05. Chains without one still resolve for every library function.
+ * with liquidity (2026-09-05, Arbitrum on 2026-09-06). Chains without one still resolve for every library function.
  */
 const builtIn: Network[] = [
 	{
@@ -60,6 +60,8 @@ const builtIn: Network[] = [
 		explorerTx: explorer(arbitrum),
 		wrappedNative: '0x82aF49447D8a07e3bd95BD0d56f35241523fBab1',
 		usd: usdc('0xaf88d065e77c8cC2239327C5EDb3A432268e5831'),
+		// Hook-less ETH/USDC 0.05 %, spacing 10: liquidity read from StateView on 2026-09-06.
+		nativeUsdPool: nativePool('0xaf88d065e77c8cC2239327C5EDb3A432268e5831'),
 	},
 	{
 		key: 'polygon',

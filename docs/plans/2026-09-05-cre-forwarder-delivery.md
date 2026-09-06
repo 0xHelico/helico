@@ -85,3 +85,15 @@ on-chain writes and the forwarder directory.
   delivery leg is the one #41 replaces with signing. Everything else in this plan stands.
 - **Config hex values are lowercased** on parse so a checksummed value compares equal to keccak
   output; the report tuple is pinned to a `cast abi-encode` vector; RPC faults throw.
+
+## Revision — 2026-09-06, the chain moved to Arbitrum One (#58)
+
+The project moved from Robinhood Chain to Arbitrum One because Arbitrum has both Uniswap v4 (all
+addresses from the SDK) and a CRE `KeystoneForwarder`, at a twentieth of the gas. For this plan
+that means the forwarder path is back on the critical path: `chainSelectorName:
+'ethereum-mainnet-arbitrum-1'`, production forwarder `0xF8344CFd5c43616a4366C34E3EEE75af79a74482`,
+and `cre workflow simulate --broadcast` through the `MockKeystoneForwarder`
+`0xd770499057619c9a76205fd4168161cf94abc532`. The signature path stays as the chain-independent
+design and the reason `AGENT_ROLE` can be a key that exists only inside an enclave. Nothing in
+the package changed for the move; this revision records the config and the dependency on the
+vault's `onReport` (#37). Tracked in #61.

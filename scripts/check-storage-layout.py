@@ -19,6 +19,7 @@ The snapshot is `contracts/storage-layout.txt`, and a diff to it belongs in a re
 """
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -28,7 +29,28 @@ CONTRACTS = ROOT / "contracts"
 SNAPSHOT = CONTRACTS / "storage-layout.txt"
 
 
+def _shape(type_name: str) -> str:
+    """Drop the compiler's AST ids, keep everything an upgrade depends on.
+
+    `t_struct(Account)10029_storage` and `t_contract(IStateView)12399` carry an AST id that
+    shifts whenever anything about the compilation changes — a comment edit is enough — while
+    the slot it occupies does not. Those go.
+
+    `t_array(t_uint256)43_storage` looks the same and is not: 43 is the gap's length, and the
+    gap shrinking by exactly as much as new state grows is the pattern this check exists to
+    make visible. That stays.
+    """
+    return re.sub(r"(t_(?:struct|contract)\([^)]*\))\d+", r"\1", type_name)
+
+
 def current() -> str:
+    # A stale `out/` makes `forge inspect` answer "storage layout missing from artifact", which
+    # reads like a bug in this script. Build first so it never can.
+    build = subprocess.run(["forge", "build"], cwd=CONTRACTS, capture_output=True, text=True)
+    if build.returncode != 0:
+        print(build.stderr.strip() or "forge build failed")
+        sys.exit(1)
+
     out = subprocess.run(
         ["forge", "inspect", "HelicoVault", "storage-layout", "--json"],
         cwd=CONTRACTS,
@@ -39,7 +61,13 @@ def current() -> str:
         print(out.stderr.strip() or "forge inspect failed")
         sys.exit(1)
     entries = json.loads(out.stdout)["storage"]
-    lines = [f"{e['slot']:>4}  {e['offset']:>2}  {e['label']}  {e['type']}" for e in entries]
+    # The compiler appends an AST id to every generated type name, and those shift whenever
+    # anything about the compilation changes — a comment edit is enough. Keeping them would make
+    # this warn on changes that move no slot, and a check that cries wolf is one people stop
+    # reading. What matters for an upgrade is the slot, the offset, the name, and the shape.
+    lines = [
+        f"{e['slot']:>4}  {e['offset']:>2}  {e['label']}  {_shape(e['type'])}" for e in entries
+    ]
     return "\n".join(lines) + "\n"
 
 

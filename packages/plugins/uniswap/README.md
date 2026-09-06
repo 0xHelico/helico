@@ -36,7 +36,7 @@ Built-ins:
 | `CHAIN` | Chain | Router | Reference pool |
 |---|---|---|---|
 | `ethereum` | Ethereum | 2.0 | not verified yet, run `discover` |
-| `arbitrum` | Arbitrum One | 2.0 | not verified yet |
+| `arbitrum` | Arbitrum One | 2.0 | ETH/USDC 0.05 %, read with liquidity |
 | `polygon` | Polygon | 2.0 | not verified yet |
 | `bnb` | BNB Smart Chain | 2.0 | BNB/USDC 0.05 %, read with liquidity |
 | `base` | Base | 2.0 | ETH/USDC 0.05 %, read with liquidity; multi-hop via USDT |
@@ -129,6 +129,12 @@ all `status: success`:
 
 An earlier run against the public ETH/USDC pool (mint #27362, swaps, collect, burn) is in the
 commit history of this file.
+
+**Arbitrum One mainnet, read-only, 2026-09-06** (`CHAIN=arbitrum bun run smoke`): router 2.0
+at `0xA51a…81a3`, the hook-less ETH/USDC 0.05 % / spacing 10 pool at tick −198064 with liquidity
+5.69e17 (2504.05 USDC per ETH), quote 1 ETH → 2502.262635 USDC and 100 USDC ← 0.03996 ETH, both
+single-hop swap shapes accepted by the Universal Router via `eth_call`, Permit2 allowances read.
+No e2e there yet: the wallet holds no ETH on Arbitrum.
 
 **Robinhood Chain mainnet, read-only, 2026-09-05** (`CHAIN=robinhood bun run smoke`): router
 2.1.1 resolved, ETH/USDG 87/1 read at tick −198250 with liquidity 2.2e17 (2,458 USDG per ETH),
