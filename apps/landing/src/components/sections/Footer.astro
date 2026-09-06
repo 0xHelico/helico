@@ -10,7 +10,7 @@ const columns = [
 ]
 ---
 
-<footer class="container footer">
+<footer class="wrap footer">
 	<div class="footer__grid">
 		<div class="footer__brand">
 			<Image src={logo} alt="" width={28} height={28} densities={[1, 2]} />
@@ -37,6 +37,7 @@ const columns = [
 
 <style>
 	.footer {
+		max-width: var(--content-max);
 		margin-top: clamp(2.5rem, 6vw, 4rem);
 		padding: 2rem 0 3rem;
 		border-top: 1px solid rgba(11, 14, 21, 0.08);
