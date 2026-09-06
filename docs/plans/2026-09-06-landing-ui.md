@@ -444,3 +444,34 @@ permalinks stay on GitHub, because that is where those things live.
 
 - "Can the landing redirect to https://docs.helico.site/ instead? Linking to a GitHub README
   feels odd, unless the context really is GitHub." and "In the nav as well as in the content."
+
+## Revision — Google Analytics, loaded after the page rather than during it
+
+Property `G-4G8KMPJLCF`, on every page including the blog. Two things about how, both measured:
+
+**It loads after `load`, not in the head.** The usual snippet puts an `async` script in the head,
+and even async it competes for bandwidth on a slow connection. Measured on the same build:
+
+| | Performance | First paint | Largest paint |
+|---|---|---|---|
+| Tag in the head, async | 74 | 2.9s | 5.0s |
+| Tag injected after load | **98** | **1.8s** | **2.1s** |
+
+Two seconds of largest paint for a pageview is not a trade worth making, and injecting the
+script on `load` costs the paint nothing. A visitor who leaves before `load` fires is not
+counted; on a page this size that is a rounding error against two seconds for everyone else.
+
+**The container's policy allows it exactly three things** — the script from
+`googletagmanager.com`, beacons to `google-analytics.com` and `analytics.google.com`, and the
+pixel — and still refuses everything else that is not this site.
+
+The measurement id sits in the repository. It names a property and grants no access to it, so
+treating it as a secret would be theatre.
+
+Verified with a browser rather than by reading: after load the page requests
+`gtag/js?id=G-4G8KMPJLCF` and then `google-analytics.com/g/collect`, and `dataLayer` holds the
+four entries the snippet pushes.
+
+### Prompt, verbatim in translation
+
+- "Add Google Analytics, G-4G8KMPJLCF. For this one: issue, PR, and merge it straight away."

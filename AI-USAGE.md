@@ -619,6 +619,17 @@ Format: date · what was done · the AI's role · what a human verified.
 - **Verified:** the image built by Coolify; `/healthz` and `/api/posts` over TLS; a `PUT` with
   the token and the post read back; the landing rebuilt against the API.
 
+### 2026-09-06 — Landing: a Lighthouse pass, and analytics that costs nothing
+
+- **Done:** the audit's one finding fixed (four links reading "Learn More" to four destinations),
+  the fonts moved off `fonts.googleapis.com` to this origin, and Google Analytics added, injected
+  after `load` rather than placed in the head.
+- **AI's role:** ran the audit, read the waterfall, made the changes, measured each one.
+- **Verified:** Lighthouse against the live site and then both builds served locally so the
+  comparison was fair. Fonts: first paint 2.9s → 2.2s, SEO 92 → 100. Analytics in the head cost
+  performance 93 → 74 and largest paint 2.9s → 5.0s; injected after load it measures 98, and a
+  browser confirms the tag and the collect beacon both fire.
+
 <!--
 Template for the next entry:
 

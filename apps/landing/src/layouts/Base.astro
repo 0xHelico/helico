@@ -11,6 +11,9 @@ interface Props {
 }
 
 const site = 'Helico'
+// Google Analytics measurement id. Public by design: it identifies the property, and cannot
+// read from it.
+const GA_ID = 'G-4G8KMPJLCF'
 const tagline = 'Your Funds, on Autopilot'
 const origin = (Astro.site ?? Astro.url).origin
 const canonical = new URL(Astro.url.pathname, origin).href
@@ -69,6 +72,26 @@ const website = {
 		<meta name="twitter:title" content={fullTitle} />
 		<meta name="twitter:description" content={description} />
 		<meta name="twitter:image" content={image} />
+		{/* Google Analytics, fetched only once the page has finished loading. Even `async`, the
+		    tag competes for bandwidth on a slow connection and cost 2.1s of largest paint when it
+		    was in the head; after load it costs the paint nothing. The measurement id names a
+		    property and grants no access to it, so it lives here rather than in a secret. */}
+		<script is:inline define:vars={{ GA_ID }}>
+			window.dataLayer = window.dataLayer || []
+			function gtag() {
+				window.dataLayer.push(arguments)
+			}
+			gtag('js', new Date())
+			gtag('config', GA_ID)
+			const loadAnalytics = () => {
+				const s = document.createElement('script')
+				s.async = true
+				s.src = `https://www.googletagmanager.com/gtag/js?id=${GA_ID}`
+				document.head.appendChild(s)
+			}
+			if (document.readyState === 'complete') loadAnalytics()
+			else window.addEventListener('load', loadAnalytics, { once: true })
+		</script>
 		<script type="application/ld+json" set:html={JSON.stringify(organisation)} />
 		<script type="application/ld+json" set:html={JSON.stringify(website)} />
 		{jsonLd && <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />}
