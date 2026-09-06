@@ -51,7 +51,12 @@
 				"useNodejsImportProtocol": "error",
 				"useAsConstAssertion": "error",
 				"useDefaultParameterLast": "error",
-				"useConsistentArrayType": { "level": "error", "options": { "syntax": "shorthand" } },
+				"useConsistentArrayType": {
+					"level": "error",
+					"options": {
+						"syntax": "shorthand"
+					}
+				},
 				"noParameterAssign": "error",
 				"noNonNullAssertion": "warn",
 				"noNestedTernary": "warn",
@@ -61,7 +66,9 @@
 			"complexity": {
 				"noExcessiveCognitiveComplexity": {
 					"level": "warn",
-					"options": { "maxAllowedComplexity": 20 }
+					"options": {
+						"maxAllowedComplexity": 20
+					}
 				}
 			},
 			"performance": {
@@ -82,10 +89,20 @@
 			"includes": ["**/*.test.ts"],
 			"linter": {
 				"rules": {
-					"suspicious": { "noExplicitAny": "off", "noConsole": "off" },
-					"complexity": { "noExcessiveCognitiveComplexity": "off" }
+					"suspicious": {
+						"noExplicitAny": "off",
+						"noConsole": "off"
+					},
+					"complexity": {
+						"noExcessiveCognitiveComplexity": "off"
+					}
 				}
 			}
 		}
-	]
+	],
+	"css": {
+		"parser": {
+			"tailwindDirectives": true
+		}
+	}
 }

@@ -1,0 +1,73 @@
+@import "tailwindcss";
+
+/* Helico theme. The island's utility classes read these; the page's CSS does too. */
+@theme {
+	--color-paper: #fbfcfe;
+	--color-cream: #f5f7fa;
+	--color-cream-warm: #e9eef7;
+	--color-ink: #0b0e15;
+	--color-ink-2: #4e5560;
+	--color-ink-3: #868d99;
+	--color-border: rgba(11, 14, 21, 0.1);
+	--color-border-strong: rgba(11, 14, 21, 0.2);
+	--color-accent: #3b82f6;
+	--color-accent-2: #8b7cf6;
+	--color-accent-3: #e59bd8;
+	--font-sans: "Inter", system-ui, sans-serif;
+	--font-serif: "Instrument Serif", Georgia, serif;
+	--font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+:root {
+	/* Messenger surface (light, iOS-like) */
+	--tg-chat-bg: #e7eef7;
+	--tg-doodle-stroke: rgba(11, 14, 21, 0.07);
+	--tg-header-bg: rgba(251, 252, 254, 0.86);
+	--tg-composer-bg: rgba(251, 252, 254, 0.86);
+	--tg-composer-input-bg: #ffffff;
+	--tg-composer-input-border: rgba(11, 14, 21, 0.12);
+	--tg-divider: rgba(11, 14, 21, 0.08);
+	--tg-accent: #3b82f6;
+	--tg-online: #2f9e6b;
+	--tg-name: #0b0e15;
+	--tg-text: #0b0e15;
+	--tg-text-muted: #868d99;
+	--tg-placeholder: #9aa1ad;
+	--tg-icon-muted: #868d99;
+	--tg-bubble-out-bg: #d9f2ff;
+	--tg-bubble-in-bg: #ffffff;
+	--tg-bubble-shadow: 0 1px 1px rgba(11, 14, 21, 0.08);
+	--tg-check-blue: #3b82f6;
+	--tg-typing-dot: #868d99;
+	--tg-text-tool-body: #4e5560;
+	--tg-text-tool-tool: #0b0e15;
+	--tg-text-tool-colon: #868d99;
+	--tg-text-tool-args: #4e5560;
+}
+
+html {
+	scroll-behavior: smooth;
+}
+
+body {
+	margin: 0;
+	background: #ffffff;
+	color: var(--color-ink);
+	font-family: var(--font-sans);
+	-webkit-font-smoothing: antialiased;
+}
+
+a {
+	color: inherit;
+	text-decoration: none;
+}
+
+button {
+	font: inherit;
+	cursor: pointer;
+}
+
+.font-serif-italic {
+	font-family: var(--font-serif);
+	font-style: italic;
+}

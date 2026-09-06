@@ -1,40 +1,48 @@
 ---
+import '../styles/global.css'
+
 interface Props {
 	title: string
 	description?: string
 }
 
-const { title, description = 'Helico, an ETHOnline 2026 submission.' } = Astro.props
+const site = 'https://helico.xyz'
+const {
+	title,
+	description = 'Commit a mandate once. A Chainlink CRE enclave watches your Uniswap v4 position and decides when to re-centre; the vault refuses anything outside what you signed.',
+} = Astro.props
 ---
 
 <html lang="en">
 	<head>
 		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>{title}</title>
 		<meta name="description" content={description} />
 		<meta name="generator" content={Astro.generator} />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<link rel="icon" href="/favicon.ico" />
-		<title>{title}</title>
+		<meta name="theme-color" content="#ffffff" />
+		<link rel="icon" href="/favicon.ico" sizes="any" />
+		<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+		<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+		<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+		<link rel="manifest" href="/site.webmanifest" />
+		<meta property="og:type" content="website" />
+		<meta property="og:site_name" content="Helico" />
+		<meta property="og:title" content={title} />
+		<meta property="og:description" content={description} />
+		<meta property="og:image" content={`${site}/og.webp`} />
+		<meta name="twitter:card" content="summary" />
+		<meta name="twitter:title" content={title} />
+		<meta name="twitter:description" content={description} />
+		<meta name="twitter:image" content={`${site}/og.webp`} />
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Serif:ital@1&family=JetBrains+Mono:wght@400;500&display=swap"
+			rel="stylesheet"
+		/>
 	</head>
 	<body>
-		<main>
-			<slot />
-		</main>
+		<slot />
 	</body>
 </html>
-
-<style is:global>
-	body {
-		margin: 0;
-		font-family: system-ui, sans-serif;
-		line-height: 1.5;
-		color: #111;
-		background: #fff;
-	}
-	main {
-		max-width: 42rem;
-		margin: 0 auto;
-		padding: 4rem 1.5rem;
-	}
-</style>
