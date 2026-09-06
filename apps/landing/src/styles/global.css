@@ -1,3 +1,12 @@
+/* The fonts are served from this origin. Asking fonts.googleapis.com for a stylesheet meant a
+   render-blocking request to a third party, and on a throttled connection nothing painted until
+   it answered: first paint and largest paint were both 3.6s. */
+@import "@fontsource-variable/inter";
+@import "@fontsource/instrument-serif/400-italic.css";
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/500.css";
+@import "@fontsource-variable/source-serif-4";
+
 @import "tailwindcss";
 
 /* Helico theme. The island's utility classes read these; the page's CSS does too. */
@@ -13,7 +22,7 @@
 	--color-accent: #3b82f6;
 	--color-accent-2: #8b7cf6;
 	--color-accent-3: #e59bd8;
-	--font-sans: "Inter", system-ui, sans-serif;
+	--font-sans: "Inter Variable", "Inter", system-ui, sans-serif;
 	--font-serif: "Instrument Serif", Georgia, serif;
 	--font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }

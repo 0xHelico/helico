@@ -444,3 +444,42 @@ permalinks stay on GitHub, because that is where those things live.
 
 - "Can the landing redirect to https://docs.helico.site/ instead? Linking to a GitHub README
   feels odd, unless the context really is GitHub." and "In the nav as well as in the content."
+
+## Revision — a Lighthouse pass, and four links that all said the same thing
+
+Run against the live site rather than a local build:
+
+| | Performance | Accessibility | Best practices | SEO |
+|---|---|---|---|---|
+| Landing, mobile | 82 | 100 | 100 | 92 → **100** |
+| Landing, desktop | 98 | 100 | 100 | 92 → **100** |
+| Blog, mobile | 90 | 100 | 100 | 100 |
+
+The only thing marked down was link text: **four buttons all said "Learn More"** and went to four
+different places, which tells a search engine nothing and a reader less. They now say what they
+are: *Read the Docs*, *See the Contract*, *About the Rules*, *Docs for Builders*, and the FAQ's
+closing link is *Read the Helico docs*. The three *Read the source ↗* links keep their words and
+gain an accessible name naming the package, so a screen reader reading links out of context can
+tell them apart.
+
+Performance had one real cause, and it was not the canvas. **Nothing painted until the
+stylesheet from `fonts.googleapis.com` answered**: first paint and largest paint were the same
+moment, 3.6s on throttled 4G, because a third-party render-blocking request has to finish before
+anything is drawn. The fonts are served from this origin now, through `@fontsource`, and the
+Google origins are gone from the page and from the container's Content-Security-Policy.
+
+Measured on the same machine, same throttling, both builds served locally so the comparison is
+fair:
+
+| | Performance | First paint | SEO |
+|---|---|---|---|
+| Before | 89 | 2.9s | 92 |
+| After | 93 | **2.2s** | **100** |
+
+Largest paint is unchanged at 2.9s and blocking time is still zero; what moved is the wait
+before anything appeared. The canvas stays: it is the page's one moving explanation of what the
+product does, and it was never the thing holding the paint.
+
+### Prompt, verbatim in translation
+
+- "Run a Lighthouse audit of the landing."
