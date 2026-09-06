@@ -298,4 +298,67 @@ contract ForkSwapRecentreTest is ForkBase {
     function _sqrtPriceOf(PoolKey memory key) internal view returns (uint160 sqrtPriceX96) {
         (sqrtPriceX96,,,) = STATE_VIEW.getSlot0(key.hashPoolKey());
     }
+
+    /// @notice The agent asks for more liquidity than the price it actually got can fund.
+    ///
+    /// @dev This is the shape of #78, and it is not exotic: the enclave sizes `liquidityToMint`
+    ///      from a model of the swap that assumes constant liquidity, and the real pool crosses
+    ///      initialised ticks. On the rehearsal that found it the model was out by 16%, and the
+    ///      whole re-centre reverted — position burned, swap done, nothing minted, for
+    ///      arithmetic rather than for anything the user agreed to.
+    ///
+    ///      Asking for `type(uint128).max` is the same failure with the guesswork removed: no
+    ///      price funds it, so if the vault mints what it was told to, this reverts. It has to
+    ///      mint what it can afford instead.
+    function test_MintsWhatItCanAffordWhenTheAgentAsksForMore() public {
+        _fork();
+        _setUpVault();
+
+        (uint256 tokenId,,) = _mintOutOfRangePosition();
+        uint128 liquidityBefore = POSITION_MANAGER.getPositionLiquidity(tokenId);
+
+        vm.prank(owner);
+        vault.setMandate(tokenId, _mandate());
+
+        int24 spacing = demoPool.tickSpacing;
+        int24 tick = _tickOf(demoPool);
+        int24 newUpper = (tick / spacing) * spacing + spacing;
+        int24 newLower = newUpper - int24(uint24(WIDTH_TICKS));
+
+        vm.prank(agent);
+        uint256 newTokenId = vault.recenter(
+            HelicoVault.RecenterParams({
+                owner: owner,
+                tickLower: newLower,
+                tickUpper: newUpper,
+                // No price on earth funds this out of one burned position.
+                liquidityToMint: type(uint128).max,
+                amount0Min: 0,
+                amount1Min: 0,
+                amount0Max: type(uint128).max,
+                amount1Max: type(uint128).max,
+                zeroForOne: false,
+                amountIn: PAR_IN / 10,
+                minAmountOut: 0,
+                deadline: block.timestamp + 60
+            })
+        );
+
+        uint128 minted = POSITION_MANAGER.getPositionLiquidity(newTokenId);
+
+        assertGt(minted, 0, "it minted something");
+        assertLt(minted, type(uint128).max, "and less than it was asked for");
+        assertTrue(_isInRange(newTokenId, demoPool), "onto the market");
+        assertEq(POSITION_MANAGER.ownerOf(newTokenId), owner, "for the owner");
+
+        // The cap is not a licence to mint dust: the mandate's floor still decides.
+        assertGe(uint256(minted) * 10_000, uint256(liquidityBefore) * RETAIN_BPS, "cleared the floor");
+
+        // And it spent what it had rather than leaving the difference idle in the wallet.
+        assertEq(address(vault).balance, 0, "no native left in the vault");
+        assertEq(IERC20(demoPool.currency1).balanceOf(address(vault)), 0, "no token1 left");
+
+        emit log_named_uint("asked for", type(uint128).max);
+        emit log_named_uint("minted", minted);
+    }
 }
