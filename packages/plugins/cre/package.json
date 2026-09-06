@@ -14,7 +14,7 @@
 	},
 	"dependencies": {
 		"@chainlink/cre-sdk": "1.19.1",
-		"viem": "2.34.0",
+		"viem": "2.56.3",
 		"zod": "3.25.76"
 	},
 	"devDependencies": {
