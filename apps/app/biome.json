@@ -4,7 +4,10 @@
     "includes": [
       "**",
       "!.next",
-      "!public"
+      "!public",
+      "!components/ui",
+      "!components/ai-elements",
+      "!hooks"
     ]
   },
   "formatter": {
