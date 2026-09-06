@@ -460,8 +460,13 @@ answers *"Is it live? Is it audited?"* with *"Neither, yet"*, the panel is capti
 example, not a live account. Nothing is deployed yet"*, and the docs have a Status page. A
 footer is a signature, not the place to repeat them.
 
+And the bar no longer changes height when a menu opens at the top of the page. Scrolling and
+opening shared one rule, so hovering shrank the bar from 82 to 64 and moved the very thing the
+pointer was aiming at. Scrolling still shortens it; opening only makes it solid.
+
 ### Prompts, verbatim in translation
 
 - "And fix the nav: at that width it should already be a hamburger."
 - "And put Launch App at the very bottom on its own."
 - "Replace [the legal paragraph] with just a Helico copyright."
+- "By the way, when I hover the nav at the top of the page, why does its height change?"
