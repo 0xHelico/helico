@@ -280,18 +280,20 @@ Format: date · what was done · the AI's role · what a human verified.
 
 ### 2026-09-06 — Landing page
 
-- **Done:** `apps/landing` replaced the starter: nav pill, hero with one "Getting started"
-  button, an aurora background that zooms on scroll, and the canvas island (four Helico
-  scenarios, terminal and messenger surfaces, the "behind the chat" voyage). Icons and metadata
-  from the Helico logo set; React and Tailwind v4 added to the Astro app for the island.
+- **Done:** `apps/landing` replaced the starter with a long single page in the style of a
+  modern protocol site: nav, hero with the canvas island (four Helico scenarios, terminal and
+  messenger surfaces, the "behind the chat" voyage), stay-updated strip, a dark under-the-hood
+  section, build, verified-by-default facts and a chart, FAQ, footer. Icons and metadata from
+  the Helico logo set; React and Tailwind v4 added to the Astro app for the island.
 - **AI's role:** rebuilt a reference HTML layout the user supplied in Astro and ported a React
   canvas composition from another project of theirs, rewriting every string and colour for
   Helico; wrote the scenarios from numbers already recorded in this repository; optimised the
   assets (WebP nav logo through `astro:assets`, WebP manifest and OG icons, lazy island).
 - **Plan:** [`docs/plans/2026-09-06-landing-ui.md`](docs/plans/2026-09-06-landing-ui.md), tracked in #66.
 - **Verified:** `astro check` (0 errors), `astro build`, `bun run check` with Tailwind
-  directives enabled in Biome; output JS is React plus framer-motion behind `client:visible`,
-  images under 45 KB each. Not yet deployed anywhere.
+  directives enabled in Biome; a Playwright audit of the production build at seven viewports
+  (overflow, hydration, scenario switching, console, axe) with zero findings; output JS is
+  React plus framer-motion behind `client:visible`, images under 45 KB each. Not yet deployed.
 
 <!--
 Template for the next entry:

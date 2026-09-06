@@ -1,0 +1,65 @@
+---
+interface Props {
+	placement?: 'top' | 'bottom'
+}
+const { placement = 'top' } = Astro.props
+const watch = 'https://github.com/0xHelico/helico/subscription'
+---
+
+<section class="container updates" aria-label={placement === 'top' ? 'Stay updated' : 'Stay updated, bottom of page'}>
+	<div class="updates__card">
+		<h2>Stay updated</h2>
+		<p>Be the first to hear when Helico ships.</p>
+		<form class="updates__form" action={watch} method="get">
+			<input type="email" name="email" placeholder="Email" aria-label="Email" autocomplete="email" />
+			<button type="submit" class="btn btn--ink">Notify me</button>
+		</form>
+		<small>Notifications go through GitHub for now: the button watches the repository.</small>
+	</div>
+</section>
+
+<style>
+	.updates {
+		margin-top: 2rem;
+	}
+	.updates__card {
+		text-align: center;
+		padding: 2.5rem 1.25rem;
+	}
+	.updates h2 {
+		margin: 0;
+		font-size: 1.05rem;
+		font-weight: 600;
+	}
+	.updates p {
+		margin: 0.4rem 0 0;
+		font-size: 0.875rem;
+		color: #5b6270;
+	}
+	.updates__form {
+		display: flex;
+		justify-content: center;
+		gap: 0.5rem;
+		margin: 1.1rem auto 0;
+		max-width: 26rem;
+	}
+	.updates__form input {
+		flex: 1;
+		min-width: 0;
+		border-radius: 9999px;
+		border: 1px solid rgba(11, 14, 21, 0.12);
+		padding: 0.6rem 1rem;
+		font: inherit;
+		font-size: 0.875rem;
+	}
+	.updates__form input:focus {
+		outline: 2px solid #b7abff;
+		outline-offset: 1px;
+	}
+	.updates small {
+		display: block;
+		margin-top: 0.7rem;
+		font-size: 0.72rem;
+		color: #5b6270;
+	}
+</style>

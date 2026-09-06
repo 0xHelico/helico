@@ -98,6 +98,16 @@
 					}
 				}
 			}
+		},
+		{
+			"includes": ["apps/landing/src/components/canvas/TuiCanvas.tsx"],
+			"linter": {
+				"rules": {
+					"a11y": {
+						"noNoninteractiveTabindex": "off"
+					}
+				}
+			}
 		}
 	],
 	"css": {

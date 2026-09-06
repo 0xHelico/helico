@@ -20,7 +20,7 @@ export function HeroCanvas() {
 
 	return (
 		<div className="relative">
-			<div className="relative isolate h-[clamp(540px,78svh,720px)] overflow-hidden rounded-[24px] border border-[var(--color-border)] shadow-[0_40px_80px_-50px_rgba(20,28,60,0.5)] sm:h-auto sm:aspect-[16/9] sm:min-h-[460px]">
+			<div className="relative isolate h-[clamp(540px,78svh,720px)] overflow-hidden rounded-[24px] border border-[var(--color-border)] shadow-[0_40px_80px_-50px_rgba(20,28,60,0.5)] lg:h-auto lg:aspect-[16/9] lg:min-h-[460px]">
 				{CYCLES.map((c, i) => (
 					<div
 						key={c.id}

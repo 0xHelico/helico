@@ -1,0 +1,108 @@
+---
+const repo = 'https://github.com/0xHelico/helico'
+const packages = [
+	{
+		name: '@helico/plugin-uniswap',
+		stat: '52 tests',
+		copy: 'Addresses, pools, quotes, every swap shape, Permit2, liquidity, on any chain. Executed on two networks, read-only on three more.',
+		href: `${repo}/tree/main/packages/plugins/uniswap`,
+	},
+	{
+		name: '@helico/plugin-cre',
+		stat: '110 tests',
+		copy: 'The enclave: hash check, in-TEE reads, the vault\'s rule mirrored, swap sizing, EIP-712 signing. Simulated with the CRE CLI.',
+		href: `${repo}/tree/main/packages/plugins/cre`,
+	},
+	{
+		name: 'HelicoVault',
+		stat: '74 + 10 tests',
+		copy: 'Mandate-enforced re-centring with the swap inside its own lock; ten tests run against a fork of Arbitrum One.',
+		href: `${repo}/tree/main/contracts`,
+	},
+]
+---
+
+<section class="container build" id="build" aria-labelledby="build-title">
+	<div class="section-card center">
+		<span class="eyebrow">Helico plugins</span>
+		<h2 class="headline" id="build-title">Build with Helico</h2>
+		<p class="lede">Two reusable packages and one vault, consumed by the app and open to anyone. Every partner integration lives in its own package.</p>
+		<div class="actions">
+			<a class="btn btn--primary" href={`${repo}/tree/main/packages/plugins`}>Start building</a>
+			<a class="btn btn--secondary" href={`${repo}/tree/main/docs/plans`}>Read the plans</a>
+		</div>
+
+		<div class="stack" aria-hidden="true">
+			<div class="tile tile--a"><span>uniswap</span></div>
+			<div class="tile tile--b"><span>cre</span></div>
+			<div class="tile tile--c"><span>vault</span></div>
+		</div>
+
+		<div class="split">
+			<div>
+				<h3>The best build with Helico.</h3>
+				<p>Each package ships with its own tests and a README that points at the lines behind every claim.</p>
+			</div>
+			<a class="btn btn--secondary" href={`${repo}#readme`}>Learn more</a>
+		</div>
+		<div class="cards" style="text-align:left">
+			{packages.map((p) => (
+				<a class="card card--link" href={p.href}>
+					<span class="label">{p.name}</span>
+					<h3 style="margin-top:.4rem;font-size:1.5rem;letter-spacing:-.02em">{p.stat}</h3>
+					<p>{p.copy}</p>
+				</a>
+			))}
+		</div>
+	</div>
+</section>
+
+<style>
+	.build {
+		margin-top: 2rem;
+	}
+	.stack {
+		display: flex;
+		align-items: flex-end;
+		justify-content: center;
+		gap: clamp(0.75rem, 2vw, 1.5rem);
+		margin: clamp(2rem, 4vw, 3rem) auto 0;
+		perspective: 900px;
+	}
+	.tile {
+		display: grid;
+		place-items: center;
+		border-radius: 18px;
+		font-family: var(--font-mono);
+		font-size: 0.75rem;
+		letter-spacing: 0.06em;
+		color: #fff;
+		transform: rotateX(18deg) rotateZ(-4deg);
+		box-shadow:
+			0 30px 50px -30px rgba(76, 63, 214, 0.55),
+			inset 0 1px 0 rgba(255, 255, 255, 0.5);
+	}
+	.tile--a {
+		width: clamp(6rem, 18vw, 9rem);
+		height: clamp(4rem, 10vw, 5.5rem);
+		background: linear-gradient(180deg, #c9c1ff, #a79bff);
+	}
+	.tile--b {
+		width: clamp(6.5rem, 20vw, 10rem);
+		height: clamp(5rem, 12vw, 7rem);
+		background: linear-gradient(180deg, #a79bff, #8676ff);
+	}
+	.tile--c {
+		width: clamp(7rem, 22vw, 11rem);
+		height: clamp(6rem, 14vw, 8.5rem);
+		background: linear-gradient(180deg, #8676ff, #5d4ce6);
+	}
+	.card--link {
+		display: block;
+		transition: transform 0.15s, border-color 0.15s;
+	}
+	.card--link:hover {
+		transform: translateY(-2px);
+		border-color: #b7abff;
+	}
+</style>

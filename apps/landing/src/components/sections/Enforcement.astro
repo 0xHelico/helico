@@ -1,0 +1,248 @@
+---
+const repo = 'https://github.com/0xHelico/helico'
+const gates = [
+	{ name: 'You', what: 'sign the mandate' },
+	{ name: 'Vault', what: 'stores its hash' },
+	{ name: 'Enclave', what: 'decides inside the TEE' },
+	{ name: 'Chain', what: 'executes only what passes' },
+]
+const templates = [
+	{
+		label: 'Keep in range',
+		name: 'Tight',
+		copy: 'A narrow band around the price, moved often. Most fees, most re-centres.',
+		chips: ['20 ticks', 'retain 90%', 'cooldown 1 h'],
+	},
+	{
+		label: 'Wide and patient',
+		name: 'Steady',
+		copy: 'A wide band that only moves when the price has clearly left it.',
+		chips: ['200 ticks', 'retain 95%', 'cooldown 24 h'],
+	},
+	{
+		label: 'Hands off',
+		name: 'Guarded',
+		copy: 'Hold unless the improvement is worth the swap; the fee ceiling refuses expensive pools.',
+		chips: ['improve ≥ 50 bps', 'fee ≤ 0.3%', 'cooldown 12 h'],
+	},
+]
+---
+
+<section class="container enforcement" id="enforcement" aria-labelledby="enforcement-title">
+	<div class="section-card section-card--dark center">
+		<span class="eyebrow">Under the hood</span>
+		<h2 class="headline" id="enforcement-title">The full power of <span class="grad">confidential</span> enforcement</h2>
+		<p class="lede">Decide in the enclave, enforce in the vault. Built on Chainlink CRE and Uniswap v4.</p>
+		<div class="actions">
+			<a class="btn btn--dark" href={`${repo}#readme`}>Get started</a>
+			<a class="btn btn--ghost" href={`${repo}/blob/main/docs/plans/2026-09-05-mandate-enforced-lp.md`}>Learn more</a>
+		</div>
+
+		<div class="panel" aria-label="A mandate and its four gates">
+			<div class="panel__bar"><i></i><i></i><i></i><span>helico · vault 0x362d…f772 · Arbitrum One</span></div>
+			<div class="panel__body">
+				<div class="panel__side">
+					<span class="is-active">Mandate</span><span>Position</span><span>Enclave</span><span>Vault</span><span>Evidence</span>
+				</div>
+				<div class="panel__main">
+					<div class="panel__head">
+						<div>
+							<div class="panel__title">Mandate · position #1900769</div>
+							<div class="panel__sub">ETH / ARB 0.05% · Uniswap v4 · hash 0x134be6bb…6225</div>
+						</div>
+						<span class="panel__badge">active</span>
+					</div>
+					<dl class="panel__grid">
+						<div><dt>Range width</dt><dd>20 ticks</dd></div>
+						<div><dt>Retain</dt><dd>≥ 90%</dd></div>
+						<div><dt>Cooldown</dt><dd>1 h</dd></div>
+						<div><dt>Improvement</dt><dd>≥ 50 bps</dd></div>
+						<div><dt>Max liquidity</dt><dd>1e18</dd></div>
+						<div><dt>Expires</dt><dd>in 30 d</dd></div>
+					</dl>
+					<ol class="gates">
+						{gates.map((g, i) => (
+							<li>
+								<span class="gates__n">{i + 1}</span>
+								<span class="gates__name">{g.name}</span>
+								<span class="gates__what">{g.what}</span>
+							</li>
+						))}
+					</ol>
+				</div>
+			</div>
+		</div>
+
+		<div class="split">
+			<div>
+				<h3>A mandate for every strategy.</h3>
+				<p>From a tight band that moves often to a wide one that waits, the terms are yours; the enclave chooses inside them and the vault refuses the rest.</p>
+			</div>
+			<a class="btn btn--ghost" href={`${repo}/blob/main/contracts/README.md`}>Learn more</a>
+		</div>
+		<div class="cards" style="text-align:left">
+			{templates.map((t) => (
+				<div class="card">
+					<span class="label">{t.label}</span>
+					<h3 style="margin-top:.4rem">{t.name}</h3>
+					<p>{t.copy}</p>
+					<div class="chips">{t.chips.map((c) => <span class="chip"><i></i>{c}</span>)}</div>
+				</div>
+			))}
+		</div>
+	</div>
+</section>
+
+<style>
+	.enforcement {
+		margin-top: 2rem;
+	}
+	.panel {
+		margin: clamp(2rem, 4vw, 3rem) auto 0;
+		max-width: 60rem;
+		border-radius: 18px;
+		overflow: hidden;
+		border: 1px solid rgba(255, 255, 255, 0.1);
+		background: #101017;
+		text-align: left;
+		box-shadow: 0 40px 80px -40px rgba(124, 107, 255, 0.35);
+	}
+	.panel__bar {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		padding: 0.6rem 0.9rem;
+		border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+		font-family: var(--font-mono);
+		font-size: 0.7rem;
+		color: #8d8ca3;
+	}
+	.panel__bar i {
+		width: 0.6rem;
+		height: 0.6rem;
+		border-radius: 50%;
+		background: #2a2a36;
+	}
+	.panel__bar span {
+		margin-left: 0.5rem;
+	}
+	.panel__body {
+		display: grid;
+		grid-template-columns: 1fr;
+	}
+	.panel__side {
+		display: none;
+		flex-direction: column;
+		gap: 0.2rem;
+		padding: 1rem 0.75rem;
+		border-right: 1px solid rgba(255, 255, 255, 0.08);
+		font-size: 0.8rem;
+		color: #8d8ca3;
+	}
+	.panel__side span {
+		padding: 0.45rem 0.7rem;
+		border-radius: 8px;
+	}
+	.panel__side .is-active {
+		background: rgba(124, 107, 255, 0.18);
+		color: #ffffff;
+	}
+	.panel__main {
+		padding: 1.25rem;
+	}
+	.panel__head {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 1rem;
+	}
+	.panel__title {
+		font-weight: 600;
+		color: #ffffff;
+	}
+	.panel__sub {
+		margin-top: 0.25rem;
+		font-family: var(--font-mono);
+		font-size: 0.72rem;
+		color: #8d8ca3;
+	}
+	.panel__badge {
+		border-radius: 9999px;
+		padding: 0.25rem 0.6rem;
+		font-size: 0.7rem;
+		font-weight: 600;
+		background: rgba(58, 166, 110, 0.18);
+		color: #6ee7a8;
+	}
+	.panel__grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+		gap: 0.6rem;
+		margin: 1.1rem 0 0;
+	}
+	.panel__grid div {
+		border-radius: 12px;
+		padding: 0.7rem 0.8rem;
+		background: #15151c;
+		border: 1px solid rgba(255, 255, 255, 0.06);
+	}
+	.panel__grid dt {
+		font-size: 0.7rem;
+		color: #8d8ca3;
+	}
+	.panel__grid dd {
+		margin: 0.2rem 0 0;
+		font-weight: 600;
+		color: #ffffff;
+	}
+	.gates {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+		gap: 0.6rem;
+		list-style: none;
+		margin: 1rem 0 0;
+		padding: 0;
+	}
+	.gates li {
+		display: grid;
+		grid-template-columns: auto 1fr;
+		gap: 0.15rem 0.6rem;
+		align-items: center;
+		border-radius: 12px;
+		padding: 0.7rem 0.8rem;
+		background: linear-gradient(180deg, rgba(124, 107, 255, 0.16), rgba(124, 107, 255, 0.05));
+		border: 1px solid rgba(124, 107, 255, 0.25);
+	}
+	.gates__n {
+		grid-row: span 2;
+		width: 1.5rem;
+		height: 1.5rem;
+		border-radius: 50%;
+		display: grid;
+		place-items: center;
+		background: #7c6bff;
+		color: #fff;
+		font-size: 0.72rem;
+		font-weight: 700;
+	}
+	.gates__name {
+		font-size: 0.8rem;
+		font-weight: 600;
+		color: #ffffff;
+	}
+	.gates__what {
+		font-size: 0.72rem;
+		color: #b9b8c8;
+	}
+	@media (min-width: 768px) {
+		.panel__body {
+			grid-template-columns: 11rem 1fr;
+		}
+		.panel__side {
+			display: flex;
+		}
+		.panel__main {
+			padding: 1.5rem;
+		}
+	}
+</style>

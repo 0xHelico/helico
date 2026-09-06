@@ -1,0 +1,153 @@
+---
+const repo = 'https://github.com/0xHelico/helico'
+const facts = [
+	{ n: '236', unit: 'unit tests', copy: 'across the two plugins and the vault, run in CI on every pull request.' },
+	{ n: '10', unit: 'fork tests', copy: 'that mint, swap, and re-centre against a fork of Arbitrum One.' },
+	{ n: '12', unit: 'audit agents', copy: 'ran over the vault before its rewrite; a six-agent pass followed.' },
+	{ n: '3', unit: 'networks exercised', copy: 'Base Sepolia and Robinhood Chain with real transactions, Arbitrum One on a fork and read-only.' },
+	{ n: '3', unit: 'ways to check one digest', copy: 'the EIP-712 authorisation matches between the enclave, the vault, and cast.' },
+	{ n: 'MIT', unit: 'open source', copy: 'every plan, prompt, and AI-usage note committed alongside the code.' },
+]
+const bars = [
+	{ label: 'Burn and mint, out of range', pct: 0, note: 'nothing can be minted' },
+	{ label: 'Burn and mint, in range', pct: 13, note: 'value returned to the wallet' },
+	{ label: 'With the vault\'s swap', pct: 81, note: 'measured on a fork' },
+	{ label: 'With the enclave\'s sizing', pct: 98, note: 'what the mandate asks for' },
+]
+---
+
+<section class="container verified" id="verified" aria-labelledby="verified-title">
+	<div class="section-card center">
+		<span class="eyebrow">Helico</span>
+		<h2 class="headline" id="verified-title">Verified by default</h2>
+		<p class="lede">Every integration is tested against the real thing, and the README points at the lines that prove each claim.</p>
+		<div class="actions">
+			<a class="btn btn--secondary" href={`${repo}#readme`}>Learn more</a>
+		</div>
+
+		<div class="cards facts" style="text-align:left">
+			{facts.map((f) => (
+				<div class="card">
+					<div class="fact__n">{f.n} <small>{f.unit}</small></div>
+					<p>{f.copy}</p>
+				</div>
+			))}
+		</div>
+
+		<div class="split">
+			<div>
+				<h3>What a re-centre keeps.</h3>
+				<p>An out-of-range position holds one token. Without a swap it cannot fund a new range at all; with the swap inside the vault it keeps most of its liquidity.</p>
+			</div>
+		</div>
+		<div class="card chart" style="text-align:left">
+			<div class="chart__head">
+				<span>Liquidity retained by a re-centre</span>
+				<span class="chart__legend">share of the position's liquidity</span>
+			</div>
+			<ul class="bars">
+				{bars.map((b) => (
+					<li>
+						<span class="bars__label">{b.label}</span>
+						<span class="bars__track"><span class="bars__fill" style={`width:${Math.max(b.pct, 1)}%`}></span></span>
+						<span class="bars__pct">{b.pct}%</span>
+						<span class="bars__note">{b.note}</span>
+					</li>
+				))}
+			</ul>
+		</div>
+	</div>
+</section>
+
+<style>
+	.verified {
+		margin-top: 2rem;
+	}
+	.facts {
+		margin-top: clamp(2rem, 4vw, 3rem);
+	}
+	.fact__n {
+		font-size: 1.6rem;
+		font-weight: 600;
+		letter-spacing: -0.02em;
+		color: var(--color-ink);
+	}
+	.fact__n small {
+		display: block;
+		font-size: 0.8rem;
+		font-weight: 500;
+		letter-spacing: 0;
+		color: #5d4ce6;
+	}
+	.chart {
+		padding: 1.5rem;
+	}
+	.chart__head {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: space-between;
+		gap: 0.5rem;
+		font-weight: 600;
+		font-size: 0.95rem;
+	}
+	.chart__legend {
+		font-weight: 500;
+		font-size: 0.75rem;
+		color: #5b6270;
+	}
+	.bars {
+		list-style: none;
+		margin: 1.25rem 0 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.9rem;
+	}
+	.bars li {
+		display: grid;
+		grid-template-columns: 1fr auto;
+		grid-template-areas:
+			'label pct'
+			'track track'
+			'note note';
+		gap: 0.3rem 0.75rem;
+		align-items: center;
+		font-size: 0.85rem;
+	}
+	.bars__label {
+		grid-area: label;
+		font-weight: 500;
+	}
+	.bars__pct {
+		grid-area: pct;
+		font-family: var(--font-mono);
+		font-size: 0.8rem;
+		color: #4c3fd6;
+	}
+	.bars__track {
+		grid-area: track;
+		height: 0.6rem;
+		border-radius: 9999px;
+		background: #efecff;
+		overflow: hidden;
+	}
+	.bars__fill {
+		display: block;
+		height: 100%;
+		border-radius: inherit;
+		background: linear-gradient(90deg, #7c6bff, #b7abff);
+	}
+	.bars__note {
+		grid-area: note;
+		font-size: 0.75rem;
+		color: #5b6270;
+	}
+	@media (min-width: 640px) {
+		.bars li {
+			grid-template-columns: 14rem 1fr 3.5rem;
+			grid-template-areas:
+				'label track pct'
+				'label note pct';
+		}
+	}
+</style>

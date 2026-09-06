@@ -37,9 +37,10 @@ export function TuiCanvas({ cycle }: { cycle: Cycle }) {
 		}
 	}, [cycle.toolStream.length])
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: re-run when the stage advances so the newest line stays in view
 	useEffect(() => {
 		if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-	}, [])
+	}, [stage])
 
 	const showUserPrompt = stage === 'committed' || stage === 'tools' || stage === 'reply'
 	const showHelicoRow = stage === 'tools' || stage === 'reply'
@@ -48,8 +49,13 @@ export function TuiCanvas({ cycle }: { cycle: Cycle }) {
 
 	return (
 		<div className="flex h-full min-h-[460px] flex-col bg-[var(--color-paper)] font-mono text-[12px] leading-[1.55] text-[var(--color-ink)]">
+			{/* Scrollable, so it must be keyboard-reachable (axe scrollable-region-focusable); Biome's
+			    noNoninteractiveTabindex is switched off for this file in biome.json for that reason. */}
 			<div
 				ref={scrollRef}
+				role="log"
+				aria-label="Conversation"
+				tabIndex={0}
 				className="min-h-0 flex-1 overflow-y-auto px-4 pt-3 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
 			>
 				<Row label="sys" labelColor={COLOR_SYS}>
@@ -125,11 +131,9 @@ export function TuiCanvas({ cycle }: { cycle: Cycle }) {
 				<span className="flex items-center gap-2">
 					<span style={{ color: COLOR_HELICO, fontWeight: 500 }}>helico</span>
 					<span style={{ color: 'var(--color-ink-3)', opacity: 0.5 }}>·</span>
-					<span style={{ color: 'var(--color-ink-3)' }}>enclave · nitro · us-west-2</span>
-					<span style={{ color: 'var(--color-ink-3)', opacity: 0.5 }}>·</span>
-					<span style={{ color: 'var(--color-ink-3)' }}>vault 0x362d…f772</span>
+					<span style={{ color: 'var(--color-ink-3)' }}>nitro · us-west-2</span>
 				</span>
-				<span style={{ color: '#c4793a' }}>key: sealed</span>
+				<span style={{ color: '#b5651d', whiteSpace: 'nowrap' }}>key sealed</span>
 			</div>
 		</div>
 	)

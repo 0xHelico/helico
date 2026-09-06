@@ -1,10 +1,10 @@
 # @helico/landing
 
-The landing page, Astro 7. Two sections: a hero over an aurora that zooms on scroll, and the
-canvas, a React island that cycles through four scripted scenarios (commit a mandate, re-centre
-through the enclave, refuse tampered thresholds, hold while in range) with the chat on the left
-and what happened behind it on the right. Illustrative; the numbers are the ones the repository
-recorded.
+The landing page, Astro 7. A long single page: nav, hero with the canvas, a stay-updated strip,
+the dark "under the hood" section, build, verified-by-default facts, FAQ, footer. The canvas is a
+React island that cycles through four scripted scenarios (commit a mandate, re-centre through
+the enclave, refuse tampered thresholds, hold while in range) with the chat on the left and what
+happened behind it on the right. Illustrative; the numbers are the ones the repository recorded.
 
 Plan: [`docs/plans/2026-09-06-landing-ui.md`](../../docs/plans/2026-09-06-landing-ui.md).
 
@@ -20,15 +20,18 @@ bun run --filter @helico/landing typecheck   # astro check
 
 | | |
 |---|---|
-| Page, nav, hero, scroll transforms | `src/pages/index.astro` |
+| Page composition | `src/pages/index.astro` |
+| Sections | `src/components/sections/*.astro` (Nav, Hero, Updates, Enforcement, Build, Verified, Faq, Footer) |
 | Head, icons, metadata | `src/layouts/Base.astro`, `public/site.webmanifest` |
 | The canvas island | `src/components/canvas/HeroCanvas.tsx` (frame), `TuiCanvas.tsx` and `TgCanvas.tsx` (chat surfaces), `OutputCanvas.tsx` and `glyphs.tsx` (the voyage) |
 | Scenarios | `src/components/canvas/cycles.ts` (chat), `provenance.ts` (stations) |
-| Theme | `src/styles/global.css` (Tailwind v4 `@theme`) |
+| Theme and page primitives (cards, buttons, chips) | `src/styles/global.css` (Tailwind v4 `@theme`) |
 
 ## Do not forget
 
-- Biome skips `.astro` files and `public/`; the island's `.tsx` and the CSS are checked.
+- Biome skips `.astro` files and `public/`; the island's `.tsx` and the CSS are checked. The terminal's
+  scrollback keeps `tabIndex={0}` (axe requires scrollable regions to be keyboard-reachable), so
+  `noNoninteractiveTabindex` is off for that one file in `biome.json`.
 - The nav logo goes through `astro:assets` (WebP at 1x and 2x); the manifest icons are WebP; the
   OG image is `public/og.webp`. The only PNG left is the 180 px Apple touch icon.
 - The island loads with `client:visible`, so React and framer-motion (about 340 KB before

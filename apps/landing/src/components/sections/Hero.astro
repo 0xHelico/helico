@@ -1,0 +1,45 @@
+---
+import { Image } from 'astro:assets'
+import logo from '../../assets/logo.png'
+import { HeroCanvas } from '../canvas/HeroCanvas'
+const repo = 'https://github.com/0xHelico/helico'
+---
+
+<section class="container" id="hero" aria-labelledby="hero-title">
+	<div class="section-card center hero">
+		<span class="eyebrow"><Image src={logo} alt="" width={16} height={16} densities={[1, 2]} /> Helico Vault</span>
+		<h1 class="headline" id="hero-title">Liquidity that stays in range.</h1>
+		<p class="lede">
+			Commit a mandate once. A Chainlink CRE enclave decides when to re-centre your Uniswap v4
+			position; the vault enforces what you signed and refuses everything else.
+		</p>
+		<div class="actions">
+			<a class="btn btn--primary cta" href={`${repo}#readme`}>
+				Read the docs
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+			</a>
+			<a class="btn btn--secondary" href="#enforcement">How it works</a>
+		</div>
+		<div class="hero__canvas" id="canvas">
+			<HeroCanvas client:visible />
+			<p class="hero__caption">Illustrative. The numbers are the ones the repository recorded.</p>
+		</div>
+	</div>
+</section>
+
+<style>
+	.hero {
+		margin-top: 1rem;
+		padding-bottom: clamp(1.25rem, 3vw, 2.5rem);
+	}
+	.hero__canvas {
+		margin-top: clamp(2rem, 4vw, 3rem);
+		text-align: left;
+	}
+	.hero__caption {
+		margin: 0.9rem 0 0;
+		text-align: center;
+		font-size: 0.75rem;
+		color: #5b6270;
+	}
+</style>

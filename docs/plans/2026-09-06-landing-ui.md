@@ -46,3 +46,21 @@ in Astro for the landing, use the `logo-helico` set for icons and metadata, repl
 section with the `HeroCanvas` composition from another project of theirs "but with Helico
 inside", replace the four popup cards with a single "Getting started" button, adjust everything
 to Helico, optimise heavy assets, and keep the issue-and-PR workflow.
+
+## Revision — same day, a different reference
+
+Mid-build the user switched the reference to a long single-page protocol site and asked for its
+style with Helico's content: white page, big rounded section cards whose lavender fades to white
+at the top, a dark rounded section, pill buttons, card grids, stats, an FAQ, and a footer with
+columns. The canvas island stays and takes the place of the app mockup in the hero. The earlier
+aurora background, the popup-card hero, and page-by-page scroll snapping were dropped with it.
+
+Sections now: nav, hero (with the canvas), stay-updated strip, "under the hood" (dark: a
+product-style panel of one mandate and its four gates, three mandate templates), "build with
+Helico" (the two plugins and the vault, with test counts), "verified by default" (six facts that
+are true of the repository today and a chart of liquidity retained by a re-centre), FAQ, a second
+updates strip, footer with a plain-language disclaimer.
+
+Verification added: a headless-browser audit script (Playwright, kept outside the repo) that
+loads the production build at seven viewports, checks for horizontal overflow, the island's
+hydration and scenario switching, console errors, and runs axe; it reports zero findings.
