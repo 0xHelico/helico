@@ -1,0 +1,57 @@
+---
+import { Image } from 'astro:assets'
+import logo from '../../assets/logo.webp'
+import { HeroCanvas } from '../canvas/HeroCanvas'
+const repo = 'https://github.com/0xHelico/helico'
+---
+
+<section class="wrap hero-wrap" id="hero" aria-labelledby="hero-title">
+	<div class="section-card center hero">
+		<div class="hero__copy">
+			<span class="eyebrow"><Image src={logo} alt="" width={20} height={20} densities={[1, 2]} /> Helico Vault</span>
+			<h1 class="headline" id="hero-title">Liquidity That Stays in Range</h1>
+			<p class="lede">Commit a mandate once. The enclave decides, the vault refuses everything else.</p>
+			<div class="actions">
+				<a class="btn btn--primary cta" href={`${repo}#readme`}>Read the Docs</a>
+				<a class="btn btn--secondary" href="#enforcement">How It Works</a>
+			</div>
+		</div>
+		<div class="hero__canvas" id="canvas">
+			<HeroCanvas client:visible />
+			<p class="hero__caption">Illustrative. The numbers are the ones the repository recorded.</p>
+		</div>
+	</div>
+</section>
+
+<style>
+	.hero-wrap {
+		/* The card starts at the top of the page, under the fixed, transparent nav. */
+		margin-top: 0;
+	}
+	.hero {
+		/* The copy keeps the page's column; the canvas below breaks out of it. */
+		padding-inline: clamp(1.25rem, 4vw, 3rem);
+		padding-top: calc(82px + clamp(2.5rem, 5vw, 4.5rem));
+	}
+	@media (max-width: 899px) {
+		.hero {
+			padding-top: calc(64px + 2.5rem);
+		}
+	}
+	.hero__copy {
+		max-width: var(--content-max);
+		margin-inline: auto;
+	}
+	.hero__canvas {
+		max-width: 80rem;
+		margin: clamp(2.5rem, 5vw, 4rem) auto 0;
+		text-align: left;
+	}
+	.hero__caption {
+		margin: 1rem 0 0;
+		text-align: center;
+		font-size: 0.8125rem;
+		letter-spacing: -0.01em;
+		color: var(--ink-65);
+	}
+</style>

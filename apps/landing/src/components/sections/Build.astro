@@ -1,0 +1,128 @@
+---
+import { readFileSync } from 'node:fs'
+import { Code } from 'astro:components'
+const repo = 'https://github.com/0xHelico/helico'
+// Read from the vault source at build time, so the page shows the function as this checkout has it.
+const source = readFileSync(new URL('../../../../../contracts/src/HelicoVault.sol', import.meta.url), 'utf8')
+const from = source.indexOf('    function _checkRange(')
+const to = source.indexOf('\n    }\n', from) + '\n    }'.length
+const check = source.slice(from, to).replace(/^ {4}/gm, '')
+// The real line number of the first line in this checkout, for the gutter. The link below
+// goes to the file on main without an anchor: a number computed from one revision must not
+// be pinned to another (#74).
+const startLine = source.slice(0, from).split('\n').length
+const packages = [
+	{
+		name: '@helico/plugin-uniswap',
+		stat: '52',
+		unit: 'tests',
+		copy: 'Reads pools and positions from the SDK\'s own address maps, on any chain in config.',
+		href: `${repo}/tree/main/packages/plugins/uniswap`,
+	},
+	{
+		name: '@helico/plugin-cre',
+		stat: '116',
+		unit: 'tests',
+		copy: 'Decides, sizes, and signs inside the enclave. The key never leaves it.',
+		href: `${repo}/tree/main/packages/plugins/cre`,
+	},
+	{
+		name: 'HelicoVault',
+		stat: '85 + 9',
+		unit: 'tests',
+		copy: 'Enforces the mandate on chain, with the swap inside its own lock. Nine run on a fork of Arbitrum One.',
+		href: `${repo}/tree/main/contracts`,
+	},
+]
+---
+
+<section class="wrap" id="build" aria-labelledby="build-title">
+	<div class="section-card center">
+		<span class="eyebrow">Helico Plugins</span>
+		<h2 class="headline" id="build-title">Build with Helico</h2>
+		<p class="lede">Decide, size, and sign from your own workflow with two plugins and one vault.</p>
+		<div class="actions">
+			<a class="btn btn--primary" href={`${repo}/tree/main/packages/plugins`}>Start Building</a>
+			<a class="btn btn--secondary" href={`${repo}/tree/main/docs/plans`}>Read the Plans</a>
+		</div>
+
+		<figure class="code" style={`--start:${startLine - 1}`}>
+			<figcaption>contracts/src/HelicoVault.sol · <code>_checkRange</code> · <a href={`${repo}/blob/main/contracts/src/HelicoVault.sol`}>open on GitHub ↗</a></figcaption>
+			<Code code={check} lang="solidity" theme="dark-plus" />
+		</figure>
+
+		<div class="split">
+			<div>
+				<h3>Open by default.</h3>
+				<p>The check above is read from the vault source when this page is built. Every count below points at the package that proves it.</p>
+			</div>
+			<a class="btn btn--secondary" href={`${repo}#readme`}>Learn More</a>
+		</div>
+		<div class="cards" style="text-align:left">
+			{packages.map((p) => (
+				<div class="card">
+					<span class="label">{p.name}</span>
+					<span class="stat">{p.stat} <small>{p.unit}</small></span>
+					<p>{p.copy}</p>
+					<a class="link" href={p.href}>Read the source ↗</a>
+				</div>
+			))}
+		</div>
+	</div>
+</section>
+
+<style>
+	.code {
+		margin: clamp(2.5rem, 5vw, 4rem) auto 0;
+		max-width: 60rem;
+		text-align: left;
+		border-radius: 24px;
+		overflow: hidden;
+		background: #1e1e1e;
+		color: #d4d4d4;
+		box-shadow: 0 40px 80px -40px rgba(93, 76, 230, 0.35);
+	}
+	.code figcaption {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem;
+		padding: 0.8rem 1.25rem;
+		font-family: var(--font-mono);
+		font-size: 0.75rem;
+		color: rgba(255, 255, 255, 0.5);
+		background: #252526;
+		border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+	}
+	.code figcaption code,
+	.code figcaption a {
+		color: #b7abff;
+	}
+	/* Shiki's output is global markup, so the gutter and sizing are addressed as such. VS Code's
+	   Dark+ theme and its editor background; the line numbers are the file's real ones. */
+	.code :global(pre.astro-code) {
+		margin: 0;
+		padding: 1.1rem 0;
+		overflow-x: auto;
+		font-family: var(--font-mono);
+		font-size: 0.78rem;
+		line-height: 1.6;
+		tab-size: 4;
+		font-variant-ligatures: none;
+		counter-reset: line var(--start);
+	}
+	.code :global(.astro-code .line) {
+		display: inline-block;
+		min-width: 100%;
+		padding-right: 1.5rem;
+	}
+	.code :global(.astro-code .line)::before {
+		counter-increment: line;
+		content: counter(line);
+		display: inline-block;
+		width: 3.75rem;
+		padding-right: 1.25rem;
+		text-align: right;
+		color: #858585;
+		user-select: none;
+	}
+</style>

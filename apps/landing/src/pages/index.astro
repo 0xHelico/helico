@@ -1,9 +1,24 @@
 ---
+import Brands from '../components/sections/Brands.astro'
+import Build from '../components/sections/Build.astro'
+import Enforcement from '../components/sections/Enforcement.astro'
+import Faq from '../components/sections/Faq.astro'
+import Footer from '../components/sections/Footer.astro'
+import Hero from '../components/sections/Hero.astro'
+import Nav from '../components/sections/Nav.astro'
+import Verified from '../components/sections/Verified.astro'
 import Base from '../layouts/Base.astro'
 ---
 
 <Base title="Helico">
-	<h1>Helico</h1>
-	<p>An ETHOnline 2026 submission. Placeholder copy until the product story is written.</p>
-	<p><a href="https://github.com/0xHelico/helico">Source on GitHub</a></p>
+	<Nav />
+	<main>
+		<Hero />
+		<Brands />
+		<Enforcement />
+		<Build />
+		<Verified />
+		<Faq />
+	</main>
+	<Footer />
 </Base>

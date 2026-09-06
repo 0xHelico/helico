@@ -299,6 +299,118 @@ Format: date · what was done · the AI's role · what a human verified.
 - **Verified:** `typecheck`, `test` (52 pass), `bun run check`; `CHAIN=arbitrum bun run smoke`
   output quoted in the package README.
 
+### 2026-09-06 — Landing page
+
+- **Done:** `apps/landing` replaced the starter with a long single page in the style of a
+  modern protocol site: nav, hero with the canvas island (four Helico scenarios, terminal and
+  messenger surfaces, the "behind the chat" voyage), stay-updated strip, a dark under-the-hood
+  section, build, verified-by-default facts and a chart, FAQ, footer. Icons and metadata from
+  the Helico logo set; React and Tailwind v4 added to the Astro app for the island.
+- **AI's role:** rebuilt a reference HTML layout the user supplied in Astro and ported a React
+  canvas composition from another project of theirs, rewriting every string and colour for
+  Helico; wrote the scenarios from numbers already recorded in this repository; optimised the
+  assets (WebP nav logo through `astro:assets`, WebP manifest and OG icons, lazy island).
+- **Plan:** [`docs/plans/2026-09-06-landing-ui.md`](docs/plans/2026-09-06-landing-ui.md), tracked in #66.
+- **Verified:** `astro check` (0 errors), `astro build`, `bun run check` with Tailwind
+  directives enabled in Biome; a Playwright audit of the production build at seven viewports
+  (overflow, hydration, scenario switching, console, axe) with zero findings; output JS is
+  React plus framer-motion behind `client:visible`, images under 45 KB each. Not yet deployed.
+
+### 2026-09-06 — Landing page: widths and content
+
+- **Done:** section cards run edge to edge with a 24px gutter and content sits in a 986px column,
+  measured on the reference with a headless browser; the canvas breaks out to 80rem. Content
+  rewritten after a reading of five protocol landing pages and the collaborator's review of
+  the page's claims: a "built with" strip, the seven mandate fields as rule cards linking to
+  pinned lines in the vault, a holds-and-refusals section, `_checkRange` rendered from the
+  vault source at build time, honest test and network counts, a two-row chart with its source,
+  a seven-question FAQ, a closing call to action, and a live tick read from Arbitrum One.
+- **AI's role:** measured the reference, scraped the five sites' text and screenshots, wrote the
+  proposal and, once approved, the copy and components; folded in every point of the
+  collaborator's review. The user chose the sites and approved the proposal; the collaborator's
+  review set the facts straight.
+- **Plan:** revision in [`docs/plans/2026-09-06-landing-ui.md`](docs/plans/2026-09-06-landing-ui.md).
+- **Verified:** `astro check` (0 errors), `astro build`, `bun run check`; widths re-measured at
+  1440, 1920 and 2560 (986px column, 24px gutter, matching the reference to the pixel); the
+  Playwright audit at seven viewports re-run on the build; the built HTML grepped for every
+  claim the review flagged. Still not deployed.
+
+### 2026-09-06 — Landing page: the reference's type scale and four-card structure
+
+- **Done:** the page restructured to the reference's three lavender cards and one black card
+  and restyled to its measured type scale (72px/550 headings, 20px ledes at 620px, 48px pill
+  buttons, 32px section radius, 313px cards, 82px nav), with Inter as the stand-in for its
+  proprietary face. The rules moved into the mandate panel as rows, the range check became the
+  build card's visual, the live tick became a stat card, and holds and refusals became an FAQ
+  entry.
+- **AI's role:** measured the reference's computed styles with a headless browser, mapped the
+  content onto its structure, wrote the CSS and components. The user chose the structure; the
+  only deliberate deviation is a darker button lavender for contrast, recorded in the plan.
+- **Plan:** revision in [`docs/plans/2026-09-06-landing-ui.md`](docs/plans/2026-09-06-landing-ui.md).
+- **Verified:** `astro check` (0 errors), `astro build`, `bun run check`; computed styles on the
+  build compared with the reference's at 1440 (heading 72px/550/−3.6px at 986px, lede
+  20px at 620px, button 48px, card 313px, all equal); the Playwright audit at seven viewports
+  with zero findings. Still not deployed.
+
+### 2026-09-06 — Landing page: "built on" logo grid
+
+- **Done:** the first stay-updated card became a logo grid (four columns, hairlines, a
+  view-more cell when there are more than eleven) of the protocols, chains, and the event the
+  repository touches. Logos are picked up from `src/assets/brands/` when present and rendered
+  through `astro:assets`; wordmarks render until then. Five logos supplied by the user.
+- **AI's role:** wrote the component, picked the list from the dependency manifests and the
+  plugin's network table, and declined to title it "Backed by": Helico has no backers, and the
+  hackathon's prize sponsors are not that. The user supplied the logos and the reference.
+- **Verified:** `astro check` (0 errors), `astro build` with and without a throwaway SVG to prove
+  the glob pickup, the view-more toggle exercised in a headless browser (12 cells to 20 while
+  the list was longer), the Playwright audit at seven viewports.
+
+### 2026-09-06 — Landing page: navigation menus and the highlighted code block
+
+- **Done:** hover menus under the nav bar (four groups of cards with Helico's destinations,
+  measured against the reference), a hamburger and full-screen sheet on small screens, and the
+  range check rendered by Shiki in VS Code's Dark+ with the file's real line numbers.
+- **AI's role:** measured the reference's open menu with a headless browser, wrote the
+  components, the glyphs, and the behaviour (hover, focus, click, Escape, scroll lock), and
+  exercised each in a headless browser at seven viewports. The user chose the reference and
+  asked for the editor look.
+- **Verified:** `astro check` (0 errors), `astro build`, the Playwright audit at seven
+  viewports, and a behaviour script: hover opens and moving onto a card keeps it open, leaving
+  closes, Tab opens, Escape closes and returns focus; the sheet opens, locks scroll, and closes
+  on Escape at 360, 390 and 768.
+
+### 2026-09-06 — Landing page: footer, nav icons, tablet sheet, unfolding panel
+
+- **Done:** the footer folded into the last lavender card with the stay-updated card; twelve
+  two-tone nav icons supplied by the user, recoloured and turning lavender on hover; a
+  two-column sheet on tablets; the nav panel unfolding with a height transition and a card fade,
+  off under reduced motion; one explanatory heading rewritten as a claim.
+- **AI's role:** wrote the CSS and markup, inlined the icons the user supplied, and verified the
+  transition and the closed state in a headless browser. The user supplied the icons and the
+  reference screenshots.
+- **Verified:** `astro check` (0 errors), `astro build`, the Playwright audit at seven viewports,
+  a transition probe (row height 0 → 139px at 90 ms → 206px open → closed again on leave).
+
+### 2026-09-06 — Landing page: the bar
+
+- **Done:** the nav is a fixed, transparent 82px bar over the hero that becomes a 64px white bar
+  with a hairline on scroll; logo left, links and button grouped on the right, spaced as the
+  reference's.
+- **AI's role:** measured the reference at three widths, wrote the CSS and the scroll toggle,
+  read the numbers back from the build. The user asked for the change.
+- **Verified:** `astro check` (0 errors), `astro build`, the Playwright audit at seven viewports,
+  and a probe of the bar at the top and after scrolling.
+
+### 2026-09-06 — Landing page: the new logo set
+
+- **Done:** favicons, the touch icon, the manifest icons, the social image, and the in-page mark
+  replaced with the logo set the user supplied; the manifest icons and the social image are
+  WebP, the in-page source a 256px WebP the image pipeline resizes from. The mark is a rounded
+  square, so the circular crops on the in-page logo were removed.
+- **AI's role:** converted and wired the files; the user supplied the set.
+- **Verified:** `astro build`, the icons served from the preview, the Playwright audit at seven
+  viewports.
+
 ### 2026-09-06 — Vault: consume the enclave's verdict through the CRE forwarder
 
 - **Done:** `HelicoVault` implements `IReceiver.onReport`, decodes

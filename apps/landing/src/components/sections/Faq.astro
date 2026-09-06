@@ -1,0 +1,104 @@
+---
+const repo = 'https://github.com/0xHelico/helico'
+const faqs = [
+	{
+		q: 'What is Helico?',
+		a: 'A vault that keeps a Uniswap v4 liquidity position in range under rules you commit to once: the pool, a range width, an improvement floor, a cooldown, a cap, an expiry, and how much liquidity a move must keep. A Chainlink CRE confidential workflow decides when to move; the vault checks every rule on chain before anything happens.',
+	},
+	{
+		q: 'Who holds my position?',
+		a: 'You do. The position NFT stays in your wallet; you approve the vault as an operator, and a re-centre mints the new position straight back to you. Between the burn and the mint the vault holds the tokens for one call, and asserts on chain that it kept none of them before the call returns.',
+	},
+	{
+		q: 'What can the enclave do to my position?',
+		a: 'One thing: propose a re-centre inside your mandate. No path in the vault pays an agent, the swap may only spend what the burn returned, and the only addresses in the plan are yours and the pool\'s. A rogue agent can move you inside your own terms, and nothing else.',
+	},
+	{
+		q: 'When does it do nothing?',
+		a: 'Most of the time. The enclave holds while the cooldown runs and whenever the best new range would not close the gap by the minimum improvement, so no swap and no gas are spent. The vault refuses an authorisation whose mandate hash it no longer holds, before it reads anything else.',
+	},
+	{
+		q: 'What stays confidential?',
+		a: 'The decision process: which positions the enclave watches, when it reads the pool, the RPC traffic, and how it sizes the swap and the mint. The mandate itself is public on chain; its hash in every report proves the enclave decided against the terms the vault holds, not stale ones.',
+	},
+	{
+		q: 'Is it live? Is it audited?',
+		a: 'Neither, yet. It targets Arbitrum One, where Uniswap v4 and a Chainlink CRE forwarder both exist. The vault has a rehearsed deploy script, the signature path is proven end to end in tests, and the forwarder path has been run end to end on a fork of Arbitrum One: a report through the mock forwarder re-centred a real position on the ETH/ARB pool, keeping 94.3% of its liquidity, and a second run held on the cooldown. That is a fork, not a live network; the simulator is not a TEE; and the mock forwarder verifies no signatures. Twelve AI audit agents and a six-agent pass ran over the vault; that is not a professional audit, and this page does not call it one.',
+	},
+]
+---
+
+<section class="wrap faq" id="faq" aria-labelledby="faq-title">
+	<h2 id="faq-title">FAQs</h2>
+	<div class="faq__list">
+		{faqs.map((f) => (
+			<details class="faq__item">
+				<summary>
+					<span>{f.q}</span>
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14" /><path d="M5 12h14" /></svg>
+				</summary>
+				<p>{f.a}</p>
+			</details>
+		))}
+	</div>
+	<p class="faq__more"><a href={`${repo}#readme`}>Learn More About Helico</a></p>
+</section>
+
+<style>
+	.faq {
+		max-width: 662px;
+		margin-top: clamp(4rem, 8vw, 6rem);
+		margin-bottom: clamp(2rem, 4vw, 3rem);
+	}
+	.faq h2 {
+		margin: 0 0 1.5rem;
+		font-size: clamp(1.75rem, 3vw, 2.5rem);
+		font-weight: 500;
+		line-height: 1.35;
+		letter-spacing: -0.02em;
+		color: var(--ink-90);
+	}
+	.faq__item {
+		border-bottom: 1px solid rgba(37, 34, 40, 0.08);
+	}
+	.faq__item summary {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		padding: 1.4rem 0;
+		cursor: pointer;
+		list-style: none;
+		font-size: 1rem;
+		letter-spacing: -0.01em;
+		color: var(--ink-90);
+	}
+	.faq__item summary::-webkit-details-marker {
+		display: none;
+	}
+	.faq__item summary svg {
+		flex: none;
+		width: 1rem;
+		height: 1rem;
+		color: var(--ink-65);
+		transition: transform 0.2s;
+	}
+	.faq__item[open] summary svg {
+		transform: rotate(45deg);
+	}
+	.faq__item p {
+		margin: 0 0 1.4rem;
+		font-size: 1rem;
+		line-height: 1.5;
+		letter-spacing: -0.01em;
+		color: var(--ink-65);
+	}
+	.faq__more {
+		margin: 1.5rem 0 0;
+		font-size: 0.875rem;
+		font-weight: 450;
+	}
+	.faq__more a {
+		color: var(--lav-text);
+	}
+</style>
