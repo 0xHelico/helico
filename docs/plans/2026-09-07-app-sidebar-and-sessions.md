@@ -5,6 +5,19 @@ votes it was wired to. The owner's words: *"why is the chatbot so different — 
 was a sidebar, below it account, chat history, new chat, and now it's gone."* And:
 *"clicking the logo goes back to the landing page"*, which it should not from inside the app.
 
+## The order the owner asked for
+
+*"Let's do it this way: make it the same first, then change it."* So the template's shell comes
+back as the template wrote it — `SidebarProvider`, `AppSidebar`, `SidebarInset`, the history
+list, the account block, the greeting and the suggested actions — and Helico's changes go on
+top of that rather than beside it.
+
+Not everything comes back. The template's composer, message renderer and history are wired to
+the AI SDK, an artifact system, documents, votes and a weather tool, and those are the parts
+that were pruned for a reason: this chat does not stream from a model in the browser, it asks
+`apps/be` for a checked intent. So the **shell** is restored faithfully and the **body** stays
+ours — the same `ai-elements` the template uses, saying what our product says.
+
 ## What has to be true
 
 A sidebar with New chat, a list of past conversations, and the account at the bottom. A
