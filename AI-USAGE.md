@@ -479,6 +479,10 @@ Format: date · what was done · the AI's role · what a human verified.
 - **Copy overhaul:** after the user pointed at aave.com and morpho.org, the tabs, rule labels,
   values, template chips, nav titles and one new FAQ were rewritten in the words a savings app
   would use, with the field names kept beside the plain labels for builders. Facts unchanged.
+- **Second pass, from screenshots:** one line per rule, plainer templates, the counts and
+  chart replaced by three promises and the rehearsal's 94%, the builders' section labelled as
+  such, the FAQ unfolding, and an SEO pass (pipe-separated titles, canonical, robots, sitemap,
+  JSON-LD). Verified with `astro check`, the build, and the audits at zero.
 
 ### 2026-09-06 — Landing page: plain words
 

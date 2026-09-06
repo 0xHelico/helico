@@ -17,9 +17,21 @@ export async function getStaticPaths() {
 
 const { post, others } = Astro.props as { post: Post; others: Post[] }
 const Content = post.entry ? (await render(post.entry)).Content : null
+const origin = (Astro.site ?? Astro.url).origin
+const article = {
+	'@context': 'https://schema.org',
+	'@type': 'BlogPosting',
+	headline: post.title,
+	description: post.summary,
+	datePublished: post.publishedAt.toISOString(),
+	author: { '@type': 'Person', name: post.author },
+	publisher: { '@type': 'Organization', name: 'Helico', logo: { '@type': 'ImageObject', url: `${origin}/icon-512.webp` } },
+	mainEntityOfPage: `${origin}/blog/${post.slug}/`,
+	keywords: post.tags.join(', '),
+}
 ---
 
-<Base title={`${post.title} · Helico`} description={post.summary}>
+<Base title={post.title} description={post.summary} type="article" jsonLd={article}>
 	<Nav />
 	<main class="article">
 		<header class="article__head">

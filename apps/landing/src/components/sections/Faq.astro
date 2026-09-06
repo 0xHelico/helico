@@ -90,6 +90,37 @@ const faqs = [
 	.faq__item[open] summary svg {
 		transform: rotate(45deg);
 	}
+	/* The answer unfolds downward. Browsers without ::details-content open it instantly. */
+	.faq {
+		interpolate-size: allow-keywords;
+	}
+	.faq__item::details-content {
+		height: 0;
+		overflow: clip;
+		transition:
+			height 0.3s ease,
+			content-visibility 0.3s allow-discrete;
+	}
+	.faq__item[open]::details-content {
+		height: auto;
+	}
+	.faq__item[open] p {
+		animation: faq-in 0.3s ease;
+	}
+	@keyframes faq-in {
+		from {
+			opacity: 0;
+			transform: translateY(-0.35rem);
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.faq__item::details-content {
+			transition: none;
+		}
+		.faq__item[open] p {
+			animation: none;
+		}
+	}
 	.faq__item p {
 		margin: 0 0 1.4rem;
 		font-size: 1rem;

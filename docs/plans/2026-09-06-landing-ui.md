@@ -332,3 +332,41 @@ phones and a sidebar from tablet up.
   general, not all crypto-native. Look at aave.com and morpho.org."
 - "Look at aave.com: even a web2 person or someone who does not know crypto understands it
   easily, right?"
+
+## Revision — what a user actually needs to know
+
+Looking at the result, the user found four places still written for us rather than for a
+reader who only wants to know whether their money keeps earning and stays theirs:
+
+- the rule rows in the panel carried a label, a field name, a value and a sentence each; now
+  one line per rule (label, value, a few muted words, the link), field names moved into the
+  link's tooltip;
+- the three templates read "Tight / Steady / Guarded" with tick chips; now "Active / Relaxed /
+  Cautious", each labelled by what it is for ("Earns the most", "Moves the least", "Keeps the
+  most") with two plain chips;
+- the "Verified by default" grid of six counts and a two-bar chart is gone; in its place
+  "Your money stays yours" with three promises (never held, never outside your rules, nothing
+  hidden) and the one number a reader can hold, 94% kept working in the rehearsal, with its
+  caveat. The live price marker went with it: a number no reader could use;
+- the builders' section is labelled "For builders" and "Built in the Open", with the code
+  figure and package cards shown directly, as the user asked, rather than behind a toggle.
+
+The FAQ answers now unfold downward (`::details-content` height transition, instant where the
+browser lacks it, off under reduced motion).
+
+SEO in the same pass: titles as `Page | Helico` with the tagline on the home page, a
+consumer-language default description, canonical and `og:url`, image size and alt, the X
+handle, `robots.txt`, a generated `sitemap.xml` listing the posts, and JSON-LD for the
+organisation, the site and each blog post. `site` in the Astro config is `https://helico.site`.
+
+### Prompts, verbatim in translation
+
+- "Too much; it becomes less clear." (the rule rows)
+- "The language is too complex." (the templates)
+- "Does the user need to know this?" (the package cards) and "Again, what is a user supposed
+  to do with this; a user only cares about profit." (the counts)
+- "Too complex." (the chart)
+- "And when an FAQ is clicked, give the answer a downward animation."
+- "Improve all the SEO, and use a pipe as the site title separator."
+- "Just show it directly, no need for this button." (the builders' toggle)
+- "No need for a Read the FAQ button, is there?"
