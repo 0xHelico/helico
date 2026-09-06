@@ -1,7 +1,6 @@
 "use client";
 
 import { ArrowRight, Wallet } from "lucide-react";
-import Image from "next/image";
 import { useState } from "react";
 import { useAccount } from "wagmi";
 import {
@@ -11,6 +10,7 @@ import {
   ConversationScrollButton,
 } from "@/components/ai-elements/conversation";
 import { Message, MessageContent } from "@/components/ai-elements/message";
+import { SiteHeader } from "@/components/site-header";
 import { SwapCard } from "@/components/swap-card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -77,14 +77,7 @@ export default function Page() {
 
   return (
     <div className="flex h-dvh flex-col">
-      <header className="flex items-center justify-between border-b px-4 py-3">
-        <a className="flex items-center gap-2" href="https://helico.site">
-          <Image alt="" height={26} src="/brand/mark.webp" width={26} />
-          <span className="font-bold text-[17px] tracking-tight">helico</span>
-        </a>
-        {/* Reown renders the connect button and everything behind it. */}
-        <appkit-button balance="hide" />
-      </header>
+      <SiteHeader />
 
       <Conversation className="mx-auto w-full max-w-3xl flex-1 px-4">
         <ConversationContent className="gap-6 py-8">

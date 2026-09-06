@@ -15,6 +15,7 @@
     "apps/app": {
       "name": "@helico/app",
       "dependencies": {
+        "@helico/plugin-cre": "workspace:*",
         "@helico/plugin-uniswap": "workspace:*",
         "@radix-ui/react-use-controllable-state": "^1.2.6",
         "@reown/appkit": "1.8.23",
