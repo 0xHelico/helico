@@ -22,7 +22,6 @@ func TestBaseUnits(t *testing.T) {
 		{"1", 18, "1000000000000000000", false},
 		{"1.5", 6, "1500000", false},
 		{"0.000001", 6, "1", false},
-		{"1,000.25", 6, "1000250000", false},
 		{"2.", 18, "2000000000000000000", false},
 		{".25", 18, "250000000000000000", false},
 		{"0.0000001", 6, "", true}, // more decimals than the token has
@@ -32,6 +31,11 @@ func TestBaseUnits(t *testing.T) {
 		{"one", 18, "", true},
 		{"", 18, "", true},
 		{"1e18", 18, "", true},
+		// A comma is refused rather than read: "0,5" is half in Indonesian and five if the comma
+		// is taken for a thousands separator, and the wrong reading is a ten-times swap.
+		{"0,5", 18, "", true},
+		{"1,5", 18, "", true},
+		{"1,000.25", 6, "", true},
 	}
 	for _, c := range cases {
 		got, err := baseUnits(c.amount, c.decimals)
@@ -89,6 +93,50 @@ func TestBuildRefusesWhatItCannotCheck(t *testing.T) {
 				t.Fatalf("error was %q, want it to mention %q", err, c.wantSub)
 			}
 		})
+	}
+}
+
+func TestBuildNamesOnlyTheFieldThatFailed(t *testing.T) {
+	// A bad amount should not tell a form that the tokens are wrong too.
+	_, err := build(draft{TokenIn: "ETH", TokenOut: "USDC", Amount: "0,5"})
+	if err == nil {
+		t.Fatal("a comma should be refused")
+	}
+	if got := faulty(err); len(got) != 1 || got[0] != "amount" {
+		t.Fatalf("faulty = %v, want [amount]", got)
+	}
+}
+
+func TestLookupChainResolvesWhatItDocuments(t *testing.T) {
+	for _, s := range []string{"", "arbitrum", "Arbitrum One", "42161"} {
+		if c, ok := LookupChain(s); !ok || c.ChainID != 42161 {
+			t.Errorf("LookupChain(%q) = %+v, %v", s, c, ok)
+		}
+	}
+	if _, ok := LookupChain("solana"); ok {
+		t.Error("an unknown chain resolved")
+	}
+}
+
+func TestBridgedUSDCIsRefusedRatherThanSubstituted(t *testing.T) {
+	// USDC.e is a different contract with its own pools, and it answers USDC to symbol() too.
+	// Resolving the name to the native token would hand someone an asset they did not name.
+	if tok, ok := arbitrum.Token("USDC.e"); ok {
+		t.Fatalf("USDC.e resolved to %s at %s", tok.Symbol, tok.Address)
+	}
+}
+
+func TestAskReportsAStatusRatherThanAShape(t *testing.T) {
+	// A gateway answering 502 with an HTML page is a status to report.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = w.Write([]byte("<html>bad gateway</html>"))
+	}))
+	t.Cleanup(srv.Close)
+	c := NewClient(srv.URL, "test-key", "test-model", 5*time.Second)
+	_, err := c.ask(context.Background(), "swap 1 ETH into USDC")
+	if err == nil || !strings.Contains(err.Error(), "refused") {
+		t.Fatalf("err = %v, want the status reported", err)
 	}
 }
 

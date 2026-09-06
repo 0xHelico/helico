@@ -61,7 +61,7 @@ func FromEnv(lookup Lookup) (Config, error) {
 		LLMBaseURL:      get("BE_LLM_BASE_URL", "https://api.openai.com/v1"),
 		LLMKey:          get("BE_LLM_API_KEY", ""),
 		LLMModel:        get("BE_LLM_MODEL", "gpt-4o-mini"),
-		LLMTimeout:      20 * time.Second,
+		LLMTimeout:      8 * time.Second,
 		SwapRatePerMin:  6,
 		SwapDailyMax:    500,
 	}
@@ -70,16 +70,21 @@ func FromEnv(lookup Lookup) (Config, error) {
 			cfg.CORSOrigins = append(cfg.CORSOrigins, o)
 		}
 	}
+	llmTimeoutSet := false
 	for _, d := range []struct {
 		key string
 		dst *time.Duration
-	}{{"BE_REQUEST_TIMEOUT", &cfg.RequestTimeout}, {"BE_LLM_TIMEOUT", &cfg.LLMTimeout}} {
+		set *bool
+	}{{"BE_REQUEST_TIMEOUT", &cfg.RequestTimeout, nil}, {"BE_LLM_TIMEOUT", &cfg.LLMTimeout, &llmTimeoutSet}} {
 		if v, ok := lookup(d.key); ok && strings.TrimSpace(v) != "" {
 			parsed, err := time.ParseDuration(strings.TrimSpace(v))
 			if err != nil {
 				return Config{}, fmt.Errorf("%s: %w", d.key, err)
 			}
 			*d.dst = parsed
+			if d.set != nil {
+				*d.set = true
+			}
 		}
 	}
 	for _, n := range []struct {
@@ -92,6 +97,18 @@ func FromEnv(lookup Lookup) (Config, error) {
 				return Config{}, fmt.Errorf("%s: want a whole number, got %q", n.key, v)
 			}
 			*n.dst = parsed
+		}
+	}
+	// The handler wraps every request in RequestTimeout, so a model given longer than that can
+	// never finish: the request times out first, with a 503 that reads exactly like the one for
+	// an unset key. An operator who wrote that combination on purpose is told at startup; one who
+	// only shortened the request timeout gets a model timeout that fits under it.
+	if cfg.RequestTimeout > 0 && cfg.LLMTimeout >= cfg.RequestTimeout {
+		if llmTimeoutSet {
+			return Config{}, fmt.Errorf("BE_LLM_TIMEOUT (%s) must be shorter than BE_REQUEST_TIMEOUT (%s), or the request times out before the model answers", cfg.LLMTimeout, cfg.RequestTimeout)
+		}
+		if cfg.LLMTimeout = cfg.RequestTimeout * 4 / 5; cfg.LLMTimeout < time.Second {
+			cfg.LLMTimeout = time.Second
 		}
 	}
 	return cfg, nil

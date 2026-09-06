@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -109,6 +110,68 @@ func TestSwapIntentLimitsWhatOneCallerCosts(t *testing.T) {
 	}
 	if res.Header.Get("Retry-After") == "" {
 		t.Error("a 429 should say when to come back")
+	}
+}
+
+func TestClientAddrTakesWhatTheProxyWroteNotTheCaller(t *testing.T) {
+	// nginx here overwrites X-Real-IP and appends to X-Forwarded-For, so the caller controls the
+	// first entry of the latter and nothing else. Counting the first entry limits nobody.
+	cases := []struct {
+		name       string
+		realIP     string
+		forwarded  string
+		remoteAddr string
+		want       string
+	}{
+		{"the header our proxy overwrites is the caller's address", "203.0.113.7", "10.0.0.1, 203.0.113.7", "127.0.0.1:5000", "203.0.113.7"},
+		{"a forwarded list is ignored entirely, appended or forged", "", "10.0.0.1, 10.0.0.2, 203.0.113.9", "198.51.100.4:5000", "198.51.100.4"},
+		{"no headers at all", "", "", "198.51.100.4:5000", "198.51.100.4"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodPost, "/api/swap/intent", nil)
+			r.RemoteAddr = c.remoteAddr
+			if c.realIP != "" {
+				r.Header.Set("X-Real-IP", c.realIP)
+			}
+			if c.forwarded != "" {
+				r.Header.Set("X-Forwarded-For", c.forwarded)
+			}
+			if got := clientAddr(r); got != c.want {
+				t.Fatalf("clientAddr = %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+func TestSwapIntentLimitsAcrossForgedForwardedHeaders(t *testing.T) {
+	// The probe from the review: a caller varying X-Forwarded-For must not buy extra calls.
+	srv := swapServer(t, "k", `{"chain":"arbitrum","tokenIn":"ETH","tokenOut":"USDC","amount":"1"}`, 2)
+	body := map[string]string{"message": "swap 1 ETH into USDC"}
+	allowed := 0
+	for i := range 4 {
+		res, _ := do(t, http.MethodPost, srv.URL+"/api/swap/intent", body, map[string]string{
+			"X-Forwarded-For": "10.0.0." + strconv.Itoa(i+1),
+		})
+		if res.StatusCode == http.StatusOK {
+			allowed++
+		}
+	}
+	if allowed != 2 {
+		t.Fatalf("%d calls allowed against a limit of 2", allowed)
+	}
+}
+
+func TestSwapIntentKeepsTheProvidersWordsOutOfTheAnswer(t *testing.T) {
+	srv := swapServer(t, "k", "not json at all", 10)
+	res, body := do(t, http.MethodPost, srv.URL+"/api/swap/intent", map[string]string{"message": "swap 1 ETH into USDC"}, nil)
+	if res.StatusCode != http.StatusBadGateway {
+		t.Fatalf("status = %d, want 502: %s", res.StatusCode, body)
+	}
+	for _, leak := range []string{"127.0.0.1", "http://", "json"} {
+		if strings.Contains(string(body), leak) {
+			t.Fatalf("the answer carries %q: %s", leak, body)
+		}
 	}
 }
 

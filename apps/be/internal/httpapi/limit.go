@@ -3,6 +3,7 @@ package httpapi
 import (
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -79,32 +80,21 @@ func (l *limiter) allow(addr string) (ok bool, reason string) {
 	return true, ""
 }
 
-// clientAddr is the address the limiter counts. X-Forwarded-For is trusted only for its first
-// entry, because this service runs behind one proxy we control.
+// clientAddr is the address the limiter counts.
+//
+// Only two things are trusted: the header our own proxy writes, and the socket. The nginx in
+// front of these domains sets `X-Real-IP $remote_addr`, which **overwrites** whatever the caller
+// sent, so it is the caller's real address. X-Forwarded-For is not used at all: nginx appends to
+// it (`$proxy_add_x_forwarded_for`), and from inside this process an appended entry and a forged
+// one look identical, so trusting any position in that list hands the limit to whoever is being
+// limited. Without a proxy the socket is right anyway.
 func clientAddr(r *http.Request) string {
-	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
-		if i := len(fwd); i > 0 {
-			for j := 0; j < i; j++ {
-				if fwd[j] == ',' {
-					return trimSpace(fwd[:j])
-				}
-			}
-			return trimSpace(fwd)
-		}
+	if real := strings.TrimSpace(r.Header.Get("X-Real-IP")); real != "" {
+		return real
 	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		return r.RemoteAddr
 	}
 	return host
-}
-
-func trimSpace(s string) string {
-	for len(s) > 0 && (s[0] == ' ' || s[0] == '\t') {
-		s = s[1:]
-	}
-	for len(s) > 0 && (s[len(s)-1] == ' ' || s[len(s)-1] == '\t') {
-		s = s[:len(s)-1]
-	}
-	return s
 }

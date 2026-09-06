@@ -27,6 +27,7 @@ func (e *ErrNeeds) Error() string { return "missing: " + strings.Join(e.Fields, 
 var (
 	errSameToken   = errors.New("the two tokens are the same")
 	errAmountShape = errors.New("the amount is not a positive number")
+	errComma       = errors.New("write the amount with a dot, not a comma: 0.5, not 0,5")
 )
 
 // draft is what the model is asked for: symbols and an amount, nothing else.
@@ -91,7 +92,13 @@ func build(d draft) (Intent, error) {
 // works on the digits rather than through a float, because a float loses wei and this number
 // ends up in a transaction.
 func baseUnits(amount string, decimals int) (*big.Int, error) {
-	s := strings.TrimSpace(strings.ReplaceAll(amount, ",", ""))
+	s := strings.TrimSpace(amount)
+	// A comma is refused rather than read. It is the decimal point in Indonesian and much of
+	// Europe and the thousands separator elsewhere, so "0,5" is either half or five, and
+	// choosing one silently is how a reply comes to disagree with the number under it.
+	if strings.ContainsRune(s, ',') {
+		return nil, errComma
+	}
 	s = strings.TrimSuffix(s, ".")
 	if s == "" {
 		return nil, errAmountShape

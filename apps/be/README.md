@@ -27,7 +27,7 @@ toolchain, the SQLite driver is pure Go.
 | `BE_LLM_API_KEY` | empty | **empty turns the swap conversation off**, with a `503` that says so |
 | `BE_LLM_BASE_URL` | `https://api.openai.com/v1` | any OpenAI-compatible endpoint |
 | `BE_LLM_MODEL` | `gpt-4o-mini` | the model asked for the swap JSON |
-| `BE_LLM_TIMEOUT` | `20s` | one call to the model |
+| `BE_LLM_TIMEOUT` | `8s` | one call to the model; must be shorter than `BE_REQUEST_TIMEOUT`, or startup refuses it |
 | `BE_SWAP_RATE_PER_MIN` | `6` | swap messages one address may send per minute |
 | `BE_SWAP_DAILY_MAX` | `500` | the process's ceiling on model calls per day |
 
@@ -81,7 +81,12 @@ to base units exactly. Anything else comes back as a question or a refusal, with
 The confirmation sentence is composed here from the checked numbers, not by the model, so the
 sentence and the intent cannot disagree.
 
-Known limits, on purpose: one chain (Arbitrum One), five assets, exact-input only. "Buy 100
+Amounts are written with a dot. A comma is refused rather than read, because it is the decimal
+point in Indonesian and the thousands separator elsewhere, and guessing turns `0,5` into `5`.
+
+Known limits, on purpose: one chain (Arbitrum One), five assets, exact-input only. `USDC.e` is
+absent: the bridged token is a different contract with its own pools, so naming it is refused
+rather than resolved to the native one. "Buy 100
 USDC with ETH" is answered with a question about how much ETH, because an exact-output swap is
 a different request and this does not pretend to price anything.
 

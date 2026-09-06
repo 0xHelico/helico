@@ -3,7 +3,10 @@
 // this package's only power is to say what someone meant.
 package swap
 
-import "strings"
+import (
+	"strconv"
+	"strings"
+)
 
 // Token is one asset the registry knows. The address is committed here rather than produced by
 // a model, which is the whole point: an intent can only ever name an address the project put in
@@ -31,6 +34,10 @@ type Chain struct {
 //
 // One symbol deliberately differs from its contract: Tether on Arbitrum reports `USD₮0`, and
 // nobody types that. `USDT` is the ticker used in conversation; the address is Tether's.
+//
+// `USDC.e` is deliberately absent. The bridged token is a different contract with its own
+// pools, and it also answers `USDC` to symbol(), so resolving that name to the native token
+// would hand someone an intent for an asset they did not name.
 var arbitrum = Chain{
 	Key:     "arbitrum",
 	ChainID: 42161,
@@ -44,7 +51,7 @@ var arbitrum = Chain{
 	},
 	aliases: map[string]string{
 		"ether": "ETH", "eth": "ETH", "weth": "WETH", "wrapped ether": "WETH",
-		"usdc": "USDC", "usd coin": "USDC", "usdc.e": "USDC",
+		"usdc": "USDC", "usd coin": "USDC",
 		"usdt": "USDT", "tether": "USDT", "usd₮0": "USDT", "usdt0": "USDT",
 		"arb": "ARB", "arbitrum": "ARB",
 	},
@@ -54,14 +61,15 @@ var arbitrum = Chain{
 // project has tested; a symbol on a chain that is not here is a refusal rather than a guess.
 var chains = []Chain{arbitrum}
 
-// LookupChain resolves a chain by key, name, or id as a string. An empty key means the default.
+// LookupChain resolves a chain by key, name, or chain id written as a string. An empty string
+// means the default, which is the chain this project targets.
 func LookupChain(s string) (Chain, bool) {
 	s = strings.ToLower(strings.TrimSpace(s))
 	if s == "" {
 		return chains[0], true
 	}
 	for _, c := range chains {
-		if s == c.Key || s == strings.ToLower(c.Name) || s == "arbitrum one" {
+		if s == c.Key || s == strings.ToLower(c.Name) || s == strconv.FormatInt(c.ChainID, 10) {
 			return c, true
 		}
 	}

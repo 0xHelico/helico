@@ -617,6 +617,10 @@ Format: date · what was done · the AI's role · what a human verified.
 - **AI's role:** wrote it, on the owner's "continue, you execute". The design rule it follows is
   the vault's: the model proposes, the code checks, and an address can only come from the file
   the project committed.
+- **Review fixes:** a comma in the amount was read as a thousands separator and turned `0,5`
+  into five; the rate limit counted a caller-written header; `BE_LLM_TIMEOUT` could not be
+  reached under the request timeout; and the 502 handed the provider's error text out. Each was
+  reproduced, fixed, and pinned with a test, including the reviewer's own forged-header probe.
 - **Verified:** `go vet`, `gofmt`, `go test -race ./...` across every package; table tests for the
   amount arithmetic and each refusal; a fake model over `httptest` for the endpoint, the 503, the
   429 and the limiter's refill. Then four real messages against `gpt-4o-mini`, including one where

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 )
 
 // Service answers one message at a time.
@@ -34,7 +35,7 @@ func (s *Service) Interpret(ctx context.Context, message string) (Answer, error)
 	if message == "" {
 		return Answer{}, errors.New("say what you would like to swap")
 	}
-	if len(message) > maxMessage {
+	if utf8.RuneCountInString(message) > maxMessage {
 		return Answer{}, fmt.Errorf("that is longer than %d characters; a sentence is enough", maxMessage)
 	}
 	if !s.Configured() {
@@ -52,8 +53,9 @@ func (s *Service) Interpret(ctx context.Context, message string) (Answer, error)
 		if errors.As(err, &needs) {
 			return Answer{Reply: question(d.Question, needs.Fields), Needs: needs.Fields}, nil
 		}
-		// A wrong token or a bad amount is the person's answer to give, not an error to log.
-		return Answer{Reply: capitalise(err.Error()) + ".", Needs: []string{"tokenIn", "tokenOut", "amount"}}, nil
+		// A wrong token or a bad amount is the person's answer to give, not an error to log. Only
+		// the field that failed is named, so a form does not light up three inputs for one fault.
+		return Answer{Reply: capitalise(err.Error()) + ".", Needs: faulty(err)}, nil
 	}
 
 	// The confirmation is composed here, from the checked values, so the sentence and the
@@ -78,6 +80,18 @@ func question(modelQuestion string, fields []string) string {
 		}
 	}
 	return "I still need " + strings.Join(parts, ", ") + "."
+}
+
+// faulty names the field a refusal is about, so the caller can highlight one input.
+func faulty(err error) []string {
+	switch {
+	case errors.Is(err, errAmountShape), errors.Is(err, errComma), strings.Contains(err.Error(), "decimal places"):
+		return []string{"amount"}
+	case errors.Is(err, errSameToken):
+		return []string{"tokenOut"}
+	default:
+		return []string{"tokenIn", "tokenOut"}
+	}
 }
 
 func capitalise(s string) string {

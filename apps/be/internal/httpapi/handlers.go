@@ -267,9 +267,11 @@ func (a *api) swapIntent(w http.ResponseWriter, r *http.Request) {
 	case err != nil && r.Context().Err() != nil:
 		writeProblem(w, http.StatusGatewayTimeout, "the model took too long")
 	case err != nil:
-		// The model failing is this service's problem to own, not the caller's to decipher.
+		// The model failing is this service's problem to own. The error can carry the provider's
+		// own message and, when the call never connected, BE_LLM_BASE_URL inside a *url.Error, so
+		// it goes to the log and the caller gets a sentence that says nothing about our setup.
 		a.opt.Logger.Warn("swap intent failed", "error", err)
-		writeProblem(w, http.StatusBadGateway, err.Error())
+		writeProblem(w, http.StatusBadGateway, "the model could not be reached; try again in a moment")
 	default:
 		w.Header().Set("Cache-Control", "no-store")
 		writeJSON(w, http.StatusOK, answer)

@@ -124,16 +124,19 @@ func (c *Client) ask(ctx context.Context, message string) (draft, error) {
 	if err != nil {
 		return draft{}, err
 	}
+	// The status comes first: a gateway answering 502 with an HTML page is a status to report,
+	// not a JSON shape to complain about.
 	var out chatResponse
-	if err := json.Unmarshal(raw, &out); err != nil {
-		return draft{}, fmt.Errorf("the model's answer was not JSON: %w", err)
-	}
+	unmarshalErr := json.Unmarshal(raw, &out)
 	if resp.StatusCode != http.StatusOK {
 		detail := resp.Status
-		if out.Error != nil && out.Error.Message != "" {
+		if unmarshalErr == nil && out.Error != nil && out.Error.Message != "" {
 			detail = out.Error.Message
 		}
 		return draft{}, fmt.Errorf("the model refused: %s", detail)
+	}
+	if unmarshalErr != nil {
+		return draft{}, fmt.Errorf("the model's answer was not JSON: %w", unmarshalErr)
 	}
 	if len(out.Choices) == 0 {
 		return draft{}, errors.New("the model answered with nothing")

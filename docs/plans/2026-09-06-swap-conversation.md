@@ -121,3 +121,28 @@ That is written in the README rather than smoothed over.
 
 - "Continue, you execute." — after a report listing this as the piece of #99 nobody had started,
   with the earlier instruction that the backend exists for the AI side.
+
+## Revision — four findings from review
+
+Each was reproduced before it was fixed, and each has a test that fails without the fix.
+
+1. **A comma was read as a thousands separator**, so `0,5` became five ETH while the reply said
+   "0,5" — the one property this design claims cannot happen. A comma is now refused outright:
+   it is the decimal point in Indonesian and the separator elsewhere, and `1,000.25` is not worth
+   the ambiguity.
+2. **The per-address rate limit counted a header the caller writes.** The nginx in front of these
+   domains appends to `X-Forwarded-For`, so its first entry is the caller's word; from inside the
+   process an appended entry and a forged one are identical. Only `X-Real-IP`, which that nginx
+   overwrites, and the socket are trusted now. The review's own probe is a test: four calls
+   varying the header against a limit of two are allowed twice.
+3. **`BE_LLM_TIMEOUT` could not be reached**, because the handler wraps every request in
+   `BE_REQUEST_TIMEOUT` and the model was given longer. The default is under it, an explicit bad
+   combination fails at startup, and shortening only the request timeout fits the model timeout
+   beneath it rather than erroring.
+4. **The 502 handed the provider's error text to an unauthenticated caller**, including
+   `BE_LLM_BASE_URL` inside a `*url.Error`. It logs, and answers a fixed sentence.
+
+Also from the same review: `USDC.e` no longer resolves to native USDC (a different contract with
+its own pools); `LookupChain` resolves the chain id it documents; the model client reports a
+status before complaining about a body's shape; the message limit counts characters; a refusal
+names only the field that failed; and `trimSpace` is `strings.TrimSpace`.
