@@ -186,3 +186,44 @@ func TestTitleIsWhatASidebarCanShow(t *testing.T) {
 		t.Fatalf("a trimmed title should say it was trimmed: %q", long)
 	}
 }
+
+// The bug this catches: ordering by a second-resolution timestamp with a random id as the
+// tiebreak put the answer before the question about half the time, and a question and its
+// answer land in the same second routinely.
+func TestTurnsInTheSameSecondKeepTheirOrder(t *testing.T) {
+	ctx := context.Background()
+	db, err := store.Open(ctx, ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	frozen := time.Unix(1_800_000_000, 0)
+	s := chat.NewService(db).WithClock(func() time.Time { return frozen })
+
+	c, err := s.Start(ctx, alice, "same second")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"one", "two", "three", "four", "five", "six"}
+	for _, body := range want {
+		if _, err := s.Append(ctx, alice, c.ID, "user", body, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	msgs, err := s.Messages(ctx, alice, c.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) != len(want) {
+		t.Fatalf("got %d messages, want %d", len(msgs), len(want))
+	}
+	for i, m := range msgs {
+		if m.Body != want[i] {
+			var got []string
+			for _, x := range msgs {
+				got = append(got, x.Body)
+			}
+			t.Fatalf("order %v, want %v", got, want)
+		}
+	}
+}

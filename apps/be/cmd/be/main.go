@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/0xHelico/helico/apps/be/internal/blog"
+	"github.com/0xHelico/helico/apps/be/internal/chat"
 	"github.com/0xHelico/helico/apps/be/internal/config"
 	"github.com/0xHelico/helico/apps/be/internal/content"
 	"github.com/0xHelico/helico/apps/be/internal/httpapi"
@@ -44,6 +45,10 @@ func run() error {
 	defer db.Close()
 
 	svc := blog.NewService(db)
+	chats := chat.NewService(db)
+	if cfg.SessionSecret == "" {
+		log.Warn("BE_SESSION_SECRET is unset; the cookie key is random, so every restart signs everyone out")
+	}
 	if n, err := content.Seed(ctx, cfg.ContentDir, svc); err != nil {
 		return fmt.Errorf("seed: %w", err)
 	} else if n > 0 {
@@ -51,8 +56,15 @@ func run() error {
 	}
 
 	srv := &http.Server{
-		Addr:              cfg.Addr,
-		Handler:           httpapi.New(svc, httpapi.Options{AdminToken: cfg.AdminToken, CORSOrigins: cfg.CORSOrigins, Logger: log, RequestTimeout: cfg.RequestTimeout}),
+		Addr: cfg.Addr,
+		Handler: httpapi.New(svc, httpapi.Options{
+			AdminToken:     cfg.AdminToken,
+			CORSOrigins:    cfg.CORSOrigins,
+			Logger:         log,
+			RequestTimeout: cfg.RequestTimeout,
+			Chats:          chats,
+			SessionSecret:  cfg.SessionSecret,
+		}),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      cfg.RequestTimeout + 5*time.Second,

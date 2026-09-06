@@ -106,9 +106,12 @@ func (s *SQLite) AppendMessage(ctx context.Context, owner, conversation string, 
 	if len(m.Intent) > 0 {
 		intent = string(m.Intent)
 	}
+	// The next sequence number is read and written inside the same transaction, so two turns
+	// racing cannot take the same one — and the unique index would refuse them if they did.
 	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO chat_messages (id, conversation_id, role, body, intent, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-		m.ID, conversation, m.Role, m.Body, intent, m.CreatedAt.Unix()); err != nil {
+		`INSERT INTO chat_messages (id, conversation_id, seq, role, body, intent, created_at)
+		 VALUES (?, ?, (SELECT COALESCE(MAX(seq), 0) + 1 FROM chat_messages WHERE conversation_id = ?), ?, ?, ?, ?)`,
+		m.ID, conversation, conversation, m.Role, m.Body, intent, m.CreatedAt.Unix()); err != nil {
 		return fmt.Errorf("append message: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
@@ -153,7 +156,7 @@ func (s *SQLite) Messages(ctx context.Context, owner, conversation string) ([]ch
 	}
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, role, body, intent, created_at FROM chat_messages
-		 WHERE conversation_id = ? ORDER BY created_at, id`, conversation)
+		 WHERE conversation_id = ? ORDER BY seq`, conversation)
 	if err != nil {
 		return nil, fmt.Errorf("messages: %w", err)
 	}
