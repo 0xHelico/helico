@@ -21,7 +21,8 @@ from pathlib import Path
 
 ARTIFACT = Path(__file__).resolve().parent.parent / "contracts/out/HelicoVault.sol/HelicoVault.json"
 
-# Payable and known to be harmless, because `multicall` cannot forward value to them.
+# Payable and known to be harmless, because no batcher can forward value to them. `receive` is
+# excluded separately: a delegatecall always carries calldata, so a batch can never reach it.
 EXPECTED_PAYABLE = {"upgradeToAndCall"}
 
 
@@ -33,14 +34,23 @@ def main() -> int:
     abi = json.loads(ARTIFACT.read_text())["abi"]
     problems = 0
 
-    multicall = next((e for e in abi if e.get("name") == "multicall"), None)
-    if multicall is None:
-        print("multicall is not in the ABI — if Multicall was removed on purpose, remove this check")
+    # The invariant is "no payable function batches calls", not "multicall is not payable".
+    # Checking the name only would pass a second batcher added under any other one — verified,
+    # a payable `batch(bytes[])` slipped through the earlier version of this script.
+    batchers = [
+        e for e in abi
+        if e["type"] == "function"
+        and len(e.get("inputs", [])) == 1
+        and e["inputs"][0].get("type") == "bytes[]"
+    ]
+    if not batchers:
+        print("no bytes[] entry point found — if Multicall was removed on purpose, remove this check")
         problems += 1
-    elif multicall.get("stateMutability") == "payable":
-        print("multicall is PAYABLE, which reopens the msg.value double-count on every batched")
-        print("payable function. Make it non-payable, or stop inheriting Multicall.")
-        problems += 1
+    for e in batchers:
+        if e.get("stateMutability") == "payable":
+            print(f"{e['name']}(bytes[]) is PAYABLE. A payable batcher lets one msg.value be")
+            print("counted by every delegatecall in the batch. Make it non-payable.")
+            problems += 1
 
     payable = {
         e.get("name", e["type"])
@@ -52,10 +62,11 @@ def main() -> int:
         # Not a failure on its own, but each one is a function that would become dangerous the
         # moment `multicall` were made payable, so they are worth naming.
         print(f"new payable functions since this check was written: {', '.join(sorted(unexpected))}")
-        print("harmless while multicall is not payable; re-read the reasoning before adding value.")
+        print("harmless only while no batcher is payable; re-read the reasoning before adding value.")
 
     if problems == 0:
-        print(f"multicall is not payable; {len(payable)} payable function(s), all unreachable by batch")
+        names = ", ".join(f"{e['name']}(bytes[])" for e in batchers)
+        print(f"{names} not payable; {len(payable)} payable function(s), none reachable by batch")
     return 1 if problems else 0
 
 

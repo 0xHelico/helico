@@ -45,6 +45,8 @@ jobs:
         run: forge build
       - name: Multicall stays safe
         run: python3 scripts/check-no-payable.py
+      - name: Storage layout is upgrade-safe
+        run: python3 scripts/check-storage-layout.py
       - name: Test
         working-directory: contracts
         # ROBINHOOD_RPC_URL is deliberately unset here, so the fork suite reports SKIP rather
