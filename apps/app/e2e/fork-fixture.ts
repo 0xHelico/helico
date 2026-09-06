@@ -66,8 +66,9 @@ const deploy = spawnSync(
 if (deploy.status !== 0) {
   throw new Error(`forge script failed:\n${deploy.stderr}`);
 }
-const vault = deploy.stdout
-  .match(/vault \(proxy\)\s+(0x[0-9a-fA-F]{40})/)?.[1] as Address | undefined;
+const vault = deploy.stdout.match(
+  /vault \(proxy\)\s+(0x[0-9a-fA-F]{40})/,
+)?.[1] as Address | undefined;
 if (!vault) {
   throw new Error(`No vault address in the deploy output:\n${deploy.stdout}`);
 }
