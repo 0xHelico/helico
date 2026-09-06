@@ -500,6 +500,23 @@ Format: date · what was done · the AI's role · what a human verified.
   amount 4.4% and left the cap unmoved, which is what says the cap is not a function of the
   budget. The script is left failing on that.
 
+### 2026-09-06 — CRE: an abandoned branch, checked rather than adopted
+
+- **Done:** recovered `fix/cre-swap-inside-the-edge` from a branch left behind on 5 September —
+  a one-unit shave off the swap bound, meant to stop a fill landing on the range's exclusive
+  upper edge. Landed the test, which states a real invariant, and **not** the arithmetic. The
+  vault's own swap passes `sqrtPriceLimitX96 = getSqrtPriceAtTick(tickUpper) - 1`, so the pool
+  halts at `tickUpper - 1` whatever the enclave asks for, and a fork test already asserts that
+  against the live pool.
+- **AI's role:** found the branch while surveying repo state, cherry-picked it, and mutated it
+  before believing it. Reverting the change altered no output in any case that could be
+  constructed, and the test shipped with it could not tell the two apart either. Wrote the
+  comment that records why, so the branch does not get rediscovered and adopted next time.
+- **Plan:** none; a comment and a renamed test.
+- **Verified:** 117 CRE tests pass. The mutation was confirmed applied by `git diff` before its
+  result was trusted, and a probe printed the post-swap price against the edge with and without
+  the change — identical to the wei in all three pool depths tried.
+
 <!--
 Template for the next entry:
 

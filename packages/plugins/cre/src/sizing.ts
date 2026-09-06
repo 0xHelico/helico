@@ -119,6 +119,19 @@ export function sizeRecentre(input: SizingInput): Sizing {
 		const toEdge = zeroForOne
 			? getAmount0Delta(sqrtA, sqrtP, poolLiquidity, false)
 			: getAmount1Delta(sqrtP, sqrtB, poolLiquidity, false)
+		// The bound is the edge itself, not one unit inside it.
+		//
+		// The vault treats the upper edge as exclusive and reverts `PriceLeftTheRange` on a tick
+		// at or above it, so shaving a unit off here looks like the safe thing to do. It is not
+		// needed, and the reason is worth knowing: the vault's own swap already passes
+		// `sqrtPriceLimitX96 = getSqrtPriceAtTick(tickUpper) - 1`, so the pool halts at
+		// `tickUpper - 1` however much this asks for. `ForkSwapRecentreTest` asserts exactly
+		// that against the live pool, with an input deliberately sized to cross the edge.
+		//
+		// A version of this with `toEdge - 1n` was written and left on a branch. Neither its
+		// test nor any case that could be constructed here tells the two apart — the binary
+		// search below never selects `hi`, so the unit is invisible. Unobservable arithmetic
+		// with a comment claiming it prevents something is worse than the plain bound.
 		hi = min(available, (toEdge * PIPS) / (PIPS - BigInt(feePips)))
 	}
 

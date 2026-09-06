@@ -116,6 +116,33 @@ describe('sizeRecentre', () => {
 		affordable(s)
 	})
 
+	test('a swap bounded by the range edge stops short of it in both directions', () => {
+		// A huge position against a thin pool wants to swap far more than the pool can absorb inside
+		// the range, so the bound is the edge, not the wallet.
+		//
+		// This checks the invariant, not a guard: the sizing has no special case for the edge, and
+		// the vault's own price limit is what makes the edge unreachable. Adding `- 1` to the bound
+		// in `sizing.ts` does not change a single number this test reads.
+		for (const [current, expectUp] of [
+			[{ tickLower: -2_000, tickUpper: -1_000 }, true],
+			[{ tickLower: 100, tickUpper: 1_100 }, false],
+		] as [typeof proposed, boolean][]) {
+			const s = sizeRecentre({
+				liquidity: 10n ** 21n,
+				sqrtPriceX96,
+				current,
+				proposed,
+				poolLiquidity: 10n ** 15n,
+				feePips: 500,
+				slippageBps: 0,
+			})
+			expect(s.zeroForOne).toBe(!expectUp)
+			if (expectUp) expect(s.sqrtPriceAfter).toBeLessThan(getSqrtRatioAtTick(proposed.tickUpper))
+			else expect(s.sqrtPriceAfter).toBeGreaterThanOrEqual(getSqrtRatioAtTick(proposed.tickLower))
+			expect(s.amountIn).toBeGreaterThan(0n)
+		}
+	})
+
 	test('above its range it sells token1, and the price moves up but not past the new upper edge', () => {
 		const s = sizeRecentre({
 			liquidity,
