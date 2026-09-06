@@ -278,6 +278,16 @@ Format: date · what was done · the AI's role · what a human verified.
   binary and not run against a deployed vault: the vault's `nonces` and
   `recenterWithSignature` do not exist yet, so the simulation is recorded as pending.
 
+### 2026-09-06 — CRE plugin: docs for the move to Arbitrum One
+
+- **Done:** package README and the two delivery plans point at Arbitrum One (#58): the CRE
+  selector, both forwarders and what each verifies, the v4 addresses from the SDK, the demo
+  pool, and the dependency on the vault's `onReport`. No code change; the chain was config.
+- **AI's role:** verified the addresses on chain (`typeAndVersion()` on both forwarders, the pool's
+  id and liquidity) and wrote the docs. The collaborator made the chain decision on #58.
+- **Plan:** revisions in the two plans; tracked in #61.
+- **Verified:** `bun run check`, `python3 scripts/check-readme-links.py` (root README untouched).
+
 <!--
 Template for the next entry:
 

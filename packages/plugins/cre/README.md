@@ -27,13 +27,29 @@ Every run (cron trigger, `handlerInTee`):
    price stays inside the new range), and the liquidity the result funds; Uniswap's own
    arithmetic on native `BigInt`, scaled by `slippageBps`. A zero mint, or one below the
    mandate's `minRetainedBps` of the old liquidity, is a hold.
-5. Crosses out with the verdict only, one of two ways. `delivery: 'signature'` (Robinhood
-   mainnet, no CRE forwarder): the agent key, a Vault DON secret released only into the
+5. Crosses out with the verdict only, one of two ways. `delivery: 'forwarder'` (chains with a CRE
+   forwarder; Arbitrum One is the target chain since #58): `EVMClient.writeReport` of
+   `abi.encode(bool act, bytes32 mandateHash, RecenterParams p)` to the vault's `onReport`.
+   `delivery: 'signature'` (any chain): the agent key, a Vault DON secret released only into the
    enclave, signs an EIP-712 `Recenter(RecenterParams params, bytes32 mandateHash, uint256 nonce)`
    with the vault's nonce, and the authorisation leaves as the DON report and as the handler's
-   result for a relayer; the key never leaves. `delivery: 'forwarder'` (chains with a CRE
-   forwarder): `EVMClient.writeReport` of `abi.encode(bool act, bytes32 mandateHash, RecenterParams p)`.
-   A hold signs and writes nothing.
+   result for a relayer; the key never leaves. A hold signs and writes nothing.
+
+## On Arbitrum One
+
+| | |
+|---|---|
+| CRE chain selector | `ethereum-mainnet-arbitrum-1` |
+| `KeystoneForwarder` (a deployed workflow writes through it) | `0xF8344CFd5c43616a4366C34E3EEE75af79a74482` |
+| `MockKeystoneForwarder` (`cre workflow simulate --broadcast` writes through it; verifies nothing) | `0xd770499057619c9a76205fd4168161cf94abc532` |
+| v4 `PoolManager` / `StateView` / `PositionManager`, from the SDK | `0x360E68faCcca8cA495c1B759Fd9EEe466db9FB32` / `0x76Fd297e2D437cd7f76d50F01AfE6160f86e9990` / `0xd88F38F930b7952f2DB2432Cb002E7abbF3dD869` |
+| Demo pool, ETH/ARB 0.05%, spacing 10 | `0xb37da7d5beb04539b6c497a15794748fc0ce1da7afc61133e3253eff76229ae5` |
+
+The forwarder path needs the vault to implement `IReceiver.onReport` and to hold `AGENT_ROLE`
+for the forwarder it trusts (#37, contract side); the signature path needs
+`recenterWithSignature`, which is on `main`. In a simulation the enclave is the simulator and
+the forwarder is the mock, so what is demonstrated is the delivery path, not DON authorisation;
+the README says so wherever the demo is described.
 
 ## Why there is a swap in the report
 
@@ -64,7 +80,7 @@ hold (`NothingToMint`).
 |---|---|
 | Registers a TEE handler with `handlerInTee` | ✅ |
 | Decision logic is Helico's | ✅ mandate hash check, in-enclave reads, re-centre rule aligned with the vault, swap and mint sizing, fee ceiling |
-| Delivers the verdict to the vault | ✅ code and tests for both modes: the enclave signs the params with the agent key (#41, any chain) or writes a DON report through a forwarder; **not yet run against a deployed vault**, whose `nonces` and `recenterWithSignature` are contract-side work |
+| Delivers the verdict to the vault | ✅ code and tests for both modes: a DON report through the forwarder (Arbitrum One) or the enclave's signature with the agent key (any chain); **not yet run against a deployed vault** |
 | Unit tests, `bun test` | ✅ 110: EIP-712 digest checked against the spec by hand, signature recovery, mandate hash and report tuple pinned to `cast`-produced vectors (commands in the tests), decision table, grid, and boundaries, arithmetic against `@uniswap/v3-sdk` including the swap step, fake `TeeRuntime` answering `eth_call` by selector, failing on RPC faults, and recording `writeReport` |
 | Compiles to WASM and simulates in the CRE simulator | the decision alone did (#33, #36, older binary); **this binary has not been simulated**, it needs a deployed vault to read |
 | Deployed | ❌ deploy access exists on the team's CRE org; the Confidential Workflows private beta is requested (#41) |
@@ -83,7 +99,7 @@ Config: `{ schedule, rpcUrl, delivery, vault, positionManager, stateView, owner,
 mandateHash, gasLimit, slippageBps, maxPoolFeePips, deadlineSeconds }` plus, for `delivery:
 'signature'`, `chainId` and optionally `domainName` (`HelicoVault`), `domainVersion` (`1`),
 `agentKeySecretId` (`AGENT_KEY`), `noncesFunction` (`nonces`); for `delivery: 'forwarder'`,
-`chainSelectorName`. Hex values are lowercased on parse. In signature mode `secrets.yaml` also
+`chainSelectorName` (`ethereum-mainnet-arbitrum-1` on the target chain). Hex values are lowercased on parse. In signature mode `secrets.yaml` also
 maps `AGENT_KEY` to the env var holding the agent's private key. `secrets.yaml` must map
 `MANDATE_RANGE_WIDTH_TICKS`, `MANDATE_MIN_IMPROVEMENT_BPS`, `MANDATE_COOLDOWN_SECONDS`,
 `MANDATE_MAX_LIQUIDITY`, `MANDATE_EXPIRY`, `MANDATE_MIN_RETAINED_BPS` to env vars, with the same
