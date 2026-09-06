@@ -1,12 +1,8 @@
 ---
-interface Props {
-	placement?: 'top' | 'bottom'
-}
-const { placement = 'top' } = Astro.props
 const watch = 'https://github.com/0xHelico/helico/subscription'
 ---
 
-<section class="wrap" aria-label={placement === 'top' ? 'Stay updated' : 'Stay updated, bottom of page'}>
+<section class="wrap" aria-label="Stay updated">
 	<div class="section-card section-card--white center updates">
 		<h2>Stay Updated</h2>
 		<p>Be the first to hear when the vault goes live.</p>

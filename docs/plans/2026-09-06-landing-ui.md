@@ -150,3 +150,17 @@ dropped because the reference has neither.
   length, card and info styles, and the rest. Match it, only the content stays Helico. And I
   see three pink cards and one black card; follow that."
 
+## Revision — a marquee in place of the first updates card
+
+The user asked for the white card under the hero to become a logo marquee and for a list of
+brands so they could find the logos. `Brands.astro` scrolls a list of eleven names, every one
+something the repository builds on or ran against: Uniswap v4, Chainlink CRE, Arbitrum One,
+Robinhood Chain, Base, OpenZeppelin, Foundry, viem, Bun, Astro, ETHGlobal. A logo dropped at
+`src/assets/brands/<slug>.svg` replaces the wordmark through `import.meta.glob`; until then the
+name renders as text. The loop is CSS only, pauses on hover, and collapses to a static wrapped
+row under `prefers-reduced-motion`. The second updates card stays at the bottom.
+
+### Prompt, verbatim in translation
+
+- "Replace this one with a marquee. Write down which brands, I will find the logos."
+

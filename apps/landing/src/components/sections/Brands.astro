@@ -1,0 +1,129 @@
+---
+// Every name here is something the repository actually builds on or ran against. Drop a logo
+// at src/assets/brands/<slug>.svg (png and webp work too) and it replaces the wordmark.
+const brands = [
+	{ slug: 'uniswap', name: 'Uniswap v4' },
+	{ slug: 'chainlink', name: 'Chainlink CRE' },
+	{ slug: 'arbitrum', name: 'Arbitrum One' },
+	{ slug: 'robinhood', name: 'Robinhood Chain' },
+	{ slug: 'base', name: 'Base' },
+	{ slug: 'openzeppelin', name: 'OpenZeppelin' },
+	{ slug: 'foundry', name: 'Foundry' },
+	{ slug: 'viem', name: 'viem' },
+	{ slug: 'bun', name: 'Bun' },
+	{ slug: 'astro', name: 'Astro' },
+	{ slug: 'ethglobal', name: 'ETHGlobal' },
+]
+const files = import.meta.glob<{ src: string; width: number; height: number }>(
+	'../../assets/brands/*.{svg,png,webp}',
+	{ eager: true, import: 'default' },
+)
+const logoFor = (slug: string) => {
+	const key = Object.keys(files).find((k) => /\/([^/]+)\.(svg|png|webp)$/.exec(k)?.[1] === slug)
+	return key ? files[key] : null
+}
+const items = brands.map((b) => ({ ...b, logo: logoFor(b.slug) }))
+// The list is rendered twice so the loop has no seam; the copy is hidden from assistive tech.
+---
+
+<section class="wrap" aria-label="Built with">
+	<div class="section-card section-card--white brands">
+		<p class="brands__label">Built with</p>
+		<div class="brands__marquee">
+			{[false, true].map((copy) => (
+				<ul class="brands__track" aria-hidden={copy ? 'true' : undefined}>
+					{items.map((b) => (
+						<li>
+							{b.logo ? (
+								<img src={b.logo.src} alt={b.name} height="28" width={Math.round((b.logo.width / b.logo.height) * 28)} loading="lazy" decoding="async" />
+							) : (
+								<span>{b.name}</span>
+							)}
+						</li>
+					))}
+				</ul>
+			))}
+		</div>
+	</div>
+</section>
+
+<style>
+	.brands {
+		padding: 2rem 0 2.25rem;
+		overflow: hidden;
+	}
+	.brands__label {
+		margin: 0 0 1.25rem;
+		text-align: center;
+		font-size: 0.875rem;
+		font-weight: 450;
+		letter-spacing: -0.01em;
+		color: var(--ink-65);
+	}
+	.brands__marquee {
+		display: flex;
+		width: 100%;
+		overflow: hidden;
+		mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+		-webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+	}
+	.brands__track {
+		display: flex;
+		flex: none;
+		align-items: center;
+		gap: 4rem;
+		margin: 0;
+		padding: 0 2rem;
+		list-style: none;
+		animation: brands-scroll 40s linear infinite;
+	}
+	.brands__track li {
+		display: flex;
+		align-items: center;
+		height: 28px;
+		white-space: nowrap;
+	}
+	.brands__track img {
+		height: 28px;
+		width: auto;
+		filter: grayscale(1);
+		opacity: 0.7;
+		transition: opacity 0.2s, filter 0.2s;
+	}
+	.brands__track li:hover img {
+		filter: none;
+		opacity: 1;
+	}
+	.brands__track span {
+		font-size: 1.125rem;
+		font-weight: 550;
+		letter-spacing: -0.02em;
+		color: var(--ink-65);
+	}
+	.brands:hover .brands__track {
+		animation-play-state: paused;
+	}
+	@keyframes brands-scroll {
+		from {
+			transform: translateX(0);
+		}
+		to {
+			transform: translateX(-100%);
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.brands__track {
+			animation: none;
+			flex-wrap: wrap;
+			justify-content: center;
+			gap: 1.5rem 2.5rem;
+		}
+		.brands__track[aria-hidden] {
+			display: none;
+		}
+		.brands__marquee {
+			mask-image: none;
+			-webkit-mask-image: none;
+		}
+	}
+</style>
