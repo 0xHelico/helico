@@ -484,6 +484,7 @@ Format: date · what was done · the AI's role · what a human verified.
   such, the FAQ unfolding, and an SEO pass (pipe-separated titles, canonical, robots, sitemap,
   JSON-LD). Verified with `astro check`, the build, and the audits at zero.
 - **Wording:** "deposit" became "funds" throughout the page at the user's request; grammar fixed by hand.
+- **Logos:** the "Built with" grid swaps three wordmarks for logos the user supplied (Ethereum, FREE-PI, One Dollar Audit), converted to lossless webp; the user is asked to confirm the last two were used.
 
 ### 2026-09-06 — Landing page: plain words
 

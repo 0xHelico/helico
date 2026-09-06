@@ -375,3 +375,10 @@ And one word: "deposit" is "funds" everywhere a reader meets it ("Your Funds, on
 "your funds stay in your wallet"), because a deposit sounds like something handed over.
 
 - Prompt: "Can the word deposit be changed to funds?"
+
+The logo grid is "Built with", and OpenZeppelin, Foundry and ETHGlobal (wordmarks, no logo
+files) are replaced by the three logos the user supplied: Ethereum, FREE-PI and One Dollar
+Audit. The last two are not referenced anywhere else in the repository; the user is asked to
+confirm they were in fact used, since a claim the repository cannot back does not belong here.
+
+- Prompt: "Use these to replace OpenZeppelin, Foundry, ETHGlobal." (three images)

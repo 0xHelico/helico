@@ -1,7 +1,7 @@
 ---
 import { Image } from 'astro:assets'
-// Protocols, chains, and the event this was built on and for. Not backers: Helico has none,
-// and the hackathon's prize sponsors are not that. Drop a logo at src/assets/brands/<slug>.svg
+// Protocols, chains, and tools this was built with. Not backers: Helico has none, and the
+// hackathon's prize sponsors are not that. Drop a logo at src/assets/brands/<slug>.svg
 // (png and webp work too) and it replaces the wordmark.
 const brands = [
 	{ slug: 'uniswap', name: 'Uniswap v4' },
@@ -9,9 +9,9 @@ const brands = [
 	{ slug: 'arbitrum', name: 'Arbitrum One' },
 	{ slug: 'robinhood', name: 'Robinhood Chain' },
 	{ slug: 'base', name: 'Base' },
-	{ slug: 'openzeppelin', name: 'OpenZeppelin' },
-	{ slug: 'foundry', name: 'Foundry' },
-	{ slug: 'ethglobal', name: 'ETHGlobal' },
+	{ slug: 'ethereum', name: 'Ethereum' },
+	{ slug: 'free-pi', name: 'FREE-PI' },
+	{ slug: 'one-dollar-audit', name: 'One Dollar Audit' },
 ]
 // Eleven show; when there are more, a twelfth cell opens the rest, the way the reference does it.
 const SHOWN = 11
@@ -28,7 +28,7 @@ const items = brands.map((b) => ({ ...b, logo: logoFor(b.slug) }))
 
 <section class="wrap" aria-labelledby="brands-title">
 	<div class="section-card section-card--white brands">
-		<h2 id="brands-title">Built on</h2>
+		<h2 id="brands-title">Built with</h2>
 		<ul class="brands__grid" data-brands>
 			{items.map((b, i) => (
 				<li class:list={{ 'is-more': i >= SHOWN }} hidden={i >= SHOWN}>
