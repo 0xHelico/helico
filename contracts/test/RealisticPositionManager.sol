@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
+import {TickMath} from "../src/lib/TickMath.sol";
 import {PoolKey} from "../src/Mandate.sol";
 import {IPositionManager} from "../src/IPositionManager.sol";
 import {IPoolManager, IUnlockCallback} from "../src/IPoolManager.sol";
@@ -286,8 +287,17 @@ contract RealisticPositionManager is IPositionManager {
     }
 }
 
-/// @notice Stands in for v4's `StateView`. Only `getSlot0` is needed: the vault reads the
-///         current tick to check a proposed range actually brackets the market price.
+/// @notice Stands in for v4's `StateView`: the tick the vault checks a range against, and the
+///         price it sizes the mint from.
+///
+/// @dev The price is not a second stored value that can drift from the tick — it is
+///      `TickMath.getSqrtPriceAtTick(tick)`, which is the same identity v4 itself holds. That
+///      is the difference between a mock and a fiction: this models a fact, not a curve.
+///
+///      It returned zero for the price until the vault started reading it, and every test
+///      still passed, because zero happens to make `getLiquidityForAmounts` answer with the
+///      token0 branch and a number large enough not to bind. A mock that answers wrongly and
+///      is never contradicted is the same hazard as one that cannot refuse.
 contract MockStateView {
     mapping(bytes32 => int24) public tickOf;
 
@@ -296,7 +306,8 @@ contract MockStateView {
     }
 
     function getSlot0(bytes32 poolId) external view returns (uint160, int24, uint24, uint24) {
-        return (0, tickOf[poolId], 0, 0);
+        int24 tick = tickOf[poolId];
+        return (TickMath.getSqrtPriceAtTick(tick), tick, 0, 0);
     }
 }
 

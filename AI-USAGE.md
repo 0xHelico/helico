@@ -465,6 +465,23 @@ Format: date · what was done · the AI's role · what a human verified.
   the API (4 posts each way); the Playwright audit on `/blog` and two articles at seven
   viewports, zero findings; the landing audit unchanged at zero.
 
+### 2026-09-06 — Vault: mint what it can afford, not what the agent guessed
+
+- **Done:** `_mint` now sizes the mint from the price the swap actually reached and the tokens
+  the vault actually holds, capped by the agent's `liquidityToMint`. Fixes #78, where a
+  re-centre burned the position, did the swap, and then reverted because the enclave's swap
+  model disagreed with the pool by 16%. `LiquidityAmounts` vendored like `TickMath`, with
+  saturation rather than truncation on overflow.
+- **AI's role:** found it by building the rehearsal in #79 and checking chain state rather than
+  the transaction hash; diagnosed it wrongly first, said so on the issue, then measured the
+  pool's active liquidity against the swap size to find the real cause. Wrote the library, the
+  fix, and the fork test.
+- **Plan:** docs/plans/2026-09-06-mint-what-the-vault-can-afford.md
+- **Verified:** `forge test` 95 pass with an Arbitrum RPC; mutation — replacing `toMint` with
+  the agent's number fails exactly the new test; storage layout unchanged; end to end on a fork
+  through `rehearse.sh`, 93.19e18 in and 74.72e18 out, and a second run held on the cooldown.
+  Also fixed `MockStateView`, which returned a zero price and so covered none of this.
+
 <!--
 Template for the next entry:
 
