@@ -5,4 +5,5 @@
    4   0  poolManager  t_contract(IPoolManager)
    5   0  _expectedUnlock  t_bytes32
    6   0  nonces  t_mapping(t_address,t_uint256)
-   7   0  __gap  t_array(t_uint256)43_storage
+   7   0  forwarder  t_address
+   8   0  __gap  t_array(t_uint256)42_storage

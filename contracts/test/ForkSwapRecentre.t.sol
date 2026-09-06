@@ -20,7 +20,7 @@ interface IPositionNft {
     function setApprovalForAll(address operator, bool approved) external;
 }
 
-/// @notice The swap path, executed end to end against the real Uniswap v4 on Robinhood Chain.
+/// @notice The swap path, executed end to end against the real Uniswap v4 on Arbitrum One.
 ///
 /// @dev This file exists because the swap cannot be proven anywhere else. `MockPoolManager`
 ///      refuses to model a price curve on purpose, so without this the lines that move the

@@ -45,11 +45,17 @@ Every run (cron trigger, `handlerInTee`):
 | v4 `PoolManager` / `StateView` / `PositionManager`, from the SDK | `0x360E68faCcca8cA495c1B759Fd9EEe466db9FB32` / `0x76Fd297e2D437cd7f76d50F01AfE6160f86e9990` / `0xd88F38F930b7952f2DB2432Cb002E7abbF3dD869` |
 | Demo pool, ETH/ARB 0.05%, spacing 10 | `0xb37da7d5beb04539b6c497a15794748fc0ce1da7afc61133e3253eff76229ae5` |
 
-The forwarder path needs the vault to implement `IReceiver.onReport` and to hold `AGENT_ROLE`
-for the forwarder it trusts (#37, contract side); the signature path needs
-`recenterWithSignature`, which is on `main`. In a simulation the enclave is the simulator and
-the forwarder is the mock, so what is demonstrated is the delivery path, not DON authorisation;
-the README says so wherever the demo is described.
+Both paths are on `main`: `recenterWithSignature` for the signature path, and
+`IReceiver.onReport` for the forwarder path. The vault authorises a report by
+`msg.sender == forwarder` — an address an admin sets with `setForwarder`, not a role — because
+the DON signatures are verified by the forwarder before the vault is ever called.
+
+The forwarder path has been run end to end on a fork of Arbitrum One against that vault: a
+report through the mock forwarder re-centred a real position on the ETH/ARB pool, and a second
+run held on the cooldown. The recipe and the numbers are in the
+[forwarder-delivery plan](../../../docs/plans/2026-09-05-cre-forwarder-delivery.md). In a
+simulation the enclave is the simulator and the forwarder is the mock, so what is demonstrated
+is the delivery path, not DON authorisation; the README says so wherever the demo is described.
 
 ## Why there is a swap in the report
 
@@ -80,9 +86,9 @@ hold (`NothingToMint`).
 |---|---|
 | Registers a TEE handler with `handlerInTee` | ✅ |
 | Decision logic is Helico's | ✅ mandate hash check, in-enclave reads, re-centre rule aligned with the vault, swap and mint sizing, fee ceiling |
-| Delivers the verdict to the vault | ✅ code and tests for both modes: a DON report through the forwarder (Arbitrum One) or the enclave's signature with the agent key (any chain); **not yet run against a deployed vault** |
+| Delivers the verdict to the vault | ✅ code and tests for both modes: a DON report through the forwarder (Arbitrum One) or the enclave's signature with the agent key (any chain). The forwarder mode ran end to end on a fork of Arbitrum One against the vault from #70 (`RECENTER 94370..94570`, 94.3% of the liquidity retained, then `HOLD (cooldown)`); **not yet run on a live network** |
 | Unit tests, `bun test` | ✅ 110: EIP-712 digest checked against the spec by hand, signature recovery, mandate hash and report tuple pinned to `cast`-produced vectors (commands in the tests), decision table, grid, and boundaries, arithmetic against `@uniswap/v3-sdk` including the swap step, fake `TeeRuntime` answering `eth_call` by selector, failing on RPC faults, and recording `writeReport` |
-| Compiles to WASM and simulates in the CRE simulator | the decision alone did (#33, #36, older binary); **this binary has not been simulated**, it needs a deployed vault to read |
+| Compiles to WASM and simulates in the CRE simulator | ✅ this binary, reading a vault on a fork of Arbitrum One and writing through the mock forwarder (#71); binary hash `a01c5ada…`. The simulator is not a TEE and the mock forwarder verifies nothing |
 | Deployed | ❌ deploy access exists on the team's CRE org; the Confidential Workflows private beta is requested (#41) |
 
 ## Use

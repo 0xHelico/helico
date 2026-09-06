@@ -8,8 +8,9 @@ import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/Pau
 // OpenZeppelin 5.7 dropped ReentrancyGuardUpgradeable: the base guard keeps its flag in an
 // ERC-7201 namespaced slot and reads it as `value == ENTERED`, so an uninitialised slot
 // already behaves as "not entered" and no initializer is needed behind a proxy. The
-// transient variant is avoided on purpose - it requires EIP-1153, and Robinhood Chain's
-// support for that could not be verified from here.
+// transient variant is left for a separate change: it would swap a storage slot for a
+// transient one, which is cheaper but is a behaviour change to the guard itself, and this
+// contract is already deployed behind a proxy in the deploy rehearsal.
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {
@@ -25,6 +26,7 @@ import {Mandate, MandateLib, PoolKey} from "./Mandate.sol";
 import {IPositionManager} from "./IPositionManager.sol";
 import {IPoolManager, IUnlockCallback} from "./IPoolManager.sol";
 import {IStateView} from "./IStateView.sol";
+import {IReceiver} from "./IReceiver.sol";
 import {TickMath} from "./lib/TickMath.sol";
 
 /// @title HelicoVault
@@ -73,7 +75,8 @@ contract HelicoVault is
     UUPSUpgradeable,
     EIP712Upgradeable,
     MulticallUpgradeable,
-    IUnlockCallback
+    IUnlockCallback,
+    IReceiver
 {
     using SafeERC20 for IERC20;
     using MandateLib for Mandate;
@@ -169,8 +172,15 @@ contract HelicoVault is
     ///      here, and the gap shrinks by the same amount.
     mapping(address => uint256) public nonces;
 
+    /// @notice The Chainlink CRE `KeystoneForwarder` whose calls to `onReport` are honoured.
+    /// @dev Zero until an admin sets it, which is the safe default: `msg.sender` is never zero,
+    ///      so an unset forwarder refuses every report. Settable rather than fixed at
+    ///      construction so one deployment can point at the mock the CRE CLI broadcasts through
+    ///      and later at the production forwarder, without a new vault.
+    address public forwarder;
+
     /// @dev Reserved so later versions can add state without shifting what is already stored.
-    uint256[43] private __gap;
+    uint256[42] private __gap;
 
     event MandateSet(address indexed owner, uint256 indexed tokenId, bytes32 mandateHash);
     event Revoked(address indexed owner, uint256 indexed tokenId);
@@ -185,6 +195,8 @@ contract HelicoVault is
     );
     event UpgradeScheduled(address indexed implementation, uint64 readyAt, bytes32 codehash);
     event UpgradeCancelled(address indexed implementation);
+    event ForwarderSet(address indexed forwarder);
+    event ReportHeld(address indexed owner, bytes32 mandateHash);
 
     error NotPositionOwner();
     error MandateInactive();
@@ -226,6 +238,7 @@ contract HelicoVault is
     error WrongNonce();
     error MandateChanged();
     error AuthorisationExpired();
+    error NotForwarder();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -424,6 +437,56 @@ contract HelicoVault is
         return _recenter(p);
     }
 
+    /// @notice Carry out a re-centre that a Chainlink CRE workflow decided, delivered by the
+    ///         `KeystoneForwarder`.
+    ///
+    /// @dev This is the path that makes the confidential workflow load-bearing rather than
+    ///      adjacent: with the forwarder holding `AGENT_ROLE`'s job, nothing can re-centre a
+    ///      position that the enclave did not decide to move.
+    ///
+    ///      **Authority is the caller here, and only here.** The forwarder has already checked
+    ///      `f + 1` DON signatures over these exact bytes before it calls; the vault cannot
+    ///      re-check them and does not try. Which is why the equality below is the whole
+    ///      security boundary, and why `forwarder` is admin-only.
+    ///
+    ///      `report` is `abi.encode(bool act, bytes32 mandateHash, RecenterParams p)` — what
+    ///      `encodeReport` in `packages/plugins/cre` produces. A hold is not written by the
+    ///      workflow at all; the `act` flag is honoured anyway, because a report that says hold
+    ///      must never move a position if one ever is.
+    ///
+    ///      **Stale reports.** The forwarder refuses to replay a transmission it has already
+    ///      attempted, but an old report pushed late still arrives, and its own documentation
+    ///      makes that the receiver's problem. Three things already answer it, and they are the
+    ///      reason nothing further is added here: `p.deadline` is checked in `_recenter` and is
+    ///      part of the signed bytes, so a late report is refused outright; `_checkRange` reads
+    ///      the tick *now* and rejects a range that no longer contains the market; and the
+    ///      cooldown, which `setMandate` refuses to leave at zero, blocks a second move.
+    ///
+    ///      `mandateHash` binds the verdict to the terms the vault holds now, exactly as it
+    ///      does on the signature path. An enclave that decided against terms the user has
+    ///      since replaced is refused rather than executed against the new ones.
+    function onReport(bytes calldata, bytes calldata report) external override whenNotPaused nonReentrant {
+        if (msg.sender != forwarder) revert NotForwarder();
+
+        (bool act, bytes32 mandateHash, RecenterParams memory p) =
+            abi.decode(report, (bool, bytes32, RecenterParams));
+
+        if (!act) {
+            emit ReportHeld(p.owner, mandateHash);
+            return;
+        }
+        if (_accounts[p.owner].mandate.hash() != mandateHash) revert MandateChanged();
+
+        _recenter(p);
+    }
+
+    /// @dev `KeystoneForwarder` delivers to an `IReceiver`, and Chainlink's receivers advertise
+    ///      that through ERC-165. `AccessControlUpgradeable` already answers the query; this
+    ///      adds the one identifier it does not know about.
+    function supportsInterface(bytes4 interfaceId) public view override returns (bool) {
+        return interfaceId == type(IReceiver).interfaceId || super.supportsInterface(interfaceId);
+    }
+
     /// @notice The digest an agent has to sign. Public so a relayer can check its authorisation
     ///         before spending gas on it.
     /// @dev `RecenterParams` is nested as its own struct, so this is
@@ -454,7 +517,7 @@ contract HelicoVault is
         return _hashTypedDataV4(keccak256(abi.encode(RECENTER_TYPEHASH, paramsHash, mandateHash, nonce)));
     }
 
-    function _recenter(RecenterParams calldata p) internal returns (uint256 newTokenId) {
+    function _recenter(RecenterParams memory p) internal returns (uint256 newTokenId) {
         Account storage a = _accounts[p.owner];
         Mandate memory m = a.mandate;
         uint256 tokenId = a.tokenId;
@@ -697,7 +760,7 @@ contract HelicoVault is
         uint256 newTokenId,
         Mandate memory m,
         uint128 liquidityBefore,
-        RecenterParams calldata p
+        RecenterParams memory p
     ) internal view {
         if (positionManager.ownerOf(newTokenId) != p.owner) {
             revert PositionNotDelivered();
@@ -767,6 +830,19 @@ contract HelicoVault is
         assembly ("memory-safe") {
             tick := signextend(2, shr(32, info))
         }
+    }
+
+    // --- admin --------------------------------------------------------------------------
+
+    /// @notice Point the vault at the `KeystoneForwarder` whose reports it will honour.
+    /// @dev A setter rather than a constructor argument because the demo and a deployment need
+    ///      different forwarders — the CRE CLI broadcasts through a mock that verifies nothing,
+    ///      a deployed workflow goes through the production one — and swapping them should not
+    ///      need a new vault. Setting it to zero turns the report path off, since `msg.sender`
+    ///      is never zero.
+    function setForwarder(address forwarder_) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        forwarder = forwarder_;
+        emit ForwarderSet(forwarder_);
     }
 
     // --- guardian -----------------------------------------------------------------------

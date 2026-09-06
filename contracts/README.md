@@ -101,6 +101,34 @@ replaced is refused rather than executed against the new ones. A nonce makes it 
 Every mandate rule still applies: the signature says *who* authorised an action, never *what*
 they were allowed to authorise.
 
+### A verdict delivered by the DON
+
+`onReport` is the third door, and the one that makes the confidential workflow load-bearing
+rather than adjacent: the vault runs a re-centre that a Chainlink CRE enclave decided and the
+DON signed.
+
+`KeystoneForwarder.report(...)` has **no caller restriction at all** — its security is the
+`f + 1` DON signatures it verifies over the report bytes before forwarding. Those signatures are
+already spent by the time the vault is called and it cannot re-check them, so
+`msg.sender == forwarder` is the entire security boundary of `onReport`. That is why `forwarder`
+is admin-only, and why it starts unset: `msg.sender` is never the zero address, so a vault
+nobody has pointed at a forwarder refuses every report.
+
+The report is `abi.encode(bool act, bytes32 mandateHash, RecenterParams p)` — the tuple
+`packages/plugins/cre` emits. `mandateHash` binds the verdict to the terms the vault holds now,
+exactly as on the signature path.
+
+**Stale reports are the receiver's problem**, and Chainlink's own `IReceiver` documentation says
+so: the forwarder refuses to replay a transmission it already attempted, but an old report
+pushed late still arrives. Three things already answer that, which is why `onReport` adds no
+fourth: `p.deadline` is inside the signed bytes and checked here; `_checkRange` reads the tick
+*now* and rejects a range that no longer contains the market; and the cooldown, which
+`setMandate` refuses to leave at zero, blocks a second move.
+
+`forwarder` is a setter rather than a constructor argument because a demo and a deployment need
+different forwarders — the CRE CLI broadcasts through a mock that verifies nothing, a deployed
+workflow goes through the production one — and swapping them should not need a new vault.
+
 ### Batching
 
 `multicall` is inherited, so a relayer holding authorisations for several owners lands them in
@@ -118,6 +146,10 @@ Solidity test can only show that today's `multicall` rejects value.
 `AGENT_ROLE` proposes actions and can do nothing outside a mandate. `GUARDIAN_ROLE` pauses
 actions but cannot block an exit. `UPGRADER_ROLE` schedules and executes upgrades. They are
 separate on purpose: a stolen agent key cannot upgrade the contract or trap a user.
+
+The forwarder is deliberately **not** a role. `onReport` checks `msg.sender == forwarder`
+directly, so the address that may deliver a DON verdict is one value an admin sets and anyone
+can read, rather than one entry in a role set that has to be enumerated to be audited.
 
 ## On being upgradeable
 
