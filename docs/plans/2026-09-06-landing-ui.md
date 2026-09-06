@@ -389,3 +389,10 @@ long and unclear for a general reader; the safety line lives in "Your money stay
 
 - Prompt: "'Money in a trading pool earns only while…' is too long and not clear enough for a
   general user."
+
+Shorter still, at the reference's length ("The World's Savings App / Get paid every second
+with global rates and Balance Protection."): "Your funds keep earning while prices move."
+The rules are the next section's subject.
+
+- Prompt: "Aave is like this: 'The World's Savings App / Get paid every second…'. Ours is too
+  long."
