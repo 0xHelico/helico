@@ -23,7 +23,7 @@ const faqs = [
 	},
 	{
 		q: 'Is it live? Is it audited?',
-		a: 'Neither, yet. It targets Arbitrum One, where Uniswap v4 and a Chainlink CRE forwarder both exist; the vault has a rehearsed deploy script, the workflow runs in the CRE simulator, and the signature path is proven end to end in tests. Twelve AI audit agents and a six-agent pass ran over the vault; that is not a professional audit, and this page does not call it one.',
+		a: 'Neither, yet. It targets Arbitrum One, where Uniswap v4 and a Chainlink CRE forwarder both exist. The vault has a rehearsed deploy script, the signature path is proven end to end in tests, and the forwarder path has been run end to end on a fork of Arbitrum One: a report through the mock forwarder re-centred a real position on the ETH/ARB pool, keeping 94.3% of its liquidity, and a second run held on the cooldown. That is a fork, not a live network; the simulator is not a TEE; and the mock forwarder verifies no signatures. Twelve AI audit agents and a six-agent pass ran over the vault; that is not a professional audit, and this page does not call it one.',
 	},
 ]
 ---
