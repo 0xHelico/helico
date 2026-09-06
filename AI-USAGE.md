@@ -299,6 +299,23 @@ Format: date · what was done · the AI's role · what a human verified.
 - **Verified:** `typecheck`, `test` (52 pass), `bun run check`; `CHAIN=arbitrum bun run smoke`
   output quoted in the package README.
 
+### 2026-09-06 — Vault: consume the enclave's verdict through the CRE forwarder
+
+- **Done:** `HelicoVault` implements `IReceiver.onReport`, decodes
+  `abi.encode(bool act, bytes32 mandateHash, RecenterParams p)`, and runs the existing
+  `_recenter` — so a Chainlink CRE workflow can move a position, not just decide that it should.
+  `forwarder` is an admin-set address, not a role; the deploy script takes an optional
+  `FORWARDER_ADDRESS`.
+- **AI's role:** read the `KeystoneForwarder` behaviour out of the notes taken from Chainlink's
+  own source, wrote the contract, the 11 tests, and the docs; generated the cross-side encoding
+  vector by running `encodeReport` from the CRE plugin rather than by hand. The collaborator
+  decided the setter-not-constructor shape on #37; deployment is theirs.
+- **Plan:** docs/plans/2026-09-06-vault-on-report.md
+- **Verified:** `forge fmt --check`, `forge build`, `forge test` (94 pass with an Arbitrum RPC,
+  85 pass and 9 skip without), `scripts/check-no-payable.py`, `scripts/check-storage-layout.py`
+  (append-only, snapshot committed). Mutation-checked: removing the `act` guard and the mandate
+  hash check fails exactly the two tests written for them.
+
 <!--
 Template for the next entry:
 
