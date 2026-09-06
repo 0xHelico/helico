@@ -396,3 +396,10 @@ The rules are the next section's subject.
 
 - Prompt: "Aave is like this: 'The World's Savings App / Get paid every second…'. Ours is too
   long."
+
+The nav's button is "Launch App", pointing at `https://app.helico.site` (not live yet; the
+user's decision), on desktop and in the phone sheet. The hero has one button, "Learn More",
+to the next section.
+
+- Prompt: "The top-right nav button 'Launch App', later pointing at app.helico.site. In the
+  hero just a 'Learn More' button."
