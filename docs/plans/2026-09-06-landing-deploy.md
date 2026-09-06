@@ -142,3 +142,11 @@ known_hosts' EXIT`, so a failed step cannot leave either file behind.
 Verified: `SSH_ORIGINAL_COMMAND=id` still answers `unknown app` and exits 2; a real run against
 the docs application printed *"serving from a new container, https://docs.helico.site/docs/introduction
 answered 200 after 40s"* and exited 0.
+
+## Follow-up — the scheduler is a worker, and workers publish nothing
+
+The automation repository runs one long-lived process with three crons. It listens on no port
+and serves no page, so the forced command's check (a new container answering a URL) had nothing
+to ask. A map line of `name uuid - -` now means a worker: the container is found by name, and
+the check is that the new one is **still running fifteen seconds later** rather than
+crash-looping. That is the honest equivalent of "it came up" for something with no endpoint.
