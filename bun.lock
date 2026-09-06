@@ -12,19 +12,22 @@
         "typescript": "^5.9.3",
       },
     },
+    "apps/be": {
+      "name": "@helico/be",
+    },
     "apps/landing": {
       "name": "@helico/landing",
       "version": "0.0.0",
       "dependencies": {
-        "@astrojs/react": "^6.0.5",
-        "@tailwindcss/vite": "^4.3.3",
-        "@types/react": "^19.2.18",
-        "@types/react-dom": "^19.2.7",
+        "@astrojs/react": "6.0.5",
+        "@tailwindcss/vite": "4.3.3",
+        "@types/react": "19.2.18",
+        "@types/react-dom": "19.2.7",
         "astro": "7.3.1",
-        "framer-motion": "^13.2.0",
-        "react": "^19.2.8",
-        "react-dom": "^19.2.8",
-        "tailwindcss": "^4.3.3",
+        "framer-motion": "13.2.0",
+        "react": "19.2.8",
+        "react-dom": "19.2.8",
+        "tailwindcss": "4.3.3",
       },
       "devDependencies": {
         "@astrojs/check": "0.9.10",
@@ -330,6 +333,8 @@
     "@ethersproject/wordlists": ["@ethersproject/wordlists@5.8.0", "", { "dependencies": { "@ethersproject/bytes": "^5.8.0", "@ethersproject/hash": "^5.8.0", "@ethersproject/logger": "^5.8.0", "@ethersproject/properties": "^5.8.0", "@ethersproject/strings": "^5.8.0" } }, "sha512-2df9bbXicZws2Sb5S6ET493uJ0Z84Fjr3pC4tu/qlnZERibZCeUVuqdtt+7Tv9xxhUxHoIekIA7avrKUWHrezg=="],
 
     "@fastify/busboy": ["@fastify/busboy@2.1.1", "", {}, "sha512-vBZP4NlzfOlerQTnba4aqZoMhE/a9HY7HRqoOPaETQcSQuWEIyZMHGfVu6w9wGtGK5fED5qRs2DteVCjOH60sA=="],
+
+    "@helico/be": ["@helico/be@workspace:apps/be"],
 
     "@helico/core": ["@helico/core@workspace:packages/core"],
 

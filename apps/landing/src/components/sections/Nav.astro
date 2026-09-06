@@ -39,18 +39,18 @@ const menus: Menu[] = [
 		id: 'product',
 		label: 'Product',
 		items: [
-			{ title: 'Helico Vault', sub: 'Liquidity that stays in range', href: '#hero', icon: 'bank' },
-			{ title: 'Mandate', badge: '7 fields', sub: 'Every one enforced on chain', href: '#enforcement', icon: 'document' },
-			{ title: 'Live canvas', sub: 'Four scenarios, one enclave', href: '#canvas', icon: 'layers' },
+			{ title: 'Helico Vault', sub: 'Liquidity that stays in range', href: '/#hero', icon: 'bank' },
+			{ title: 'Mandate', badge: '7 fields', sub: 'Every one enforced on chain', href: '/#enforcement', icon: 'document' },
+			{ title: 'Live canvas', sub: 'Four scenarios, one enclave', href: '/#canvas', icon: 'layers' },
 		],
 	},
 	{
 		id: 'how',
 		label: 'How It Works',
 		items: [
-			{ title: 'The mandate', sub: 'Seven fields you sign once', href: '#enforcement', icon: 'document' },
+			{ title: 'The mandate', sub: 'Seven fields you sign once', href: '/#enforcement', icon: 'document' },
 			{ title: 'The enclave', sub: 'Decides inside the TEE', href: `${repo}/tree/main/packages/plugins/cre`, icon: 'leaf', external: true },
-			{ title: 'The check', sub: 'Twenty lines, read from source', href: '#build', icon: 'book' },
+			{ title: 'The check', sub: 'Twenty lines, read from source', href: '/#build', icon: 'book' },
 		],
 	},
 	{
@@ -67,7 +67,7 @@ const menus: Menu[] = [
 		id: 'evidence',
 		label: 'Evidence',
 		items: [
-			{ title: 'Verified by default', sub: 'Counts that are true today', href: '#verified', icon: 'scales' },
+			{ title: 'Verified by default', sub: 'Counts that are true today', href: '/#verified', icon: 'scales' },
 			{ title: 'AI usage', sub: 'What was AI-assisted, and how', href: `${repo}/blob/main/AI-USAGE.md`, icon: 'arcs', external: true },
 			{ title: 'Uniswap feedback', sub: 'FEEDBACK.md for the Foundation', href: `${repo}/blob/main/FEEDBACK.md`, icon: 'wings', external: true },
 		],
@@ -77,7 +77,7 @@ const menus: Menu[] = [
 
 <header class="nav" data-nav>
 	<div class="wrap nav__inner">
-		<a class="nav__brand" href="#hero" aria-label="Helico, back to top">
+		<a class="nav__brand" href="/" aria-label="Helico, back to top">
 			<Image src={logoNav} alt="" width={28} height={28} densities={[1, 2]} />
 			<span>helico</span>
 		</a>
@@ -86,7 +86,8 @@ const menus: Menu[] = [
 				{menus.map((m) => (
 					<button type="button" data-menu={m.id} aria-expanded="false" aria-controls={`menu-${m.id}`}>{m.label}</button>
 				))}
-				<a href="#faq">FAQ</a>
+				<a href="/#faq">FAQ</a>
+				<a href="/blog/">Blog</a>
 			</nav>
 			<a class="btn btn--ink btn--small nav__cta" href={repo}>Get Started</a>
 			<button type="button" class="nav__burger" data-burger aria-expanded="false" aria-controls="nav-sheet" aria-label="Open menu">
@@ -120,7 +121,7 @@ const menus: Menu[] = [
 
 <div class="nav__sheet" id="nav-sheet" data-sheet role="dialog" aria-modal="true" aria-label="Menu" hidden>
 	<div class="nav__sheet-top">
-		<a class="nav__brand" href="#hero" aria-label="Helico, back to top" data-sheet-link>
+		<a class="nav__brand" href="/" aria-label="Helico, back to top" data-sheet-link>
 			<Image src={logoNav} alt="" width={28} height={28} densities={[1, 2]} />
 			<span>helico</span>
 		</a>
@@ -150,8 +151,11 @@ const menus: Menu[] = [
 		</section>
 	))}
 	<section class="nav__group nav__group--foot">
-		<a class="nav__card nav__card--sheet" href="#faq" data-sheet-link>
+		<a class="nav__card nav__card--sheet" href="/#faq" data-sheet-link>
 			<span class="nav__text"><span class="nav__title">FAQ</span><span class="nav__sub">Six questions, answered honestly</span></span>
+		</a>
+		<a class="nav__card nav__card--sheet" href="/blog/" data-sheet-link>
+			<span class="nav__text"><span class="nav__title">Blog</span><span class="nav__sub">Notes from building Helico</span></span>
 		</a>
 		<a class="btn btn--ink" href={repo} data-sheet-link>Get Started</a>
 	</section>

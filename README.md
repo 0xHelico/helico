@@ -20,11 +20,12 @@ not yet true rather than left to be assumed — see [Rules](#rules) for why that
 | [`packages/plugins/uniswap/`](packages/plugins/uniswap/) | Uniswap v4 on-chain package, `@helico/plugin-uniswap` |
 | [`packages/plugins/cre/`](packages/plugins/cre/) | Chainlink CRE confidential workflow, `@helico/plugin-cre` |
 | [`packages/core/`](packages/core/) | Shared library, `@helico/core` |
-| [`apps/landing/`](apps/landing/) | Landing page, Astro |
+| [`apps/landing/`](apps/landing/) | Landing page and blog, Astro |
+| [`apps/be/`](apps/be/) | Blog API, Go and SQLite |
 | [`docs/plans/`](docs/plans/) | Implementation plans, written before the code |
 
-`apps/be/` and `apps/cre/` are scaffolding from the initial layout and are **empty**. They are
-left in place rather than linked as though they held something; the CRE workflow lives in
+`apps/cre/` is scaffolding from the initial layout and is **empty**; the CRE workflow is the
+`packages/plugins/cre` package, consumed from a scratch project.
 `packages/plugins/cre`, because every integration is a reusable package here.
 
 ## Partner integrations

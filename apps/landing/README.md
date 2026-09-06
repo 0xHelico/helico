@@ -43,3 +43,14 @@ bun run --filter @helico/landing typecheck   # astro check
   OG image is `public/og.webp`. The only PNG left is the 180 px Apple touch icon.
 - The island loads with `client:visible`, so React and framer-motion (about 340 KB before
   compression) only load when the section approaches.
+
+## Blog
+
+`/blog` and `/blog/<slug>` are built at build time from one source of truth, the Markdown in
+[`apps/be/content`](../be/content): through the backend's API when `BE_URL` is set and it
+answers (`BE_URL=http://127.0.0.1:8787 bun run build`), otherwise straight from the files
+through a content collection. The build log says which (`[blog] 4 posts from the api|files`).
+The article page follows a Medium article's measurements: a 680px column, a 42px title, a 22px
+grey subtitle, an author row with a 48px avatar, and body copy in Source Serif 4 at 20px on
+32px lines.
+
