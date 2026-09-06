@@ -382,3 +382,10 @@ Audit. The last two are not referenced anywhere else in the repository; the user
 confirm they were in fact used, since a claim the repository cannot back does not belong here.
 
 - Prompt: "Use these to replace OpenZeppelin, Foundry, ETHGlobal." (three images)
+
+The hero's lede is one sentence: "Your funds keep earning while prices move, under rules you
+set once." The three-sentence version explained the mechanism first, and the user found it too
+long and unclear for a general reader; the safety line lives in "Your money stays yours".
+
+- Prompt: "'Money in a trading pool earns only while…' is too long and not clear enough for a
+  general user."
