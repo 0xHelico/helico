@@ -1,8 +1,10 @@
 name: landing
 
-# Builds the landing image on every merge to main, publishes it to GHCR, and asks Coolify to
-# redeploy. The deploy step only runs when the two Coolify secrets exist, so a fork or a
-# clone still gets the build without the deploy.
+# Builds the landing image on every merge to main, publishes it to GHCR, and asks the VPS to
+# redeploy. The deploy step only runs when the VPS variables exist, so a fork or a clone still
+# gets the build without the deploy. The ask goes over SSH with a key that can run exactly one
+# command on the server (a forced command that names the app); the Coolify token never leaves
+# the box (#108).
 on:
   push:
     branches: [main]
@@ -50,16 +52,18 @@ jobs:
   deploy:
     needs: image
     runs-on: ubuntu-latest
-    if: ${{ vars.COOLIFY_URL != '' }}
+    if: ${{ vars.VPS_HOST != '' }}
     steps:
-      - name: Ask Coolify to redeploy the landing
+      - name: Ask the VPS to redeploy the landing
         env:
-          COOLIFY_URL: ${{ vars.COOLIFY_URL }}
-          COOLIFY_APP_UUID: ${{ secrets.COOLIFY_APP_UUID }}
-          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          VPS_HOST: ${{ vars.VPS_HOST }}
+          VPS_USER: ${{ vars.VPS_USER }}
+          VPS_KNOWN_HOSTS: ${{ vars.VPS_KNOWN_HOSTS }}
+          VPS_DEPLOY_KEY: ${{ secrets.VPS_DEPLOY_KEY }}
         run: |
-          test -n "$COOLIFY_APP_UUID" && test -n "$COOLIFY_TOKEN"
-          # Coolify 4.3 answers GET here with "This endpoint has changed to a POST request."
-          curl --fail --silent --show-error -X POST \
-            -H "Authorization: Bearer $COOLIFY_TOKEN" \
-            "$COOLIFY_URL/api/v1/deploy?uuid=$COOLIFY_APP_UUID&force=false"
+          umask 077
+          printf '%s\n' "$VPS_DEPLOY_KEY" > deploy_key
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > known_hosts
+          ssh -i deploy_key -o UserKnownHostsFile=known_hosts -o StrictHostKeyChecking=yes \
+            -o BatchMode=yes "$VPS_USER@$VPS_HOST" landing
+          rm -f deploy_key

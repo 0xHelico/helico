@@ -591,6 +591,8 @@ Format: date · what was done · the AI's role · what a human verified.
   Closes #100 once the Coolify application exists, which only the owner can create.
 - **AI's role:** the survey, the files and the server steps. The owner's instruction, verbatim
   in translation, is in the plan.
+- **Follow-up (#108):** the deploy call moved from an HTTP bearer token to SSH with a
+  forced command on the server; the exposed tokens were revoked. Verified by a run.
 - **Follow-up:** the Coolify project and application created through Coolify's API from the
   server, a deploy-only token placed in the repository secrets, the deploy call corrected to
   `POST`, and squash/rebase merging switched off in the repository settings.
