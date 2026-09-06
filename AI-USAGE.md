@@ -352,15 +352,18 @@ Format: date · what was done · the AI's role · what a human verified.
   20px at 620px, button 48px, card 313px, all equal); the Playwright audit at seven viewports
   with zero findings. Still not deployed.
 
-### 2026-09-06 — Landing page: brand marquee
+### 2026-09-06 — Landing page: "built on" logo grid
 
-- **Done:** the first stay-updated card became a "built with" marquee of the eleven names the
-  repository actually uses; logos are picked up from `src/assets/brands/` when present and
-  wordmarks render until then. CSS-only loop, paused on hover, static under reduced motion.
-- **AI's role:** wrote the component and picked the list from the dependency manifests and the
-  plugin's network table, so nothing on it is decorative. The user supplies the logos.
+- **Done:** the first stay-updated card became a logo grid (four columns, hairlines, a
+  view-more cell when there are more than eleven) of the protocols, chains, and the event the
+  repository touches. Logos are picked up from `src/assets/brands/` when present and rendered
+  through `astro:assets`; wordmarks render until then. Five logos supplied by the user.
+- **AI's role:** wrote the component, picked the list from the dependency manifests and the
+  plugin's network table, and declined to title it "Backed by": Helico has no backers, and the
+  hackathon's prize sponsors are not that. The user supplied the logos and the reference.
 - **Verified:** `astro check` (0 errors), `astro build` with and without a throwaway SVG to prove
-  the glob pickup, the Playwright audit at seven viewports.
+  the glob pickup, the view-more toggle exercised in a headless browser (12 cells to 20 while
+  the list was longer), the Playwright audit at seven viewports.
 
 <!--
 Template for the next entry:

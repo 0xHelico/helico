@@ -1,6 +1,8 @@
 ---
-// Every name here is something the repository actually builds on or ran against. Drop a logo
-// at src/assets/brands/<slug>.svg (png and webp work too) and it replaces the wordmark.
+import { Image } from 'astro:assets'
+// Protocols, chains, and the event this was built on and for. Not backers: Helico has none,
+// and the hackathon's prize sponsors are not that. Drop a logo at src/assets/brands/<slug>.svg
+// (png and webp work too) and it replaces the wordmark.
 const brands = [
 	{ slug: 'uniswap', name: 'Uniswap v4' },
 	{ slug: 'chainlink', name: 'Chainlink CRE' },
@@ -9,121 +11,123 @@ const brands = [
 	{ slug: 'base', name: 'Base' },
 	{ slug: 'openzeppelin', name: 'OpenZeppelin' },
 	{ slug: 'foundry', name: 'Foundry' },
-	{ slug: 'viem', name: 'viem' },
-	{ slug: 'bun', name: 'Bun' },
-	{ slug: 'astro', name: 'Astro' },
 	{ slug: 'ethglobal', name: 'ETHGlobal' },
 ]
-const files = import.meta.glob<{ src: string; width: number; height: number }>(
-	'../../assets/brands/*.{svg,png,webp}',
-	{ eager: true, import: 'default' },
-)
+// Eleven show; when there are more, a twelfth cell opens the rest, the way the reference does it.
+const SHOWN = 11
+const files = import.meta.glob<ImageMetadata>('../../assets/brands/*.{svg,png,webp}', {
+	eager: true,
+	import: 'default',
+})
 const logoFor = (slug: string) => {
 	const key = Object.keys(files).find((k) => /\/([^/]+)\.(svg|png|webp)$/.exec(k)?.[1] === slug)
 	return key ? files[key] : null
 }
 const items = brands.map((b) => ({ ...b, logo: logoFor(b.slug) }))
-// The list is rendered twice so the loop has no seam; the copy is hidden from assistive tech.
 ---
 
-<section class="wrap" aria-label="Built with">
+<section class="wrap" aria-labelledby="brands-title">
 	<div class="section-card section-card--white brands">
-		<p class="brands__label">Built with</p>
-		<div class="brands__marquee">
-			{[false, true].map((copy) => (
-				<ul class="brands__track" aria-hidden={copy ? 'true' : undefined}>
-					{items.map((b) => (
-						<li>
-							{b.logo ? (
-								<img src={b.logo.src} alt={b.name} height="28" width={Math.round((b.logo.width / b.logo.height) * 28)} loading="lazy" decoding="async" />
-							) : (
-								<span>{b.name}</span>
-							)}
-						</li>
-					))}
-				</ul>
+		<h2 id="brands-title">Built on</h2>
+		<ul class="brands__grid" data-brands>
+			{items.map((b, i) => (
+				<li class:list={{ 'is-more': i >= SHOWN }} hidden={i >= SHOWN}>
+					{b.logo ? <Image src={b.logo} alt={b.name} height={28} densities={[1, 2]} /> : <span>{b.name}</span>}
+				</li>
 			))}
-		</div>
+			{items.length > SHOWN && (
+				<li class="brands__toggle">
+					<button type="button" data-brands-more aria-expanded="false">View More</button>
+				</li>
+			)}
+		</ul>
 	</div>
 </section>
 
+<script>
+	const grid = document.querySelector<HTMLElement>('[data-brands]')
+	const more = document.querySelector<HTMLButtonElement>('[data-brands-more]')
+	more?.addEventListener('click', () => {
+		for (const li of grid?.querySelectorAll<HTMLElement>('.is-more') ?? []) li.hidden = false
+		more.setAttribute('aria-expanded', 'true')
+		more.closest('li')?.remove()
+	})
+</script>
+
 <style>
 	.brands {
-		padding: 2rem 0 2.25rem;
-		overflow: hidden;
+		padding: 3rem 1.5rem;
 	}
-	.brands__label {
-		margin: 0 0 1.25rem;
+	.brands h2 {
+		margin: 0 0 2rem;
 		text-align: center;
-		font-size: 0.875rem;
-		font-weight: 450;
-		letter-spacing: -0.01em;
-		color: var(--ink-65);
+		font-size: clamp(1.75rem, 3vw, 2.5rem);
+		font-weight: 500;
+		line-height: 1.2;
+		letter-spacing: -0.03em;
+		color: var(--ink-90);
 	}
-	.brands__marquee {
-		display: flex;
-		width: 100%;
-		overflow: hidden;
-		mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
-		-webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
-	}
-	.brands__track {
-		display: flex;
-		flex: none;
-		align-items: center;
-		gap: 4rem;
-		margin: 0;
-		padding: 0 2rem;
+	.brands__grid {
+		display: grid;
+		grid-template-columns: repeat(2, 1fr);
+		gap: 1px;
+		max-width: var(--content-max);
+		margin: 0 auto;
+		padding: 1px 0;
 		list-style: none;
-		animation: brands-scroll 40s linear infinite;
+		background: rgba(37, 34, 40, 0.08);
 	}
-	.brands__track li {
+	.brands__grid li {
 		display: flex;
 		align-items: center;
-		height: 28px;
-		white-space: nowrap;
+		justify-content: center;
+		min-height: 120px;
+		padding: 1rem;
+		background: #ffffff;
 	}
-	.brands__track img {
+	.brands__grid li[hidden] {
+		display: none;
+	}
+	.brands__grid img {
 		height: 28px;
 		width: auto;
 		filter: grayscale(1);
 		opacity: 0.7;
-		transition: opacity 0.2s, filter 0.2s;
+		transition:
+			opacity 0.2s,
+			filter 0.2s;
 	}
-	.brands__track li:hover img {
+	.brands__grid li:hover img {
 		filter: none;
 		opacity: 1;
 	}
-	.brands__track span {
+	.brands__grid span {
 		font-size: 1.125rem;
 		font-weight: 550;
 		letter-spacing: -0.02em;
+		text-align: center;
 		color: var(--ink-65);
 	}
-	.brands:hover .brands__track {
-		animation-play-state: paused;
+	.brands__toggle button {
+		border: 0;
+		background: none;
+		padding: 0.5rem 0.75rem;
+		border-radius: 99px;
+		font-size: 1.0625rem;
+		font-weight: 450;
+		letter-spacing: -0.01em;
+		color: var(--ink-65);
 	}
-	@keyframes brands-scroll {
-		from {
-			transform: translateX(0);
-		}
-		to {
-			transform: translateX(-100%);
-		}
+	.brands__toggle button:hover {
+		color: var(--ink-90);
+		background: rgba(37, 34, 40, 0.04);
 	}
-	@media (prefers-reduced-motion: reduce) {
-		.brands__track {
-			animation: none;
-			flex-wrap: wrap;
-			justify-content: center;
-			gap: 1.5rem 2.5rem;
+	@media (min-width: 720px) {
+		.brands__grid {
+			grid-template-columns: repeat(4, 1fr);
 		}
-		.brands__track[aria-hidden] {
-			display: none;
-		}
-		.brands__marquee {
-			mask-image: none;
-			-webkit-mask-image: none;
+		.brands__grid li {
+			min-height: 150px;
 		}
 	}
 </style>

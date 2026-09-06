@@ -1,12 +1,14 @@
 # @helico/landing
 
 The landing page, Astro 7. A long single page in four cards: the hero with the canvas, a
-"built with" marquee, the mandate (dark, one row per field with the line in the vault that
+"built on" logo grid, the mandate (dark, one row per field with the line in the vault that
 enforces it), build (with the vault's range check rendered from source), verified-by-default
 facts with a live tick, then the FAQ, a stay-updated card, and the footer.
 
-Brand logos for the marquee go in `src/assets/brands/<slug>.svg` (png and webp work too); the
-slugs are listed in `Brands.astro`, and a name without a file renders as a wordmark. The canvas is a
+Logos for the grid go in `src/assets/brands/<slug>.svg` (png and webp work too); the slugs are
+listed in `Brands.astro`, and a name without a file renders as a wordmark. The grid lists only
+protocols, chains, and the event the repository actually touches: it is not a backers section,
+because Helico has none. The canvas is a
 React island that cycles through four scripted scenarios (commit a mandate, re-centre through
 the enclave, refuse tampered thresholds, hold while in range) with the chat on the left and what
 happened behind it on the right. Illustrative; the numbers are the ones the repository recorded.

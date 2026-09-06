@@ -164,3 +164,23 @@ row under `prefers-reduced-motion`. The second updates card stays at the bottom.
 
 - "Replace this one with a marquee. Write down which brands, I will find the logos."
 
+## Revision — the marquee becomes a grid, and stays honest
+
+The user then pointed at a "backed by" grid on a credit-network site: four columns, hairline
+dividers, eleven logos and a twelfth cell that opens the rest. The grid replaced the marquee.
+The user's note that the reference is a *backers* section, not a tools section, is the reason
+the content did not follow it: Helico has no backers, and the hackathon's prize sponsors are not
+that, so a "Backed by" heading over their logos would be the misrepresentation the rules
+disqualify for. The section is titled "Built on" and lists only the protocols, chains, and the
+event the repository touches: Uniswap v4, Chainlink CRE, Arbitrum One, Robinhood Chain, Base,
+OpenZeppelin, Foundry, ETHGlobal. The dev tooling that briefly padded the list to twenty is
+gone. With eight entries the "View More" cell does not render; the toggle stays in the
+component for the day the list grows past eleven. Five logos supplied by the user were shrunk
+to 160px WebP sources; `astro:assets` emits the served sizes.
+
+### Prompts, verbatim in translation
+
+- "Make it like this instead: eleven shown, the rest behind view more." (two screenshots of
+  the reference grid)
+- "That one is backed-by, not the features used."
+
