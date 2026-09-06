@@ -1,12 +1,12 @@
+import { PageHeader } from "@/components/chat/page-header";
 import { MandatePanel } from "@/components/mandate-panel";
-import { SiteHeader } from "@/components/site-header";
 
 export const metadata = { title: "Mandate" };
 
 export default function MandatePage() {
   return (
     <div className="flex min-h-dvh flex-col">
-      <SiteHeader />
+      <PageHeader />
       <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-10">
         <h1 className="font-semibold text-2xl tracking-tight">
           The rules you set
