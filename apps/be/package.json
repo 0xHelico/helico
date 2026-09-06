@@ -1,0 +1,10 @@
+{
+	"name": "@helico/be",
+	"private": true,
+	"scripts": {
+		"dev": "go run ./cmd/be",
+		"build": "go build -o bin/be ./cmd/be",
+		"typecheck": "go vet ./...",
+		"test": "go test ./..."
+	}
+}
