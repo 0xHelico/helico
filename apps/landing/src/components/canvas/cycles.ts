@@ -1,7 +1,7 @@
 /**
- * The scenarios the canvas cycles through. Illustrative: the numbers are the ones the repo
- * recorded (the ETH/ARB 0.05 % pool at tick 130472, the 0x134be6bb… mandate hash, nonce 7),
- * the conversations are scripted.
+ * The scenarios the canvas cycles through. Illustrative: the pool, tick, token, out-of-range
+ * band, and the 94.3% retained are the fork rehearsal's (docs/plans/2026-09-05-cre-forwarder-delivery.md);
+ * the 20-tick target band, the mandate hash, the nonce, and the conversations are scripted.
  */
 
 export type CycleSurface = 'tui' | 'tg'
@@ -29,7 +29,7 @@ export const CYCLES: Cycle[] = [
 		prompt:
 			'keep my ETH/ARB position in range: 20 ticks wide, keep 90% of the liquidity, one move an hour',
 		toolStream: [
-			{ tool: 'pool.read', args: 'ETH/ARB 0.05% · tick 130472', status: 'ok' },
+			{ tool: 'pool.read', args: 'ETH/ARB 0.05% · tick 94505', status: 'ok' },
 			{ tool: 'mandate.build', args: 'width 20 · retain 90% · cooldown 1h', status: 'ok' },
 			{ tool: 'mandate.hash', args: '0x134be6bb…6225', status: 'ok' },
 			{ tool: 'vault.setMandate', args: 'position #1900769', status: 'ok' },
@@ -51,18 +51,18 @@ The enclave checks the pool every five minutes. It can only propose moves inside
 		greeting: { prompt: 'gm', reply: 'gm ☀️ your ETH/ARB position drifted below its range' },
 		prompt: 'bring it back in range',
 		toolStream: [
-			{ tool: 'stateView.getSlot0', args: 'tick 130472 · fee 0.05%', status: 'ok' },
-			{ tool: 'vault.positionOf', args: '#1900769 · [130200, 130400)', status: 'ok' },
+			{ tool: 'stateView.getSlot0', args: 'tick 94505 · fee 0.05%', status: 'ok' },
+			{ tool: 'vault.positionOf', args: '#202707 · [93270, 93470)', status: 'ok' },
 			{ tool: 'mandate.verify', args: 'hash ✓ · nonce 7', status: 'ok' },
 			{ tool: 'size.swap', args: '41.0 ARB → ETH, inside the band', status: 'ok' },
 			{ tool: 'enclave.sign', args: 'EIP-712 · the key never leaves', status: 'ok' },
-			{ tool: 'vault.recenterWithSignature', args: '→ [130460, 130480)', status: 'ok' },
+			{ tool: 'vault.recenterWithSignature', args: '→ [94500, 94520)', status: 'ok' },
 		],
 		reply: `Back in range.
 
-**[130460, 130480)** around tick 130472
+**[94500, 94520)** around tick 94505
 Swapped 41.0 ARB for ETH through the position's own pool, then minted.
-Retained **98%** of the liquidity · cooldown until 15:32
+Retained **94.3%** of the liquidity · cooldown until 15:32
 
 The vault checked the width, the price, the improvement, the floor, and the nonce before it moved anything.`,
 		painting: 'recentre',

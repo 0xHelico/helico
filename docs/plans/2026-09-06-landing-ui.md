@@ -281,3 +281,20 @@ marked as being for builders. Every fact and caveat is unchanged.
 - "And on the landing too, the writing should not be too developer; there may be people who
   do not understand crypto yet but want to know about Helico, so keep the topics general."
 
+
+## Revision — one set of numbers, counted rather than typed
+
+Review of #84 found two drifts. The Position tab quoted the 98% that #67 had removed as
+unsourced, while the Evidence tab one click away quoted the rehearsal's measured 94.3%; the
+Position tab and the hero walkthrough now use the rehearsal's figures (tick, token, bands,
+94.3%), with the scripted parts named in the canvas's comment. And "9 fork tests" had become
+10 an hour after it was typed, the third such drift in a day, so the Solidity counts are now
+read from `contracts/test/` at build time (`src/lib/solidity-tests.ts`): every `function test…`,
+and for the fork suite those in `Fork*.t.sol` that are not `pure`, which is exactly the set
+`forge test` skips without an endpoint. Checked against `forge test --list`: 95 and 10.
+
+### Prompt, verbatim
+
+- Review on #84: "98% is back … Suggest 94.3%, so the Position tab and the Evidence tab
+  describe the same world." and "`9 fork tests` is 10 … the fork count could be derived at
+  build time the way `_checkRange` already is."

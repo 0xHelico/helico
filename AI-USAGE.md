@@ -473,6 +473,9 @@ Format: date · what was done · the AI's role · what a human verified.
 - **AI's role:** wrote the markup, the script and the copy; exercised click and keyboard in a
   headless browser. The user asked for it.
 - **Verified:** `astro check` (0 errors), `astro build`, the Playwright audit at seven viewports.
+- **Review follow-up:** the Position tab's 98% (removed in #67 as unsourced) became the
+  rehearsal's 94.3%, and the Solidity test counts are read from `contracts/test/` at build time
+  instead of typed, checked against `forge test --list` (95, 10 fork).
 
 ### 2026-09-06 — Landing page: plain words
 

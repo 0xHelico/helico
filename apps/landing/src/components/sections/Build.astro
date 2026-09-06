@@ -1,6 +1,7 @@
 ---
 import { readFileSync } from 'node:fs'
 import { Code } from 'astro:components'
+import { forkTests, solidityTests } from '../../lib/solidity-tests'
 const repo = 'https://github.com/0xHelico/helico'
 // Read from the vault source at build time, so the page shows the function as this checkout has it.
 const source = readFileSync(new URL('../../../../../contracts/src/HelicoVault.sol', import.meta.url), 'utf8')
@@ -28,9 +29,9 @@ const packages = [
 	},
 	{
 		name: 'HelicoVault',
-		stat: '85 + 9',
+		stat: String(solidityTests),
 		unit: 'tests',
-		copy: 'Enforces the mandate on chain, with the swap inside its own lock. Nine run on a fork of Arbitrum One.',
+		copy: `Enforces the mandate on chain, with the swap inside its own lock. ${forkTests} of them run on a fork of Arbitrum One.`,
 		href: `${repo}/tree/main/contracts`,
 	},
 ]

@@ -1,9 +1,10 @@
 ---
+import { forkTests, solidityTests } from '../../lib/solidity-tests'
 const repo = 'https://github.com/0xHelico/helico'
 const swapPlan = `${repo}/blob/main/docs/plans/2026-09-05-vault-swap-recentre.md`
 const facts = [
-	{ n: '240+', unit: 'automated tests', copy: 'Run on every change: 52 on the Uniswap piece, 116 on the decision piece, 85 on the contract.' },
-	{ n: '9', unit: 'tests on a copy of the real market', copy: 'Deposit, swap, and move a real position on a snapshot of Arbitrum One.' },
+	{ n: '240+', unit: 'automated tests', copy: `Run on every change: 52 on the Uniswap piece, 116 on the decision piece, ${solidityTests} on the contract.` },
+	{ n: String(forkTests), unit: 'tests on a copy of the real market', copy: 'Deposit, swap, and move a real position on a snapshot of Arbitrum One.' },
 	{ n: '12', unit: 'automated reviews', copy: 'AI reviewers went over the contract, then six more. That is not a professional audit, and we do not call it one.' },
 	{ n: '4', unit: 'networks tried', copy: 'Real transactions on two test networks, read-only on Robinhood Chain, and a snapshot of Arbitrum One.' },
 	{ n: '3', unit: 'ways one signature was checked', copy: 'The same approval was verified by the program, by the contract, and by an independent tool.' },

@@ -1,4 +1,5 @@
 ---
+import { forkTests } from '../../lib/solidity-tests'
 const repo = 'https://github.com/0xHelico/helico'
 // Permalinks pinned at the commit these line numbers were read from, so they stay true when the file moves on.
 const vault = `${repo}/blob/154bcabd85ca3be8f73851bbc55a1a04ea42c6e4/contracts/src/HelicoVault.sol`
@@ -18,7 +19,7 @@ const position = [
 	['Pool', 'ETH and ARB, on the Uniswap exchange, on the Arbitrum network'],
 	['Range', 'a narrow band of prices, 20 steps wide'],
 	['Price now', 'inside the range, so the deposit is earning'],
-	['Last move', 'kept 98% of the deposit working'],
+	['Last move', 'kept 94.3% of the deposit working, as in the rehearsal'],
 	['Cooldown', 'until 15:32; no move can happen before then'],
 	['Owner', 'you; the deposit stays in your wallet and the contract may only move it'],
 ]
@@ -40,7 +41,7 @@ const evidence = [
 	['Rehearsal', 'on a snapshot of the real market, an automated decision moved a real deposit that had drifted out of range'],
 	['Kept', '94.3% of the deposit working; the rules demanded at least 50%'],
 	['Second run', 'correctly did nothing, because the cooldown was running'],
-	['Tests', '240+ automated tests, 9 of them on a snapshot of the real market'],
+	['Tests', `240+ automated tests, ${forkTests} of them on a snapshot of the real market`],
 	['Caveats', 'a snapshot, not the live network; the sealed environment was simulated; nothing is deployed yet'],
 ]
 const tabs = [
