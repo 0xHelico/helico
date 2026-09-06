@@ -580,6 +580,22 @@ Format: date · what was done · the AI's role · what a human verified.
   existing tests were quietly relying on the silent replacement and now `revoke()` first, which
   is the flow a user has.
 
+### 2026-09-06 — Landing: container image, VPS, and a deploy on every merge
+
+- **Done:** a read-only security survey of the VPS recorded in
+  `docs/plans/2026-09-06-landing-deploy.md`; `apps/landing/Dockerfile` (Bun build, nginx
+  unprivileged, cache and security headers, health check) and `.dockerignore`; a workflow that
+  publishes the image to GHCR on every merge to `main` and asks Coolify to redeploy; the
+  `helico.site` nginx site and certificate on the VPS within the deploy user's granted rights.
+  Closes #100 once the Coolify application exists, which only the owner can create.
+- **AI's role:** the survey, the files and the server steps. The owner's instruction, verbatim
+  in translation, is in the plan.
+- **Verified:** the image built on the VPS and run on a private port: every route 200, 404 on
+  a missing page, gzip, immutable cache on hashed assets, headers, non-root nginx, health
+  `healthy`; `https://helico.site` answers with a valid certificate (502 until the container
+  exists). The SSH password test, the sudo rights and the port list were checked on the box,
+  not assumed. The laptop's Docker daemon was not running, so the local check is the server's.
+
 <!--
 Template for the next entry:
 
