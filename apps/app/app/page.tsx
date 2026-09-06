@@ -11,25 +11,11 @@ import {
   ConversationScrollButton,
 } from "@/components/ai-elements/conversation";
 import { Message, MessageContent } from "@/components/ai-elements/message";
+import { SwapCard } from "@/components/swap-card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { suggestions } from "@/lib/constants";
-
-type Token = {
-  symbol: string;
-  address: string;
-  decimals: number;
-  name: string;
-};
-
-type Intent = {
-  chainId: number;
-  chain: string;
-  tokenIn: Token;
-  tokenOut: Token;
-  amountIn: string;
-  amountInWei: string;
-};
+import type { Intent } from "@/lib/intent";
 
 type Turn = {
   id: number;
@@ -133,7 +119,7 @@ export default function Page() {
                 }
               >
                 <p className="whitespace-pre-wrap">{turn.text}</p>
-                {turn.intent ? <IntentCard intent={turn.intent} /> : null}
+                {turn.intent ? <SwapCard intent={turn.intent} /> : null}
               </MessageContent>
             </Message>
           ))}
@@ -176,36 +162,6 @@ export default function Page() {
             : "Connect a wallet to sign what you decide. Reading and asking work without one."}
         </p>
       </div>
-    </div>
-  );
-}
-
-function IntentCard({ intent }: { intent: Intent }) {
-  return (
-    <div className="mt-3 rounded-xl border p-4">
-      <div className="flex items-center gap-3 font-medium text-base">
-        <span>
-          {intent.amountIn} {intent.tokenIn.symbol}
-        </span>
-        <ArrowRight className="size-4 text-muted-foreground" />
-        <span>{intent.tokenOut.symbol}</span>
-      </div>
-      <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-muted-foreground text-xs">
-        <dt>Network</dt>
-        <dd>{intent.chain}</dd>
-        <dt>Giving</dt>
-        <dd>
-          {intent.tokenIn.name} · {intent.amountInWei} of its smallest unit
-        </dd>
-        <dt>Receiving</dt>
-        <dd>{intent.tokenOut.name}</dd>
-      </dl>
-      {/* Honest about where this stops today: the vault is not on a live network yet, so there
-          is nothing to sign against. A button that did nothing would be worse than this line. */}
-      <p className="mt-3 border-t pt-3 text-muted-foreground text-xs">
-        Signing is not wired yet. Helico is not deployed to a live network, so
-        this is what it understood, and nothing more.
-      </p>
     </div>
   );
 }
