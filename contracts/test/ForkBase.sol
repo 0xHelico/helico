@@ -22,11 +22,21 @@ import {MandateLib, PoolKey} from "../src/Mandate.sol";
 abstract contract ForkBase is Test {
     using MandateLib for PoolKey;
 
-    IPositionManager constant POSITION_MANAGER = IPositionManager(0xd88F38F930b7952f2DB2432Cb002E7abbF3dD869);
-    IStateView constant STATE_VIEW = IStateView(0x76Fd297e2D437cd7f76d50F01AfE6160f86e9990);
-    IPoolManager constant POOL_MANAGER = IPoolManager(0x360E68faCcca8cA495c1B759Fd9EEe466db9FB32);
+    // Set once by the constructor, so a fork suite can name a different chain without a second
+    // copy of the helpers below. They were `constant` while there was one chain; the moment a
+    // hooked pool had to come from somewhere other than Arbitrum, the constants were the whole
+    // obstacle and the rest of this file was already chain-agnostic.
+    IPositionManager internal POSITION_MANAGER;
+    IStateView internal STATE_VIEW;
+    IPoolManager internal POOL_MANAGER;
 
-    uint256 constant ARBITRUM_ONE = 42161;
+    /// @dev The `[rpc_endpoints]` alias in `foundry.toml`, and the chain the fork must turn out
+    ///      to be. Checking the id is what stops a mis-set endpoint from silently testing the
+    ///      wrong chain against the right addresses.
+    string internal forkAlias;
+    uint256 internal expectedChainId;
+    /// @dev The environment variable behind `forkAlias`, so the skip message names the one to set.
+    string internal rpcEnvVar;
 
     /// @dev ETH/ARB at 0.05%, spacing 10 —
     ///      `poolId 0xb37da7d5beb04539b6c497a15794748fc0ce1da7afc61133e3253eff76229ae5`.
@@ -39,28 +49,58 @@ abstract contract ForkBase is Test {
     ///      `currency0` is native, so this still exercises the path the vault most needs to
     ///      prove it handles — `Currency.transfer` for the zero address is a bare `call`, and a
     ///      contract without `receive()` fails it with no diagnostic.
-    PoolKey internal demoPool = PoolKey({
-        currency0: address(0),
-        currency1: 0x912CE59144191C1204E64559FE8253a0e49E6548,
-        fee: 500,
-        tickSpacing: 10,
-        hooks: address(0)
-    });
+    PoolKey internal demoPool;
 
     bool internal forked;
+
+    constructor(
+        string memory forkAlias_,
+        string memory rpcEnvVar_,
+        uint256 expectedChainId_,
+        IPositionManager positionManager_,
+        IStateView stateView_,
+        IPoolManager poolManager_,
+        PoolKey memory demoPool_
+    ) {
+        forkAlias = forkAlias_;
+        rpcEnvVar = rpcEnvVar_;
+        expectedChainId = expectedChainId_;
+        POSITION_MANAGER = positionManager_;
+        STATE_VIEW = stateView_;
+        POOL_MANAGER = poolManager_;
+        demoPool = demoPool_;
+    }
 
     /// @dev Marks the test skipped rather than passed when there is no endpoint. A test that
     ///      reports green without having run is the same lie as a mock that cannot refuse
     ///      anything, and this repo has already paid for that once.
+    ///
+    ///      `HELICO_FORK_BLOCK` pins a block, for reproducing only. Reading the live pool means
+    ///      a failure that depends on where the price happens to sit disappears on the next run,
+    ///      and chasing one without a pin is a coin flip. Leave it unset everywhere else — a
+    ///      pinned suite silently stops testing what it claims.
     function _fork() internal {
-        try vm.createSelectFork("arbitrum") {
-            forked = block.chainid == ARBITRUM_ONE;
-        } catch {
-            forked = false;
-        }
+        uint256 pinned = vm.envOr("HELICO_FORK_BLOCK", uint256(0));
+        forked = pinned == 0 ? _select() : _select(pinned);
         if (!forked) {
-            emit log("no endpoint: set ARBITRUM_RPC_URL to run the fork suite");
+            emit log(string.concat("no endpoint: set ", rpcEnvVar, " to run this fork suite"));
             vm.skip(true);
+        }
+    }
+
+    function _select() private returns (bool) {
+        try vm.createSelectFork(forkAlias) {
+            return block.chainid == expectedChainId;
+        } catch {
+            return false;
+        }
+    }
+
+    function _select(uint256 blockNumber) private returns (bool) {
+        try vm.createSelectFork(forkAlias, blockNumber) {
+            return block.chainid == expectedChainId;
+        } catch {
+            return false;
         }
     }
 
@@ -83,4 +123,37 @@ abstract contract ForkBase is Test {
         int24 tick = _tickOf(key);
         return tick >= lower && tick < upper;
     }
+}
+
+/// @notice Arbitrum One, and the hook-less ETH/ARB pool every existing fork test uses.
+///
+/// @dev A named base rather than the same seven arguments in each test file. The pool's fee
+///      matters to this product more than it looks: a re-centre pays a swap through the
+///      position's own pool, so 0.05% is the difference between an action that recovers more
+///      than it costs and one that does not. The chain we came from had this pool at 1%, and
+///      most of its pools between 6% and 20%.
+///
+///      `currency0` is native, so this exercises the path the vault most needs to prove it
+///      handles — `Currency.transfer` for the zero address is a bare `call`, and a contract
+///      without `receive()` fails it with no diagnostic.
+///
+///      `poolId 0xb37da7d5beb04539b6c497a15794748fc0ce1da7afc61133e3253eff76229ae5`.
+abstract contract ArbitrumFork is ForkBase {
+    constructor()
+        ForkBase(
+            "arbitrum",
+            "ARBITRUM_RPC_URL",
+            42161,
+            IPositionManager(0xd88F38F930b7952f2DB2432Cb002E7abbF3dD869),
+            IStateView(0x76Fd297e2D437cd7f76d50F01AfE6160f86e9990),
+            IPoolManager(0x360E68faCcca8cA495c1B759Fd9EEe466db9FB32),
+            PoolKey({
+                currency0: address(0),
+                currency1: 0x912CE59144191C1204E64559FE8253a0e49E6548,
+                fee: 500,
+                tickSpacing: 10,
+                hooks: address(0)
+            })
+        )
+    {}
 }

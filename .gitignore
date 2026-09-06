@@ -1,4 +1,7 @@
 node_modules
+
+# Throwaway probes, so a broad `git add` cannot sweep one in.
+*.tmp.ts
 .env
 .env.local
 .env.*.local
