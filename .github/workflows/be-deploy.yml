@@ -1,0 +1,37 @@
+name: be
+
+# Every merge to main that touches the backend: ask the VPS to rebuild and redeploy it, over
+# the same SSH forced command the landing uses (see landing-deploy.yml and #108).
+on:
+  push:
+    branches: [main]
+    paths:
+      - apps/be/**
+      - .github/workflows/be-deploy.yml
+  workflow_dispatch:
+
+concurrency:
+  group: be-deploy
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: ${{ vars.VPS_HOST != '' }}
+    steps:
+      - name: Ask the VPS to redeploy the API
+        env:
+          VPS_HOST: ${{ vars.VPS_HOST }}
+          VPS_USER: ${{ vars.VPS_USER }}
+          VPS_KNOWN_HOSTS: ${{ vars.VPS_KNOWN_HOSTS }}
+          VPS_DEPLOY_KEY: ${{ secrets.VPS_DEPLOY_KEY }}
+        run: |
+          umask 077
+          printf '%s\n' "$VPS_DEPLOY_KEY" > deploy_key
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > known_hosts
+          ssh -i deploy_key -o UserKnownHostsFile=known_hosts -o StrictHostKeyChecking=yes \
+            -o BatchMode=yes "$VPS_USER@$VPS_HOST" api
+          rm -f deploy_key

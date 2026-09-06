@@ -108,3 +108,16 @@ The repository now allows merge commits only; squash and rebase merging are swit
 the settings, at the owner's request, after three pull requests were squashed.
 
 - Prompt: "Can you please set it up as well?" and "Domain helico.site, with certbot too."
+
+## Follow-up — the deploy call no longer crosses the internet in cleartext (#108)
+
+Coolify answers plain HTTP on its port, so the deploy-only token in the workflow went over the
+public internet on every merge. Rather than give the panel a hostname and a certificate, the
+workflow now asks over SSH, which is encrypted and already exposed: a key that exists only in
+the repository secrets, whose entry in the server's `authorized_keys` carries a **forced
+command** and no port forwarding, no agent, no pty. The command takes one word, `landing` or
+`docs`, maps it to the application, and calls Coolify on `127.0.0.1` with a token that lives in a
+mode-600 file on the box. The two tokens that had crossed HTTP were revoked. Verified: the key
+run with any other command answers `unknown app`; a hand-triggered run redeployed the site.
+
+- Prompt: "check issues and PRs" (the fix follows the collaborator's #108).

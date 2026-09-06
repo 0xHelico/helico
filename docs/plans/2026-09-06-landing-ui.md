@@ -426,3 +426,21 @@ the reader has not asked for reduced motion.
 - "Make the canvas go back to Mandate after Hold finishes, so it always loops."
 - "And give each component an entrance animation in sequence, so they do not all appear at
   once."
+
+## Revision — the docs site is the destination for reading
+
+Every "learn more" used to land on a README on GitHub, which reads as a detour unless the
+reader came for the repository. Now that `docs.helico.site` exists, one rule decides each link:
+a link that means **read about Helico** goes to the docs site, and a link that means **look at
+the code or a repository artifact** stays on GitHub with a label that says so.
+
+So the nav gains a Docs entry (desktop and phone sheet); the concept entries in its menus point
+at the matching docs pages; "Get Started", both "Learn More" buttons, "See the Record" and
+"Learn More About Helico" go to docs pages; and "See the Code", "Read the Plans", "open on
+GitHub", "Read the source", "AI usage", "Uniswap feedback", the licence and the vault line
+permalinks stay on GitHub, because that is where those things live.
+
+### Prompt, verbatim in translation
+
+- "Can the landing redirect to https://docs.helico.site/ instead? Linking to a GitHub README
+  feels odd, unless the context really is GitHub." and "In the nav as well as in the content."

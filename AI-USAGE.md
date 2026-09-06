@@ -486,6 +486,8 @@ Format: date · what was done · the AI's role · what a human verified.
 - **Wording:** "deposit" became "funds" throughout the page at the user's request; grammar fixed by hand.
 - **Logos:** the "Built with" grid swaps three wordmarks for logos the user supplied (Ethereum, FREE-PI, One Dollar Audit), converted to lossless webp; the user is asked to confirm the last two were used.
 - **Motion:** the canvas loop bug (timer keyed on duration, two neighbours share one) fixed; sections reveal their parts in sequence on first view, JS- and reduced-motion-guarded. Watched headless: the loop returns to Mandate; 53 parts arm and complete; audit at zero.
+- **Links:** reading links repointed from GitHub READMEs to docs.helico.site, in the nav and
+  every section; code links unchanged. All eight docs URLs checked live, audit at zero.
 
 ### 2026-09-06 — Landing page: plain words
 
@@ -591,6 +593,8 @@ Format: date · what was done · the AI's role · what a human verified.
   Closes #100 once the Coolify application exists, which only the owner can create.
 - **AI's role:** the survey, the files and the server steps. The owner's instruction, verbatim
   in translation, is in the plan.
+- **Follow-up (#108):** the deploy call moved from an HTTP bearer token to SSH with a
+  forced command on the server; the exposed tokens were revoked. Verified by a run.
 - **Follow-up:** the Coolify project and application created through Coolify's API from the
   server, a deploy-only token placed in the repository secrets, the deploy call corrected to
   `POST`, and squash/rebase merging switched off in the repository settings.
@@ -616,6 +620,18 @@ Format: date · what was done · the AI's role · what a human verified.
   the model invented a token and the registry refused it — the table is in the plan. Each token
   address was checked on chain with `symbol()` and `decimals()`, which is how the `USD₮0` naming
   came to be written down.
+
+### 2026-09-06 — Backend: the blog API on the VPS
+
+- **Done:** `apps/be/Dockerfile` (static Go build, non-root Alpine runtime, content baked in,
+  `/data` volume), a `be` workflow over the SSH forced command, the landing Dockerfile passing
+  `BE_URL` at build time; on the server the `api.helico.site` nginx site and certificate, the
+  Coolify application with its volume and environment, and the automation's `.env` pointed at
+  it. Plan in `docs/plans/2026-09-06-be-deploy.md`.
+- **AI's role:** all of it, on the owner's "continue" and the earlier instruction that the API
+  would live at `api.helico.site`.
+- **Verified:** the image built by Coolify; `/healthz` and `/api/posts` over TLS; a `PUT` with
+  the token and the post read back; the landing rebuilt against the API.
 
 <!--
 Template for the next entry:
