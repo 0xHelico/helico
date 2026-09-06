@@ -465,6 +465,30 @@ Format: date · what was done · the AI's role · what a human verified.
   the API (4 posts each way); the Playwright audit on `/blog` and two articles at seven
   viewports, zero findings; the landing audit unchanged at zero.
 
+### 2026-09-06 — Landing page: the panel's tabs
+
+- **Done:** the dark card's sidebar became real tabs (roles, arrow keys) with a panel each:
+  mandate, position, enclave, vault, evidence, every line from the knowledge the repository
+  records, caveats included.
+- **AI's role:** wrote the markup, the script and the copy; exercised click and keyboard in a
+  headless browser. The user asked for it.
+- **Verified:** `astro check` (0 errors), `astro build`, the Playwright audit at seven viewports.
+- **Review follow-up:** the Position tab's 98% (removed in #67 as unsourced) became the
+  rehearsal's 94.3%, and the Solidity test counts are read from `contracts/test/` at build time
+  instead of typed, checked against `forge test --list` (95, 10 fork).
+- **Copy overhaul:** after the user pointed at aave.com and morpho.org, the tabs, rule labels,
+  values, template chips, nav titles and one new FAQ were rewritten in the words a savings app
+  would use, with the field names kept beside the plain labels for builders. Facts unchanged.
+
+### 2026-09-06 — Landing page: plain words
+
+- **Done:** the landing's copy rewritten for a reader who may not know crypto: the idea before
+  the mechanism, terms explained or avoided, numbers explained, the panel tabs in the same
+  register, the code figure marked for builders. Facts and caveats unchanged.
+- **AI's role:** rewrote the copy against the knowledge the repository records. The user asked
+  for the register.
+- **Verified:** `astro check` (0 errors), `astro build`, the Playwright audit at seven viewports.
+
 ### 2026-09-06 — Vault: mint what it can afford, not what the agent guessed
 
 - **Done:** `_mint` now sizes the mint from the price the swap actually reached and the tokens

@@ -28,7 +28,7 @@ bun run --filter @helico/landing typecheck   # astro check
 | | |
 |---|---|
 | Page composition | `src/pages/index.astro` |
-| Sections | `src/components/sections/*.astro` (Nav, Hero, Brands, Enforcement, Build, Verified, Faq, Updates, Footer) |
+| Sections | `src/components/sections/*.astro` (Nav, Hero, Brands, Enforcement, Build, Verified, Faq, Footer) |
 | Head, icons, metadata | `src/layouts/Base.astro`, `public/site.webmanifest` |
 | The canvas island | `src/components/canvas/HeroCanvas.tsx` (frame), `TuiCanvas.tsx` and `TgCanvas.tsx` (chat surfaces), `OutputCanvas.tsx` and `glyphs.tsx` (the voyage) |
 | Scenarios | `src/components/canvas/cycles.ts` (chat), `provenance.ts` (stations) |

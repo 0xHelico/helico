@@ -253,3 +253,82 @@ on the column's edge, the hero card at y = 0.
 
 - "The nav is too tall, and it should be the logo on the left and the rest on the right."
 
+## Revision — the panel's sections are tabs
+
+The user found the dark card's panel confusing: a sidebar that looked like tabs but did nothing.
+The five entries are now real tabs (roles, arrow keys, one panel shown at a time) with content
+of their own, every line drawn from what the repository records: the mandate's fields as
+before; the position as the canvas shows it; what the enclave reads, recomputes, decides, sizes
+and leaves; what the vault holds, checks, moves, ends with and refuses; and the evidence from
+the fork rehearsal with its caveats.
+
+### Prompt, verbatim in translation
+
+- "I think this is still confusing and the UI is not clear; make the tabs clickable, with
+  content."
+
+## Revision — plain words for readers outside crypto
+
+The user asked that the landing not read like it was written for developers: someone who does
+not know crypto may still want to understand Helico, so the topics should stay general. The
+copy is rewritten with the idea before the mechanism, terms explained or avoided ("a trading
+pool", "a deposit", "a sealed program", "a snapshot of the real market"), numbers explained
+("kept 94% of the deposit working"), the tab panels in the same register, and the code figure
+marked as being for builders. Every fact and caveat is unchanged.
+
+### Prompt, verbatim in translation
+
+- "And on the landing too, the writing should not be too developer; there may be people who
+  do not understand crypto yet but want to know about Helico, so keep the topics general."
+
+
+## Revision — one set of numbers, counted rather than typed
+
+Review of #84 found two drifts. The Position tab quoted the 98% that #67 had removed as
+unsourced, while the Evidence tab one click away quoted the rehearsal's measured 94.3%; the
+Position tab and the hero walkthrough now use the rehearsal's figures (tick, token, bands,
+94.3%), with the scripted parts named in the canvas's comment. And "9 fork tests" had become
+10 an hour after it was typed, the third such drift in a day, so the Solidity counts are now
+read from `contracts/test/` at build time (`src/lib/solidity-tests.ts`): every `function test…`,
+and for the fork suite those in `Fork*.t.sol` that are not `pure`, which is exactly the set
+`forge test` skips without an endpoint. Checked against `forge test --list`: 95 and 10.
+
+### Prompt, verbatim
+
+- Review on #84: "98% is back … Suggest 94.3%, so the Position tab and the Evidence tab
+  describe the same world." and "`9 fork tests` is 10 … the fork count could be derived at
+  build time the way `_checkRange` already is."
+
+## Revision — the words a savings app would use
+
+The user pointed at aave.com and morpho.org again: both are readable by someone who has never
+held crypto, because every heading is a promise in ordinary words and the mechanism is a click
+away. The landing's copy is redone to that standard, keeping every fact and caveat:
+
+- the hero says what the problem is before what the product does ("Money in a trading pool
+  earns only while the price stays where you put it. When it drifts, Helico moves your deposit
+  back…");
+- the panel's tabs are "Your rules", "Your deposit", "The decider", "The contract", "Evidence";
+  each rule has a plain label first ("Which market", "How wide", "Worth the move", "How often",
+  "How much at once", "Until when", "How much to keep", "Where the price is") with the field
+  name beside it in small type for builders, and a plain value ("once an hour at most",
+  "at least 0.5% closer") instead of `1 h` and `≥ 50 bps`;
+- "pool" and "range" become "market" and "band" everywhere a reader meets them, the template
+  chips say "narrow band · keep 90% · hourly at most", and the nav's "Mandate" and "The
+  enclave" become "Your rules" and "The decider";
+- one FAQ is added for the reader who has nothing yet: "What do I need to start?", answered
+  honestly (a wallet and an existing deposit; nothing is live).
+
+The builder material (the code figure, the package cards, the Developers menu) keeps its
+vocabulary; it is labelled for builders and sits below the fold.
+
+Found while checking the result on a phone: the tab sidebar was hidden below 768px, so the
+other four tabs could not be reached at all there. It is now a strip that scrolls sideways on
+phones and a sidebar from tablet up.
+
+### Prompt, verbatim in translation
+
+- "And do not forget to overhaul the content on the landing; the aim is that users are
+  general, not all crypto-native. Look at aave.com and morpho.org."
+- "Look at aave.com: even a web2 person or someone who does not know crypto understands it
+  easily, right?"

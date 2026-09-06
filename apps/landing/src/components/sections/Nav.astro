@@ -1,4 +1,5 @@
 ---
+import { solidityTests } from '../../lib/solidity-tests'
 import { Image } from 'astro:assets'
 import logoNav from '../../assets/logo-nav.webp'
 const repo = 'https://github.com/0xHelico/helico'
@@ -39,18 +40,18 @@ const menus: Menu[] = [
 		id: 'product',
 		label: 'Product',
 		items: [
-			{ title: 'Helico Vault', sub: 'Liquidity that stays in range', href: '/#hero', icon: 'bank' },
-			{ title: 'Mandate', badge: '7 fields', sub: 'Every one enforced on chain', href: '/#enforcement', icon: 'document' },
-			{ title: 'Live canvas', sub: 'Four scenarios, one enclave', href: '/#canvas', icon: 'layers' },
+			{ title: 'Helico Vault', sub: 'Keeps your deposit earning', href: '/#hero', icon: 'bank' },
+			{ title: 'Your rules', badge: '7 rules', sub: 'Seven rules you write once', href: '/#enforcement', icon: 'document' },
+			{ title: 'Live canvas', sub: 'Watch a move happen', href: '/#canvas', icon: 'layers' },
 		],
 	},
 	{
 		id: 'how',
 		label: 'How It Works',
 		items: [
-			{ title: 'The mandate', sub: 'Seven fields you sign once', href: '/#enforcement', icon: 'document' },
-			{ title: 'The enclave', sub: 'Decides inside the TEE', href: `${repo}/tree/main/packages/plugins/cre`, icon: 'leaf', external: true },
-			{ title: 'The check', sub: 'Twenty lines, read from source', href: '/#build', icon: 'book' },
+			{ title: 'Your rules', sub: 'What you decide, and what the contract enforces', href: '/#enforcement', icon: 'document' },
+			{ title: 'The decider', sub: 'A sealed program that decides', href: `${repo}/tree/main/packages/plugins/cre`, icon: 'leaf', external: true },
+			{ title: 'The check', sub: 'The actual code, for builders', href: '/#build', icon: 'book' },
 		],
 	},
 	{
@@ -59,7 +60,7 @@ const menus: Menu[] = [
 		items: [
 			{ title: 'Uniswap plugin', badge: '52 tests', sub: 'Pools and positions from the SDK', href: `${repo}/tree/main/packages/plugins/uniswap`, icon: 'percent', external: true },
 			{ title: 'CRE plugin', badge: '116 tests', sub: 'Decide, size, and sign in the enclave', href: `${repo}/tree/main/packages/plugins/cre`, icon: 'pills', external: true },
-			{ title: 'Vault', badge: '85 + 9 tests', sub: 'Solidity, Foundry, fork tests', href: `${repo}/tree/main/contracts`, icon: 'coins', external: true },
+			{ title: 'Vault', badge: `${solidityTests} tests`, sub: 'Solidity, Foundry, fork tests', href: `${repo}/tree/main/contracts`, icon: 'coins', external: true },
 			{ title: 'Plans and prompts', sub: 'Every plan committed before code', href: `${repo}/tree/main/docs/plans`, icon: 'bars', external: true },
 		],
 	},
@@ -67,7 +68,7 @@ const menus: Menu[] = [
 		id: 'evidence',
 		label: 'Evidence',
 		items: [
-			{ title: 'Verified by default', sub: 'Counts that are true today', href: '/#verified', icon: 'scales' },
+			{ title: 'Verified by default', sub: 'Tests and records, nothing else', href: '/#verified', icon: 'scales' },
 			{ title: 'AI usage', sub: 'What was AI-assisted, and how', href: `${repo}/blob/main/AI-USAGE.md`, icon: 'arcs', external: true },
 			{ title: 'Uniswap feedback', sub: 'FEEDBACK.md for the Foundation', href: `${repo}/blob/main/FEEDBACK.md`, icon: 'wings', external: true },
 		],
@@ -152,7 +153,7 @@ const menus: Menu[] = [
 	))}
 	<section class="nav__group nav__group--foot">
 		<a class="nav__card nav__card--sheet" href="/#faq" data-sheet-link>
-			<span class="nav__text"><span class="nav__title">FAQ</span><span class="nav__sub">Six questions, answered honestly</span></span>
+			<span class="nav__text"><span class="nav__title">FAQ</span><span class="nav__sub">Seven questions, answered honestly</span></span>
 		</a>
 		<a class="nav__card nav__card--sheet" href="/blog/" data-sheet-link>
 			<span class="nav__text"><span class="nav__title">Blog</span><span class="nav__sub">Notes from building Helico</span></span>

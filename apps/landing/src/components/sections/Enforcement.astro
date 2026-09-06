@@ -1,44 +1,83 @@
 ---
+import { forkTests } from '../../lib/solidity-tests'
 const repo = 'https://github.com/0xHelico/helico'
 // Permalinks pinned at the commit these line numbers were read from, so they stay true when the file moves on.
 const vault = `${repo}/blob/154bcabd85ca3be8f73851bbc55a1a04ea42c6e4/contracts/src/HelicoVault.sol`
 const fields = [
-	{ field: 'poolId', value: 'ETH / ARB 0.05%', rule: 'Only the pool you named.', line: 489 },
-	{ field: 'rangeWidthTicks', value: '20 ticks', rule: 'Exactly this width, on the pool\'s spacing.', line: 733 },
-	{ field: 'minImprovementBps', value: '≥ 50 bps', rule: 'The new range must sit closer to the price by this much.', line: 747 },
-	{ field: 'cooldownSeconds', value: '1 h', rule: 'One move per cooldown.', line: 473 },
-	{ field: 'maxLiquidity', value: '1e18', rule: 'A cap on what one move may touch.', line: 486 },
-	{ field: 'expiry', value: 'in 30 d', rule: 'After this, every re-centre reverts.', line: 468 },
-	{ field: 'minRetainedBps', value: '≥ 90%', rule: 'The share a move must keep, read back from the mint.', line: 718 },
-	{ field: 'the price', value: 'tick inside', rule: 'The new range must contain the current tick.', line: 739 },
+	{ label: 'Which market', field: 'poolId', value: 'ETH and ARB', rule: 'Only the market you named. Nothing can move your money somewhere else.', line: 489 },
+	{ label: 'How wide', field: 'rangeWidthTicks', value: 'narrow, 20 steps', rule: 'The new band is exactly as wide as you said, never wider or narrower.', line: 733 },
+	{ label: 'Worth the move', field: 'minImprovementBps', value: 'at least 0.5% closer', rule: 'A move has to be worth it: the new band must sit this much closer to the price.', line: 747 },
+	{ label: 'How often', field: 'cooldownSeconds', value: 'once an hour at most', rule: 'So nothing can churn your deposit.', line: 473 },
+	{ label: 'How much at once', field: 'maxLiquidity', value: 'a fixed cap', rule: 'A ceiling on how much one move may touch.', line: 486 },
+	{ label: 'Until when', field: 'expiry', value: '30 days', rule: 'After this date the rules expire and nothing can move.', line: 468 },
+	{ label: 'How much to keep', field: 'minRetainedBps', value: 'at least 90%', rule: 'A move must keep this share of your deposit working, measured after the fact.', line: 718 },
+	{ label: 'Where the price is', field: '_checkRange', value: 'inside the band', rule: 'The new band must contain the current price, or it would earn nothing.', line: 739 },
+]
+// The other tabs, illustrative like the mandate: the canvas's numbers for the position and the
+// enclave, the vault's rules, and the fork rehearsal for the evidence.
+const position = [
+	['Market', 'ETH and ARB, on the Uniswap exchange, on the Arbitrum network'],
+	['Band', 'a narrow band of prices, 20 steps wide'],
+	['Price now', 'inside the band, so the deposit is earning'],
+	['Last move', 'kept 94.3% of the deposit working, as in the rehearsal'],
+	['Cooldown', 'until 15:32; no move can happen before then'],
+	['Owner', 'you; the deposit stays in your wallet and the contract may only move it'],
+]
+const enclave = [
+	['Reads', 'the market\'s price and your deposit, from inside a sealed environment'],
+	['Checks', 'that the rules it was given are the rules the contract holds; if not, it stops'],
+	['Decides', 'to wait while the price is inside the band or the cooldown runs; otherwise, a new band of your chosen width around the price'],
+	['Sizes', 'the exchange that funds both sides of the new band, and the new deposit'],
+	['Leaves', 'only the decision, signed with a key that never leaves the sealed environment'],
+]
+const vaultRows = [
+	['Holds', 'a fingerprint of your rules, never the rules themselves'],
+	['Checks', 'that the decision matches your rules, then every rule again: market, width, worth it, how often, cap, expiry, share kept, price inside'],
+	['Moves', 'takes the deposit out, exchanges only what the new band needs, puts a new deposit in, all in one step'],
+	['Ends', 'holding nothing; whatever the move did not use goes back to you'],
+	['Refuses', 'anything else; there is no other way in'],
+]
+const evidence = [
+	['Rehearsal', 'on a snapshot of the real market, an automated decision moved a real deposit that had drifted out of its band'],
+	['Kept', '94.3% of the deposit working; the rules demanded at least 50%'],
+	['Second run', 'correctly did nothing, because the cooldown was running'],
+	['Tests', `240+ automated tests, ${forkTests} of them on a snapshot of the real market`],
+	['Caveats', 'a snapshot, not the live network; the sealed environment was simulated; nothing is deployed yet'],
+]
+const tabs = [
+	{ id: 'mandate', label: 'Your rules' },
+	{ id: 'position', label: 'Your deposit' },
+	{ id: 'enclave', label: 'The decider' },
+	{ id: 'vault', label: 'The contract' },
+	{ id: 'evidence', label: 'Evidence' },
 ]
 const templates = [
 	{
 		label: 'Keep in range',
 		name: 'Tight',
-		copy: 'A narrow band around the price, moved often. Most fees, most re-centres.',
-		chips: ['20 ticks', 'retain 90%', 'cooldown 1 h'],
+		copy: 'A narrow range around the price, moved often. Earns the most, moves the most.',
+		chips: ['narrow band', 'keep 90%', 'hourly at most'],
 	},
 	{
 		label: 'Wide and patient',
 		name: 'Steady',
-		copy: 'A wide band that only moves when the price has clearly left it.',
-		chips: ['200 ticks', 'retain 95%', 'cooldown 24 h'],
+		copy: 'A wide range that only moves when the price has clearly left it.',
+		chips: ['wide band', 'keep 95%', 'daily at most'],
 	},
 	{
 		label: 'Hands off',
 		name: 'Guarded',
-		copy: 'Hold unless the improvement is worth the swap, and keep almost all of the position when it is.',
-		chips: ['improve ≥ 50 bps', 'retain 95%', 'cooldown 12 h'],
+		copy: 'Stay put unless a move is clearly worth it, and keep almost all of the deposit when it is.',
+		chips: ['only if clearly closer', 'keep 95%', 'twice a day at most'],
 	},
 ]
 ---
 
 <section class="wrap" id="enforcement" aria-labelledby="enforcement-title">
 	<div class="section-card section-card--dark center">
-		<span class="eyebrow">Helico Mandate</span>
-		<h2 class="headline" id="enforcement-title">The Full Power of the Mandate</h2>
-		<p class="lede">Decide in the enclave, refuse on chain. Built on Uniswap v4.</p>
+		<span class="eyebrow">Your Rules</span>
+		<h2 class="headline" id="enforcement-title">A Program That Cannot Break Your Rules</h2>
+		<p class="lede">You set the rules. The program decides. The contract checks. Nothing moves otherwise.</p>
 		<div class="actions">
 			<a class="btn btn--dark" href={`${repo}#readme`}>Get Started</a>
 			<a class="btn btn--ghost" href={`${vault}#L724`}>Learn More</a>
@@ -47,36 +86,59 @@ const templates = [
 		<div class="panel" aria-label="An example mandate and the rule the vault enforces for each field">
 			<div class="panel__bar"><i></i><i></i><i></i><span>helico · vault · Arbitrum One · not deployed yet</span></div>
 			<div class="panel__body">
-				<div class="panel__side">
-					<span class="is-active">Mandate</span><span>Position</span><span>Enclave</span><span>Vault</span><span>Evidence</span>
+				<div class="panel__side" role="tablist" aria-label="Panel sections" data-tabs>
+					{tabs.map((t, i) => (
+						<button type="button" role="tab" id={`tab-${t.id}`} aria-controls={`panel-${t.id}`} aria-selected={i === 0 ? 'true' : 'false'} tabindex={i === 0 ? 0 : -1}>{t.label}</button>
+					))}
 				</div>
-				<div class="panel__main">
+				<div class="panel__main" role="tabpanel" id="panel-mandate" aria-labelledby="tab-mandate">
 					<div class="panel__head">
 						<div>
-							<div class="panel__title">Mandate · example position</div>
-							<div class="panel__sub">ETH / ARB 0.05% · Uniswap v4 · hash 0x134be6bb…6225</div>
+							<div class="panel__title">Your rules · example</div>
+							<div class="panel__sub">The seven rules for one deposit, and what each one stops</div>
 						</div>
 						<span class="panel__badge">example</span>
 					</div>
 					<ol class="fields">
 						{fields.map((f) => (
 							<li>
-								<span class="fields__name"><code>{f.field}</code><b>{f.value}</b></span>
-								<span class="fields__rule">{f.rule}</span>
+								<span class="fields__name"><b>{f.label}</b><code>{f.field}</code></span>
+								<span class="fields__rule"><strong>{f.value}.</strong> {f.rule}</span>
 								<a class="fields__line" href={`${vault}#L${f.line}`}>line {f.line} ↗</a>
 							</li>
 						))}
 					</ol>
-					<p class="fields__foot">Seven fields, one extra rule for the price. A re-centre that fails any of them reverts; there is no other entry point.</p>
+					<p class="fields__foot">Seven rules, plus one for the price. A move that breaks any of them is rejected by the contract itself; there is no other way in.</p>
 				</div>
+				{[
+					{ id: 'position', title: 'Your deposit · example', sub: 'One deposit, as the contract and the program see it', rows: position },
+					{ id: 'enclave', title: 'The decider · one run', sub: 'A sealed program that decides, every five minutes', rows: enclave },
+					{ id: 'vault', title: 'The contract · every move', sub: 'It does not take the program\'s word for anything', rows: vaultRows },
+					{ id: 'evidence', title: 'Evidence · what has run', sub: 'On a snapshot of the real market, 2026-09-06', rows: evidence },
+				].map((t) => (
+					<div class="panel__main" role="tabpanel" id={`panel-${t.id}`} aria-labelledby={`tab-${t.id}`} hidden>
+						<div class="panel__head">
+							<div>
+								<div class="panel__title">{t.title}</div>
+								<div class="panel__sub">{t.sub}</div>
+							</div>
+							<span class="panel__badge">example</span>
+						</div>
+						<dl class="rows">
+							{t.rows.map(([k, v]) => (
+								<div><dt>{k}</dt><dd>{v}</dd></div>
+							))}
+						</dl>
+					</div>
+				))}
 			</div>
 		</div>
-		<p class="panel__caption">Illustrative. Nothing is deployed yet; the fields are the seven the vault stores.</p>
+		<p class="panel__caption">An example, not a live account. Nothing is deployed yet; the seven rules are the ones the contract stores.</p>
 
 		<div class="split">
 			<div>
-				<h3>A mandate for every strategy.</h3>
-				<p>From a tight band that moves often to a wide one that waits, the terms are yours; the enclave chooses inside them and the vault refuses the rest.</p>
+				<h3>Rules for every style.</h3>
+				<p>Move often or rarely, keep more or less: you choose. The program works inside your rules, and the contract stops everything else.</p>
 			</div>
 			<a class="btn btn--ghost" href={`${repo}/blob/main/contracts/README.md`}>Learn More</a>
 		</div>
@@ -92,6 +154,32 @@ const templates = [
 		</div>
 	</div>
 </section>
+
+<script>
+	// Tabs: click or arrow keys move between them; only the selected panel is shown.
+	for (const list of document.querySelectorAll<HTMLElement>('[data-tabs]')) {
+		const tabs = Array.from(list.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
+		const select = (tab: HTMLButtonElement) => {
+			for (const t of tabs) {
+				const on = t === tab
+				t.setAttribute('aria-selected', String(on))
+				t.tabIndex = on ? 0 : -1
+				const panel = document.getElementById(t.getAttribute('aria-controls') ?? '')
+				if (panel) panel.hidden = !on
+			}
+			tab.focus()
+		}
+		tabs.forEach((tab, i) => {
+			tab.addEventListener('click', () => select(tab))
+			tab.addEventListener('keydown', (e) => {
+				const step = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? -1 : 0
+				if (step === 0) return
+				e.preventDefault()
+				select(tabs[(i + step + tabs.length) % tabs.length] as HTMLButtonElement)
+			})
+		})
+	}
+</script>
 
 <style>
 	.enforcement {
@@ -130,22 +218,16 @@ const templates = [
 		display: grid;
 		grid-template-columns: 1fr;
 	}
+	/* On a phone the tabs are a strip that scrolls sideways; from tablet up, a sidebar. */
 	.panel__side {
-		display: none;
-		flex-direction: column;
-		gap: 0.2rem;
-		padding: 1rem 0.75rem;
-		border-right: 1px solid rgba(255, 255, 255, 0.08);
+		display: flex;
+		flex-direction: row;
+		gap: 0.35rem;
+		padding: 0.75rem;
+		overflow-x: auto;
+		border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 		font-size: 0.8rem;
 		color: #8d8ca3;
-	}
-	.panel__side span {
-		padding: 0.45rem 0.7rem;
-		border-radius: 8px;
-	}
-	.panel__side .is-active {
-		background: rgba(124, 107, 255, 0.18);
-		color: #ffffff;
 	}
 	.panel__main {
 		padding: 1.25rem;
@@ -179,7 +261,15 @@ const templates = [
 			grid-template-columns: 11rem 1fr;
 		}
 		.panel__side {
-			display: flex;
+			flex-direction: column;
+			gap: 0.2rem;
+			padding: 1rem 0.75rem;
+			overflow: visible;
+			border-bottom: 0;
+			border-right: 1px solid rgba(255, 255, 255, 0.08);
+		}
+		.panel__side button {
+			width: 100%;
 		}
 		.panel__main {
 			padding: 1.5rem;
@@ -212,6 +302,13 @@ const templates = [
 		font-weight: 450;
 		color: #ffffff;
 	}
+	.fields__name code {
+		font-size: 0.72rem;
+	}
+	.fields__rule strong {
+		font-weight: 500;
+		color: #ffffff;
+	}
 	.fields__rule {
 		font-size: 0.9rem;
 		line-height: 1.4;
@@ -240,12 +337,76 @@ const templates = [
 	}
 	@media (min-width: 720px) {
 		.fields li {
-			grid-template-columns: 15rem 1fr auto;
+			grid-template-columns: 10rem 1fr auto;
 			align-items: baseline;
 		}
 		.fields__name {
 			flex-direction: column;
 			gap: 0.15rem;
+		}
+	}
+	@media (min-width: 1024px) {
+		.fields li {
+			grid-template-columns: 15rem 1fr auto;
+		}
+	}
+	.panel__side button {
+		display: block;
+		flex: 0 0 auto;
+		white-space: nowrap;
+		padding: 0.55rem 0.75rem;
+		border: 0;
+		border-radius: 10px;
+		background: none;
+		text-align: left;
+		font: inherit;
+		font-size: 0.875rem;
+		color: rgba(255, 255, 255, 0.6);
+		cursor: pointer;
+	}
+	.panel__side button:hover {
+		color: #ffffff;
+		background: rgba(255, 255, 255, 0.05);
+	}
+	.panel__side button[aria-selected='true'] {
+		color: #ffffff;
+		background: rgba(124, 107, 255, 0.18);
+	}
+	.panel__side button:focus-visible {
+		outline: 2px solid #b7abff;
+		outline-offset: 2px;
+	}
+	.panel__main[hidden] {
+		display: none;
+	}
+	.rows {
+		margin: 1rem 0 0;
+		border-top: 1px solid rgba(255, 255, 255, 0.08);
+	}
+	.rows div {
+		display: grid;
+		grid-template-columns: 1fr;
+		gap: 0.2rem 1.25rem;
+		padding: 0.8rem 0;
+		border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+		text-align: left;
+	}
+	.rows dt {
+		font-family: var(--font-mono);
+		font-size: 0.8rem;
+		color: #b7abff;
+	}
+	.rows dd {
+		margin: 0;
+		font-size: 0.9rem;
+		line-height: 1.45;
+		letter-spacing: -0.01em;
+		color: rgba(255, 255, 255, 0.85);
+	}
+	@media (min-width: 720px) {
+		.rows div {
+			grid-template-columns: 9rem 1fr;
+			align-items: baseline;
 		}
 	}
 </style>

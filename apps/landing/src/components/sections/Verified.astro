@@ -1,16 +1,17 @@
 ---
+import { forkTests, solidityTests } from '../../lib/solidity-tests'
 const repo = 'https://github.com/0xHelico/helico'
 const swapPlan = `${repo}/blob/main/docs/plans/2026-09-05-vault-swap-recentre.md`
 const facts = [
-	{ n: '240+', unit: 'unit tests', copy: '52 in the Uniswap plugin, 116 in the CRE plugin, 85 in the vault, on every pull request.' },
-	{ n: '9', unit: 'fork tests', copy: 'Mint, swap, and re-centre against a fork of Arbitrum One.' },
-	{ n: '12', unit: 'AI audit agents', copy: 'Ran over the vault before its rewrite; a six-agent pass followed. Not a professional audit.' },
-	{ n: '4', unit: 'networks', copy: 'Base Sepolia and Robinhood Chain Testnet with real transactions, Robinhood Chain mainnet read-only, Arbitrum One on a fork.' },
-	{ n: '3', unit: 'ways to check one digest', copy: 'The EIP-712 authorisation matches between the enclave, the vault, and cast.' },
+	{ n: '240+', unit: 'automated tests', copy: `Run on every change: 52 on the Uniswap piece, 116 on the decision piece, ${solidityTests} on the contract.` },
+	{ n: String(forkTests), unit: 'tests on a copy of the real market', copy: 'Deposit, swap, and move a real position on a snapshot of Arbitrum One.' },
+	{ n: '12', unit: 'automated reviews', copy: 'AI reviewers went over the contract, then six more. That is not a professional audit, and we do not call it one.' },
+	{ n: '4', unit: 'networks tried', copy: 'Real transactions on two test networks, read-only on Robinhood Chain, and a snapshot of Arbitrum One.' },
+	{ n: '3', unit: 'independent checks of one approval', copy: 'The same permission was checked by the program, by the contract, and by a separate tool.' },
 ]
 const bars = [
-	{ label: 'Out of range, no swap', pct: 0, note: 'nothing can be minted' },
-	{ label: 'In range, no swap', pct: 13, note: 'the rest went back to the wallet' },
+	{ label: 'Price outside the range', pct: 0, note: 'nothing keeps working' },
+	{ label: 'Price inside the range', pct: 13, note: 'the rest went back to the wallet' },
 ]
 ---
 
@@ -18,7 +19,7 @@ const bars = [
 	<div class="section-card center">
 		<span class="eyebrow">Helico</span>
 		<h2 class="headline" id="verified-title">Verified by Default</h2>
-		<p class="lede">Tested against the real thing. Every claim points at the line that proves it.</p>
+		<p class="lede">Every claim on this page has a test or a record behind it.</p>
 		<div class="actions">
 			<a class="btn btn--secondary" href={`${repo}#readme`}>Learn More</a>
 		</div>
@@ -31,21 +32,21 @@ const bars = [
 				</div>
 			))}
 			<div class="card">
-				<span class="stat"><span data-live-tick>…</span> <small>tick, <span data-live-note>reading</span></small></span>
-				<p>Of the ETH / ARB 0.05% pool on Arbitrum One, read from the chain when this page loads.</p>
+				<span class="stat"><span data-live-tick>…</span> <small>price marker, <span data-live-note>reading</span></small></span>
+				<p>The price marker of the demo pool on Arbitrum One, read from the chain when this page loads.</p>
 			</div>
 		</div>
 
 		<div class="split">
 			<div>
-				<h3>Moves that keep the position.</h3>
-				<p>The vault swaps inside its own lock, so a move funds both sides of the new range. Without that swap an out-of-range position mints nothing, and an in-range one keeps 13%.</p>
+				<h3>Moves that keep your money working.</h3>
+				<p>Move a deposit without exchanging tokens first and most of it comes back to your wallet unused: nothing at all when the price has left the range, and 13% when it has not. Helico exchanges inside the move, so the deposit keeps working.</p>
 			</div>
 		</div>
 		<div class="card chart" style="text-align:left">
 			<div class="chart__head">
-				<span>Liquidity a re-centre keeps without a swap</span>
-				<span class="chart__legend">share of the position's liquidity</span>
+				<span>How much of a deposit keeps working after a move, without the exchange step</span>
+				<span class="chart__legend">share of the deposit</span>
 			</div>
 			<ul class="bars">
 				{bars.map((b) => (
@@ -58,8 +59,8 @@ const bars = [
 				))}
 			</ul>
 			<p class="chart__foot">
-				Measured against a live pool before the swap existed and recorded in
-				<a href={swapPlan}>the swap plan</a>. How much the swap path keeps depends on the pool at the
+				Measured on a real pool before the exchange step existed and recorded in
+				<a href={swapPlan}>the project's notes</a>. How much the exchange step keeps depends on the pool at the
 				time, so it is not charted here.
 			</p>
 		</div>
