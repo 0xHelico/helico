@@ -46,7 +46,7 @@ contract ForkDeployTest is ForkBase {
             vault.eip712Domain();
         assertEq(name, "HelicoVault");
         assertEq(version, "1");
-        assertEq(chainId, ROBINHOOD_MAINNET, "the domain binds the chain it was deployed to");
+        assertEq(chainId, ARBITRUM_ONE, "the domain binds the chain it was deployed to");
         assertEq(verifying, address(vault), "and the address it lives at");
     }
 

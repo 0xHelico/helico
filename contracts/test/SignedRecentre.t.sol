@@ -278,16 +278,41 @@ contract SignedRecentreTest is Test {
         vault.recenterWithSignature(p, MandateLib.hash(mandate), 0, sig);
     }
 
-    function test_RejectsAfterRevoke() public {
+    /// @notice Revoking refuses an outstanding authorisation, and keeps refusing it.
+    /// @dev The nonce is bumped by `revoke`, so the refusal survives the user later committing
+    ///      the *same terms* again — which restores the same mandate hash and, without the
+    ///      bump, would restore a valid signature with it. That sequence is ordinary ("pause
+    ///      the agent while I travel, turn it back on after"), not contrived.
+    function test_RevokeCancelsAnOutstandingAuthorisationForGood() public {
         HelicoVault.RecenterParams memory p = _params();
+        bytes32 hash = MandateLib.hash(mandate);
         bytes memory sig = _sign(agentKey, p, 0);
 
         vm.prank(user);
         vault.revoke();
 
         vm.prank(relayer);
+        vm.expectRevert(HelicoVault.WrongNonce.selector);
+        vault.recenterWithSignature(p, hash, 0, sig);
+
+        // Same terms again: same hash, active once more, and the old signature is still refused.
+        vm.prank(user);
+        vault.setMandate(tokenId, mandate);
+        assertEq(vault.nonces(user), 1, "the counter moved and stays moved");
+
+        vm.prank(relayer);
+        vm.expectRevert(HelicoVault.WrongNonce.selector);
+        vault.recenterWithSignature(p, hash, 0, sig);
+    }
+
+    /// @notice And the role-gated path still refuses outright, since the account is inactive.
+    function test_RejectsAfterRevoke() public {
+        vm.prank(user);
+        vault.revoke();
+
+        vm.prank(agent);
         vm.expectRevert(HelicoVault.MandateInactive.selector);
-        vault.recenterWithSignature(p, MandateLib.hash(mandate), 0, sig);
+        vault.recenter(_params());
     }
 
     // --- batching -------------------------------------------------------------------------

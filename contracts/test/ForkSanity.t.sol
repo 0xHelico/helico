@@ -15,7 +15,7 @@ contract ForkSanityTest is ForkBase {
 
         (uint160 sqrtPriceX96, int24 tick,, uint24 lpFee) = STATE_VIEW.getSlot0(demoPool.hashPoolKey());
         assertTrue(sqrtPriceX96 != 0, "the demo pool is initialised");
-        assertEq(lpFee, 10_000, "1% fee, hundredths of a bip against MAX_LP_FEE of 1,000,000");
+        assertEq(lpFee, 500, "0.05% fee: hundredths of a bip against MAX_LP_FEE of 1,000,000");
 
         emit log_named_int("tick", tick);
         emit log_named_uint("sqrtPriceX96", sqrtPriceX96);

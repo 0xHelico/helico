@@ -16,19 +16,21 @@ import {HelicoVault} from "../src/HelicoVault.sol";
 ///      existed to answer it.
 ///
 ///      Run:
-///        forge script script/Deploy.s.sol:Deploy --rpc-url $ROBINHOOD_RPC_URL --broadcast
+///        forge script script/Deploy.s.sol:Deploy --rpc-url $ARBITRUM_RPC_URL --broadcast
 ///
 ///      Environment:
 ///        AGENT_ADDRESS   the enclave's signer. Not an EOA we hold — the key exists only
 ///                        inside the enclave, which is the whole point of the signature path.
 ///        ADMIN_ADDRESS   optional; defaults to the broadcaster. Should be a multisig.
 contract Deploy is Script {
-    uint256 constant ROBINHOOD_MAINNET = 4663;
+    uint256 constant ARBITRUM_ONE = 42161;
 
-    // Verified on chain rather than copied from a table: each has code at these addresses.
-    address constant POSITION_MANAGER = 0x58daec3116aae6D93017bAAea7749052E8a04fA7;
-    address constant STATE_VIEW = 0xF3334192D15450CdD385c8B70e03f9A6bD9E673b;
-    address constant POOL_MANAGER = 0x8366a39CC670B4001A1121B8F6A443A643e40951;
+    // Arbitrum One. These resolve from `@uniswap/sdk-core`'s own address map — they are
+    // written out here so the script depends on nothing that could change under it, and each
+    // was checked to have code before this was committed.
+    address constant POSITION_MANAGER = 0xd88F38F930b7952f2DB2432Cb002E7abbF3dD869;
+    address constant STATE_VIEW = 0x76Fd297e2D437cd7f76d50F01AfE6160f86e9990;
+    address constant POOL_MANAGER = 0x360E68faCcca8cA495c1B759Fd9EEe466db9FB32;
 
     error WrongChain(uint256 actual);
     error NoAgentAddress();
@@ -38,7 +40,7 @@ contract Deploy is Script {
     function run() external returns (HelicoVault vault) {
         // A mainnet script that will run anywhere is a mainnet script that will eventually run
         // somewhere else.
-        if (block.chainid != ROBINHOOD_MAINNET) revert WrongChain(block.chainid);
+        if (block.chainid != ARBITRUM_ONE) revert WrongChain(block.chainid);
 
         address agent = vm.envAddress("AGENT_ADDRESS");
         if (agent == address(0)) revert NoAgentAddress();

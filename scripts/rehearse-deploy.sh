@@ -11,10 +11,10 @@
 #
 #   ./scripts/rehearse-deploy.sh
 #
-# Requires a reachable Robinhood RPC (a VPN, on a network that blocks the domain).
+# Requires a reachable Arbitrum One RPC.
 set -euo pipefail
 
-RPC="${ROBINHOOD_RPC_URL:-https://rpc.mainnet.chain.robinhood.com}"
+RPC="${ARBITRUM_RPC_URL:-https://arb1.arbitrum.io/rpc}"
 PORT="${ANVIL_PORT:-8555}"
 LOCAL="http://127.0.0.1:${PORT}"
 # anvil's first well-known account. Local only, never a real key.
@@ -24,7 +24,7 @@ AGENT="${AGENT_ADDRESS:-0x00000000000000000000000000000000000ABCDE}"
 cd "$(dirname "$0")/../contracts"
 
 echo "forking $RPC on :$PORT"
-anvil --fork-url "$RPC" --chain-id 4663 --port "$PORT" --silent &
+anvil --fork-url "$RPC" --chain-id 42161 --port "$PORT" --silent &
 ANVIL=$!
 trap 'kill $ANVIL 2>/dev/null || true' EXIT
 until cast chain-id --rpc-url "$LOCAL" >/dev/null 2>&1; do sleep 1; done
@@ -34,7 +34,7 @@ AGENT_ADDRESS="$AGENT" forge script script/Deploy.s.sol:Deploy --sig "run()" \
 
 VAULT=$(python3 -c "
 import json
-r=json.load(open('broadcast/Deploy.s.sol/4663/run-latest.json'))
+r=json.load(open('broadcast/Deploy.s.sol/42161/run-latest.json'))
 print([t['contractAddress'] for t in r['transactions'] if t['contractName']=='ERC1967Proxy'][0])")
 
 echo
