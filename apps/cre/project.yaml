@@ -1,0 +1,24 @@
+# ==========================================================================
+# CRE PROJECT SETTINGS
+# ==========================================================================
+# Helico's workflow reads the chain from inside the enclave and writes its
+# verdict back, so unlike the template it genuinely needs an RPC.
+#
+# `staging-settings` points at a LOCAL FORK of Arbitrum One. That is the target
+# you can run today: the vault is not on a live network yet, and the workflow
+# has nothing to read without one. `rehearse.sh` starts the fork, deploys the
+# vault onto it, and gives the position something to be out of range about.
+#
+# The chain name is Arbitrum One either way. A fork keeps chain id 42161, which
+# is also what the deploy script insists on.
+staging-settings:
+    rpcs:
+        - chain-name: ethereum-mainnet-arbitrum-1
+          url: http://127.0.0.1:8546
+# ==========================================================================
+# `production-settings` is the same workflow against the real chain. It needs a
+# deployed vault, and deploying one is not something this file can do for you.
+production-settings:
+    rpcs:
+        - chain-name: ethereum-mainnet-arbitrum-1
+          url: https://arb1.arbitrum.io/rpc
