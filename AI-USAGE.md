@@ -482,6 +482,23 @@ Format: date · what was done · the AI's role · what a human verified.
   through `rehearse.sh`, 93.19e18 in and 74.72e18 out, and a second run held on the cooldown.
   Also fixed `MockStateView`, which returned a zero price and so covered none of this.
 
+### 2026-09-06 — Vault: the mint's ceiling is the vault's balance, not the enclave's guess
+
+- **Done:** `_mint` passes `got0`/`got1` as the mint's maxima instead of the agent's predicted
+  ones. #80 stopped the vault trusting the enclave's `liquidityToMint` and left it trusting the
+  enclave's guess about its own balances one line later, so a swap returning *more* of the
+  binding token than predicted still reverted with the vault holding plenty. Found by
+  @rifkyeasy reviewing #80.
+- **AI's role:** wrote the change and the fork test. The reviewer found the gap; the test gap
+  was mine — `test_MintsWhatItCanAffordWhenTheAgentAsksForMore` passes `uint128.max` for both
+  maxima, so it covered the half I was thinking about and not the other.
+- **Plan:** tracked in #87; a one-line change, no separate plan document.
+- **Verified:** `forge test` 96 pass with an Arbitrum RPC. Mutation — restoring the agent's
+  maxima fails exactly the new test with `MaximumAmountExceeded(1, 87.9e18)`. The first
+  mutation attempt reported a false negative because the replacement did not match the
+  formatted source; identical gas figures across runs were the tell, and a mutation must be
+  confirmed to have applied before its result means anything. Storage layout unchanged.
+
 ### 2026-09-06 — The CRE project a judge can actually run
 
 - **Done:** `apps/cre` becomes a real CRE project — `project.yaml`, `secrets.yaml`,
