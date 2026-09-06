@@ -401,6 +401,16 @@ Format: date · what was done · the AI's role · what a human verified.
 - **Verified:** `astro check` (0 errors), `astro build`, the Playwright audit at seven viewports,
   and a probe of the bar at the top and after scrolling.
 
+### 2026-09-06 — Landing page: the new logo set
+
+- **Done:** favicons, the touch icon, the manifest icons, the social image, and the in-page mark
+  replaced with the logo set the user supplied; the manifest icons and the social image are
+  WebP, the in-page source a 256px WebP the image pipeline resizes from. The mark is a rounded
+  square, so the circular crops on the in-page logo were removed.
+- **AI's role:** converted and wired the files; the user supplied the set.
+- **Verified:** `astro build`, the icons served from the preview, the Playwright audit at seven
+  viewports.
+
 <!--
 Template for the next entry:
 

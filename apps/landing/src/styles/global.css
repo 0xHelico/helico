@@ -130,7 +130,6 @@ button {
 .eyebrow svg {
 	width: 20px;
 	height: 20px;
-	border-radius: 50%;
 }
 .section-card--dark .eyebrow {
 	color: rgba(255, 255, 255, 0.7);
