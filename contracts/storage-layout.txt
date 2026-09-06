@@ -1,0 +1,8 @@
+   0   0  _accounts  t_mapping(t_address,t_struct(Account)10029_storage)
+   1   0  positionManager  t_contract(IPositionManager)12374
+   2   0  stateView  t_contract(IStateView)12399
+   3   0  scheduledUpgrades  t_mapping(t_address,t_struct(ScheduledUpgrade)10035_storage)
+   4   0  poolManager  t_contract(IPoolManager)12313
+   5   0  _expectedUnlock  t_bytes32
+   6   0  nonces  t_mapping(t_address,t_uint256)
+   7   0  __gap  t_array(t_uint256)43_storage

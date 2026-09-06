@@ -154,15 +154,20 @@ contract HelicoVault is
 
     mapping(address => ScheduledUpgrade) public scheduledUpgrades;
 
-    /// @notice One-use counter per position owner, so an authorisation cannot be replayed.
-    mapping(address => uint256) public nonces;
-
     IPoolManager public poolManager;
 
-    /// @dev Set for the duration of one `recenter`, so `unlockCallback` can tell a callback it
-    ///      asked for from one it did not. Deliberately not a reentrancy guard: `recenter`
-    ///      already holds OpenZeppelin's, and the callback runs inside that window.
-    bool private _recentring;
+    /// @dev `keccak256` of the payload this contract passed to `poolManager.unlock`, held for
+    ///      the length of one `recenter`. A boolean would only say that *some* re-centre is in
+    ///      flight; this says which, so the callback cannot be driven with data the vault did
+    ///      not build. Deliberately not a reentrancy guard: `recenter` already holds
+    ///      OpenZeppelin's, and the callback runs inside that window.
+    bytes32 private _expectedUnlock;
+
+    /// @notice One-use counter per position owner, so an authorisation cannot be replayed.
+    /// @dev Declared last on purpose. Adding it in the middle is what moved `poolManager` from
+    ///      slot 4 to slot 5 — harmless only because nothing was deployed yet. New state goes
+    ///      here, and the gap shrinks by the same amount.
+    mapping(address => uint256) public nonces;
 
     /// @dev Reserved so later versions can add state without shifting what is already stored.
     uint256[43] private __gap;
@@ -210,6 +215,7 @@ contract HelicoVault is
     error RangeNotDelivered();
     error LiquidityNotRetained();
     error RetentionOutOfRange();
+    error CooldownZero();
     error ZeroAddress();
     error NotAContract();
     error UpgradeNotScheduled();
@@ -273,6 +279,9 @@ contract HelicoVault is
         if (m.maxLiquidity == 0) revert MaxLiquidityZero();
         if (m.minImprovementBps >= BPS) revert ImprovementOutOfRange();
         if (m.minRetainedBps > BPS) revert RetentionOutOfRange();
+        // A zero cooldown lets an agent re-centre repeatedly in one block, each time paying the
+        // pool's fee and the gas out of the position. Every other field was bounded; this was not.
+        if (m.cooldownSeconds == 0) revert CooldownZero();
 
         // The pool is read from the position rather than taken on trust, so a mandate cannot
         // commit to a pool the position is not in.
@@ -300,6 +309,13 @@ contract HelicoVault is
         Account storage a = _accounts[msg.sender];
         if (!a.active) revert MandateInactive();
         a.active = false;
+
+        // Cancels every authorisation the agent has signed and not yet relayed. Without this,
+        // revoking and later committing the same terms restores the same mandate hash against
+        // an unspent nonce, and a signature from before the revoke becomes valid again — which
+        // is an ordinary sequence, not a contrived one.
+        nonces[msg.sender]++;
+
         emit Revoked(msg.sender, a.tokenId);
     }
 
@@ -384,17 +400,16 @@ contract HelicoVault is
     ///      authorisation signed against terms the user has since replaced is refused rather
     ///      than executed against the new ones.
     ///
-    ///      The nonce makes it single use, and `deadline` is enforced by the PositionManager on
-    ///      the batch itself, so a stale authorisation cannot be held and replayed later.
+    ///      The nonce makes it single use, and `deadline` is checked in `_recenter` — by this
+    ///      contract and nowhere else, so do not remove it believing v4 repeats the check.
     function recenterWithSignature(
         RecenterParams calldata p,
         bytes32 mandateHash,
         uint256 nonce,
         bytes calldata signature
     ) external whenNotPaused nonReentrant returns (uint256 newTokenId) {
-        // The PositionManager enforces this too, deep inside the batch. Checking it first only
-        // saves a relayer the gas it would spend reaching that revert with an authorisation
-        // that was never going to work — which is the common case for a stale one.
+        // Checked again in `_recenter`; here only to spare a relayer the gas of recovering a
+        // signature for an authorisation that was never going to execute.
         if (block.timestamp > p.deadline) revert AuthorisationExpired();
         if (nonce != nonces[p.owner]) revert WrongNonce();
         if (_accounts[p.owner].mandate.hash() != mandateHash) revert MandateChanged();
@@ -445,6 +460,11 @@ contract HelicoVault is
         uint256 tokenId = a.tokenId;
 
         if (!a.active) revert MandateInactive();
+        // The only enforcement there is. `modifyLiquiditiesWithoutUnlock` — the entry point
+        // this contract uses — takes no deadline and carries no `checkDeadline`; only
+        // `modifyLiquidities`, which the swap leg stopped using, ever did. An earlier comment
+        // claimed otherwise, and the role-gated path enforced nothing at all.
+        if (block.timestamp > p.deadline) revert AuthorisationExpired();
         if (block.timestamp > m.expiry) revert MandateExpired();
         if (uint160(p.owner) < FIRST_REAL_ADDRESS) revert UnusableOwner();
         // A sold position carries no mandate: the buyer never agreed to one.
@@ -479,9 +499,10 @@ contract HelicoVault is
         // because that leaves no room between the burn and the mint — and a swap has to sit
         // there. v4 has no re-range action and an out-of-range position holds one token, which
         // cannot fund a range that contains the price.
-        _recentring = true;
-        poolManager.unlock(abi.encode(Unlock({tokenId: tokenId, liquidity: liquidity, key: key, p: p})));
-        _recentring = false;
+        bytes memory payload = abi.encode(Unlock({tokenId: tokenId, liquidity: liquidity, key: key, p: p}));
+        _expectedUnlock = keccak256(payload);
+        poolManager.unlock(payload);
+        _expectedUnlock = bytes32(0);
 
         _assertDelivered(newTokenId, m, liquidity, p);
 
@@ -495,7 +516,7 @@ contract HelicoVault is
     ///      distinguishes a callback the vault asked for; `msg.sender` is what makes it safe.
     function unlockCallback(bytes calldata data) external override returns (bytes memory) {
         if (msg.sender != address(poolManager)) revert NotPoolManager();
-        if (!_recentring) revert NoRecentreInFlight();
+        if (keccak256(data) != _expectedUnlock) revert NoRecentreInFlight();
 
         Unlock memory u = abi.decode(data, (Unlock));
 
@@ -589,6 +610,11 @@ contract HelicoVault is
         if (amount < 0) {
             uint256 owed = uint256(uint128(-amount));
             if (currency == address(0)) {
+                // v4-core: "if settling native, integrators should still call sync first to
+                // avoid DoS attack vectors". `sync` is permissionless and its slot transient,
+                // so a hook that dirties it would otherwise make every re-centre on a native
+                // pool revert `NonzeroNativeValue`.
+                poolManager.sync(address(0));
                 poolManager.settle{value: owed}();
             } else {
                 poolManager.sync(currency);

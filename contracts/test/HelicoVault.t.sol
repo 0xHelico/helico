@@ -493,6 +493,41 @@ contract HelicoVaultTest is Test {
         vault.setMandate(tokenId, impossible);
     }
 
+    // --- what the audit found missing --------------------------------------------------
+
+    /// @notice A zero cooldown lets an agent act repeatedly in one block, paying the pool's fee
+    ///         and the gas out of the position each time. Every other field was bounded.
+    function test_RejectsAZeroCooldown() public {
+        Mandate memory m = mandate;
+        m.cooldownSeconds = 0;
+        vm.prank(user);
+        vm.expectRevert(HelicoVault.CooldownZero.selector);
+        vault.setMandate(tokenId, m);
+    }
+
+    /// @notice The deadline is enforced on the role-gated path too.
+    /// @dev It was enforced nowhere on this path, and a comment claimed the PositionManager did
+    ///      it. `modifyLiquiditiesWithoutUnlock` — the entry point the swap leg switched to —
+    ///      takes no deadline at all, so this contract is the only thing checking it.
+    function test_RejectsAnExpiredDeadlineOnTheRoleGatedPath() public {
+        HelicoVault.RecenterParams memory p = _params(-50, 50);
+        p.deadline = block.timestamp - 1;
+
+        vm.prank(agent);
+        vm.expectRevert(HelicoVault.AuthorisationExpired.selector);
+        vault.recenter(p);
+    }
+
+    /// @notice The callback answers only the exact payload this contract passed to `unlock`.
+    /// @dev A boolean in-flight flag would say that *some* re-centre is running; the hash says
+    ///      which. Nothing reaches this on the real PoolManager — it calls back once, on the
+    ///      caller — so this is the guard behind the guard.
+    function test_UnlockCallbackRefusesAPayloadTheVaultDidNotBuild() public {
+        vm.prank(address(poolManager));
+        vm.expectRevert(HelicoVault.NoRecentreInFlight.selector);
+        vault.unlockCallback(abi.encode(uint256(1), uint128(2), poolKey, _params(-50, 50)));
+    }
+
     // --- the agreement with the enclave -------------------------------------------------
 
     /// @notice The workflow inside the enclave recomputes the mandate hash from a flat tuple

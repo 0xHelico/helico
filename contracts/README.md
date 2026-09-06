@@ -24,10 +24,12 @@ The new NFT and every token that leaves the old position go to the position's ow
 those are the only destinations the contract will write into a payload. There is no path that
 pays an agent, and no path that touches a position whose owner did not commit a mandate.
 
-How much liquidity survives the round trip is capped from below by `minRetainedBps`, so an
-agent cannot mint dust and send the remainder to your wallet — leaving you with every token
-and no earning position. That check is measured from the liquidity actually delivered, not
-from the number the agent asked for.
+How much liquidity survives the round trip is capped from below by `minRetainedBps`, measured
+from the liquidity actually delivered rather than the number the agent asked for. **Commit a
+non-zero one.** Zero is a permitted opt-out and it means exactly what it says: with zero, an
+agent can mint a position of 1 and send the rest to your wallet, leaving you with every token
+and nothing earning. The contract refuses a mint of *nothing* regardless, but a floor is what
+refuses a mint of almost nothing.
 
 ## What the contract decides
 
