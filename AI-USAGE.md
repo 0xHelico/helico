@@ -630,6 +630,22 @@ Format: date · what was done · the AI's role · what a human verified.
   performance 93 → 74 and largest paint 2.9s → 5.0s; injected after load it measures 98, and a
   browser confirms the tag and the collect beacon both fire.
 
+### 2026-09-07 — The dapp: a wallet, and a sentence that becomes a checked intent
+
+- **Done:** `apps/app` — the `vercel/chatbot` template pruned to a chat surface and added to
+  the monorepo as a workspace member, Reown AppKit as the only identity (Arbitrum One, email
+  and social login switched off), a server route that forwards the sentence to `apps/be` and
+  renders exactly what came back, and an intent card that ends by saying signing is not wired
+  yet. `ncu -u` inside `apps/app` only.
+- **AI's role:** all of it, on the owner's instructions, which are recorded verbatim in
+  translation in the plan.
+- **Plan:** docs/plans/2026-09-07-app-dapp.md
+- **Verified:** in a browser against a local `apps/be` built from the #115 branch with a real
+  model key. The Reown modal lists 310 wallets and offers no email field; "Swap half an ETH
+  into USDC" comes back as *Swapping 0.5 ETH into USDC on Arbitrum One*; the card shows
+  Arbitrum One and `500000000000000000`; the honesty line renders; the console is clean.
+  `tsc --noEmit`, `biome check .` and `next build` all pass.
+
 <!--
 Template for the next entry:
 
