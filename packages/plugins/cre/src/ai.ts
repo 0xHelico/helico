@@ -118,7 +118,10 @@ export function explain(
 	const apiKey = secrets[AI_SECRET_IDS.apiKey]?.value
 	if (!username || !password || !apiKey) return undefined
 
-	const basic = btoa(`${username}:${password}`)
+	// Not `btoa`. The WASM runtime the workflow compiles into does not provide it, and the
+	// failure is `workflow execution failed: not a function` at run time with every unit test
+	// still green. `bytesToBase64` is the SDK's own, and `chain.ts` already relies on it.
+	const basic = bytesToBase64(new TextEncoder().encode(`${username}:${password}`))
 
 	for (const model of [config.aiModel, config.aiFallbackModel]) {
 		if (!model) continue
