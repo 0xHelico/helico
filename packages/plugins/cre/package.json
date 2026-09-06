@@ -3,7 +3,9 @@
 	"version": "0.0.0",
 	"private": true,
 	"exports": {
-		".": "./src/index.ts"
+		".": "./src/index.ts",
+		"./abi": "./src/abi.ts",
+		"./mandate": "./src/mandate.ts"
 	},
 	"scripts": {
 		"typecheck": "tsc --noEmit",

@@ -1,6 +1,15 @@
 import { describe, expect, test } from 'bun:test'
+import type { AbiFunction, AbiParameter } from 'viem'
 import { encodeAbiParameters, keccak256, parseAbiParameters } from 'viem'
-import { MANDATE_SECRET_IDS, type Mandate, mandateFromSecrets, mandateHash } from './mandate'
+import { vaultAbi } from './abi'
+import {
+	fromContractMandate,
+	MANDATE_SECRET_IDS,
+	type Mandate,
+	mandateFromSecrets,
+	mandateHash,
+	toContractMandate,
+} from './mandate'
 
 const poolId = '0xea84630b1ccfd69145b791334c55a7d8be1565910cb6e290c489413c977fd9c5'
 const mandate: Mandate = {
@@ -56,5 +65,39 @@ describe('mandateFromSecrets', () => {
 		expect(() =>
 			mandateFromSecrets(poolId, { ...secrets, MANDATE_MAX_LIQUIDITY: { value: '1e18' } }),
 		).toThrow('MANDATE_MAX_LIQUIDITY')
+	})
+})
+
+describe('the vault ABI and the hash describe the same struct', () => {
+	const tupleOf = (name: string, pick: (item: AbiFunction) => readonly AbiParameter[]) => {
+		const item = vaultAbi.find((i) => i.type === 'function' && i.name === name) as
+			| AbiFunction
+			| undefined
+		if (!item) throw new Error(`vaultAbi has no ${name}`)
+		const [tuple] = pick(item)
+		if (!tuple) throw new Error(`${name} has no tuple`)
+		return tuple
+	}
+	const encoded = (tuple: AbiParameter) =>
+		keccak256(encodeAbiParameters([tuple], [{ ...mandate, expiry: BigInt(mandate.expiry) }]))
+
+	// Reordering or resizing a field in abi.ts would leave `mandateOf` decoding one struct while
+	// the enclave hashes another, and nothing else in the repository would notice.
+	test('what mandateOf returns hashes to what mandateHash produces', () => {
+		expect(encoded(tupleOf('mandateOf', (i) => i.outputs))).toBe(mandateHash(mandate))
+	})
+
+	test('what setMandate accepts is that same struct', () => {
+		expect(encoded(tupleOf('setMandate', (i) => i.inputs.slice(1)))).toBe(mandateHash(mandate))
+	})
+})
+
+describe('the conversions to and from the contract', () => {
+	test('a round trip through the contract shapes changes nothing', () => {
+		expect(fromContractMandate(toContractMandate(mandate))).toEqual(mandate)
+	})
+
+	test('expiry crosses as a bigint, because that is what a uint64 is to viem', () => {
+		expect(toContractMandate(mandate).expiry).toBe(BigInt(mandate.expiry))
 	})
 })

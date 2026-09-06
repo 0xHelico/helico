@@ -21,11 +21,15 @@ Not a style preference. Four rules, each with a reason that has already cost us 
 1. **Protocol code lives in `packages/plugins/uniswap`.** CLAUDE.md requires it, and the
    Uniswap bounty rewards tooling other people can use. A React component that encodes
    calldata is calldata nobody else can reuse and nobody can unit-test.
-2. **The vault's surface lives in `packages/core`,** which is an empty placeholder today
-   and is exactly what it was reserved for. `@helico/plugin-cre` already carries a `Mandate`
-   type and a `mandateHash`. A second copy in the app is a hash that silently disagrees with
-   the enclave's, so `packages/core` gets a test that asserts the two produce identical
-   bytes. Drift becomes a failing test rather than a rejected transaction.
+2. **The vault's surface has one home, and it is the one that already exists.** The first
+   draft of this plan put it in `packages/core`, which is an empty placeholder. That was
+   wrong: `@helico/plugin-cre` already carries the `Mandate` type, `mandateHash`, and a test
+   pinning both to the Solidity struct. Moving or copying that creates a second definition
+   whose only job is to agree with the first. Instead the plugin gained subpath exports
+   (`@helico/plugin-cre/abi`, `/mandate`) so a browser bundle can take the two viem-only
+   modules and nothing else, the user-facing functions and errors were added to the ABI the
+   enclave already reads, and a test now asserts that the ABI's tuple and `mandateHash`
+   describe the same struct. Drift is a failing test rather than a rejected transaction.
 3. **No address is written into a component.** Addresses come from `addresses(chainId)`,
    from `networkByChainId`, or from the environment. Adding a chain stays one
    `registerNetwork` call.

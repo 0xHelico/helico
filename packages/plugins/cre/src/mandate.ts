@@ -24,6 +24,20 @@ export type Mandate = {
 	minRetainedBps: number
 }
 
+/**
+ * The struct shaped the way viem wants it for a call: Solidity's uint64 and uint128 arrive and
+ * leave as bigint. Keeping the conversion beside the type is the point — `expiry` as a JS number
+ * is a seconds timestamp a person can read, and as a bigint it is what the contract stores, and
+ * the pair of them silently disagreeing is a transaction that reverts for no visible reason.
+ */
+export const toContractMandate = (m: Mandate) => ({ ...m, expiry: BigInt(m.expiry) })
+
+/** The inverse, for a `mandateOf` read. */
+export const fromContractMandate = (m: Omit<Mandate, 'expiry'> & { expiry: bigint }): Mandate => ({
+	...m,
+	expiry: Number(m.expiry),
+})
+
 const MANDATE_ABI = [
 	{ type: 'bytes32' },
 	{ type: 'uint16' },
