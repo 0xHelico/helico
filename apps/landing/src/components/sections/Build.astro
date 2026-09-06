@@ -1,108 +1,106 @@
 ---
+import { readFileSync } from 'node:fs'
 const repo = 'https://github.com/0xHelico/helico'
+const vault = `${repo}/blob/154bcabd85ca3be8f73851bbc55a1a04ea42c6e4/contracts/src/HelicoVault.sol`
+// Read from the vault source at build time, so the page shows the function as this checkout has it.
+const source = readFileSync(new URL('../../../../../contracts/src/HelicoVault.sol', import.meta.url), 'utf8')
+const from = source.indexOf('    function _checkRange(')
+const to = source.indexOf('\n    }\n', from) + '\n    }'.length
+const check = source.slice(from, to).replace(/^ {4}/gm, '')
 const packages = [
 	{
 		name: '@helico/plugin-uniswap',
-		stat: '52 tests',
-		copy: 'Addresses, pools, quotes, every swap shape, Permit2, liquidity, on any chain. Executed on two networks, read-only on three more.',
+		stat: '52',
+		unit: 'tests',
+		copy: 'Reads pools and positions from the SDK\'s own address maps, on any chain in config.',
 		href: `${repo}/tree/main/packages/plugins/uniswap`,
 	},
 	{
 		name: '@helico/plugin-cre',
-		stat: '116 tests',
-		copy: 'The enclave: hash check, in-TEE reads, the vault\'s rule mirrored, swap sizing, EIP-712 signing. Simulated with the CRE CLI.',
+		stat: '116',
+		unit: 'tests',
+		copy: 'Decides, sizes, and signs inside the enclave. The key never leaves it.',
 		href: `${repo}/tree/main/packages/plugins/cre`,
 	},
 	{
 		name: 'HelicoVault',
-		stat: '74 + 9 tests',
-		copy: 'Mandate-enforced re-centring with the swap inside its own lock; nine tests run against a fork of Arbitrum One.',
+		stat: '74 + 9',
+		unit: 'tests',
+		copy: 'Enforces the mandate on chain, with the swap inside its own lock. Nine run on a fork of Arbitrum One.',
 		href: `${repo}/tree/main/contracts`,
 	},
 ]
 ---
 
-<section class="wrap build" id="build" aria-labelledby="build-title">
+<section class="wrap" id="build" aria-labelledby="build-title">
 	<div class="section-card center">
-		<span class="eyebrow">Helico plugins</span>
+		<span class="eyebrow">Helico Plugins</span>
 		<h2 class="headline" id="build-title">Build with Helico</h2>
-		<p class="lede">Two reusable packages and one vault, consumed by the app and open to anyone. Every partner integration lives in its own package.</p>
+		<p class="lede">Decide, size, and sign from your own workflow with two plugins and one vault.</p>
 		<div class="actions">
-			<a class="btn btn--primary" href={`${repo}/tree/main/packages/plugins`}>Start building</a>
-			<a class="btn btn--secondary" href={`${repo}/tree/main/docs/plans`}>Read the plans</a>
+			<a class="btn btn--primary" href={`${repo}/tree/main/packages/plugins`}>Start Building</a>
+			<a class="btn btn--secondary" href={`${repo}/tree/main/docs/plans`}>Read the Plans</a>
 		</div>
 
-		<div class="stack" aria-hidden="true">
-			<div class="tile tile--a"><span>uniswap</span></div>
-			<div class="tile tile--b"><span>cre</span></div>
-			<div class="tile tile--c"><span>vault</span></div>
-		</div>
+		<figure class="code">
+			<figcaption>contracts/src/HelicoVault.sol · <code>_checkRange</code> · <a href={`${vault}#L724`}>open on GitHub ↗</a></figcaption>
+			<pre tabindex="0"><code>{check}</code></pre>
+		</figure>
 
 		<div class="split">
 			<div>
-				<h3>The best build with Helico.</h3>
-				<p>Each package ships with its own tests and a README that points at the lines behind every claim.</p>
+				<h3>Open by default.</h3>
+				<p>The check above is read from the vault source when this page is built. Every count below points at the package that proves it.</p>
 			</div>
-			<a class="btn btn--secondary" href={`${repo}#readme`}>Learn more</a>
+			<a class="btn btn--secondary" href={`${repo}#readme`}>Learn More</a>
 		</div>
 		<div class="cards" style="text-align:left">
 			{packages.map((p) => (
-				<a class="card card--link" href={p.href}>
+				<div class="card">
 					<span class="label">{p.name}</span>
-					<h3 style="margin-top:.4rem;font-size:1.5rem;letter-spacing:-.02em">{p.stat}</h3>
+					<span class="stat">{p.stat} <small>{p.unit}</small></span>
 					<p>{p.copy}</p>
-				</a>
+					<a class="link" href={p.href}>Read the source ↗</a>
+				</div>
 			))}
 		</div>
 	</div>
 </section>
 
 <style>
-	.build {
-		margin-top: 2rem;
+	.code {
+		margin: clamp(2.5rem, 5vw, 4rem) auto 0;
+		max-width: 60rem;
+		text-align: left;
+		border-radius: 24px;
+		overflow: hidden;
+		background: #0f0f10;
+		color: #e6e4f2;
+		box-shadow: 0 40px 80px -40px rgba(93, 76, 230, 0.35);
 	}
-	.stack {
+	.code figcaption {
 		display: flex;
-		align-items: flex-end;
-		justify-content: center;
-		gap: clamp(0.75rem, 2vw, 1.5rem);
-		margin: clamp(2rem, 4vw, 3rem) auto 0;
-		perspective: 900px;
-	}
-	.tile {
-		display: grid;
-		place-items: center;
-		border-radius: 18px;
+		flex-wrap: wrap;
+		gap: 0.35rem;
+		padding: 0.8rem 1.25rem;
 		font-family: var(--font-mono);
 		font-size: 0.75rem;
-		letter-spacing: 0.06em;
-		color: #fff;
-		transform: rotateX(18deg) rotateZ(-4deg);
-		box-shadow:
-			0 30px 50px -30px rgba(76, 63, 214, 0.55),
-			inset 0 1px 0 rgba(255, 255, 255, 0.5);
+		color: rgba(255, 255, 255, 0.5);
+		border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 	}
-	.tile--a {
-		width: clamp(6rem, 18vw, 9rem);
-		height: clamp(4rem, 10vw, 5.5rem);
-		background: linear-gradient(180deg, #c9c1ff, #a79bff);
+	.code figcaption code,
+	.code figcaption a {
+		color: #b7abff;
 	}
-	.tile--b {
-		width: clamp(6.5rem, 20vw, 10rem);
-		height: clamp(5rem, 12vw, 7rem);
-		background: linear-gradient(180deg, #a79bff, #8676ff);
-	}
-	.tile--c {
-		width: clamp(7rem, 22vw, 11rem);
-		height: clamp(6rem, 14vw, 8.5rem);
-		background: linear-gradient(180deg, #8676ff, #5d4ce6);
-	}
-	.card--link {
-		display: block;
-		transition: transform 0.15s, border-color 0.15s;
-	}
-	.card--link:hover {
-		transform: translateY(-2px);
-		border-color: #b7abff;
+	.code pre {
+		margin: 0;
+		padding: 1.25rem 1.5rem;
+		overflow-x: auto;
+		font-family: var(--font-mono);
+		font-size: 0.78rem;
+		line-height: 1.6;
+		tab-size: 4;
+		/* Verbatim means verbatim: no ligatures turning >= into one glyph. */
+		font-variant-ligatures: none;
 	}
 </style>

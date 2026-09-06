@@ -335,6 +335,23 @@ Format: date · what was done · the AI's role · what a human verified.
   Playwright audit at seven viewports re-run on the build; the built HTML grepped for every
   claim the review flagged. Still not deployed.
 
+### 2026-09-06 — Landing page: the reference's type scale and four-card structure
+
+- **Done:** the page restructured to the reference's three lavender cards and one black card
+  and restyled to its measured type scale (72px/550 headings, 20px ledes at 620px, 48px pill
+  buttons, 32px section radius, 313px cards, 82px nav), with Inter as the stand-in for its
+  proprietary face. The rules moved into the mandate panel as rows, the range check became the
+  build card's visual, the live tick became a stat card, and holds and refusals became an FAQ
+  entry.
+- **AI's role:** measured the reference's computed styles with a headless browser, mapped the
+  content onto its structure, wrote the CSS and components. The user chose the structure; the
+  only deliberate deviation is a darker button lavender for contrast, recorded in the plan.
+- **Plan:** revision in [`docs/plans/2026-09-06-landing-ui.md`](docs/plans/2026-09-06-landing-ui.md).
+- **Verified:** `astro check` (0 errors), `astro build`, `bun run check`; computed styles on the
+  build compared with the reference's at 1440 (heading 72px/550/−3.6px at 986px, lede
+  20px at 620px, button 48px, card 313px, all equal); the Playwright audit at seven viewports
+  with zero findings. Still not deployed.
+
 <!--
 Template for the next entry:
 

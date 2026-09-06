@@ -115,3 +115,38 @@ to seven (who holds the position, what it costs, "is it live? is it audited?").
   concepts." (five URLs)
 - "Go on." (to the proposal)
 - "And the canvas is too small."
+
+## Revision — the reference's type scale and its four cards
+
+The user asked for the reference's wording style, type sizes, font, button dimensions,
+description lengths and card styles, with Helico's content, and for its structure of three
+lavender cards and one black card. Measured on the reference with a headless browser at 1440:
+
+| Element | Reference | Here |
+|---|---|---|
+| Font | a proprietary grotesk, weight 550 for headings | Inter (variable, 100 to 900) at the same weights |
+| Hero and section headings | 72px, weight 550, line-height 1.1, tracking −0.05em, 90% ink | same |
+| Lede | 20px, 400, line-height 1.36, tracking −0.01em, 65% ink, max 620px | same |
+| Sub-headings inside cards | 40px, 500, tracking −0.03em, left | same |
+| Buttons | 48px tall, 24px side padding, 17px/500, radius 99px | same geometry; the lavender is two notches darker (`#695cff`) so white text passes 4.5:1, which the reference's does not |
+| Section cards | radius 32px, 24px gutter and 24px gaps | same |
+| Small cards | 313px wide, radius 24px, padding 32px, 1px 5% border | same |
+| Stat cards | 24px/450 number, 16px caption at #636161 | same |
+| Nav | 82px bar, 14px/450 links at 65% ink, ink pill CTA 32px tall | same |
+| FAQ | 40px "FAQs" left, 662px column, 16px questions with a 1px rule | same |
+| Descriptions | 8 to 14 words under a heading, one sentence per card | same |
+
+Structure, top to bottom: hero (lavender), stay-updated (white card), the mandate (black),
+build (lavender), verified (lavender), FAQ, stay-updated, footer. Everything the previous
+revision added was folded into those four cards rather than dropped: the rule links live in
+the mandate panel as one row per field, the `_checkRange` figure is the visual of the build
+card, the live tick is the sixth stat card, and the holds-and-refusals section became the FAQ
+entry "When does it do nothing?". The "built with" strip and the closing call to action were
+dropped because the reference has neither.
+
+### Prompts, verbatim in translation
+
+- "Check the reference: wording, text style, font size, font family, button, description
+  length, card and info styles, and the rest. Match it, only the content stays Helico. And I
+  see three pink cards and one black card; follow that."
+

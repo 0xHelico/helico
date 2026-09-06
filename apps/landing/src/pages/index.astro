@@ -1,14 +1,10 @@
 ---
 import Build from '../components/sections/Build.astro'
-import BuiltWith from '../components/sections/BuiltWith.astro'
-import Commit from '../components/sections/Commit.astro'
 import Enforcement from '../components/sections/Enforcement.astro'
 import Faq from '../components/sections/Faq.astro'
 import Footer from '../components/sections/Footer.astro'
 import Hero from '../components/sections/Hero.astro'
 import Nav from '../components/sections/Nav.astro'
-import Open from '../components/sections/Open.astro'
-import Quiet from '../components/sections/Quiet.astro'
 import Updates from '../components/sections/Updates.astro'
 import Verified from '../components/sections/Verified.astro'
 import Base from '../layouts/Base.astro'
@@ -18,15 +14,12 @@ import Base from '../layouts/Base.astro'
 	<Nav />
 	<main>
 		<Hero />
-		<BuiltWith />
+		<Updates />
 		<Enforcement />
-		<Quiet />
-		<Open />
 		<Build />
 		<Verified />
 		<Faq />
-		<Commit />
-		<Updates />
+		<Updates placement="bottom" />
 	</main>
 	<Footer />
 </Base>

@@ -2,55 +2,15 @@
 const repo = 'https://github.com/0xHelico/helico'
 // Permalinks to the vault as it is on main today, so the line numbers stay true when the file moves on.
 const vault = `${repo}/blob/154bcabd85ca3be8f73851bbc55a1a04ea42c6e4/contracts/src/HelicoVault.sol`
-const rules = [
-	{
-		field: 'poolId',
-		rule: 'Only the pool you named. The position and the new range must both hash to it.',
-		line: 489,
-		error: 'PoolNotPermitted',
-	},
-	{
-		field: 'rangeWidthTicks',
-		rule: "Exactly the width you committed, on the pool's tick spacing. Nothing is snapped or rounded.",
-		line: 733,
-		error: 'RangeWidthMismatch',
-	},
-	{
-		field: 'minImprovementBps',
-		rule: 'The new range must sit closer to the price than the old one, by at least this much.',
-		line: 747,
-		error: 'NotEnoughImprovement',
-	},
-	{
-		field: 'cooldownSeconds',
-		rule: 'One move per cooldown, counted from the last one the vault executed.',
-		line: 473,
-		error: 'CooldownNotElapsed',
-	},
-	{
-		field: 'maxLiquidity',
-		rule: 'A cap on how much liquidity one move may touch, measured from the position rather than declared.',
-		line: 486,
-		error: 'LiquidityTooLarge',
-	},
-	{
-		field: 'expiry',
-		rule: 'After this timestamp the mandate is dead and every re-centre reverts.',
-		line: 468,
-		error: 'MandateExpired',
-	},
-	{
-		field: 'minRetainedBps',
-		rule: 'The share of your liquidity a move must keep, read back from the position it minted.',
-		line: 718,
-		error: 'LiquidityNotRetained',
-	},
-	{
-		field: 'and the price',
-		rule: 'The new range must contain the current tick. A band parked where no trade reaches it is refused.',
-		line: 739,
-		error: 'RangeOffMarket',
-	},
+const fields = [
+	{ field: 'poolId', value: 'ETH / ARB 0.05%', rule: 'Only the pool you named.', line: 489 },
+	{ field: 'rangeWidthTicks', value: '20 ticks', rule: 'Exactly this width, on the pool\'s spacing.', line: 733 },
+	{ field: 'minImprovementBps', value: '≥ 50 bps', rule: 'The new range must sit closer to the price by this much.', line: 747 },
+	{ field: 'cooldownSeconds', value: '1 h', rule: 'One move per cooldown.', line: 473 },
+	{ field: 'maxLiquidity', value: '1e18', rule: 'A cap on what one move may touch.', line: 486 },
+	{ field: 'expiry', value: 'in 30 d', rule: 'After this, every re-centre reverts.', line: 468 },
+	{ field: 'minRetainedBps', value: '≥ 90%', rule: 'The share a move must keep, read back from the mint.', line: 718 },
+	{ field: 'the price', value: 'tick inside', rule: 'The new range must contain the current tick.', line: 739 },
 ]
 const templates = [
 	{
@@ -74,20 +34,17 @@ const templates = [
 ]
 ---
 
-<section class="wrap enforcement" id="enforcement" aria-labelledby="enforcement-title">
+<section class="wrap" id="enforcement" aria-labelledby="enforcement-title">
 	<div class="section-card section-card--dark center">
-		<span class="eyebrow">How it works</span>
-		<h2 class="headline" id="enforcement-title">Seven fields. <span class="grad">Every one</span> enforced on chain.</h2>
-		<p class="lede">
-			You sign a mandate once. The enclave decides inside it; the vault checks each field before
-			anything moves, and a re-centre that fails any check reverts.
-		</p>
+		<span class="eyebrow">Helico Mandate</span>
+		<h2 class="headline" id="enforcement-title">The Full Power of the Mandate</h2>
+		<p class="lede">Decide in the enclave, refuse on chain. Built on Uniswap v4.</p>
 		<div class="actions">
-			<a class="btn btn--dark" href={`${repo}#readme`}>Get started</a>
-			<a class="btn btn--ghost" href={`${vault}#L724`}>Read the check</a>
+			<a class="btn btn--dark" href={`${repo}#readme`}>Get Started</a>
+			<a class="btn btn--ghost" href={`${vault}#L724`}>Learn More</a>
 		</div>
 
-		<div class="panel" aria-label="An example mandate">
+		<div class="panel" aria-label="An example mandate and the rule the vault enforces for each field">
 			<div class="panel__bar"><i></i><i></i><i></i><span>helico · vault · Arbitrum One · not deployed yet</span></div>
 			<div class="panel__body">
 				<div class="panel__side">
@@ -101,51 +58,33 @@ const templates = [
 						</div>
 						<span class="panel__badge">example</span>
 					</div>
-					<dl class="panel__grid">
-						<div><dt>Pool</dt><dd>ETH / ARB 0.05%</dd></div>
-						<div><dt>Range width</dt><dd>20 ticks</dd></div>
-						<div><dt>Improvement</dt><dd>≥ 50 bps</dd></div>
-						<div><dt>Cooldown</dt><dd>1 h</dd></div>
-						<div><dt>Max liquidity</dt><dd>1e18</dd></div>
-						<div><dt>Expires</dt><dd>in 30 d</dd></div>
-						<div><dt>Retain</dt><dd>≥ 90%</dd></div>
-					</dl>
+					<ol class="fields">
+						{fields.map((f) => (
+							<li>
+								<span class="fields__name"><code>{f.field}</code><b>{f.value}</b></span>
+								<span class="fields__rule">{f.rule}</span>
+								<a class="fields__line" href={`${vault}#L${f.line}`}>line {f.line} ↗</a>
+							</li>
+						))}
+					</ol>
+					<p class="fields__foot">Seven fields, one extra rule for the price. A re-centre that fails any of them reverts; there is no other entry point.</p>
 				</div>
 			</div>
 		</div>
-		<p class="panel__caption">
-			Illustrative. Nothing is deployed yet. The fields are the seven the vault stores, and the hash is
-			the test vector the enclave and the vault both reproduce.
-		</p>
-
-		<ol class="rules" style="text-align:left">
-			{rules.map((r, i) => (
-				<li class="card rule">
-					<span class="rule__n">{String(i + 1).padStart(2, '0')}</span>
-					<code class="rule__field">{r.field}</code>
-					<p>{r.rule}</p>
-					<a href={`${vault}#L${r.line}`}>{r.error} · line {r.line} ↗</a>
-				</li>
-			))}
-		</ol>
-		<p class="rules__foot">
-			There is no other entry point. <code>recenter</code> and <code>recenterWithSignature</code> end in
-			the same checks, and the swap between the burn and the mint is capped at the edge of the range you
-			signed, so the pool itself halts it there.
-		</p>
+		<p class="panel__caption">Illustrative. Nothing is deployed yet; the fields are the seven the vault stores.</p>
 
 		<div class="split">
 			<div>
 				<h3>A mandate for every strategy.</h3>
 				<p>From a tight band that moves often to a wide one that waits, the terms are yours; the enclave chooses inside them and the vault refuses the rest.</p>
 			</div>
-			<a class="btn btn--ghost" href={`${repo}/blob/main/contracts/README.md`}>Learn more</a>
+			<a class="btn btn--ghost" href={`${repo}/blob/main/contracts/README.md`}>Learn More</a>
 		</div>
 		<div class="cards" style="text-align:left">
 			{templates.map((t) => (
 				<div class="card">
 					<span class="label">{t.label}</span>
-					<h3 style="margin-top:.4rem">{t.name}</h3>
+					<h3>{t.name}</h3>
 					<p>{t.copy}</p>
 					<div class="chips">{t.chips.map((c) => <span class="chip"><i></i>{c}</span>)}</div>
 				</div>
@@ -235,27 +174,6 @@ const templates = [
 		background: rgba(58, 166, 110, 0.18);
 		color: #6ee7a8;
 	}
-	.panel__grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
-		gap: 0.6rem;
-		margin: 1.1rem 0 0;
-	}
-	.panel__grid div {
-		border-radius: 12px;
-		padding: 0.7rem 0.8rem;
-		background: #15151c;
-		border: 1px solid rgba(255, 255, 255, 0.06);
-	}
-	.panel__grid dt {
-		font-size: 0.7rem;
-		color: #8d8ca3;
-	}
-	.panel__grid dd {
-		margin: 0.2rem 0 0;
-		font-weight: 600;
-		color: #ffffff;
-	}
 	@media (min-width: 768px) {
 		.panel__body {
 			grid-template-columns: 11rem 1fr;
@@ -267,56 +185,67 @@ const templates = [
 			padding: 1.5rem;
 		}
 	}
-	.panel__caption {
-		margin: 0.9rem auto 0;
-		max-width: 60rem;
-		font-size: 0.75rem;
-		color: #9a98ad;
-	}
-	.rules {
-		display: grid;
-		gap: 0.9rem;
-		grid-template-columns: repeat(auto-fit, minmax(13.5rem, 1fr));
-		margin: clamp(2rem, 4vw, 3rem) 0 0;
+	.fields {
+		margin: 1rem 0 0;
 		padding: 0;
 		list-style: none;
-		counter-reset: rule;
+		border-top: 1px solid rgba(255, 255, 255, 0.08);
 	}
-	.rule {
+	.fields li {
+		display: grid;
+		grid-template-columns: 1fr;
+		gap: 0.25rem 1.25rem;
+		padding: 0.8rem 0;
+		border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+		text-align: left;
+	}
+	.fields__name {
 		display: flex;
-		flex-direction: column;
-		gap: 0.35rem;
-	}
-	.rule__n {
+		justify-content: space-between;
+		gap: 1rem;
 		font-family: var(--font-mono);
-		font-size: 0.72rem;
+		font-size: 0.8rem;
 		color: #b7abff;
 	}
-	.rule__field {
-		font-family: var(--font-mono);
-		font-size: 0.85rem;
+	.fields__name b {
+		font-family: var(--font-sans);
+		font-weight: 450;
 		color: #ffffff;
 	}
-	.rule p {
-		flex: 1;
-		margin: 0.2rem 0 0;
-	}
-	.rule a {
-		margin-top: 0.6rem;
-		font-size: 0.75rem;
-		font-weight: 600;
-		color: #b7abff;
-	}
-	.rules__foot {
-		max-width: 44rem;
-		margin: 1.5rem auto 0;
+	.fields__rule {
 		font-size: 0.9rem;
-		line-height: 1.6;
-		color: #b9b8c8;
+		line-height: 1.4;
+		letter-spacing: -0.01em;
+		color: rgba(255, 255, 255, 0.7);
 	}
-	.rules__foot code {
-		font-family: var(--font-mono);
-		font-size: 0.82rem;
-		color: #ffffff;
+	.fields__line {
+		font-size: 0.8rem;
+		font-weight: 450;
+		color: #b7abff;
+		white-space: nowrap;
+	}
+	.fields__foot {
+		margin: 1rem 0 0;
+		font-size: 0.85rem;
+		line-height: 1.4;
+		color: rgba(255, 255, 255, 0.5);
+		text-align: left;
+	}
+	.panel__caption {
+		margin: 1rem auto 0;
+		max-width: 60rem;
+		font-size: 0.8125rem;
+		letter-spacing: -0.01em;
+		color: rgba(255, 255, 255, 0.5);
+	}
+	@media (min-width: 720px) {
+		.fields li {
+			grid-template-columns: 15rem 1fr auto;
+			align-items: baseline;
+		}
+		.fields__name {
+			flex-direction: column;
+			gap: 0.15rem;
+		}
 	}
 </style>

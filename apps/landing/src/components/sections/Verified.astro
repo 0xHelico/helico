@@ -2,12 +2,11 @@
 const repo = 'https://github.com/0xHelico/helico'
 const swapPlan = `${repo}/blob/main/docs/plans/2026-09-05-vault-swap-recentre.md`
 const facts = [
-	{ n: '240+', unit: 'unit tests', copy: '52 in the Uniswap plugin, 116 in the CRE plugin, 74 in the vault; CI runs them on every pull request.' },
-	{ n: '9', unit: 'fork tests', copy: 'that mint, swap, and re-centre against a fork of Arbitrum One.' },
-	{ n: '12', unit: 'AI audit agents', copy: 'ran over the vault before its rewrite; a six-agent pass followed. Not a professional audit, and not called one.' },
-	{ n: '4', unit: 'networks exercised', copy: 'Base Sepolia and Robinhood Chain Testnet with real transactions, Robinhood Chain mainnet read-only, Arbitrum One on a fork.' },
-	{ n: '3', unit: 'ways to check one digest', copy: 'the EIP-712 authorisation matches between the enclave, the vault, and cast.' },
-	{ n: 'MIT', unit: 'open source', copy: 'every plan, prompt, and AI-usage note committed alongside the code.' },
+	{ n: '240+', unit: 'unit tests', copy: '52 in the Uniswap plugin, 116 in the CRE plugin, 74 in the vault, on every pull request.' },
+	{ n: '9', unit: 'fork tests', copy: 'Mint, swap, and re-centre against a fork of Arbitrum One.' },
+	{ n: '12', unit: 'AI audit agents', copy: 'Ran over the vault before its rewrite; a six-agent pass followed. Not a professional audit.' },
+	{ n: '4', unit: 'networks', copy: 'Base Sepolia and Robinhood Chain Testnet with real transactions, Robinhood Chain mainnet read-only, Arbitrum One on a fork.' },
+	{ n: '3', unit: 'ways to check one digest', copy: 'The EIP-712 authorisation matches between the enclave, the vault, and cast.' },
 ]
 const bars = [
 	{ label: 'Out of range, no swap', pct: 0, note: 'nothing can be minted' },
@@ -15,28 +14,32 @@ const bars = [
 ]
 ---
 
-<section class="wrap verified" id="verified" aria-labelledby="verified-title">
+<section class="wrap" id="verified" aria-labelledby="verified-title">
 	<div class="section-card center">
 		<span class="eyebrow">Helico</span>
-		<h2 class="headline" id="verified-title">Verified by default</h2>
-		<p class="lede">Every integration is tested against the real thing, and the README points at the lines that prove each claim.</p>
+		<h2 class="headline" id="verified-title">Verified by Default</h2>
+		<p class="lede">Tested against the real thing. Every claim points at the line that proves it.</p>
 		<div class="actions">
-			<a class="btn btn--secondary" href={`${repo}#readme`}>Learn more</a>
+			<a class="btn btn--secondary" href={`${repo}#readme`}>Learn More</a>
 		</div>
 
 		<div class="cards facts" style="text-align:left">
 			{facts.map((f) => (
 				<div class="card">
-					<div class="fact__n">{f.n} <small>{f.unit}</small></div>
+					<span class="stat">{f.n} <small>{f.unit}</small></span>
 					<p>{f.copy}</p>
 				</div>
 			))}
+			<div class="card">
+				<span class="stat"><span data-live-tick>…</span> <small>tick, <span data-live-note>reading</span></small></span>
+				<p>Of the ETH / ARB 0.05% pool on Arbitrum One, read from the chain when this page loads.</p>
+			</div>
 		</div>
 
 		<div class="split">
 			<div>
 				<h3>Why the swap is inside the vault.</h3>
-				<p>An out-of-range position holds one token. Burn it and mint a new range without a swap, and the pool cannot take the second side: nothing is minted out of range, and 13% survives in range. These two rows are the reason the vault swaps between the burn and the mint.</p>
+				<p>An out-of-range position holds one token. Burn it and mint a new range without a swap, and the pool cannot take the second side: nothing is minted out of range, and 13% survives in range.</p>
 			</div>
 		</div>
 		<div class="card chart" style="text-align:left">
@@ -63,25 +66,46 @@ const bars = [
 	</div>
 </section>
 
-<style>
-	.verified {
-		margin-top: 2rem;
+<script>
+	// One eth_call to Uniswap v4's StateView on Arbitrum One: getSlot0(poolId) for the demo pool.
+	// The address and the pool id are the ones packages/plugins/uniswap resolves from the SDK.
+	const STATE_VIEW = '0x76Fd297e2D437cd7f76d50F01AfE6160f86e9990'
+	const POOL_ID = 'b37da7d5beb04539b6c497a15794748fc0ce1da7afc61133e3253eff76229ae5'
+	const GET_SLOT0 = '0xc815641c'
+	const tick = document.querySelector('[data-live-tick]')
+	const note = document.querySelector('[data-live-note]')
+	const show = (value: string, label: string) => {
+		if (tick) tick.textContent = value
+		if (note) note.textContent = label
 	}
+	;(async () => {
+		try {
+			const res = await fetch('https://arb1.arbitrum.io/rpc', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					jsonrpc: '2.0',
+					id: 1,
+					method: 'eth_call',
+					params: [{ to: STATE_VIEW, data: `${GET_SLOT0}${POOL_ID}` }, 'latest'],
+				}),
+			})
+			const { result } = (await res.json()) as { result?: string }
+			if (!result || result.length < 2 + 128) throw new Error('short result')
+			// slot0 is (sqrtPriceX96, tick, protocolFee, lpFee); the tick is an int24, sign-extended
+			// to the second 32-byte word.
+			let value = BigInt(`0x${result.slice(2 + 64, 2 + 128)}`)
+			if (value >= 1n << 255n) value -= 1n << 256n
+			show(Number(value).toLocaleString('en-US'), 'live')
+		} catch {
+			show('unavailable', 'the public RPC did not answer')
+		}
+	})()
+</script>
+
+<style>
 	.facts {
 		margin-top: clamp(2rem, 4vw, 3rem);
-	}
-	.fact__n {
-		font-size: 1.6rem;
-		font-weight: 600;
-		letter-spacing: -0.02em;
-		color: var(--color-ink);
-	}
-	.fact__n small {
-		display: block;
-		font-size: 0.8rem;
-		font-weight: 500;
-		letter-spacing: 0;
-		color: #5d4ce6;
 	}
 	.chart {
 		padding: 1.5rem;

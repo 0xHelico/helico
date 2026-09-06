@@ -8,24 +8,13 @@ const repo = 'https://github.com/0xHelico/helico'
 <section class="wrap" id="hero" aria-labelledby="hero-title">
 	<div class="section-card center hero">
 		<div class="hero__copy">
-			<span class="eyebrow"><Image src={logo} alt="" width={16} height={16} densities={[1, 2]} /> Helico Vault</span>
-			<h1 class="headline" id="hero-title">Liquidity that stays in range.</h1>
-			<p class="lede">
-				Commit a mandate once. A Chainlink CRE enclave decides when to re-centre your Uniswap v4
-				position; the vault enforces what you signed and refuses everything else.
-			</p>
+			<span class="eyebrow"><Image src={logo} alt="" width={20} height={20} densities={[1, 2]} /> Helico Vault</span>
+			<h1 class="headline" id="hero-title">Liquidity That Stays in Range</h1>
+			<p class="lede">Commit a mandate once. The enclave decides, the vault refuses everything else.</p>
 			<div class="actions">
-				<a class="btn btn--primary cta" href={`${repo}#readme`}>
-					Read the docs
-					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
-				</a>
-				<a class="btn btn--secondary" href="#enforcement">How it works</a>
+				<a class="btn btn--primary cta" href={`${repo}#readme`}>Read the Docs</a>
+				<a class="btn btn--secondary" href="#enforcement">How It Works</a>
 			</div>
-			<dl class="hero__live" aria-label="The demo pool, read from Arbitrum One when this page loads">
-				<div><dt>Chain</dt><dd>Arbitrum One</dd></div>
-				<div><dt>Pool</dt><dd>ETH / ARB 0.05%</dd></div>
-				<div><dt>Tick now</dt><dd><span data-live-tick>…</span> <small data-live-note>reading</small></dd></div>
-			</dl>
 		</div>
 		<div class="hero__canvas" id="canvas">
 			<HeroCanvas client:visible />
@@ -34,93 +23,25 @@ const repo = 'https://github.com/0xHelico/helico'
 	</div>
 </section>
 
-<script>
-	// One eth_call to Uniswap v4's StateView on Arbitrum One: getSlot0(poolId) for the demo pool.
-	// The address and the pool id are the ones packages/plugins/uniswap resolves from the SDK.
-	const STATE_VIEW = '0x76Fd297e2D437cd7f76d50F01AfE6160f86e9990'
-	const POOL_ID = 'b37da7d5beb04539b6c497a15794748fc0ce1da7afc61133e3253eff76229ae5'
-	const GET_SLOT0 = '0xc815641c'
-	const tick = document.querySelector('[data-live-tick]')
-	const note = document.querySelector('[data-live-note]')
-	const show = (value: string, label: string) => {
-		if (tick) tick.textContent = value
-		if (note) note.textContent = label
-	}
-	;(async () => {
-		try {
-			const res = await fetch('https://arb1.arbitrum.io/rpc', {
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({
-					jsonrpc: '2.0',
-					id: 1,
-					method: 'eth_call',
-					params: [{ to: STATE_VIEW, data: `${GET_SLOT0}${POOL_ID}` }, 'latest'],
-				}),
-			})
-			const { result } = (await res.json()) as { result?: string }
-			if (!result || result.length < 2 + 128) throw new Error('short result')
-			// slot0 is (sqrtPriceX96, tick, protocolFee, lpFee); the tick is an int24, sign-extended
-			// to the second 32-byte word.
-			let value = BigInt(`0x${result.slice(2 + 64, 2 + 128)}`)
-			if (value >= 1n << 255n) value -= 1n << 256n
-			show(Number(value).toLocaleString('en-US'), 'live')
-		} catch {
-			show('unavailable', 'the public RPC did not answer')
-		}
-	})()
-</script>
-
 <style>
 	.hero {
-		margin-top: 1rem;
 		/* The copy keeps the page's column; the canvas below breaks out of it. */
 		padding-inline: clamp(1.25rem, 4vw, 3rem);
-		padding-bottom: clamp(1.25rem, 3vw, 2.5rem);
 	}
 	.hero__copy {
 		max-width: var(--content-max);
 		margin-inline: auto;
 	}
-	.hero__live {
-		display: flex;
-		flex-wrap: wrap;
-		justify-content: center;
-		gap: 0.75rem 2.5rem;
-		margin: 1.75rem 0 0;
-	}
-	.hero__live div {
-		display: flex;
-		flex-direction: column;
-		gap: 0.15rem;
-	}
-	.hero__live dt {
-		font-size: 0.72rem;
-		letter-spacing: 0.06em;
-		text-transform: uppercase;
-		color: #6b7280;
-	}
-	.hero__live dd {
-		margin: 0;
-		font-weight: 600;
-		font-size: 0.95rem;
-		font-variant-numeric: tabular-nums;
-	}
-	.hero__live small {
-		margin-left: 0.3rem;
-		font-size: 0.72rem;
-		font-weight: 500;
-		color: #5d4ce6;
-	}
 	.hero__canvas {
 		max-width: 80rem;
-		margin: clamp(2rem, 4vw, 3rem) auto 0;
+		margin: clamp(2.5rem, 5vw, 4rem) auto 0;
 		text-align: left;
 	}
 	.hero__caption {
-		margin: 0.9rem 0 0;
+		margin: 1rem 0 0;
 		text-align: center;
-		font-size: 0.75rem;
-		color: #5b6270;
+		font-size: 0.8125rem;
+		letter-spacing: -0.01em;
+		color: var(--ink-65);
 	}
 </style>

@@ -1,33 +1,34 @@
 ---
+interface Props {
+	placement?: 'top' | 'bottom'
+}
+const { placement = 'top' } = Astro.props
 const watch = 'https://github.com/0xHelico/helico/subscription'
 ---
 
-<section class="wrap updates" aria-label="Follow the build">
-	<div class="updates__card">
-		<h2>Follow the build</h2>
-		<p>Helico ships in the open. Watch the repository to hear when the vault goes live.</p>
+<section class="wrap" aria-label={placement === 'top' ? 'Stay updated' : 'Stay updated, bottom of page'}>
+	<div class="section-card section-card--white center updates">
+		<h2>Stay Updated</h2>
+		<p>Be the first to hear when the vault goes live.</p>
 		<a class="btn btn--ink" href={watch}>Watch on GitHub</a>
 	</div>
 </section>
 
 <style>
-	.updates {
-		margin-top: 2rem;
-	}
-	.updates__card {
-		max-width: 26rem;
-		margin-inline: auto;
-		text-align: center;
-	}
-	.updates__card h2 {
+	.updates h2 {
 		margin: 0;
-		font-size: 1.25rem;
-		letter-spacing: -0.02em;
+		font-size: 1.5rem;
+		font-weight: 450;
+		line-height: 1.35;
+		letter-spacing: -0.03em;
+		color: var(--ink-solid);
 	}
-	.updates__card p {
-		margin: 0.5rem 0 1.1rem;
-		font-size: 0.95rem;
-		line-height: 1.55;
-		color: #5b6270;
+	.updates p {
+		margin: 0.5rem auto 1.5rem;
+		max-width: 620px;
+		font-size: 1.25rem;
+		line-height: 1.36;
+		letter-spacing: -0.01em;
+		color: var(--ink-65);
 	}
 </style>

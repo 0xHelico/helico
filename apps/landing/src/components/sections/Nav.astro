@@ -12,12 +12,12 @@ const repo = 'https://github.com/0xHelico/helico'
 		</a>
 		<nav class="nav__links" aria-label="Primary">
 			<a href="#hero">Product</a>
-			<a href="#enforcement">How it works</a>
+			<a href="#enforcement">How It Works</a>
 			<a href="#build">Developers</a>
 			<a href="#verified">Evidence</a>
 			<a href="#faq">FAQ</a>
 		</nav>
-		<a class="btn btn--ink nav__cta" href={repo}>Get started</a>
+		<a class="btn btn--ink btn--small nav__cta" href={repo}>Get Started</a>
 	</div>
 </header>
 
@@ -36,7 +36,7 @@ const repo = 'https://github.com/0xHelico/helico'
 		align-items: center;
 		justify-content: space-between;
 		gap: 1rem;
-		padding: 0.7rem 0;
+		min-height: 82px;
 	}
 	.nav__brand {
 		display: inline-flex;
@@ -51,17 +51,21 @@ const repo = 'https://github.com/0xHelico/helico'
 	}
 	.nav__links {
 		display: none;
-		gap: 1.6rem;
-		font-size: 0.85rem;
-		font-weight: 500;
-		color: #4e5560;
+		gap: 0.25rem;
+		font-size: 0.875rem;
+		font-weight: 450;
+		color: var(--ink-65);
+	}
+	.nav__links a {
+		display: inline-flex;
+		align-items: center;
+		height: 32px;
+		padding: 0 16px;
+		border-radius: 50px;
 	}
 	.nav__links a:hover {
-		color: var(--color-ink);
-	}
-	.nav__cta {
-		padding: 0.5rem 0.9rem;
-		font-size: 0.8rem;
+		color: var(--ink-90);
+		background: rgba(37, 34, 40, 0.04);
 	}
 	@media (min-width: 900px) {
 		.nav__links {
