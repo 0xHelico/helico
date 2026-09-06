@@ -8,34 +8,41 @@ import {IPoolManager} from "../src/IPoolManager.sol";
 import {IStateView} from "../src/IStateView.sol";
 import {MandateLib, PoolKey} from "../src/Mandate.sol";
 
-/// @notice Shared setup for tests that run against the real Uniswap v4 on Robinhood Chain.
+/// @notice Shared setup for tests that run against the real Uniswap v4 on Arbitrum One.
 ///
-/// @dev **Why these do not pin a block.** The public RPC is not an archive node — it keeps
-///      roughly 6,100 blocks of state, and at a 0.101 second block time that is about ten
-///      minutes. A pinned `--fork-block-number` works on the machine that warmed Foundry's
-///      cache and fails for everyone else within the hour.
+/// @dev **Why these do not pin a block.** They fork `latest` and derive everything from what
+///      they read. Nothing is hard-coded about where the price is or whether a position is in
+///      range; a test that needs a particular condition asserts it and skips if the chain does
+///      not currently offer it, rather than failing for a reason unrelated to the code.
 ///
-///      So these fork `latest` and derive everything from what they read. Nothing is
-///      hard-coded about where the price is or whether a position is in range; a test that
-///      needs a particular condition asserts it and skips if the chain does not currently
-///      offer it, rather than failing for a reason that has nothing to do with the code.
+///      That started as a workaround — the chain this project first targeted served about ten
+///      minutes of state, so a pinned block failed for everyone who had not warmed a cache. It
+///      is kept because it is the better shape regardless: a fixture derived from the live pool
+///      cannot go stale, and one pinned to a block silently stops testing what it claims.
 abstract contract ForkBase is Test {
     using MandateLib for PoolKey;
 
-    IPositionManager constant POSITION_MANAGER = IPositionManager(0x58daec3116aae6D93017bAAea7749052E8a04fA7);
-    IStateView constant STATE_VIEW = IStateView(0xF3334192D15450CdD385c8B70e03f9A6bD9E673b);
-    IPoolManager constant POOL_MANAGER = IPoolManager(0x8366a39CC670B4001A1121B8F6A443A643e40951);
+    IPositionManager constant POSITION_MANAGER = IPositionManager(0xd88F38F930b7952f2DB2432Cb002E7abbF3dD869);
+    IStateView constant STATE_VIEW = IStateView(0x76Fd297e2D437cd7f76d50F01AfE6160f86e9990);
+    IPoolManager constant POOL_MANAGER = IPoolManager(0x360E68faCcca8cA495c1B759Fd9EEe466db9FB32);
 
-    uint256 constant ROBINHOOD_MAINNET = 4663;
+    uint256 constant ARBITRUM_ONE = 42161;
 
-    /// @dev ETH/par, 1% fee, spacing 10. The deepest pool surveyed on this chain by a wide
-    ///      margin, and a hundredth of the fee of the 20% launch pools that dominate it — a
-    ///      swap leg is only defensible somewhere like this. `currency0` is native, which is
-    ///      also the case the vault most needs to prove it handles.
+    /// @dev ETH/ARB at 0.05%, spacing 10 —
+    ///      `poolId 0xb37da7d5beb04539b6c497a15794748fc0ce1da7afc61133e3253eff76229ae5`.
+    ///
+    ///      The fee matters to this product more than it looks: a re-centre pays a swap through
+    ///      the position's own pool, so 0.05% is the difference between an action that recovers
+    ///      more than it costs and one that does not. The chain we came from had this pool at
+    ///      1%, and most of its pools between 6% and 20%.
+    ///
+    ///      `currency0` is native, so this still exercises the path the vault most needs to
+    ///      prove it handles — `Currency.transfer` for the zero address is a bare `call`, and a
+    ///      contract without `receive()` fails it with no diagnostic.
     PoolKey internal demoPool = PoolKey({
         currency0: address(0),
-        currency1: 0x507B6F349a80114097A67B8b4677367acC15b220,
-        fee: 10_000,
+        currency1: 0x912CE59144191C1204E64559FE8253a0e49E6548,
+        fee: 500,
         tickSpacing: 10,
         hooks: address(0)
     });
@@ -46,13 +53,13 @@ abstract contract ForkBase is Test {
     ///      reports green without having run is the same lie as a mock that cannot refuse
     ///      anything, and this repo has already paid for that once.
     function _fork() internal {
-        try vm.createSelectFork("robinhood") {
-            forked = block.chainid == ROBINHOOD_MAINNET;
+        try vm.createSelectFork("arbitrum") {
+            forked = block.chainid == ARBITRUM_ONE;
         } catch {
             forked = false;
         }
         if (!forked) {
-            emit log("no endpoint: set ROBINHOOD_RPC_URL to run the fork suite");
+            emit log("no endpoint: set ARBITRUM_RPC_URL to run the fork suite");
             vm.skip(true);
         }
     }

@@ -147,9 +147,10 @@ Written down rather than glossed over.
 - **`maxLiquidity` is a cap on the whole position**, not on a slice of it. Re-centring always
   moves everything, so a position above the cap cannot be re-centred at all rather than being
   moved in parts. Set it above the position you intend to manage.
-- **A re-centre pays a swap through the position's own pool.** On a high-fee pool that can cost
-  more than it recovers — v4 fees are hundredths of a bip, and pools on this chain run to 20%.
-  Nothing in the contract can fix that; it is the pool the user chose.
+- **A re-centre pays a swap through the position's own pool.** v4 fees are hundredths of a bip,
+  so a `fee` of `200000` is 20%, not 20 bps, and pools like that exist. On one of them a
+  re-centre can cost more than it recovers. Nothing in the contract can fix it — it is the pool
+  the user chose — so the mandate's pool is worth choosing with the fee in mind.
 - **Stray native sent to the vault is stuck.** `receive()` accepts from anyone, and a re-centre
   measures only what it produced, so a loose transfer is never paid to somebody else — but
   there is no path to recover it either. That is the trade for not adding a privileged sweep.
@@ -165,16 +166,15 @@ forge build
 forge test
 
 # The fork suite needs an endpoint. Without one it reports SKIP, not PASS.
-ROBINHOOD_RPC_URL=https://rpc.mainnet.chain.robinhood.com forge test
+ARBITRUM_RPC_URL=https://arb1.arbitrum.io/rpc forge test
 ```
 
-CI leaves `ROBINHOOD_RPC_URL` unset, so the fork suite reports `SKIP` there — read the tick
+CI leaves `ARBITRUM_RPC_URL` unset, so the fork suite reports `SKIP` there — read the tick
 count as 56 executed, not 62, unless the endpoint is set.
 
-The fork tests do **not** pin a block. The public RPC keeps roughly 6,100 blocks of state and
-the block time is 0.101 seconds, so a pinned fork works on the machine that warmed Foundry's
-cache and fails for everyone else within the hour. They fork `latest` and derive what they need
-from what they read.
+The fork tests run against **Arbitrum One** and do **not** pin a block: they fork `latest` and
+derive what they need from what they read, so a fixture cannot go stale and a pinned block
+cannot quietly stop testing what it claims.
 
 78 tests, 9 of them on a fork. `VaultAttacks.t.sol` holds the audit's findings as regression tests — each one was
 written before the contract could pass it, and the commit that added them is red on all nine.
