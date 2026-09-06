@@ -408,3 +408,21 @@ The hero's "Learn More" goes to `https://docs.helico.site` (not live yet; the us
 decision).
 
 - Prompt: "And Learn More later goes to docs.helico.site."
+
+## Revision — motion: the canvas loops, and sections arrive in order
+
+The hero canvas stopped on "Hold": its timer was re-armed only when the scenario's duration
+changed, and the last two scenarios share one. It is re-armed on every change of scenario now,
+so after Hold it returns to Mandate and keeps going (watched for a minute headless:
+Mandate → Re-centre → Refuse → Hold → Mandate).
+
+Every section is a `[data-reveal]` container whose parts (heading, lede, buttons, each card,
+each FAQ item, each logo) fade and rise one after another, 90 ms apart, the first time the
+section scrolls into view. Only with JavaScript (nothing is hidden without it) and only when
+the reader has not asked for reduced motion.
+
+### Prompts, verbatim in translation
+
+- "Make the canvas go back to Mandate after Hold finishes, so it always loops."
+- "And give each component an entrance animation in sequence, so they do not all appear at
+  once."

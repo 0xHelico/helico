@@ -27,7 +27,7 @@ const items = brands.map((b) => ({ ...b, logo: logoFor(b.slug) }))
 ---
 
 <section class="wrap" aria-labelledby="brands-title">
-	<div class="section-card section-card--white brands">
+	<div class="section-card section-card--white brands" data-reveal>
 		<h2 id="brands-title">Built with</h2>
 		<ul class="brands__grid" data-brands>
 			{items.map((b, i) => (
