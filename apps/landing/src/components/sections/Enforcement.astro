@@ -337,12 +337,17 @@ const templates = [
 	}
 	@media (min-width: 720px) {
 		.fields li {
-			grid-template-columns: 15rem 1fr auto;
+			grid-template-columns: 10rem 1fr auto;
 			align-items: baseline;
 		}
 		.fields__name {
 			flex-direction: column;
 			gap: 0.15rem;
+		}
+	}
+	@media (min-width: 1024px) {
+		.fields li {
+			grid-template-columns: 15rem 1fr auto;
 		}
 	}
 	.panel__side button {
