@@ -483,6 +483,41 @@ Format: date · what was done · the AI's role · what a human verified.
   for the register.
 - **Verified:** `astro check` (0 errors), `astro build`, the Playwright audit at seven viewports.
 
+### 2026-09-06 — Vault: mint what it can afford, not what the agent guessed
+
+- **Done:** `_mint` now sizes the mint from the price the swap actually reached and the tokens
+  the vault actually holds, capped by the agent's `liquidityToMint`. Fixes #78, where a
+  re-centre burned the position, did the swap, and then reverted because the enclave's swap
+  model disagreed with the pool by 16%. `LiquidityAmounts` vendored like `TickMath`, with
+  saturation rather than truncation on overflow.
+- **AI's role:** found it by building the rehearsal in #79 and checking chain state rather than
+  the transaction hash; diagnosed it wrongly first, said so on the issue, then measured the
+  pool's active liquidity against the swap size to find the real cause. Wrote the library, the
+  fix, and the fork test.
+- **Plan:** docs/plans/2026-09-06-mint-what-the-vault-can-afford.md
+- **Verified:** `forge test` 95 pass with an Arbitrum RPC; mutation — replacing `toMint` with
+  the agent's number fails exactly the new test; storage layout unchanged; end to end on a fork
+  through `rehearse.sh`, 93.19e18 in and 74.72e18 out, and a second run held on the cooldown.
+  Also fixed `MockStateView`, which returned a zero price and so covered none of this.
+
+### 2026-09-06 — The CRE project a judge can actually run
+
+- **Done:** `apps/cre` becomes a real CRE project — `project.yaml`, `secrets.yaml`,
+  `workflow/` with the config for the fork and for Arbitrum One, `.env.example`, and
+  `rehearse.sh`, which forks Arbitrum One, deploys the vault, mints an out-of-range position,
+  commits the mandate and runs the workflow end to end. The scratch Foundry helper from the
+  forwarder-delivery plan is committed as `contracts/script/Rehearse.s.sol`.
+- **AI's role:** scaffolded from the CLI's own template rather than from memory
+  (`cre init -t hello-confidential-workflows-ts`), wrote the script and the docs, ran it, and
+  read the result back from the fork. The collaborator wrote the recipe this automates and
+  handed the directory over on #21.
+- **Plan:** docs/plans/2026-09-06-cre-runnable-project.md
+- **Verified:** the run itself, three times. It exposed #78 — the workflow reports a
+  transaction hash for a re-centre the forwarder's `try` swallowed, and `positionOf` was
+  unchanged. Tested rather than assumed: raising `slippageBps` 50 → 500 moved the requested
+  amount 4.4% and left the cap unmoved, which is what says the cap is not a function of the
+  budget. The script is left failing on that.
+
 <!--
 Template for the next entry:
 

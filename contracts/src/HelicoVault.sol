@@ -28,6 +28,7 @@ import {IPoolManager, IUnlockCallback} from "./IPoolManager.sol";
 import {IStateView} from "./IStateView.sol";
 import {IReceiver} from "./IReceiver.sol";
 import {TickMath} from "./lib/TickMath.sol";
+import {LiquidityAmounts} from "./lib/LiquidityAmounts.sol";
 
 /// @title HelicoVault
 /// @notice Enforces a user's committed mandate on an agent that re-centres their Uniswap v4
@@ -695,8 +696,32 @@ contract HelicoVault is
     function _mint(Unlock memory u, uint256 got0, uint256 got1) internal {
         // Belt to the price limit's braces: the swap may have moved the tick, and every check
         // in `_assertDelivered` is about where the range is rather than where the price is.
-        (, int24 tick,,) = stateView.getSlot0(u.key.hashPoolKey());
+        (uint160 sqrtPriceX96, int24 tick,,) = stateView.getSlot0(u.key.hashPoolKey());
         if (tick < u.p.tickLower || tick >= u.p.tickUpper) revert PriceLeftTheRange();
+
+        // Mint what this call can actually pay for, at the price the swap actually reached,
+        // and never more than was authorised.
+        //
+        // The agent sizes `liquidityToMint` off-chain from a model of the swap. A model is a
+        // guess about a curve that moves between the read and the transaction, and the enclave
+        // that makes it cannot see the initialised ticks the swap will cross. When the guess
+        // is high the whole re-centre used to revert on `MaximumAmountExceeded` — the position
+        // burned, the swap done, and nothing minted, for arithmetic rather than for anything
+        // the user agreed to.
+        //
+        // The vault does not have to guess. Here it holds the tokens and can read the price.
+        // The cap is what keeps the agent's authority intact: this can only ever mint *less*
+        // than was asked for, never more, and `_assertDelivered` still measures the result
+        // against `minRetainedBps` — so a swap that went badly still reverts everything.
+        uint128 affordable = LiquidityAmounts.getLiquidityForAmounts(
+            sqrtPriceX96,
+            TickMath.getSqrtPriceAtTick(u.p.tickLower),
+            TickMath.getSqrtPriceAtTick(u.p.tickUpper),
+            got0,
+            got1
+        );
+        uint256 toMint = affordable < u.p.liquidityToMint ? uint256(affordable) : u.p.liquidityToMint;
+        if (toMint == 0) revert NothingToMint();
 
         // The PositionManager pays a settle mapped `payerIsUser = false` out of its own
         // balance, so funding the mint is a transfer to it rather than a Permit2 allowance
@@ -709,14 +734,7 @@ contract HelicoVault is
         bytes memory actions = abi.encodePacked(MINT_POSITION, SETTLE, SETTLE, SWEEP, SWEEP);
         bytes[] memory params = new bytes[](5);
         params[0] = abi.encode(
-            u.key,
-            u.p.tickLower,
-            u.p.tickUpper,
-            u.p.liquidityToMint,
-            u.p.amount0Max,
-            u.p.amount1Max,
-            u.p.owner,
-            bytes("")
+            u.key, u.p.tickLower, u.p.tickUpper, toMint, u.p.amount0Max, u.p.amount1Max, u.p.owner, bytes("")
         );
         params[1] = abi.encode(u.key.currency0, uint256(OPEN_DELTA), false);
         params[2] = abi.encode(u.key.currency1, uint256(OPEN_DELTA), false);

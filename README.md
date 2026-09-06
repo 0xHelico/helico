@@ -22,11 +22,13 @@ not yet true rather than left to be assumed — see [Rules](#rules) for why that
 | [`packages/core/`](packages/core/) | Shared library, `@helico/core` |
 | [`apps/landing/`](apps/landing/) | Landing page and blog, Astro |
 | [`apps/be/`](apps/be/) | Blog API, Go and SQLite |
+| [`apps/cre/`](apps/cre/) | The runnable CRE project, and `rehearse.sh` |
 | [`docs/plans/`](docs/plans/) | Implementation plans, written before the code |
 
-`apps/cre/` is scaffolding from the initial layout and is **empty**; the CRE workflow is the
-`packages/plugins/cre` package, consumed from a scratch project.
-`packages/plugins/cre`, because every integration is a reusable package here.
+The workflow's logic lives in `packages/plugins/cre` rather than in `apps/cre`, because every
+partner integration here is a reusable package — and because that is what lets 116 unit tests
+cover the enclave's decision without the CRE CLI in the loop. `apps/cre` is what the CLI
+compiles and simulates.
 
 ## Partner integrations
 
@@ -84,10 +86,27 @@ released there by the Vault DON. Only the verdict crosses back out.
 | Chain reads made from inside the enclave | [`chain.ts#L20-L44`](https://github.com/0xHelico/helico/blob/a42e7d5e9cac2689ef672fc76cbd80e1f62ab482/packages/plugins/cre/src/chain.ts#L20-L44) |
 | The mandate hash, tying the verdict to what the user signed | [`mandate.ts#L38-L50`](https://github.com/0xHelico/helico/blob/a42e7d5e9cac2689ef672fc76cbd80e1f62ab482/packages/plugins/cre/src/mandate.ts#L38-L50) |
 
-> ⚠️ **Not yet claimed.** The workflow's verdict does not yet drive the vault on chain.
-> Confidential Workflows is an invite-only beta separate from CRE deploy access, so this runs
-> in the CRE simulator; the simulator stands in for the enclave, and the README of the plugin
-> says so where it matters. We would rather say that than imply a live DON deployment.
+| The verdict delivered to the vault | [`index.ts#L244-L265`](https://github.com/0xHelico/helico/blob/a42e7d5e9cac2689ef672fc76cbd80e1f62ab482/packages/plugins/cre/src/index.ts#L244-L265) |
+| The vault receiving it | [`HelicoVault.sol#L468-L481`](https://github.com/0xHelico/helico/blob/a42e7d5e9cac2689ef672fc76cbd80e1f62ab482/contracts/src/HelicoVault.sol#L468-L481) |
+
+**Run it yourself:** `cp apps/cre/.env.example apps/cre/.env && cd apps/cre && ./rehearse.sh`.
+It forks Arbitrum One, deploys the vault onto the fork, gives it a position that has drifted
+out of range, and lets the workflow decide and deliver. A second run holds on the cooldown.
+
+> ⚠️ **What that run does not show.** The simulator is **not a TEE** — it says so itself while
+> running — and the `MockKeystoneForwarder` the CLI broadcasts through **verifies no DON
+> signatures**. So the run proves the delivery path and the vault's execution, not
+> authorisation by a decentralised oracle network. It is also a fork, not a live network.
+>
+> Chainlink's own qualification text accepts *"a Confidential Workflow simulation using the CRE
+> CLI **or** a live deployment"*, so this is evidence rather than a stand-in for it. A live
+> deployment additionally needs the Confidential Workflows beta, which is a Chainlink gate and
+> not a hackathon requirement.
+>
+> ⚠️ **A transaction hash is not evidence on this path.** `KeystoneForwarder` calls the
+> receiver inside a `try`: a reverting `onReport` still leaves a transaction with `status 1`.
+> Only the position moving proves a re-centre, which is what `rehearse.sh` checks and how
+> [#78](https://github.com/0xHelico/helico/issues/78) was found.
 
 ## Rules
 
