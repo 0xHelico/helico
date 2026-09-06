@@ -18,35 +18,35 @@ const fields = [
 const position = [
 	['Market', 'ETH and ARB, on the Uniswap exchange, on the Arbitrum network'],
 	['Band', 'a narrow band of prices, 20 steps wide'],
-	['Price now', 'inside the band, so the deposit is earning'],
-	['Last move', 'kept 94.3% of the deposit working, as in the rehearsal'],
+	['Price now', 'inside the band, so your funds are earning'],
+	['Last move', 'kept 94.3% of the funds working, as in the rehearsal'],
 	['Cooldown', 'until 15:32; no move can happen before then'],
-	['Owner', 'you; the deposit stays in your wallet and the contract may only move it'],
+	['Owner', 'you; the funds stay in your wallet and the contract may only move them'],
 ]
 const enclave = [
-	['Reads', 'the market\'s price and your deposit, from inside a sealed environment'],
+	['Reads', 'the market\'s price and your funds, from inside a sealed environment'],
 	['Checks', 'that the rules it was given are the rules the contract holds; if not, it stops'],
 	['Decides', 'to wait while the price is inside the band or the cooldown runs; otherwise, a new band of your chosen width around the price'],
-	['Sizes', 'the exchange that funds both sides of the new band, and the new deposit'],
+	['Sizes', 'the exchange that covers both sides of the new band, and what goes back in'],
 	['Leaves', 'only the decision, signed with a key that never leaves the sealed environment'],
 ]
 const vaultRows = [
 	['Holds', 'a fingerprint of your rules, never the rules themselves'],
 	['Checks', 'that the decision matches your rules, then every rule again: market, width, worth it, how often, cap, expiry, share kept, price inside'],
-	['Moves', 'takes the deposit out, exchanges only what the new band needs, puts a new deposit in, all in one step'],
+	['Moves', 'takes the funds out, exchanges only what the new band needs, puts them back in, all in one step'],
 	['Ends', 'holding nothing; whatever the move did not use goes back to you'],
 	['Refuses', 'anything else; there is no other way in'],
 ]
 const evidence = [
-	['Rehearsal', 'on a snapshot of the real market, an automated decision moved a real deposit that had drifted out of its band'],
-	['Kept', '94.3% of the deposit working; the rules demanded at least 50%'],
+	['Rehearsal', 'on a snapshot of the real market, an automated decision moved real funds that had drifted out of their band'],
+	['Kept', '94.3% of the funds working; the rules demanded at least 50%'],
 	['Second run', 'correctly did nothing, because the cooldown was running'],
 	['Tests', `240+ automated tests, ${forkTests} of them on a snapshot of the real market`],
 	['Caveats', 'a snapshot, not the live network; the sealed environment was simulated; nothing is deployed yet'],
 ]
 const tabs = [
 	{ id: 'mandate', label: 'Your rules' },
-	{ id: 'position', label: 'Your deposit' },
+	{ id: 'position', label: 'Your funds' },
 	{ id: 'enclave', label: 'The decider' },
 	{ id: 'vault', label: 'The contract' },
 	{ id: 'evidence', label: 'Evidence' },
@@ -80,7 +80,7 @@ const templates = [
 					<div class="panel__head">
 						<div>
 							<div class="panel__title">Your rules · example</div>
-							<div class="panel__sub">The seven rules for one deposit, and what each one stops</div>
+							<div class="panel__sub">The seven rules for your funds, and what each one stops</div>
 						</div>
 						<span class="panel__badge">example</span>
 					</div>
@@ -96,7 +96,7 @@ const templates = [
 					<p class="fields__foot">Break any of these and the contract rejects the move. There is no other way in.</p>
 				</div>
 				{[
-					{ id: 'position', title: 'Your deposit · example', sub: 'One deposit, as the contract and the program see it', rows: position },
+					{ id: 'position', title: 'Your funds · example', sub: 'Your funds, as the contract and the program see them', rows: position },
 					{ id: 'enclave', title: 'The decider · one run', sub: 'A sealed program that decides, every five minutes', rows: enclave },
 					{ id: 'vault', title: 'The contract · every move', sub: 'It does not take the program\'s word for anything', rows: vaultRows },
 					{ id: 'evidence', title: 'Evidence · what has run', sub: 'On a snapshot of the real market, 2026-09-06', rows: evidence },

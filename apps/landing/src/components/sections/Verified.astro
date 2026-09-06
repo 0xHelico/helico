@@ -2,7 +2,7 @@
 const repo = 'https://github.com/0xHelico/helico'
 const record = `${repo}/blob/main/docs/plans/2026-09-05-cre-forwarder-delivery.md`
 const cards = [
-	{ label: 'Never held', title: 'Your deposit stays in your wallet.', copy: 'The contract moves it for one step, and proves it kept none before that step ends.' },
+	{ label: 'Never held', title: 'Your funds stay in your wallet.', copy: 'The contract moves them for one step, and proves it kept none before that step ends.' },
 	{ label: 'Never outside your rules', title: 'Break a rule and the move is refused.', copy: 'The contract checks every rule itself. 240+ automated checks run on every change.' },
 	{ label: 'Nothing hidden', title: 'All of the code is public.', copy: 'Twelve automated reviewers went over it. That is not a professional audit, and nothing is live yet.' },
 ]
@@ -12,7 +12,7 @@ const cards = [
 	<div class="section-card center">
 		<span class="eyebrow">Helico</span>
 		<h2 class="headline" id="verified-title">Your Money Stays Yours</h2>
-		<p class="lede">It can move your deposit. It can never keep it.</p>
+		<p class="lede">It can move your funds. It can never keep them.</p>
 		<div class="cards" style="text-align:left">
 			{cards.map((c) => (
 				<div class="card">
@@ -26,7 +26,7 @@ const cards = [
 		<div class="split">
 			<div>
 				<h3>94% kept working.</h3>
-				<p>In a rehearsal on a copy of the real market, a deposit that had drifted out of its band was moved back with 94% of it still working. The rules asked for at least 50%. A rehearsal, not the live network.</p>
+				<p>In a rehearsal on a copy of the real market, funds that had drifted out of their band were moved back with 94% still working. The rules asked for at least 50%. A rehearsal, not the live network.</p>
 			</div>
 			<a class="btn btn--secondary" href={record}>See the Record</a>
 		</div>

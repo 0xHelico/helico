@@ -11,12 +11,12 @@ interface Props {
 }
 
 const site = 'Helico'
-const tagline = 'Your Deposit, on Autopilot'
+const tagline = 'Your Funds, on Autopilot'
 const origin = (Astro.site ?? Astro.url).origin
 const canonical = new URL(Astro.url.pathname, origin).href
 const {
 	title,
-	description = 'Helico keeps your deposit working while prices move, under rules you set once. It can move your money. It can never keep it.',
+	description = 'Helico keeps your funds working while prices move, under rules you set once. It can move your money. It can never keep it.',
 	type = 'website',
 	jsonLd,
 } = Astro.props

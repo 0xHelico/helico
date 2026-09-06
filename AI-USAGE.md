@@ -483,6 +483,7 @@ Format: date · what was done · the AI's role · what a human verified.
   chart replaced by three promises and the rehearsal's 94%, the builders' section labelled as
   such, the FAQ unfolding, and an SEO pass (pipe-separated titles, canonical, robots, sitemap,
   JSON-LD). Verified with `astro check`, the build, and the audits at zero.
+- **Wording:** "deposit" became "funds" throughout the page at the user's request; grammar fixed by hand.
 
 ### 2026-09-06 — Landing page: plain words
 

@@ -370,3 +370,8 @@ organisation, the site and each blog post. `site` in the Astro config is `https:
 - "Improve all the SEO, and use a pipe as the site title separator."
 - "Just show it directly, no need for this button." (the builders' toggle)
 - "No need for a Read the FAQ button, is there?"
+
+And one word: "deposit" is "funds" everywhere a reader meets it ("Your Funds, on Autopilot",
+"your funds stay in your wallet"), because a deposit sounds like something handed over.
+
+- Prompt: "Can the word deposit be changed to funds?"

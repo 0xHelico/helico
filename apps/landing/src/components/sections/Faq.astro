@@ -3,31 +3,31 @@ const repo = 'https://github.com/0xHelico/helico'
 const faqs = [
 	{
 		q: 'What is Helico, in plain words?',
-		a: 'When you put money into a trading pool, it only earns while the price stays inside a band you chose. Prices drift, and then the money sits idle. Helico watches for that and moves your deposit back into its band, under rules you write down once: which market, how wide, how often, how much must be kept. A contract checks every rule before anything moves, and blocks anything else.',
+		a: 'When you put money into a trading pool, it only earns while the price stays inside a band you chose. Prices drift, and then the money sits idle. Helico watches for that and moves your funds back into their band, under rules you write down once: which market, how wide, how often, how much must be kept. A contract checks every rule before anything moves, and blocks anything else.',
 	},
 	{
 		q: 'What do I need to start?',
-		a: 'A wallet, and a deposit already sitting in a supported market on the Arbitrum network. Helico does not create or hold the deposit; it only moves the one you have, and only under your rules. One deposit per wallet at a time: to switch to another, you end the first yourself, so nothing is ever quietly dropped. Nothing is live yet, so today the honest answer is the code and a rehearsal on a snapshot of the market.',
+		a: 'A wallet, and funds already sitting in a supported market on the Arbitrum network. Helico does not create or hold them; it only moves what you already have, and only under your rules. One market at a time per wallet: to switch, you end the first yourself, so nothing is ever quietly dropped. Nothing is live yet, so today the honest answer is the code and a rehearsal on a snapshot of the market.',
 	},
 	{
 		q: 'Who holds my money?',
-		a: 'You do. Your deposit stays in your wallet as a token that proves you own it. You give the contract permission to move it, not to keep it. A move takes your deposit out, exchanges what is needed, and puts a new deposit straight back in your name. The contract holds the funds for one step and proves, before that step ends, that it kept none.',
+		a: 'You do. Your funds stay in your wallet as a token that proves you own them. You give the contract permission to move them, not to keep them. A move takes your funds out, exchanges what is needed, and puts them straight back in your name. The contract holds the funds for one step and proves, before that step ends, that it kept none.',
 	},
 	{
 		q: 'What can the automation do to it?',
-		a: 'One thing: propose a move inside your rules. It cannot pay itself, it cannot spend more than your deposit released, and it cannot send anything anywhere but back to you or into the pool. A misbehaving automation could move you within your own rules, and nothing else.',
+		a: 'One thing: propose a move inside your rules. It cannot pay itself, it cannot spend more than your funds released, and it cannot send anything anywhere but back to you or into the pool. A misbehaving automation could move you within your own rules, and nothing else.',
 	},
 	{
 		q: 'When does it do nothing?',
-		a: 'Most of the time. It waits while your cooldown runs, and whenever a move would not bring the deposit meaningfully closer to the price, because every move costs a little. And the contract refuses any instruction that does not match the rules it holds for you.',
+		a: 'Most of the time. It waits while your cooldown runs, and whenever a move would not bring your funds meaningfully closer to the price, because every move costs a little. And the contract refuses any instruction that does not match the rules it holds for you.',
 	},
 	{
 		q: 'What stays private?',
-		a: 'How the decision is made. The program that decides runs inside a sealed environment: which deposits it watches, when it looks, and how it sizes a move never leave it. The rules themselves are public on the chain, so anyone can check that a move followed them.',
+		a: 'How the decision is made. The program that decides runs inside a sealed environment: whose funds it watches, when it looks, and how it sizes a move never leave it. The rules themselves are public on the chain, so anyone can check that a move followed them.',
 	},
 	{
 		q: 'Is it live? Is it audited?',
-		a: 'Neither, yet. It is built for Arbitrum One. The contract has a rehearsed deployment, and the whole flow has been run end to end on a snapshot of the real market: an automated decision moved a real deposit and kept 94% of it working, and a second run correctly did nothing. That was a snapshot, not the live network, and the sealed environment was simulated. Twelve AI reviewers and then six more went over the contract; that is not a professional audit, and this page does not call it one.',
+		a: 'Neither, yet. It is built for Arbitrum One. The contract has a rehearsed deployment, and the whole flow has been run end to end on a snapshot of the real market: an automated decision moved real funds and kept 94% of them working, and a second run correctly did nothing. That was a snapshot, not the live network, and the sealed environment was simulated. Twelve AI reviewers and then six more went over the contract; that is not a professional audit, and this page does not call it one.',
 	},
 ]
 ---
