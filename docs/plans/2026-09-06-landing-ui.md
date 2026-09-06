@@ -444,3 +444,29 @@ permalinks stay on GitHub, because that is where those things live.
 
 - "Can the landing redirect to https://docs.helico.site/ instead? Linking to a GitHub README
   feels odd, unless the context really is GitHub." and "In the nav as well as in the content."
+
+## Revision — the bar hands over earlier, and the sheet ends with the button
+
+Seven menu entries and a call to action fit on one row down to about 900px, but "fits" and
+"reads as deliberate" are different things, and before the webfont loads the fallback is wider,
+so "How It Works" is the first label to break across two lines. The bar now hands over to the
+sheet below **1240px**, and the labels never wrap.
+
+In the sheet, "Launch App" shared a row with the last card. It spans the full width and ends
+the sheet on its own now.
+
+The footer's legal paragraph is a copyright line. The caveats it carried are not lost: the FAQ
+answers *"Is it live? Is it audited?"* with *"Neither, yet"*, the panel is captioned *"An
+example, not a live account. Nothing is deployed yet"*, and the docs have a Status page. A
+footer is a signature, not the place to repeat them.
+
+And the bar no longer changes height when a menu opens at the top of the page. Scrolling and
+opening shared one rule, so hovering shrank the bar from 82 to 64 and moved the very thing the
+pointer was aiming at. Scrolling still shortens it; opening only makes it solid.
+
+### Prompts, verbatim in translation
+
+- "And fix the nav: at that width it should already be a hamburger."
+- "And put Launch App at the very bottom on its own."
+- "Replace [the legal paragraph] with just a Helico copyright."
+- "By the way, when I hover the nav at the top of the page, why does its height change?"
