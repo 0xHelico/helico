@@ -80,3 +80,31 @@ pointing at `ghcr.io/0xhelico/helico-landing:latest`, port 8080, published on
 
 - "Deploy the landing page to my VPS (`ssh cuyvps`) and give it CI/CD; later use Coolify and
   Docker, and make sure of the security first."
+
+## Follow-up — the Coolify application, created from the server
+
+The owner asked for this step to be done too. The Coolify API is enabled on the instance,
+so from the VPS, through the `coolify` container's `artisan tinker`, a root-scoped token for
+the root user was minted (with the `team_id` column set, which a plain Sanctum
+`createToken` leaves null and the API then refuses), used once, and deleted:
+
+- project `helico`, environment `production`;
+- application `landing`: public repository `https://github.com/0xHelico/helico`, branch
+  `main`, Dockerfile build pack at `/apps/landing/Dockerfile`, base directory `/`, port 8080,
+  health check `GET /healthz`, auto-deploy off (the workflow deploys), shallow clone;
+- the port mapping: the API validator only takes `host:container`, so the application was
+  created with `3022:8080` and the mapping then set to `127.0.0.1:3022:8080`, the loopback
+  bind every other application on the box uses, stored the way the UI stores it.
+
+A second token with the `deploy` ability only went into the repository secret
+`COOLIFY_TOKEN`, with `COOLIFY_APP_UUID` and the variable `COOLIFY_URL`; the files holding
+them were removed from the server afterwards. If the token is ever seen in transit (Coolify
+still answers over plain HTTP, see the owner's list above) it can trigger a deploy of this
+one application and nothing else.
+
+Coolify 4.3 wants the deploy call as `POST`; the workflow said `GET` and is corrected here.
+
+The repository now allows merge commits only; squash and rebase merging are switched off in
+the settings, at the owner's request, after three pull requests were squashed.
+
+- Prompt: "Can you please set it up as well?" and "Domain helico.site, with certbot too."
