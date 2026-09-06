@@ -288,6 +288,17 @@ Format: date · what was done · the AI's role · what a human verified.
 - **Plan:** revisions in the two plans; tracked in #61.
 - **Verified:** `bun run check`, `python3 scripts/check-readme-links.py` (root README untouched).
 
+### 2026-09-06 — Uniswap plugin: reference pool and smoke on Arbitrum One
+
+- **Done:** `networks.ts` gains the hook-less ETH/USDC 0.05 % pool as Arbitrum One's reference
+  pool, after reading its liquidity from `StateView`; the keyless smoke runs there and the README
+  records it.
+- **AI's role:** read the pool live, made the one-line change, ran the smoke, wrote the docs. The
+  chain move is the collaborator's decision (#58).
+- **Plan:** one-line change tracked in #63; no separate plan document.
+- **Verified:** `typecheck`, `test` (52 pass), `bun run check`; `CHAIN=arbitrum bun run smoke`
+  output quoted in the package README.
+
 <!--
 Template for the next entry:
 
