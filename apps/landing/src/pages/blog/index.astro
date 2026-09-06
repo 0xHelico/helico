@@ -1,0 +1,105 @@
+---
+import Footer from '../../components/sections/Footer.astro'
+import Nav from '../../components/sections/Nav.astro'
+import Base from '../../layouts/Base.astro'
+import { formatDate, loadPosts } from '../../lib/posts'
+
+const { source, posts } = await loadPosts()
+console.info(`[blog] ${posts.length} posts from the ${source}`)
+---
+
+<Base title="Blog · Helico" description="Notes from building Helico: the mandate, the enclave, the vault, and the evidence behind each.">
+	<Nav />
+	<main class="blog">
+		<header class="blog__head">
+			<h1>Blog</h1>
+			<p>Notes from building Helico. Every number on this page is one the repository records.</p>
+		</header>
+		<ol class="blog__list">
+			{posts.map((p) => (
+				<li>
+					<a class="post" href={`/blog/${p.slug}/`}>
+						<span class="post__meta">{p.author} · {formatDate(p.publishedAt)}</span>
+						<h2>{p.title}</h2>
+						<p>{p.summary}</p>
+						<span class="post__foot">{p.readingMinutes} min read{p.tags.length > 0 && <> · {p.tags.join(', ')}</>}</span>
+					</a>
+				</li>
+			))}
+		</ol>
+	</main>
+	<Footer />
+</Base>
+
+<style>
+	.blog {
+		/* 680px of content, the reference's column, plus the page gutters. */
+		max-width: calc(680px + 2 * var(--gutter));
+		margin: 0 auto;
+		box-sizing: border-box;
+		padding: calc(82px + 3rem) var(--gutter) 4rem;
+	}
+	.blog__head h1 {
+		margin: 0;
+		font-size: 2.625rem;
+		font-weight: 700;
+		line-height: 1.24;
+		letter-spacing: -0.011em;
+		color: #242424;
+	}
+	.blog__head p {
+		margin: 0.75rem 0 0;
+		font-size: 1.375rem;
+		line-height: 1.27;
+		color: #6b6b6b;
+	}
+	.blog__list {
+		margin: 3rem 0 0;
+		padding: 0;
+		list-style: none;
+	}
+	.blog__list li + li {
+		border-top: 1px solid rgba(36, 36, 36, 0.1);
+	}
+	.post {
+		display: block;
+		padding: 2rem 0;
+	}
+	.post__meta,
+	.post__foot {
+		display: block;
+		font-size: 0.875rem;
+		line-height: 1.43;
+		color: #6b6b6b;
+	}
+	.post h2 {
+		margin: 0.5rem 0 0.35rem;
+		font-size: 1.5rem;
+		font-weight: 700;
+		line-height: 1.25;
+		letter-spacing: -0.016em;
+		color: #242424;
+	}
+	.post:hover h2 {
+		text-decoration: underline;
+		text-decoration-thickness: 1px;
+		text-underline-offset: 3px;
+	}
+	.post p {
+		margin: 0 0 0.75rem;
+		font-size: 1rem;
+		line-height: 1.5;
+		color: #6b6b6b;
+	}
+	@media (max-width: 899px) {
+		.blog {
+			padding-top: calc(64px + 2rem);
+		}
+		.blog__head h1 {
+			font-size: 2rem;
+		}
+		.blog__head p {
+			font-size: 1.125rem;
+		}
+	}
+</style>
