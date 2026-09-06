@@ -34,10 +34,13 @@ RUN cd apps/app && ../../node_modules/.bin/next build
 # the toolchain nor the workspace.
 FROM node:24-alpine
 WORKDIR /app
+# `::` rather than `0.0.0.0`: inside the container `localhost` resolves to ::1 first, and a
+# server bound only to IPv4 refuses the health check that asks for it by name. Node binds
+# dual-stack on `::`, so both addresses answer.
 ENV NODE_ENV=production \
 	NEXT_TELEMETRY_DISABLED=1 \
 	PORT=8080 \
-	HOSTNAME=0.0.0.0 \
+	HOSTNAME=:: \
 	BE_API_URL=https://api.helico.site
 COPY --from=build /repo/apps/app/.next/standalone ./
 COPY --from=build /repo/apps/app/.next/static ./apps/app/.next/static
