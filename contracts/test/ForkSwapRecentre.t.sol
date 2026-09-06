@@ -5,7 +5,7 @@ import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.s
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
-import {ForkBase} from "./ForkBase.sol";
+import {ArbitrumFork} from "./ForkBase.sol";
 import {HelicoVault} from "../src/HelicoVault.sol";
 import {Mandate, MandateLib, PoolKey} from "../src/Mandate.sol";
 import {TickMath} from "../src/lib/TickMath.sol";
@@ -30,7 +30,7 @@ interface IPositionNft {
 ///      Nothing here is borrowed. The test funds an owner, mints its own position out of range
 ///      through the live PositionManager, and re-centres it, so it does not depend on a
 ///      stranger's position that may flip sides between runs, and it needs no archive node.
-contract ForkSwapRecentreTest is ForkBase {
+contract ForkSwapRecentreTest is ArbitrumFork {
     using MandateLib for PoolKey;
 
     address constant PERMIT2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
@@ -228,8 +228,7 @@ contract ForkSwapRecentreTest is ForkBase {
 
         int24 spacing = demoPool.tickSpacing;
         int24 tick = _tickOf(demoPool);
-        int24 newUpper = (tick / spacing) * spacing + spacing;
-        int24 newLower = newUpper - 20;
+        (int24 newLower, int24 newUpper) = _rangeAboveTick(tick, spacing);
 
         // Enough token1 to carry the price five spacings past the range's upper edge at the
         // liquidity in the pool right now: amount1 = L * (sqrtTarget - sqrtNow) / 2**96.
@@ -251,8 +250,7 @@ contract ForkSwapRecentreTest is ForkBase {
 
         // Re-read: minting the position above may itself have shifted the tick.
         tick = _tickOf(demoPool);
-        newUpper = (tick / spacing) * spacing + spacing;
-        newLower = newUpper - 20;
+        (newLower, newUpper) = _rangeAboveTick(tick, spacing);
 
         vm.prank(agent);
         uint256 newTokenId = vault.recenter(
@@ -293,6 +291,21 @@ contract ForkSwapRecentreTest is ForkBase {
         emit log_named_int("tick before", tick);
         emit log_named_int("tick after the oversized swap", after_);
         emit log_named_uint("liquidity before", liquidityBefore);
+    }
+
+    /// @notice The range this test commits to: the spacing above `tick`, 20 ticks wide.
+    ///
+    /// @dev The extra spacing when the tick already sits on its bucket's last tick is not
+    ///      cosmetic. The vault limits the swap to the sqrt price at the range's upper edge and
+    ///      the pool halts on the last tick inside it, so if that tick is the one the price is
+    ///      already on, the largest swap the vault permits moves nothing — and the test reads as
+    ///      idle instead of as proof. One live tick in `spacing` lands there, which is how this
+    ///      failed on one run and passed on the next against the same code. Reproduce the old
+    ///      shape with `HELICO_FORK_BLOCK=502399995` (ETH/ARB at tick 94819).
+    function _rangeAboveTick(int24 tick, int24 spacing) internal pure returns (int24 lower, int24 upper) {
+        upper = (tick / spacing) * spacing + spacing;
+        if (upper - tick < 2) upper += spacing;
+        lower = upper - 20;
     }
 
     function _sqrtPriceOf(PoolKey memory key) internal view returns (uint160 sqrtPriceX96) {
