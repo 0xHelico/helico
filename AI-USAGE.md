@@ -316,6 +316,25 @@ Format: date · what was done · the AI's role · what a human verified.
   (overflow, hydration, scenario switching, console, axe) with zero findings; output JS is
   React plus framer-motion behind `client:visible`, images under 45 KB each. Not yet deployed.
 
+### 2026-09-06 — Landing page: widths and content
+
+- **Done:** section cards run edge to edge with a 24px gutter and content sits in a 986px column,
+  measured on the reference with a headless browser; the canvas breaks out to 80rem. Content
+  rewritten after a reading of five protocol landing pages and the collaborator's review of
+  the page's claims: a "built with" strip, the seven mandate fields as rule cards linking to
+  pinned lines in the vault, a holds-and-refusals section, `_checkRange` rendered from the
+  vault source at build time, honest test and network counts, a two-row chart with its source,
+  a seven-question FAQ, a closing call to action, and a live tick read from Arbitrum One.
+- **AI's role:** measured the reference, scraped the five sites' text and screenshots, wrote the
+  proposal and, once approved, the copy and components; folded in every point of the
+  collaborator's review. The user chose the sites and approved the proposal; the collaborator's
+  review set the facts straight.
+- **Plan:** revision in [`docs/plans/2026-09-06-landing-ui.md`](docs/plans/2026-09-06-landing-ui.md).
+- **Verified:** `astro check` (0 errors), `astro build`, `bun run check`; widths re-measured at
+  1440, 1920 and 2560 (986px column, 24px gutter, matching the reference to the pixel); the
+  Playwright audit at seven viewports re-run on the build; the built HTML grepped for every
+  claim the review flagged. Still not deployed.
+
 <!--
 Template for the next entry:
 

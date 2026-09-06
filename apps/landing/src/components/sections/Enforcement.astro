@@ -1,10 +1,56 @@
 ---
 const repo = 'https://github.com/0xHelico/helico'
-const gates = [
-	{ name: 'You', what: 'sign the mandate' },
-	{ name: 'Vault', what: 'stores its hash' },
-	{ name: 'Enclave', what: 'decides inside the TEE' },
-	{ name: 'Chain', what: 'executes only what passes' },
+// Permalinks to the vault as it is on main today, so the line numbers stay true when the file moves on.
+const vault = `${repo}/blob/154bcabd85ca3be8f73851bbc55a1a04ea42c6e4/contracts/src/HelicoVault.sol`
+const rules = [
+	{
+		field: 'poolId',
+		rule: 'Only the pool you named. The position and the new range must both hash to it.',
+		line: 489,
+		error: 'PoolNotPermitted',
+	},
+	{
+		field: 'rangeWidthTicks',
+		rule: "Exactly the width you committed, on the pool's tick spacing. Nothing is snapped or rounded.",
+		line: 733,
+		error: 'RangeWidthMismatch',
+	},
+	{
+		field: 'minImprovementBps',
+		rule: 'The new range must sit closer to the price than the old one, by at least this much.',
+		line: 747,
+		error: 'NotEnoughImprovement',
+	},
+	{
+		field: 'cooldownSeconds',
+		rule: 'One move per cooldown, counted from the last one the vault executed.',
+		line: 473,
+		error: 'CooldownNotElapsed',
+	},
+	{
+		field: 'maxLiquidity',
+		rule: 'A cap on how much liquidity one move may touch, measured from the position rather than declared.',
+		line: 486,
+		error: 'LiquidityTooLarge',
+	},
+	{
+		field: 'expiry',
+		rule: 'After this timestamp the mandate is dead and every re-centre reverts.',
+		line: 468,
+		error: 'MandateExpired',
+	},
+	{
+		field: 'minRetainedBps',
+		rule: 'The share of your liquidity a move must keep, read back from the position it minted.',
+		line: 718,
+		error: 'LiquidityNotRetained',
+	},
+	{
+		field: 'and the price',
+		rule: 'The new range must contain the current tick. A band parked where no trade reaches it is refused.',
+		line: 739,
+		error: 'RangeOffMarket',
+	},
 ]
 const templates = [
 	{
@@ -22,24 +68,27 @@ const templates = [
 	{
 		label: 'Hands off',
 		name: 'Guarded',
-		copy: 'Hold unless the improvement is worth the swap; the fee ceiling refuses expensive pools.',
-		chips: ['improve ≥ 50 bps', 'fee ≤ 0.3%', 'cooldown 12 h'],
+		copy: 'Hold unless the improvement is worth the swap, and keep almost all of the position when it is.',
+		chips: ['improve ≥ 50 bps', 'retain 95%', 'cooldown 12 h'],
 	},
 ]
 ---
 
 <section class="wrap enforcement" id="enforcement" aria-labelledby="enforcement-title">
 	<div class="section-card section-card--dark center">
-		<span class="eyebrow">Under the hood</span>
-		<h2 class="headline" id="enforcement-title">The full power of <span class="grad">confidential</span> enforcement</h2>
-		<p class="lede">Decide in the enclave, enforce in the vault. Built on Chainlink CRE and Uniswap v4.</p>
+		<span class="eyebrow">How it works</span>
+		<h2 class="headline" id="enforcement-title">Seven fields. <span class="grad">Every one</span> enforced on chain.</h2>
+		<p class="lede">
+			You sign a mandate once. The enclave decides inside it; the vault checks each field before
+			anything moves, and a re-centre that fails any check reverts.
+		</p>
 		<div class="actions">
 			<a class="btn btn--dark" href={`${repo}#readme`}>Get started</a>
-			<a class="btn btn--ghost" href={`${repo}/blob/main/docs/plans/2026-09-05-mandate-enforced-lp.md`}>Learn more</a>
+			<a class="btn btn--ghost" href={`${vault}#L724`}>Read the check</a>
 		</div>
 
-		<div class="panel" aria-label="A mandate and its four gates">
-			<div class="panel__bar"><i></i><i></i><i></i><span>helico · vault 0x362d…f772 · Arbitrum One</span></div>
+		<div class="panel" aria-label="An example mandate">
+			<div class="panel__bar"><i></i><i></i><i></i><span>helico · vault · Arbitrum One · not deployed yet</span></div>
 			<div class="panel__body">
 				<div class="panel__side">
 					<span class="is-active">Mandate</span><span>Position</span><span>Enclave</span><span>Vault</span><span>Evidence</span>
@@ -47,31 +96,43 @@ const templates = [
 				<div class="panel__main">
 					<div class="panel__head">
 						<div>
-							<div class="panel__title">Mandate · position #1900769</div>
+							<div class="panel__title">Mandate · example position</div>
 							<div class="panel__sub">ETH / ARB 0.05% · Uniswap v4 · hash 0x134be6bb…6225</div>
 						</div>
-						<span class="panel__badge">active</span>
+						<span class="panel__badge">example</span>
 					</div>
 					<dl class="panel__grid">
+						<div><dt>Pool</dt><dd>ETH / ARB 0.05%</dd></div>
 						<div><dt>Range width</dt><dd>20 ticks</dd></div>
-						<div><dt>Retain</dt><dd>≥ 90%</dd></div>
-						<div><dt>Cooldown</dt><dd>1 h</dd></div>
 						<div><dt>Improvement</dt><dd>≥ 50 bps</dd></div>
+						<div><dt>Cooldown</dt><dd>1 h</dd></div>
 						<div><dt>Max liquidity</dt><dd>1e18</dd></div>
 						<div><dt>Expires</dt><dd>in 30 d</dd></div>
+						<div><dt>Retain</dt><dd>≥ 90%</dd></div>
 					</dl>
-					<ol class="gates">
-						{gates.map((g, i) => (
-							<li>
-								<span class="gates__n">{i + 1}</span>
-								<span class="gates__name">{g.name}</span>
-								<span class="gates__what">{g.what}</span>
-							</li>
-						))}
-					</ol>
 				</div>
 			</div>
 		</div>
+		<p class="panel__caption">
+			Illustrative. Nothing is deployed yet. The fields are the seven the vault stores, and the hash is
+			the test vector the enclave and the vault both reproduce.
+		</p>
+
+		<ol class="rules" style="text-align:left">
+			{rules.map((r, i) => (
+				<li class="card rule">
+					<span class="rule__n">{String(i + 1).padStart(2, '0')}</span>
+					<code class="rule__field">{r.field}</code>
+					<p>{r.rule}</p>
+					<a href={`${vault}#L${r.line}`}>{r.error} · line {r.line} ↗</a>
+				</li>
+			))}
+		</ol>
+		<p class="rules__foot">
+			There is no other entry point. <code>recenter</code> and <code>recenterWithSignature</code> end in
+			the same checks, and the swap between the burn and the mint is capped at the edge of the range you
+			signed, so the pool itself halts it there.
+		</p>
 
 		<div class="split">
 			<div>
@@ -195,45 +256,6 @@ const templates = [
 		font-weight: 600;
 		color: #ffffff;
 	}
-	.gates {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
-		gap: 0.6rem;
-		list-style: none;
-		margin: 1rem 0 0;
-		padding: 0;
-	}
-	.gates li {
-		display: grid;
-		grid-template-columns: auto 1fr;
-		gap: 0.15rem 0.6rem;
-		align-items: center;
-		border-radius: 12px;
-		padding: 0.7rem 0.8rem;
-		background: linear-gradient(180deg, rgba(124, 107, 255, 0.16), rgba(124, 107, 255, 0.05));
-		border: 1px solid rgba(124, 107, 255, 0.25);
-	}
-	.gates__n {
-		grid-row: span 2;
-		width: 1.5rem;
-		height: 1.5rem;
-		border-radius: 50%;
-		display: grid;
-		place-items: center;
-		background: #7c6bff;
-		color: #fff;
-		font-size: 0.72rem;
-		font-weight: 700;
-	}
-	.gates__name {
-		font-size: 0.8rem;
-		font-weight: 600;
-		color: #ffffff;
-	}
-	.gates__what {
-		font-size: 0.72rem;
-		color: #b9b8c8;
-	}
 	@media (min-width: 768px) {
 		.panel__body {
 			grid-template-columns: 11rem 1fr;
@@ -244,5 +266,57 @@ const templates = [
 		.panel__main {
 			padding: 1.5rem;
 		}
+	}
+	.panel__caption {
+		margin: 0.9rem auto 0;
+		max-width: 60rem;
+		font-size: 0.75rem;
+		color: #9a98ad;
+	}
+	.rules {
+		display: grid;
+		gap: 0.9rem;
+		grid-template-columns: repeat(auto-fit, minmax(13.5rem, 1fr));
+		margin: clamp(2rem, 4vw, 3rem) 0 0;
+		padding: 0;
+		list-style: none;
+		counter-reset: rule;
+	}
+	.rule {
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
+	}
+	.rule__n {
+		font-family: var(--font-mono);
+		font-size: 0.72rem;
+		color: #b7abff;
+	}
+	.rule__field {
+		font-family: var(--font-mono);
+		font-size: 0.85rem;
+		color: #ffffff;
+	}
+	.rule p {
+		flex: 1;
+		margin: 0.2rem 0 0;
+	}
+	.rule a {
+		margin-top: 0.6rem;
+		font-size: 0.75rem;
+		font-weight: 600;
+		color: #b7abff;
+	}
+	.rules__foot {
+		max-width: 44rem;
+		margin: 1.5rem auto 0;
+		font-size: 0.9rem;
+		line-height: 1.6;
+		color: #b9b8c8;
+	}
+	.rules__foot code {
+		font-family: var(--font-mono);
+		font-size: 0.82rem;
+		color: #ffffff;
 	}
 </style>

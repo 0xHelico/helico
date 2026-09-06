@@ -64,3 +64,54 @@ updates strip, footer with a plain-language disclaimer.
 Verification added: a headless-browser audit script (Playwright, kept outside the repo) that
 loads the production build at seven viewports, checks for horizontal overflow, the island's
 hydration and scenario switching, console errors, and runs axe; it reports zero findings.
+
+## Revision — content, after reading five protocol sites
+
+The user asked for two more things once the layout matched the reference: the reference's
+exact widths, and a content pass informed by five protocol landing pages (a lending
+protocol, a credit network, a yield optimiser, an automated LP manager, and a liquid-staking
+protocol), with a proposal for what Helico should learn from them. The collaborator reviewed
+the page at the same time with one lens, claims that are not true, and requested changes.
+Both sets of changes landed together.
+
+**Widths.** Measured with a headless browser on the reference at 1440, 1920 and 2560: the big
+section cards run edge to edge minus a 24px gutter, and everything inside them, nav and footer
+included, sits in a centred 986px column. The page now does the same; the wrapper class was
+renamed because Tailwind's `container` utility shares the name and its breakpoint caps were
+winning. The canvas alone breaks out of the column (to 80rem), because at 986px it read as too
+small.
+
+**What the five sites share.** One plain-language promise and one benefit line in the hero, live
+numbers, a strip of the protocols used, products as cards, a security section that names each
+mechanism rather than saying "audited", a builders section, trust numbers, an FAQ, a closing
+call to action, and a footer with disclaimers. The two automation products among them are the
+closest to Helico: one names its guards as cards ("rebalances can only touch pre-approved
+contracts; anything else reverts"), the other says when it does *not* act. The credit network
+shows its contract source on the page as a trust device.
+
+**What Helico takes from that, and what it refuses.** Taken: a "built with" strip; the seven
+mandate fields as eight rule cards (seven fields plus the price-inside rule), each linking to
+the line in the vault, pinned to a commit so the anchors stay true; a section on holds and
+refusals ("most of the time, it does nothing"); the `_checkRange` function on the page, read from
+the vault source at build time; a closing call to action; the live tick of the demo pool in the
+hero, read with one `eth_call` to `StateView` on the public Arbitrum One RPC and labelled
+"live". Refused: trust numbers Helico does not have (TVL, years, professional audits) and any
+"trusted by default" framing built on them.
+
+**The collaborator's corrections.** Robinhood Chain mainnet was read-only and the transactions
+ran on Robinhood Chain Testnet, so the networks fact now says exactly that and counts four;
+the two unsourced chart rows (81% and 98%) are gone and the chart keeps the two rows the swap
+plan records; the dark panel no longer shows a vault address or an "active" badge, and carries
+an illustrative caption; the unit-test count is "240+" with the per-package breakdown
+(52 + 116 + 74) and the fork suite is nine tests; the "fee ≤ 0.3%" chip, which is an
+enclave-side config rather than a mandate field, is replaced with a real field; the email input
+that led nowhere is replaced with a "watch on GitHub" button. The FAQ grew from five questions
+to seven (who holds the position, what it costs, "is it live? is it audited?").
+
+### Prompts, verbatim in translation
+
+- "Match the max width; you can test it directly on the reference site."
+- "Study the content of these five sites and think about how Helico should be, from those
+  concepts." (five URLs)
+- "Go on." (to the proposal)
+- "And the canvas is too small."

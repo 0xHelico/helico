@@ -3,23 +3,31 @@ const repo = 'https://github.com/0xHelico/helico'
 const faqs = [
 	{
 		q: 'What is Helico?',
-		a: 'A vault that keeps a Uniswap v4 liquidity position in range under rules the user commits to once: range width, how much liquidity a move must keep, a cooldown, an improvement floor, an expiry. A Chainlink CRE confidential workflow decides when to move; the vault checks every rule on chain before anything happens.',
+		a: 'A vault that keeps a Uniswap v4 liquidity position in range under rules you commit to once: range width, how much liquidity a move must keep, a cooldown, an improvement floor, a cap, an expiry, and the pool. A Chainlink CRE confidential workflow decides when to move; the vault checks every rule on chain before anything happens.',
+	},
+	{
+		q: 'Who holds my position?',
+		a: 'You do. The position NFT stays in your wallet; you approve the vault as an operator, and a re-centre mints the new position straight back to you. Between the burn and the mint the vault holds the tokens for one call, and asserts on chain that it kept none of them before the call returns.',
+	},
+	{
+		q: 'What can the enclave do to my position?',
+		a: 'One thing: propose a re-centre inside your mandate. No path in the vault pays an agent, the swap may only spend what the burn returned, and the only addresses in the plan are yours and the pool\'s. A rogue agent can move you inside your own terms, and nothing else.',
 	},
 	{
 		q: 'What stays confidential?',
 		a: 'The decision process: which positions the enclave watches, when it reads the pool, the RPC traffic, and how it sizes the swap and the mint. The mandate itself is public on chain; its hash in every report proves the enclave decided against the terms the vault holds, not stale ones.',
 	},
 	{
-		q: 'Can the agent take my funds?',
-		a: 'No path in the vault pays an agent. A re-centre burns your position, swaps only what the burn returned, and mints the new range back to you; the only addresses it writes into the plan are yours and the pool\'s. A rogue agent can move you inside your own terms, and nothing else.',
+		q: 'What does it cost?',
+		a: 'Gas for the re-centre and the fee of the swap, both paid out of the position when a move happens. The vault takes nothing for itself; there is no protocol fee and no token.',
 	},
 	{
 		q: 'Which chain does it run on?',
-		a: 'Arbitrum One, where Uniswap v4 and a Chainlink CRE forwarder both exist. The plugins resolve any chain from config; the tests ran real transactions on Base Sepolia and Robinhood Chain and fork tests on Arbitrum.',
+		a: 'Arbitrum One, where Uniswap v4 and a Chainlink CRE forwarder both exist. The plugins resolve any chain from config; the tests sent real transactions on Base Sepolia and Robinhood Chain Testnet, read Robinhood Chain mainnet, and run the swap on a fork of Arbitrum One.',
 	},
 	{
-		q: 'Is it live?',
-		a: 'Not yet. The vault has a rehearsed deploy script, the workflow runs in the CRE simulator, and the enclave\'s signature path is proven end to end in tests. A production enclave needs the Confidential Workflows beta; until then the simulator stands in for it, and this page says so.',
+		q: 'Is it live? Is it audited?',
+		a: 'Neither, yet. The vault has a rehearsed deploy script, the workflow runs in the CRE simulator, and the enclave\'s signature path is proven end to end in tests. Twelve AI audit agents and a six-agent pass ran over the vault; that is not a professional audit, and this page does not call it one. A production enclave needs the Confidential Workflows beta.',
 	},
 ]
 ---

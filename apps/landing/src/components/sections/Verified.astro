@@ -1,18 +1,17 @@
 ---
 const repo = 'https://github.com/0xHelico/helico'
+const swapPlan = `${repo}/blob/main/docs/plans/2026-09-05-vault-swap-recentre.md`
 const facts = [
-	{ n: '236', unit: 'unit tests', copy: 'across the two plugins and the vault, run in CI on every pull request.' },
-	{ n: '10', unit: 'fork tests', copy: 'that mint, swap, and re-centre against a fork of Arbitrum One.' },
-	{ n: '12', unit: 'audit agents', copy: 'ran over the vault before its rewrite; a six-agent pass followed.' },
-	{ n: '3', unit: 'networks exercised', copy: 'Base Sepolia and Robinhood Chain with real transactions, Arbitrum One on a fork and read-only.' },
+	{ n: '240+', unit: 'unit tests', copy: '52 in the Uniswap plugin, 116 in the CRE plugin, 74 in the vault; CI runs them on every pull request.' },
+	{ n: '9', unit: 'fork tests', copy: 'that mint, swap, and re-centre against a fork of Arbitrum One.' },
+	{ n: '12', unit: 'AI audit agents', copy: 'ran over the vault before its rewrite; a six-agent pass followed. Not a professional audit, and not called one.' },
+	{ n: '4', unit: 'networks exercised', copy: 'Base Sepolia and Robinhood Chain Testnet with real transactions, Robinhood Chain mainnet read-only, Arbitrum One on a fork.' },
 	{ n: '3', unit: 'ways to check one digest', copy: 'the EIP-712 authorisation matches between the enclave, the vault, and cast.' },
 	{ n: 'MIT', unit: 'open source', copy: 'every plan, prompt, and AI-usage note committed alongside the code.' },
 ]
 const bars = [
-	{ label: 'Burn and mint, out of range', pct: 0, note: 'nothing can be minted' },
-	{ label: 'Burn and mint, in range', pct: 13, note: 'value returned to the wallet' },
-	{ label: 'With the vault\'s swap', pct: 81, note: 'measured on a fork' },
-	{ label: 'With the enclave\'s sizing', pct: 98, note: 'what the mandate asks for' },
+	{ label: 'Out of range, no swap', pct: 0, note: 'nothing can be minted' },
+	{ label: 'In range, no swap', pct: 13, note: 'the rest went back to the wallet' },
 ]
 ---
 
@@ -36,13 +35,13 @@ const bars = [
 
 		<div class="split">
 			<div>
-				<h3>What a re-centre keeps.</h3>
-				<p>An out-of-range position holds one token. Without a swap it cannot fund a new range at all; with the swap inside the vault it keeps most of its liquidity.</p>
+				<h3>Why the swap is inside the vault.</h3>
+				<p>An out-of-range position holds one token. Burn it and mint a new range without a swap, and the pool cannot take the second side: nothing is minted out of range, and 13% survives in range. These two rows are the reason the vault swaps between the burn and the mint.</p>
 			</div>
 		</div>
 		<div class="card chart" style="text-align:left">
 			<div class="chart__head">
-				<span>Liquidity retained by a re-centre</span>
+				<span>Liquidity a re-centre keeps without a swap</span>
 				<span class="chart__legend">share of the position's liquidity</span>
 			</div>
 			<ul class="bars">
@@ -55,6 +54,11 @@ const bars = [
 					</li>
 				))}
 			</ul>
+			<p class="chart__foot">
+				Measured against a live pool before the swap existed and recorded in
+				<a href={swapPlan}>the swap plan</a>. How much the swap path keeps depends on the pool at the
+				time, so it is not charted here.
+			</p>
 		</div>
 	</div>
 </section>
@@ -149,5 +153,15 @@ const bars = [
 				'label track pct'
 				'label note pct';
 		}
+	}
+	.chart__foot {
+		margin: 1rem 0 0;
+		font-size: 0.78rem;
+		line-height: 1.55;
+		color: #5b6270;
+	}
+	.chart__foot a {
+		color: #5d4ce6;
+		font-weight: 600;
 	}
 </style>

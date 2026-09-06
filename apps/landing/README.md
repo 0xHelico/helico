@@ -1,7 +1,8 @@
 # @helico/landing
 
-The landing page, Astro 7. A long single page: nav, hero with the canvas, a stay-updated strip,
-the dark "under the hood" section, build, verified-by-default facts, FAQ, footer. The canvas is a
+The landing page, Astro 7. A long single page: nav, hero with the canvas and a live tick, a
+"built with" strip, the dark "seven fields" section, holds and refusals, the vault's range check
+rendered from source, build, verified-by-default facts, FAQ, a closing call to action, footer. The canvas is a
 React island that cycles through four scripted scenarios (commit a mandate, re-centre through
 the enclave, refuse tampered thresholds, hold while in range) with the chat on the left and what
 happened behind it on the right. Illustrative; the numbers are the ones the repository recorded.
@@ -21,7 +22,7 @@ bun run --filter @helico/landing typecheck   # astro check
 | | |
 |---|---|
 | Page composition | `src/pages/index.astro` |
-| Sections | `src/components/sections/*.astro` (Nav, Hero, Updates, Enforcement, Build, Verified, Faq, Footer) |
+| Sections | `src/components/sections/*.astro` (Nav, Hero, BuiltWith, Enforcement, Quiet, Open, Build, Verified, Faq, Commit, Updates, Footer) |
 | Head, icons, metadata | `src/layouts/Base.astro`, `public/site.webmanifest` |
 | The canvas island | `src/components/canvas/HeroCanvas.tsx` (frame), `TuiCanvas.tsx` and `TgCanvas.tsx` (chat surfaces), `OutputCanvas.tsx` and `glyphs.tsx` (the voyage) |
 | Scenarios | `src/components/canvas/cycles.ts` (chat), `provenance.ts` (stations) |
