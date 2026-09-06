@@ -8,6 +8,7 @@ import {
 	type Mandate,
 	mandateFromSecrets,
 	mandateHash,
+	mandateRefusedBecause,
 	toContractMandate,
 } from './mandate'
 
@@ -99,5 +100,47 @@ describe('the conversions to and from the contract', () => {
 
 	test('expiry crosses as a bigint, because that is what a uint64 is to viem', () => {
 		expect(toContractMandate(mandate).expiry).toBe(BigInt(mandate.expiry))
+	})
+})
+
+describe('mandateRefusedBecause', () => {
+	// Spacing 10 divides 1000, so the fixture above is sound to begin with.
+	const at = (over: Partial<Mandate> = {}, tickSpacing = 10) =>
+		mandateRefusedBecause({ ...mandate, ...over }, { tickSpacing, nowSeconds: 1_700_000_000 })
+
+	test('terms the vault would accept are not refused', () => {
+		expect(at()).toBeUndefined()
+	})
+
+	test.each([
+		['MandateExpired', { expiry: 1_600_000_000 }, 10],
+		['RangeWidthZero', { rangeWidthTicks: 0 }, 10],
+		['MaxLiquidityZero', { maxLiquidity: 0n }, 10],
+		['ImprovementOutOfRange', { minImprovementBps: 10_000 }, 10],
+		['RetentionOutOfRange', { minRetainedBps: 10_001 }, 10],
+		['CooldownZero', { cooldownSeconds: 0 }, 10],
+		['RangeWidthNotSpaced', {}, 60],
+	] as [string, Partial<Mandate>, number][])(
+		'names %s the way the contract does',
+		(error, over, spacing) => {
+			expect(at(over, spacing)).toBe(error)
+		},
+	)
+
+	test('every name it can return is an error the ABI can decode', () => {
+		const declared = new Set(
+			vaultAbi.filter((i) => i.type === 'error').map((i) => (i as { name: string }).name),
+		)
+		for (const [over, spacing] of [
+			[{ expiry: 1_600_000_000 }, 10],
+			[{ rangeWidthTicks: 0 }, 10],
+			[{ maxLiquidity: 0n }, 10],
+			[{ minImprovementBps: 10_000 }, 10],
+			[{ minRetainedBps: 10_001 }, 10],
+			[{ cooldownSeconds: 0 }, 10],
+			[{}, 60],
+		] as [Partial<Mandate>, number][]) {
+			expect(declared).toContain(at(over, spacing) as string)
+		}
 	})
 })
