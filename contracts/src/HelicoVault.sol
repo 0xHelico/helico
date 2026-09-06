@@ -229,6 +229,7 @@ contract HelicoVault is
     error LiquidityNotRetained();
     error RetentionOutOfRange();
     error CooldownZero();
+    error MandateAlreadyActive(uint256 tokenId);
     error ZeroAddress();
     error NotAContract();
     error UpgradeNotScheduled();
@@ -304,6 +305,21 @@ contract HelicoVault is
         if (int24(uint24(m.rangeWidthTicks)) % key.tickSpacing != 0) revert RangeWidthNotSpaced();
 
         Account storage a = _accounts[msg.sender];
+        // One position per address, and the user is told rather than left to find out.
+        //
+        // Accounts are keyed by owner, not by tokenId, and that was the right call: a tokenId
+        // is destroyed by the very action it authorises and it changes hands when the NFT is
+        // sold, so the mandate has to follow the person. But it turned "one mandate per
+        // position" into "one mandate per person" without anyone deciding that, and a second
+        // `setMandate` used to overwrite the first — leaving a position the user still believed
+        // was managed, silently unmanaged.
+        //
+        // Refusing is the honest version of the same limit. Re-committing terms on the position
+        // already under mandate still works, which is what changing your mind looks like;
+        // moving to a different position means `revoke()` first, so the moment the old one
+        // stops being managed is a transaction the user sent.
+        if (a.active && a.tokenId != tokenId) revert MandateAlreadyActive(a.tokenId);
+
         a.mandate = m;
         a.tokenId = tokenId;
         a.active = true;

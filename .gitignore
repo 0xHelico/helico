@@ -1,32 +1,37 @@
-node_modules/
+node_modules
 .env
 .env.local
 .env.*.local
 .DS_Store
-dist/
-build/
-out/
-cache/
-.next/
+dist
+build
+out
+cache
+.next
 *.log
 
+# A trailing slash matches a directory only, so a *symlink* of the same name slips past the
+# rule and gets committed. That happened twice in one afternoon — `node_modules` and
+# `contracts/lib`, both symlinks made in a worktree to skip a reinstall, both carrying an
+# absolute home path into a public repository. No trailing slashes here.
+
 # Foundry
-broadcast/
-artifacts/
+broadcast
+artifacts
 
 # CRE
-.cre/
+.cre
 
 # Turborepo
-.turbo/
+.turbo
 
 # Astro generated types
-.astro/
+.astro
 
 # CRE simulator scratch files
 .cre_build_tmp.*
 
 # Foundry
-contracts/out/
-contracts/cache/
-contracts/lib/
+contracts/out
+contracts/cache
+contracts/lib

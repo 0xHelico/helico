@@ -7,6 +7,16 @@ The user keeps their position NFT and approves the vault to act on it; **revokin
 approval, or calling `revoke`, ends the agent's authority immediately** and cannot be blocked by
 the agent, the guardian, or a pending upgrade.
 
+> **One address manages one position at a time.** Accounts are keyed by owner rather than by
+> tokenId, because a tokenId is destroyed by the very action it authorises and changes hands
+> when the NFT is sold — so the mandate has to follow the person. The cost is this limit, and
+> it is real: a provider holding a wide base and a narrow band on top can automate one of them.
+>
+> `setMandate` on a second position **reverts** with `MandateAlreadyActive`. Re-committing terms
+> on the position already under mandate still works; moving to a different one means `revoke()`
+> first, so the moment the old position stops being managed is a transaction the user sent
+> rather than something they discover later.
+
 The vault holds nothing **across a transaction**. It is not a custodian and holds no balance
 between calls, but tokens do exist in it between the burn and the mint of a single re-centre,
 because a swap has to sit there. The contract asserts on chain, at the end of every re-centre,

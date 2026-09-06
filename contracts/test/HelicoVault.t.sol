@@ -188,6 +188,8 @@ contract HelicoVaultTest is Test {
     function test_RejectsMovementBelowTheCommittedImprovement() public {
         uint256 offset = pm.mintTo(user, poolKey, 0, 100, LIQUIDITY);
         vm.prank(user);
+        vault.revoke();
+        vm.prank(user);
         vault.setMandate(offset, mandate);
         stateView.setTick(poolKey.hashPoolKey(), 4);
 
@@ -199,6 +201,8 @@ contract HelicoVaultTest is Test {
     function test_AcceptsMovementAtTheCommittedImprovement() public {
         uint256 offset = pm.mintTo(user, poolKey, 0, 100, LIQUIDITY);
         vm.prank(user);
+        vault.revoke();
+        vm.prank(user);
         vault.setMandate(offset, mandate);
         stateView.setTick(poolKey.hashPoolKey(), 4);
 
@@ -206,6 +210,64 @@ contract HelicoVaultTest is Test {
         vm.prank(agent);
         uint256 moved = vault.recenter(_params(-40, 60));
         assertEq(pm.ownerOf(moved), user);
+    }
+
+    // --- one position per address ---------------------------------------------------------
+
+    /// @notice A second position is refused, not silently swapped in.
+    ///
+    /// @dev The bug this replaces was quiet: `setMandate` on another position overwrote the
+    ///      first, and the user was left with a position they believed was managed and was not.
+    ///      Accounts are keyed by owner because a tokenId is destroyed by the very action it
+    ///      authorises — right for #34, and it collapsed "one per position" into "one per
+    ///      person" without anyone choosing that. The limit stays; the silence does not.
+    function test_ASecondPositionIsRefusedRatherThanSwappedIn() public {
+        uint256 other = pm.mintTo(user, poolKey, -400, -300, LIQUIDITY);
+
+        vm.prank(user);
+        vm.expectRevert(abi.encodeWithSelector(HelicoVault.MandateAlreadyActive.selector, tokenId));
+        vault.setMandate(other, mandate);
+
+        assertEq(vault.positionOf(user), tokenId, "the first position is still the managed one");
+        assertTrue(vault.isActive(user), "and still managed");
+    }
+
+    /// @notice Changing your mind about the terms is not the same as changing position.
+    function test_TheSamePositionCanBeRecommittedWithNewTerms() public {
+        Mandate memory wider = mandate;
+        wider.rangeWidthTicks = 200;
+
+        vm.prank(user);
+        vault.setMandate(tokenId, wider);
+
+        assertEq(vault.mandateOf(user).rangeWidthTicks, 200, "the new terms took");
+        assertEq(vault.positionOf(user), tokenId);
+    }
+
+    /// @notice The way to move to another position: end the first, on purpose.
+    function test_RevokingFreesTheAddressForAnotherPosition() public {
+        uint256 other = pm.mintTo(user, poolKey, -400, -300, LIQUIDITY);
+
+        vm.startPrank(user);
+        vault.revoke();
+        vault.setMandate(other, mandate);
+        vm.stopPrank();
+
+        assertEq(vault.positionOf(user), other, "the second position is managed now");
+    }
+
+    /// @notice Two people are two accounts. The limit is per address, not global.
+    function test_AnotherAddressIsUnaffected() public {
+        address second = makeAddr("second user");
+        uint256 theirs = pm.mintTo(second, poolKey, -300, -200, LIQUIDITY);
+
+        vm.startPrank(second);
+        pm.setApprovalForAll(address(vault), true);
+        vault.setMandate(theirs, mandate);
+        vm.stopPrank();
+
+        assertEq(vault.positionOf(second), theirs);
+        assertEq(vault.positionOf(user), tokenId, "and the first user is untouched");
     }
 
     function test_RejectsLiquidityOverCap() public {
