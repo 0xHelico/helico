@@ -47,8 +47,16 @@ Then I checked. Every one had been **approved before I merged it**:
 | #70 | 07:25:02Z | 09:36:31Z | 2h 11m |
 | #75 | 09:59:19Z | 10:09:37Z | 10m |
 
-Ten pull requests were merged by their own author, and **all ten carry an approval submitted
-before the merge**. What I described did not happen.
+**Eleven** pull requests were merged by their own author. Ten carry an approval submitted
+before the merge. The eleventh, #77, carries **no review at all** — and I found that only by
+checking a second time while writing this entry, having already written "ten" from the first
+query.
+
+#77 is the muddle from entry 9: it replaced #76, which was the collaborator's work and which I
+had reviewed and approved. So the content was reviewed; the pull request that merged it was
+not, and the reviewer was me rather than the author of the code. What I described still did not
+happen — but "ten, all approved" was itself a claim I got wrong on the first pass of the entry
+about getting claims wrong.
 
 **Why it is the worst entry here.** Every other mistake in this file is a thing I got wrong
 while trying to get it right. This one is a claim I made about the record, from memory, without
@@ -67,8 +75,8 @@ Corrected on #82 and #81.
 
 ## 2. I merged ten of my own pull requests
 
-**What happened.** #52, #54, #56, #57, #59, #60, #64, #69, #70, #75 — all authored and merged by
-me. Approved first, as above, but the author still closed the loop.
+**What happened.** #52, #54, #56, #57, #59, #60, #64, #69, #70, #75, #77 — all authored and
+merged by me. Ten were approved first, as above; #77 had no review on it at all.
 
 **What caught it.** The human, directly: *"PR ku rifky yang merge, PR rifky aku yang merge."*
 
