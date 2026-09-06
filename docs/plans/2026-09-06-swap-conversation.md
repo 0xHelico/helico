@@ -84,10 +84,38 @@ internal/httpapi          the route, the limiter, the 503 when unconfigured
 
 ## Verification
 
+Every address in the registry was checked against Arbitrum One before it shipped, with
+`symbol()` and `decimals()` over `eth_call`:
+
+| Ticker used | Address | The contract says |
+|---|---|---|
+| WETH | `0x82aF…Bab1` | `WETH`, 18 |
+| USDC | `0xaf88…5831` | `USDC`, 6 |
+| USDT | `0xFd08…Cbb9` | **`USD₮0`**, 6 |
+| ARB | `0x912C…6548` | `ARB`, 18 |
+
+The one mismatch is real and is written down rather than smoothed over: Tether on Arbitrum
+reports `USD₮0`, which nobody types, so `USDT` is the ticker in conversation and the address is
+Tether's. `ETH` is the zero address, which is how Uniswap v4 names the native coin.
+
 Table tests over the checks, with a fake model served by `httptest`: a full intent, a missing
 amount, an unknown symbol, identical tokens, an amount with too many decimals, junk from the
-model, a slow model, the unconfigured 503, and the limiter's 429. Then one real call against an
-OpenAI-compatible endpoint from a local `.env`, recorded here rather than committed.
+model, a slow model, the unconfigured 503, and the limiter's 429. Then real calls against an OpenAI-compatible endpoint, with the key from a local file rather
+than this repository. Four messages, one process, `gpt-4o-mini`:
+
+| Message | Answer |
+|---|---|
+| "swap half an ETH into USDC" | intent: 0.5 ETH → USDC, `500000000000000000` base units, USDC's registry address |
+| "I want to move some ARB into stablecoins" | no intent; "What amount of ARB do you want to swap?", needs `amount` |
+| "swap 2 ETH into mooncoin" | no intent; `"MOON" is not a token I know on Arbitrum One; I know ETH, WETH, USDC, USDT, ARB.` |
+| "buy 100 USDC with ether" | no intent; "How much ETH are you giving?", needs `amount` |
+
+The third is the one worth keeping: the model produced a token that does not exist, and the
+refusal came from the registry rather than from the model changing its mind.
+
+The fourth shows a limit rather than a fault. This is exact-input only, so "buy 100 USDC" is
+answered with a question about the ETH side instead of being turned into an exact-output swap.
+That is written in the README rather than smoothed over.
 
 ## Prompt, verbatim in translation
 

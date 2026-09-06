@@ -600,6 +600,23 @@ Format: date · what was done · the AI's role · what a human verified.
   exists). The SSH password test, the sudo rights and the port list were checked on the box,
   not assumed. The laptop's Docker daemon was not running, so the local check is the server's.
 
+### 2026-09-06 — Backend: the swap conversation
+
+- **Done:** `internal/swap` (a token registry whose addresses were read from Arbitrum One, the
+  checks that turn a model's draft into an intent or a refusal, an OpenAI-compatible client, and
+  the service that composes its own confirmation sentence), `POST /api/swap/intent` with a rate
+  limiter and a 503 when no model is configured, the `BE_LLM_*` and `BE_SWAP_*` settings, and the
+  README section. The half of #99 that is not the enclave's; #101 is the other half.
+- **AI's role:** wrote it, on the owner's "continue, you execute". The design rule it follows is
+  the vault's: the model proposes, the code checks, and an address can only come from the file
+  the project committed.
+- **Verified:** `go vet`, `gofmt`, `go test -race ./...` across every package; table tests for the
+  amount arithmetic and each refusal; a fake model over `httptest` for the endpoint, the 503, the
+  429 and the limiter's refill. Then four real messages against `gpt-4o-mini`, including one where
+  the model invented a token and the registry refused it — the table is in the plan. Each token
+  address was checked on chain with `symbol()` and `decimals()`, which is how the `USD₮0` naming
+  came to be written down.
+
 <!--
 Template for the next entry:
 
