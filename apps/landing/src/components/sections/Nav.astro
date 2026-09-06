@@ -1,6 +1,6 @@
 ---
 import { Image } from 'astro:assets'
-import logo from '../../assets/logo.webp'
+import logoNav from '../../assets/logo-nav.webp'
 const repo = 'https://github.com/0xHelico/helico'
 
 // Two-tone 40px icons supplied by the user, in the reference's style; the colours are ours.
@@ -78,7 +78,7 @@ const menus: Menu[] = [
 <header class="nav" data-nav>
 	<div class="wrap nav__inner">
 		<a class="nav__brand" href="#hero" aria-label="Helico, back to top">
-			<Image src={logo} alt="" width={22} height={22} densities={[1, 2]} />
+			<Image src={logoNav} alt="" width={28} height={28} densities={[1, 2]} />
 			<span>helico</span>
 		</a>
 		<div class="nav__right">
@@ -121,7 +121,7 @@ const menus: Menu[] = [
 <div class="nav__sheet" id="nav-sheet" data-sheet role="dialog" aria-modal="true" aria-label="Menu" hidden>
 	<div class="nav__sheet-top">
 		<a class="nav__brand" href="#hero" aria-label="Helico, back to top" data-sheet-link>
-			<Image src={logo} alt="" width={22} height={22} densities={[1, 2]} />
+			<Image src={logoNav} alt="" width={28} height={28} densities={[1, 2]} />
 			<span>helico</span>
 		</a>
 		<button type="button" class="nav__burger" data-sheet-close aria-label="Close menu">
@@ -264,10 +264,16 @@ const menus: Menu[] = [
 		display: inline-flex;
 		align-items: center;
 		gap: 0.4rem;
-		font-size: 0.9375rem;
-		font-weight: 550;
-		letter-spacing: -0.02em;
-		color: var(--ink-90);
+		/* The wordmark reads like the reference's: large, heavy, tight. */
+		font-size: 1.375rem;
+		font-weight: 750;
+		letter-spacing: -0.045em;
+		line-height: 1;
+		color: var(--ink-solid);
+	}
+	.nav__brand img {
+		width: 28px;
+		height: 28px;
 	}
 	.nav__links {
 		display: none;
