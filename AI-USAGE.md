@@ -391,6 +391,16 @@ Format: date · what was done · the AI's role · what a human verified.
 - **Verified:** `astro check` (0 errors), `astro build`, the Playwright audit at seven viewports,
   a transition probe (row height 0 → 139px at 90 ms → 206px open → closed again on leave).
 
+### 2026-09-06 — Landing page: the bar
+
+- **Done:** the nav is a fixed, transparent 82px bar over the hero that becomes a 64px white bar
+  with a hairline on scroll; logo left, links and button grouped on the right, spaced as the
+  reference's.
+- **AI's role:** measured the reference at three widths, wrote the CSS and the scroll toggle,
+  read the numbers back from the build. The user asked for the change.
+- **Verified:** `astro check` (0 errors), `astro build`, the Playwright audit at seven viewports,
+  and a probe of the bar at the top and after scrolling.
+
 <!--
 Template for the next entry:
 

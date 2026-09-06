@@ -5,7 +5,7 @@ import { HeroCanvas } from '../canvas/HeroCanvas'
 const repo = 'https://github.com/0xHelico/helico'
 ---
 
-<section class="wrap" id="hero" aria-labelledby="hero-title">
+<section class="wrap hero-wrap" id="hero" aria-labelledby="hero-title">
 	<div class="section-card center hero">
 		<div class="hero__copy">
 			<span class="eyebrow"><Image src={logo} alt="" width={20} height={20} densities={[1, 2]} /> Helico Vault</span>
@@ -24,9 +24,19 @@ const repo = 'https://github.com/0xHelico/helico'
 </section>
 
 <style>
+	.hero-wrap {
+		/* The card starts at the top of the page, under the fixed, transparent nav. */
+		margin-top: 0;
+	}
 	.hero {
 		/* The copy keeps the page's column; the canvas below breaks out of it. */
 		padding-inline: clamp(1.25rem, 4vw, 3rem);
+		padding-top: calc(82px + clamp(2.5rem, 5vw, 4.5rem));
+	}
+	@media (max-width: 899px) {
+		.hero {
+			padding-top: calc(64px + 2.5rem);
+		}
 	}
 	.hero__copy {
 		max-width: var(--content-max);

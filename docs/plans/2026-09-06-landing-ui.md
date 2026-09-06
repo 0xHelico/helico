@@ -239,3 +239,17 @@ position.") with the explanation in the line under it.
   style."
 - "And when hovering a menu there is an animation, the menu comes down, not appearing at once."
 
+## Revision — the bar itself
+
+The user found the bar too tall and wanted the logo alone on the left with everything else on
+the right. Measured on the reference at 1000, 1280 and 1440: a fixed, transparent 82px bar over
+the hero card (which starts at the top of the page, under it), becoming a 64px white bar with a
+hairline once the page scrolls; the wordmark 16px tall; the links 8px apart and the button 16px
+after them, the group flush with the right edge of the column. The page now does the same, and
+the numbers read back equal: bar 82 then 64, links 8px apart, button 16px after, its right edge
+on the column's edge, the hero card at y = 0.
+
+### Prompt, verbatim in translation
+
+- "The nav is too tall, and it should be the logo on the left and the rest on the right."
+

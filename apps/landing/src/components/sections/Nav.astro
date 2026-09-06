@@ -78,16 +78,16 @@ const menus: Menu[] = [
 <header class="nav" data-nav>
 	<div class="wrap nav__inner">
 		<a class="nav__brand" href="#hero" aria-label="Helico, back to top">
-			<Image src={logo} alt="" width={28} height={28} densities={[1, 2]} />
+			<Image src={logo} alt="" width={22} height={22} densities={[1, 2]} />
 			<span>helico</span>
 		</a>
-		<nav class="nav__links" aria-label="Primary">
-			{menus.map((m) => (
-				<button type="button" data-menu={m.id} aria-expanded="false" aria-controls={`menu-${m.id}`}>{m.label}</button>
-			))}
-			<a href="#faq">FAQ</a>
-		</nav>
 		<div class="nav__right">
+			<nav class="nav__links" aria-label="Primary">
+				{menus.map((m) => (
+					<button type="button" data-menu={m.id} aria-expanded="false" aria-controls={`menu-${m.id}`}>{m.label}</button>
+				))}
+				<a href="#faq">FAQ</a>
+			</nav>
 			<a class="btn btn--ink btn--small nav__cta" href={repo}>Get Started</a>
 			<button type="button" class="nav__burger" data-burger aria-expanded="false" aria-controls="nav-sheet" aria-label="Open menu">
 				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
@@ -121,7 +121,7 @@ const menus: Menu[] = [
 <div class="nav__sheet" id="nav-sheet" data-sheet role="dialog" aria-modal="true" aria-label="Menu" hidden>
 	<div class="nav__sheet-top">
 		<a class="nav__brand" href="#hero" aria-label="Helico, back to top" data-sheet-link>
-			<Image src={logo} alt="" width={28} height={28} densities={[1, 2]} />
+			<Image src={logo} alt="" width={22} height={22} densities={[1, 2]} />
 			<span>helico</span>
 		</a>
 		<button type="button" class="nav__burger" data-sheet-close aria-label="Close menu">
@@ -190,6 +190,11 @@ const menus: Menu[] = [
 		if (current !== null && e.target instanceof Node && !nav?.contains(e.target)) set(null)
 	})
 
+	// Transparent over the hero, a shorter white bar once the page has scrolled, like the reference.
+	const onScroll = () => nav?.toggleAttribute('data-scrolled', window.scrollY > 8)
+	window.addEventListener('scroll', onScroll, { passive: true })
+	onScroll()
+
 	// The small-screen sheet: the burger opens it, the cross, Escape, a link, or a wide viewport close it.
 	const sheet = document.querySelector<HTMLElement>('[data-sheet]')
 	const burger = document.querySelector<HTMLButtonElement>('[data-burger]')
@@ -214,30 +219,52 @@ const menus: Menu[] = [
 </script>
 
 <style>
+	/* Measured on the reference: a fixed, transparent 82px bar over the hero that becomes a 64px
+	   white bar with a hairline once the page scrolls; the wordmark 16px tall; links 8px apart
+	   and the button 16px after them, all flush right. */
 	.nav {
-		position: sticky;
+		position: fixed;
 		top: 0;
+		left: 0;
+		right: 0;
 		z-index: 50;
-		background: rgba(255, 255, 255, 0.85);
+		height: 82px;
+		background: transparent;
+		transition:
+			height 0.2s,
+			background-color 0.2s,
+			box-shadow 0.2s;
+	}
+	.nav[data-scrolled],
+	.nav[data-open] {
+		height: 64px;
+		background: rgba(255, 255, 255, 0.92);
 		-webkit-backdrop-filter: blur(10px);
 		backdrop-filter: blur(10px);
+		box-shadow: 0 1px 0 rgba(0, 0, 0, 0.05);
 	}
 	.nav[data-open] {
 		background: #ffffff;
 	}
 	.nav__inner {
 		max-width: var(--content-max);
+		height: 100%;
 		margin-top: 0;
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		gap: 1rem;
-		min-height: 82px;
+	}
+	.nav__right {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
 	}
 	.nav__brand {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: 0.4rem;
+		font-size: 0.9375rem;
 		font-weight: 550;
 		letter-spacing: -0.02em;
 		color: var(--ink-90);
@@ -247,7 +274,7 @@ const menus: Menu[] = [
 	}
 	.nav__links {
 		display: none;
-		gap: 0.25rem;
+		gap: 0.5rem;
 		font-size: 0.875rem;
 		font-weight: 450;
 		color: var(--ink-65);
@@ -406,11 +433,6 @@ const menus: Menu[] = [
 		height: 12px;
 		color: rgba(39, 34, 40, 0.4);
 	}
-	.nav__right {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-	}
 	.nav__burger {
 		display: inline-flex;
 		align-items: center;
@@ -512,8 +534,14 @@ const menus: Menu[] = [
 		}
 	}
 	@media (max-width: 899px) {
+		.nav {
+			height: 64px;
+		}
 		.nav__panel {
 			display: none;
+		}
+		.nav__sheet-top {
+			min-height: 64px;
 		}
 	}
 </style>
