@@ -99,6 +99,18 @@ replaced is refused rather than executed against the new ones. A nonce makes it 
 Every mandate rule still applies: the signature says *who* authorised an action, never *what*
 they were allowed to authorise.
 
+### Batching
+
+`multicall` is inherited, so a relayer holding authorisations for several owners lands them in
+one transaction rather than several. A batch is all or nothing, and `delegatecall` preserves the
+caller, so a user batching their own calls is still the one making them.
+
+What rules out the usual `Multicall` hazard — one `msg.value` counted by every call in a batch —
+is that **`multicall` is not payable**, so there is no value in the batch to count. Not the
+absence of payable functions: the vault has one, `upgradeToAndCall` from UUPS.
+`scripts/check-no-payable.py` guards the invariant that actually matters, in CI, because a
+Solidity test can only show that today's `multicall` rejects value.
+
 ## Roles
 
 `AGENT_ROLE` proposes actions and can do nothing outside a mandate. `GUARDIAN_ROLE` pauses
@@ -164,7 +176,7 @@ the block time is 0.101 seconds, so a pinned fork works on the machine that warm
 cache and fails for everyone else within the hour. They fork `latest` and derive what they need
 from what they read.
 
-71 tests, 7 of them on a fork. `VaultAttacks.t.sol` holds the audit's findings as regression tests — each one was
+73 tests, 7 of them on a fork. `VaultAttacks.t.sol` holds the audit's findings as regression tests — each one was
 written before the contract could pass it, and the commit that added them is red on all nine.
 `HelicoVault.t.sol` covers every rejection path above, all three exits (paused, agent removed,
 upgrade pending), the upgrade path, and the hash agreement with the CRE workflow — pinned to a literal

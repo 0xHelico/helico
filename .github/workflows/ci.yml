@@ -43,6 +43,8 @@ jobs:
       - name: Build
         working-directory: contracts
         run: forge build
+      - name: Multicall stays safe
+        run: python3 scripts/check-no-payable.py
       - name: Test
         working-directory: contracts
         # ROBINHOOD_RPC_URL is deliberately unset here, so the fork suite reports SKIP rather

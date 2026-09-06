@@ -290,6 +290,105 @@ contract SignedRecentreTest is Test {
         vault.recenterWithSignature(p, MandateLib.hash(mandate), 0, sig);
     }
 
+    // --- batching -------------------------------------------------------------------------
+
+    /// @notice The case `multicall` exists for: one relayer, several users, one transaction.
+    /// @dev `recenterWithSignature` takes no privileges, so a relayer can hold authorisations
+    ///      for many owners at once. Without this they are several transactions; with it they
+    ///      are one, and no separate batcher contract has to be deployed and explained.
+    function test_ARelayerLandsTwoUsersInOneTransaction() public {
+        address second = makeAddr("second user");
+        uint256 secondToken = pm.mintTo(second, poolKey, -300, -200, LIQUIDITY);
+        vm.startPrank(second);
+        pm.setApprovalForAll(address(vault), true);
+        vault.setMandate(secondToken, mandate);
+        vm.stopPrank();
+
+        HelicoVault.RecenterParams memory a = _params();
+        HelicoVault.RecenterParams memory b = _params();
+        b.owner = second;
+
+        bytes[] memory calls = new bytes[](2);
+        calls[0] = abi.encodeCall(
+            HelicoVault.recenterWithSignature, (a, MandateLib.hash(mandate), 0, _sign(agentKey, a, 0))
+        );
+        calls[1] = abi.encodeCall(
+            HelicoVault.recenterWithSignature, (b, MandateLib.hash(mandate), 0, _sign(agentKey, b, 0))
+        );
+
+        vm.prank(relayer);
+        vault.multicall(calls);
+
+        assertEq(vault.nonces(user), 1, "the first authorisation was spent");
+        assertEq(vault.nonces(second), 1, "and so was the second");
+        assertEq(pm.ownerOf(vault.positionOf(user)), user, "each position went to its own owner");
+        assertEq(pm.ownerOf(vault.positionOf(second)), second, "each position went to its own owner");
+    }
+
+    /// @notice A batch is all or nothing, so a relayer cannot land the profitable half of one.
+    /// @dev Two different owners, so the failure is unambiguously the second one's range and
+    ///      not the first one's cooldown.
+    function test_ABatchIsAtomic() public {
+        address second = makeAddr("second user");
+        uint256 secondToken = pm.mintTo(second, poolKey, -300, -200, LIQUIDITY);
+        vm.startPrank(second);
+        pm.setApprovalForAll(address(vault), true);
+        vault.setMandate(secondToken, mandate);
+        vm.stopPrank();
+
+        HelicoVault.RecenterParams memory good = _params();
+        HelicoVault.RecenterParams memory bad = _params();
+        bad.owner = second;
+        bad.tickLower = -100; // wrong width against the committed mandate
+
+        bytes[] memory calls = new bytes[](2);
+        calls[0] = abi.encodeCall(
+            HelicoVault.recenterWithSignature, (good, MandateLib.hash(mandate), 0, _sign(agentKey, good, 0))
+        );
+        calls[1] = abi.encodeCall(
+            HelicoVault.recenterWithSignature, (bad, MandateLib.hash(mandate), 0, _sign(agentKey, bad, 0))
+        );
+
+        vm.prank(relayer);
+        vm.expectRevert(HelicoVault.RangeWidthMismatch.selector);
+        vault.multicall(calls);
+
+        assertEq(vault.nonces(user), 0, "the good half was rolled back too");
+        assertEq(vault.positionOf(user), tokenId, "and nothing moved");
+    }
+
+    /// @notice `delegatecall` keeps the caller, so a batched user action is still theirs.
+    ///         If it were not, `setMandate` inside a batch would attribute to the vault.
+    function test_TheCallerIsPreservedInsideABatch() public {
+        uint256 other = pm.mintTo(user, poolKey, -400, -300, LIQUIDITY);
+
+        bytes[] memory calls = new bytes[](1);
+        calls[0] = abi.encodeCall(HelicoVault.setMandate, (other, mandate));
+
+        vm.prank(user);
+        vault.multicall(calls);
+
+        assertEq(vault.positionOf(user), other, "attributed to the user, not to the vault");
+    }
+
+    /// @notice `multicall` takes no value, which is what makes batching safe here.
+    /// @dev Batching a payable function with itself lets one `msg.value` be counted by every
+    ///      `delegatecall`. The vault has one payable function — `upgradeToAndCall`, from UUPS
+    ///      — so what rules the hazard out is this, not their absence.
+    ///
+    ///      This test proves only that today's `multicall` rejects value; it would keep passing
+    ///      if `multicall` were later overridden as payable elsewhere in the hierarchy. The ABI
+    ///      is where that can be checked, and `scripts/check-no-payable.py` checks it.
+    function test_MulticallTakesNoValue() public {
+        bytes[] memory calls = new bytes[](1);
+        calls[0] = abi.encodeCall(HelicoVault.revoke, ());
+
+        vm.deal(user, 1 ether);
+        vm.prank(user);
+        (bool ok,) = address(vault).call{value: 1 ether}(abi.encodeWithSignature("multicall(bytes[])", calls));
+        assertFalse(ok, "multicall must reject value");
+    }
+
     function test_StrangerCannotForgeByReusingAValidSignatureOnOtherParameters() public {
         HelicoVault.RecenterParams memory p = _params();
         bytes memory sig = _sign(agentKey, p, 0);
