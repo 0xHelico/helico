@@ -1,0 +1,342 @@
+---
+import { Image } from 'astro:assets'
+import { render } from 'astro:content'
+import logo from '../../assets/logo.webp'
+import Footer from '../../components/sections/Footer.astro'
+import Nav from '../../components/sections/Nav.astro'
+import Base from '../../layouts/Base.astro'
+import { formatDate, loadPosts, type Post } from '../../lib/posts'
+
+export async function getStaticPaths() {
+	const { posts } = await loadPosts()
+	return posts.map((post) => ({
+		params: { slug: post.slug },
+		props: { post, others: posts.filter((p) => p.slug !== post.slug).slice(0, 3) },
+	}))
+}
+
+const { post, others } = Astro.props as { post: Post; others: Post[] }
+const Content = post.entry ? (await render(post.entry)).Content : null
+---
+
+<Base title={`${post.title} · Helico`} description={post.summary}>
+	<Nav />
+	<main class="article">
+		<header class="article__head">
+			<h1>{post.title}</h1>
+			{post.summary && <p class="article__sub">{post.summary}</p>}
+			<div class="article__author">
+				<Image src={logo} alt="" width={48} height={48} densities={[1, 2]} />
+				<div>
+					<span class="article__name">{post.author}</span>
+					<span class="article__meta">{post.readingMinutes} min read · {formatDate(post.publishedAt)}</span>
+				</div>
+			</div>
+		</header>
+		{post.cover ? (
+			<figure class="article__cover"><img src={post.cover} alt="" loading="eager" /></figure>
+		) : (
+			<div class="article__banner" aria-hidden="true"><span>{post.title}</span></div>
+		)}
+		<div class="article__body">
+			{Content ? <Content /> : <Fragment set:html={post.html ?? ''} />}
+		</div>
+		{post.tags.length > 0 && (
+			<ul class="article__tags" aria-label="Tags">
+				{post.tags.map((t) => <li>{t}</li>)}
+			</ul>
+		)}
+		<aside class="article__card">
+			<Image src={logo} alt="" width={64} height={64} densities={[1, 2]} />
+			<div>
+				<span class="article__written">Written by {post.author}</span>
+				<p>A mandate you sign once, an enclave that decides, a vault that refuses everything else. Built for ETHOnline 2026.</p>
+			</div>
+		</aside>
+		{others.length > 0 && (
+			<section class="article__more" aria-labelledby="more-title">
+				<h2 id="more-title">More from Helico</h2>
+				<ul>
+					{others.map((o) => (
+						<li>
+							<a href={`/blog/${o.slug}/`}>
+								<span class="article__more-meta">{formatDate(o.publishedAt)} · {o.readingMinutes} min read</span>
+								<span class="article__more-title">{o.title}</span>
+								<span class="article__more-sum">{o.summary}</span>
+							</a>
+						</li>
+					))}
+				</ul>
+			</section>
+		)}
+	</main>
+	<Footer />
+</Base>
+
+<style>
+	/* Measured on the reference article: a 680px column, a 42px/700 title on 52px lines with a
+	   22px grey subtitle, a 48px avatar with 16px name and 14px meta, and body copy in a serif at
+	   20px on 32px lines. The reference's faces are proprietary; Inter and Source Serif 4 stand in. */
+	.article {
+		/* 680px of content, the reference's column, plus the page gutters. */
+		max-width: calc(680px + 2 * var(--gutter));
+		margin: 0 auto;
+		box-sizing: border-box;
+		padding: calc(82px + 3rem) var(--gutter) 4rem;
+		color: #242424;
+	}
+	.article__head h1 {
+		margin: 0;
+		font-size: 2.625rem;
+		font-weight: 700;
+		line-height: 1.24;
+		letter-spacing: -0.011em;
+	}
+	.article__sub {
+		margin: 1.25rem 0 0;
+		font-size: 1.375rem;
+		line-height: 1.27;
+		color: #6b6b6b;
+	}
+	.article__author {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		margin-top: 1.5rem;
+	}
+	.article__author img {
+		border-radius: 2px;
+	}
+	.article__author div {
+		display: flex;
+		flex-direction: column;
+		gap: 0.1rem;
+	}
+	.article__name {
+		font-size: 1rem;
+		line-height: 1.25;
+	}
+	.article__meta,
+	.article__more-meta {
+		font-size: 0.875rem;
+		line-height: 1.43;
+		color: #6b6b6b;
+	}
+	.article__cover {
+		margin: 2.5rem 0 0;
+	}
+	.article__cover img {
+		display: block;
+		width: 100%;
+		height: auto;
+		border-radius: 4px;
+	}
+	.article__banner {
+		display: flex;
+		align-items: flex-end;
+		min-height: 240px;
+		margin-top: 2.5rem;
+		padding: 1.5rem;
+		border-radius: 8px;
+		background:
+			linear-gradient(180deg, rgba(255, 255, 255, 0) 40%, rgba(15, 15, 16, 0.35) 100%),
+			radial-gradient(120% 100% at 20% 0%, #b7abff 0%, #695cff 45%, #2a2144 100%);
+	}
+	.article__banner span {
+		font-family: var(--font-serif);
+		font-style: italic;
+		font-size: 1.5rem;
+		line-height: 1.2;
+		color: #ffffff;
+	}
+	.article__body {
+		margin-top: 2.5rem;
+		font-family: 'Source Serif 4', Charter, Georgia, serif;
+		font-size: 1.25rem;
+		line-height: 1.6;
+		letter-spacing: -0.003em;
+	}
+	.article__body :global(p),
+	.article__body :global(ul),
+	.article__body :global(ol),
+	.article__body :global(table),
+	.article__body :global(pre),
+	.article__body :global(blockquote) {
+		margin: 2.1em 0 0;
+	}
+	.article__body :global(h2) {
+		margin: 1.5em 0 0;
+		font-family: var(--font-sans);
+		font-size: 1.5rem;
+		font-weight: 600;
+		line-height: 1.25;
+		letter-spacing: -0.016em;
+	}
+	.article__body :global(h3) {
+		margin: 1.4em 0 0;
+		font-family: var(--font-sans);
+		font-size: 1.25rem;
+		font-weight: 600;
+		line-height: 1.3;
+	}
+	.article__body :global(h2 + p),
+	.article__body :global(h3 + p) {
+		margin-top: 0.6em;
+	}
+	.article__body :global(li) {
+		margin-top: 0.6em;
+		padding-left: 0.25rem;
+	}
+	.article__body :global(ul),
+	.article__body :global(ol) {
+		padding-left: 30px;
+	}
+	.article__body :global(strong) {
+		font-weight: 700;
+	}
+	.article__body :global(a) {
+		text-decoration: underline;
+		text-underline-offset: 3px;
+	}
+	.article__body :global(code) {
+		font-family: var(--font-mono);
+		font-size: 0.85em;
+		padding: 0.1em 0.35em;
+		border-radius: 4px;
+		background: rgba(36, 36, 36, 0.06);
+	}
+	.article__body :global(pre) {
+		padding: 1.1rem 1.25rem;
+		overflow-x: auto;
+		border-radius: 8px;
+		background: #1e1e1e;
+		color: #d4d4d4;
+		font-size: 0.9rem;
+		line-height: 1.6;
+	}
+	.article__body :global(pre code) {
+		padding: 0;
+		background: none;
+		font-size: inherit;
+		color: inherit;
+	}
+	.article__body :global(table) {
+		width: 100%;
+		border-collapse: collapse;
+		font-size: 1.0625rem;
+	}
+	.article__body :global(th),
+	.article__body :global(td) {
+		padding: 0.6rem 0.75rem;
+		text-align: left;
+		border-bottom: 1px solid rgba(36, 36, 36, 0.12);
+		vertical-align: top;
+	}
+	.article__body :global(th) {
+		font-family: var(--font-sans);
+		font-size: 0.875rem;
+		font-weight: 600;
+	}
+	.article__body :global(blockquote) {
+		padding-left: 1.25rem;
+		border-left: 3px solid #242424;
+		font-style: italic;
+	}
+	.article__body :global(hr) {
+		margin: 3rem 0;
+		border: 0;
+		border-top: 1px solid rgba(36, 36, 36, 0.12);
+	}
+	.article__tags {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+		margin: 3rem 0 0;
+		padding: 0;
+		list-style: none;
+	}
+	.article__tags li {
+		padding: 0.4rem 0.9rem;
+		border-radius: 99px;
+		background: rgba(36, 36, 36, 0.06);
+		font-size: 0.875rem;
+		color: #242424;
+	}
+	.article__card {
+		display: flex;
+		gap: 1rem;
+		margin-top: 3rem;
+		padding: 2rem 0;
+		border-top: 1px solid rgba(36, 36, 36, 0.1);
+		border-bottom: 1px solid rgba(36, 36, 36, 0.1);
+	}
+	.article__card img {
+		flex: none;
+		border-radius: 4px;
+	}
+	.article__written {
+		display: block;
+		font-size: 1.25rem;
+		font-weight: 600;
+		letter-spacing: -0.01em;
+	}
+	.article__card p {
+		margin: 0.35rem 0 0;
+		font-size: 1rem;
+		line-height: 1.5;
+		color: #6b6b6b;
+	}
+	.article__more {
+		margin-top: 3rem;
+	}
+	.article__more h2 {
+		margin: 0 0 1rem;
+		font-size: 1.25rem;
+		font-weight: 600;
+		letter-spacing: -0.01em;
+	}
+	.article__more ul {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+	.article__more li + li {
+		border-top: 1px solid rgba(36, 36, 36, 0.1);
+	}
+	.article__more a {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		padding: 1.25rem 0;
+	}
+	.article__more-title {
+		font-size: 1.125rem;
+		font-weight: 700;
+		letter-spacing: -0.01em;
+	}
+	.article__more a:hover .article__more-title {
+		text-decoration: underline;
+		text-underline-offset: 3px;
+	}
+	.article__more-sum {
+		font-size: 0.9375rem;
+		line-height: 1.45;
+		color: #6b6b6b;
+	}
+	@media (max-width: 899px) {
+		.article {
+			padding-top: calc(64px + 2rem);
+		}
+		.article__head h1 {
+			font-size: 2rem;
+			line-height: 1.2;
+		}
+		.article__sub {
+			font-size: 1.125rem;
+		}
+		.article__body {
+			font-size: 1.125rem;
+			line-height: 1.6;
+		}
+	}
+</style>

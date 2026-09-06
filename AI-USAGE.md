@@ -411,6 +411,25 @@ Format: date · what was done · the AI's role · what a human verified.
 - **Verified:** `astro build`, the icons served from the preview, the Playwright audit at seven
   viewports.
 
+### 2026-09-06 — Blog and the Go backend
+
+- **Done:** `apps/be`, a Go service with SQLite (pure-Go driver, WAL), embedded migrations,
+  Markdown rendered once on write, keyset pagination, `ETag`/`304`, gzip, problem+json,
+  structured logs, graceful shutdown, a bearer token for writes, seeded from
+  `apps/be/content/*.md`; tests at every layer. `/blog` and `/blog/<slug>` in the landing,
+  measured on a Medium article, built from the API when `BE_URL` is set and from the same files
+  otherwise. Four posts written from what the repository records. A Go step in CI.
+- **AI's role:** designed and wrote the service, its tests, the pages, the loader, and the
+  posts; measured the reference; ran every route with `curl`, both build paths, and the audit.
+  The user asked for the blog, the reference, the language and the database, and lifted the
+  earlier rule that kept `apps/be` off limits.
+- **Plan:** [`docs/plans/2026-09-06-blog-and-backend.md`](docs/plans/2026-09-06-blog-and-backend.md), committed first; tracked in #73.
+- **Verified:** `go vet`, `gofmt -l` empty, `go test -race ./...` (five packages); the server
+  booted and every route exercised with `curl` (a `304`, a `201`, a `204`, gzip 6770 → 1946
+  bytes, a restart that seeds nothing); `astro check`, `astro build` from the files and from
+  the API (4 posts each way); the Playwright audit on `/blog` and two articles at seven
+  viewports, zero findings; the landing audit unchanged at zero.
+
 <!--
 Template for the next entry:
 
