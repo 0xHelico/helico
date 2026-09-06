@@ -143,7 +143,13 @@ not show what we want it to show.
 
 A second pair of eyes is also not a formality here. The review of #70 ran an independent
 mutation of the one line the whole forwarder path rests on. The review of #67 found five
-claims on the landing page that were not true. Neither would have come from a green tick.
+claims on the landing page that were not true. Neither would have come from a green tick. The review of #89
+found a symlink to a developer's home directory committed to a public branch, and the same
+defect on a second pull request that was `MERGEABLE` at the time.
+
+Every one of those is written up in [`SELF_LEARNING.md`](SELF_LEARNING.md), together with the
+check that would have caught it without a reviewer. Read it before opening a pull request; it
+is short, and each entry cost hours.
 
 ## Where things live
 

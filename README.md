@@ -24,6 +24,7 @@ not yet true rather than left to be assumed — see [Rules](#rules) for why that
 | [`apps/be/`](apps/be/) | Blog API, Go and SQLite |
 | [`apps/cre/`](apps/cre/) | The runnable CRE project, and `rehearse.sh` |
 | [`docs/plans/`](docs/plans/) | Implementation plans, written before the code |
+| [`SELF_LEARNING.md`](SELF_LEARNING.md) | Mistakes made here, what caught each, and the check that would have caught it sooner |
 
 The workflow's logic lives in `packages/plugins/cre` rather than in `apps/cre`, because every
 partner integration here is a reusable package — and because that is what lets 116 unit tests

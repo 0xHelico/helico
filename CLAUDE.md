@@ -16,6 +16,19 @@ when each partner owns one package.
 The rules below come from ETHGlobal's official workshops and the event prize page, not
 from guesswork. The research notes behind them are kept outside this repository.
 
+> **Read [`SELF_LEARNING.md`](SELF_LEARNING.md) before opening a pull request.** It records
+> mistakes actually made in this repository, what caught each one, and the check that would
+> have caught it sooner. Twelve rules, each with the evidence behind it. The three that have
+> cost the most so far:
+>
+> 1. **Check the record before making a claim about the record.** A sentence containing a pull
+>    request number, a count, a timestamp or "never" is research, not memory. This applies
+>    hardest to claims about your own work, because those feel like recall.
+> 2. **Never merge your own pull request.** The reviewer merges. See `CONTRIBUTING.md`.
+> 3. **Evidence is a state read, never a transaction hash or a receipt status.** The CRE
+>    forwarder calls the vault inside a `try`, so a re-centre that reverts still leaves a
+>    transaction marked successful.
+
 ## Language — team convention, not an ETHGlobal rule
 
 | Where | Language |
@@ -97,6 +110,11 @@ Permitted and encouraged. What is forbidden is **not understanding the result**.
 3. **Failing to submit** before the deadline → forfeits prizes and stake
 4. **Misrepresenting what was built** → prizes withdrawn and a ban
 
+**Understating counts as misrepresenting.** A caveat has an expiry: the README claimed the
+workflow did not drive the vault for two merges after it did, and a judge reading that
+concludes the integration does not work. Re-read every ⚠️ block after anything it describes
+changes. Entry 12 of [`SELF_LEARNING.md`](SELF_LEARNING.md).
+
 ### Pre-submission checklist
 
 - [ ] Repository public, code open source
@@ -161,6 +179,7 @@ read it, including other participants.
 | Partner requirements that are already public | Internal research notes and their sources |
 | Technical obstacles and how they were solved | Personal identifiers — email, phone, accounts beyond what this repo needs |
 | Architectural decisions and their rationale | Credentials, API keys, any `.env` |
+| — | **Absolute paths from a developer's machine** |
 
 The distinction is subtle but real: ETHGlobal **asks** for plans to be committed, and what
 they mean is **implementation** plans — evidence that thinking preceded code. That belongs
@@ -172,3 +191,15 @@ you, it does not belong in this repository.**
 ## Git
 
 - Verify `git config user.email` is correct before committing.
+- **Never merge your own pull request.** The reviewer merges — see `CONTRIBUTING.md`.
+- **Before `--delete-branch`, check nothing is stacked on it**
+  (`gh pr list --json number,baseRefName`). Deleting a base branch closes the pull request
+  built on it, and GitHub will not reopen one whose base is gone.
+- **Never symlink into the working tree from a worktree.** `.gitignore` rules have no trailing
+  slashes here precisely because a trailing slash matches directories only and lets a symlink
+  of the same name be committed — which happened twice, carrying an absolute home path onto a
+  public branch. Check with `git ls-tree -r HEAD | awk '$1=="120000"'`. Build in a worktree
+  with a real install.
+- **A permalink cannot name the merge commit that will contain it.** Re-pin the README on
+  `main` in the commit *after* anything that moves code it points at, and run
+  `python3 scripts/check-readme-links.py`.
