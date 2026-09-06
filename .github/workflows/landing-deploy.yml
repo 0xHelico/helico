@@ -61,8 +61,10 @@ jobs:
           VPS_DEPLOY_KEY: ${{ secrets.VPS_DEPLOY_KEY }}
         run: |
           umask 077
+          trap 'rm -f deploy_key known_hosts' EXIT
           printf '%s\n' "$VPS_DEPLOY_KEY" > deploy_key
           printf '%s\n' "$VPS_KNOWN_HOSTS" > known_hosts
+          # The server's forced command waits for a new container to answer before it
+          # returns, so a deploy that never came up fails this step rather than passing.
           ssh -i deploy_key -o UserKnownHostsFile=known_hosts -o StrictHostKeyChecking=yes \
             -o BatchMode=yes "$VPS_USER@$VPS_HOST" landing
-          rm -f deploy_key
