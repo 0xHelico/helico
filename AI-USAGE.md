@@ -517,6 +517,22 @@ Format: date · what was done · the AI's role · what a human verified.
   amount 4.4% and left the cap unmoved, which is what says the cap is not a function of the
   budget. The script is left failing on that.
 
+### 2026-09-06 — Vault: say the one-position limit out loud
+
+- **Done:** `setMandate` on a second position reverts with `MandateAlreadyActive` instead of
+  silently replacing the first, and `contracts/README.md` states the limit and why it exists.
+  Closes #53, where a user could be left holding a position they believed was managed and was
+  not. Re-committing terms on the same position still works; moving means `revoke()` first.
+- **AI's role:** chose the cheap option of the three on the issue and said why the other two
+  were wrong here — re-keying accounts by `(owner, tokenId)` changes storage and the mandate
+  hash six days before the deadline, and one mandate across many positions cannot work because
+  the mandate commits a `poolId`.
+- **Plan:** the options are on #53; a guard and four tests did not warrant a separate document.
+- **Verified:** `forge test` 89 pass, 10 fork skip without an RPC. Mutation — deleting the guard
+  fails exactly `test_ASecondPositionIsRefusedRatherThanSwappedIn` and nothing else. Three
+  existing tests were quietly relying on the silent replacement and now `revoke()` first, which
+  is the flow a user has.
+
 <!--
 Template for the next entry:
 

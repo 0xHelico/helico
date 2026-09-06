@@ -387,8 +387,13 @@ contract SignedRecentreTest is Test {
     function test_TheCallerIsPreservedInsideABatch() public {
         uint256 other = pm.mintTo(user, poolKey, -400, -300, LIQUIDITY);
 
-        bytes[] memory calls = new bytes[](1);
-        calls[0] = abi.encodeCall(HelicoVault.setMandate, (other, mandate));
+        // `revoke` first, because one address manages one position and moving to another is
+        // now a refusal rather than a silent replacement. Batched together, which is the point:
+        // `delegatecall` keeps `msg.sender` the user across both calls, so the second sees the
+        // account the first just cleared.
+        bytes[] memory calls = new bytes[](2);
+        calls[0] = abi.encodeCall(HelicoVault.revoke, ());
+        calls[1] = abi.encodeCall(HelicoVault.setMandate, (other, mandate));
 
         vm.prank(user);
         vault.multicall(calls);
