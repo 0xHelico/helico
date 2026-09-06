@@ -184,3 +184,30 @@ to 160px WebP sources; `astro:assets` emits the served sizes.
   the reference grid)
 - "That one is backed-by, not the features used."
 
+## Revision — the reference's navigation, the code block as an editor
+
+The user asked for the reference's navigation: a hovered item becomes a light pill and opens
+a full-width white panel of cards under the bar (icon tile, title with an optional badge,
+one-line subtitle, an arrow on links that leave the page), and on small screens a hamburger
+that opens a full-screen sheet with the same cards stacked under group headings. Measured on
+the reference: hovered pill `rgba(0,0,0,.03)` at radius 50 with the text at full ink; panel
+grid of three 318px cards with 16px gaps in the 986px column; cards 74px tall, radius 24,
+padding 16, a 1px 5% hairline; 40px icons; 10px/600 lavender badges; 14px/450 subtitles at
+65% ink. The icons are Helico's own line glyphs drawn for the tiles, not the reference's
+files. Four groups (Product, How It Works, Developers, Evidence) with Helico's destinations,
+FAQ stays a plain link. Hover opens on pointer devices; focus, click, Escape and leaving the
+bar work everywhere, and the sheet locks page scroll while open.
+
+The user also asked for the code block to be coloured "like VS Code" with line numbers. It is
+rendered at build time by Astro's `Code` component (Shiki, `dark-plus`, Solidity grammar) on
+the editor's own background, and the gutter shows the file's real line numbers, computed from
+the source at build time so they match the GitHub link.
+
+### Prompts, verbatim in translation
+
+- "The nav on the reference when I hover: the hovered item gets highlighted." (four
+  screenshots of its open menus)
+- "Like this in mobile mode." (two screenshots)
+- "Check every responsive size, not only two views."
+- "Give the code colouring so it looks good, with line numbers, like VS Code."
+

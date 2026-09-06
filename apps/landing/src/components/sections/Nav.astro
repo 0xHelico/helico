@@ -2,24 +2,200 @@
 import { Image } from 'astro:assets'
 import logo from '../../assets/logo.png'
 const repo = 'https://github.com/0xHelico/helico'
+
+// Simple line glyphs, one path each, drawn for the 40px icon tiles.
+const glyphs: Record<string, string> = {
+	vault: 'M5 11V8a7 7 0 0 1 14 0v3M4 11h16v9H4zM12 15v2',
+	mandate: 'M7 3h7l4 4v14H7zM14 3v4h4M9 12h6M9 16h6',
+	canvas: 'M3 5h18v11H3zM8 21h8M12 16v5M9 9l3 2 3-2',
+	enclave: 'M12 3l7 3v5c0 4-3 7-7 9-4-2-7-5-7-9V6zM9 12l2 2 4-4',
+	code: 'M8 8l-4 4 4 4M16 8l4 4-4 4M13 5l-2 14',
+	plugin: 'M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5',
+	plans: 'M5 5h14M5 12h14M5 19h9M17 17l2 2 3-3',
+	check: 'M12 3l2.5 2 3-.5.5 3 2 2.5-2 2.5-.5 3-3-.5-2.5 2-2.5-2-3 .5-.5-3L4 12l2-2.5-.5-3 3 .5zM9 12l2 2 4-4',
+	ai: 'M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z',
+	feedback: 'M4 5h16v11H9l-5 4zM8 9h8M8 12h5',
+}
+
+type Item = { title: string; sub: string; href: string; icon: keyof typeof glyphs; badge?: string; external?: boolean }
+type Menu = { id: string; label: string; items: Item[] }
+
+const menus: Menu[] = [
+	{
+		id: 'product',
+		label: 'Product',
+		items: [
+			{ title: 'Helico Vault', sub: 'Liquidity that stays in range', href: '#hero', icon: 'vault' },
+			{ title: 'Mandate', badge: '7 fields', sub: 'Every one enforced on chain', href: '#enforcement', icon: 'mandate' },
+			{ title: 'Live canvas', sub: 'Four scenarios, one enclave', href: '#canvas', icon: 'canvas' },
+		],
+	},
+	{
+		id: 'how',
+		label: 'How It Works',
+		items: [
+			{ title: 'The mandate', sub: 'Seven fields you sign once', href: '#enforcement', icon: 'mandate' },
+			{ title: 'The enclave', sub: 'Decides inside the TEE', href: `${repo}/tree/main/packages/plugins/cre`, icon: 'enclave', external: true },
+			{ title: 'The check', sub: 'Twenty lines, read from source', href: '#build', icon: 'code' },
+		],
+	},
+	{
+		id: 'developers',
+		label: 'Developers',
+		items: [
+			{ title: 'Uniswap plugin', badge: '52 tests', sub: 'Pools and positions from the SDK', href: `${repo}/tree/main/packages/plugins/uniswap`, icon: 'plugin', external: true },
+			{ title: 'CRE plugin', badge: '116 tests', sub: 'Decide, size, and sign in the enclave', href: `${repo}/tree/main/packages/plugins/cre`, icon: 'plugin', external: true },
+			{ title: 'Vault', badge: '74 + 9 tests', sub: 'Solidity, Foundry, fork tests', href: `${repo}/tree/main/contracts`, icon: 'vault', external: true },
+			{ title: 'Plans and prompts', sub: 'Every plan committed before code', href: `${repo}/tree/main/docs/plans`, icon: 'plans', external: true },
+		],
+	},
+	{
+		id: 'evidence',
+		label: 'Evidence',
+		items: [
+			{ title: 'Verified by default', sub: 'Counts that are true today', href: '#verified', icon: 'check' },
+			{ title: 'AI usage', sub: 'What was AI-assisted, and how', href: `${repo}/blob/main/AI-USAGE.md`, icon: 'ai', external: true },
+			{ title: 'Uniswap feedback', sub: 'FEEDBACK.md for the Foundation', href: `${repo}/blob/main/FEEDBACK.md`, icon: 'feedback', external: true },
+		],
+	},
+]
 ---
 
-<header class="nav">
+<header class="nav" data-nav>
 	<div class="wrap nav__inner">
-		<a href="#hero" class="nav__brand" aria-label="Helico home">
-			<Image src={logo} alt="" width={24} height={24} densities={[1, 2]} loading="eager" />
+		<a class="nav__brand" href="#hero" aria-label="Helico, back to top">
+			<Image src={logo} alt="" width={28} height={28} densities={[1, 2]} />
 			<span>helico</span>
 		</a>
 		<nav class="nav__links" aria-label="Primary">
-			<a href="#hero">Product</a>
-			<a href="#enforcement">How It Works</a>
-			<a href="#build">Developers</a>
-			<a href="#verified">Evidence</a>
+			{menus.map((m) => (
+				<button type="button" data-menu={m.id} aria-expanded="false" aria-controls={`menu-${m.id}`}>{m.label}</button>
+			))}
 			<a href="#faq">FAQ</a>
 		</nav>
-		<a class="btn btn--ink btn--small nav__cta" href={repo}>Get Started</a>
+		<div class="nav__right">
+			<a class="btn btn--ink btn--small nav__cta" href={repo}>Get Started</a>
+			<button type="button" class="nav__burger" data-burger aria-expanded="false" aria-controls="nav-sheet" aria-label="Open menu">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+			</button>
+		</div>
 	</div>
+	{menus.map((m) => (
+		<div class="nav__panel" id={`menu-${m.id}`} data-panel={m.id} hidden>
+			<div class="nav__grid">
+				{m.items.map((it) => (
+					<a class="nav__card" href={it.href} {...(it.external ? { target: '_blank', rel: 'noreferrer' } : {})}>
+						<span class="nav__icon" aria-hidden="true">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d={glyphs[it.icon]} /></svg>
+						</span>
+						<span class="nav__text">
+							<span class="nav__title">{it.title}{it.badge && <em>{it.badge}</em>}</span>
+							<span class="nav__sub">{it.sub}</span>
+						</span>
+						{it.external && (
+							<svg class="nav__ext" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8" /></svg>
+						)}
+					</a>
+				))}
+			</div>
+		</div>
+	))}
 </header>
+
+<div class="nav__sheet" id="nav-sheet" data-sheet role="dialog" aria-modal="true" aria-label="Menu" hidden>
+	<div class="nav__sheet-top">
+		<a class="nav__brand" href="#hero" aria-label="Helico, back to top" data-sheet-link>
+			<Image src={logo} alt="" width={28} height={28} densities={[1, 2]} />
+			<span>helico</span>
+		</a>
+		<button type="button" class="nav__burger" data-sheet-close aria-label="Close menu">
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+		</button>
+	</div>
+	{menus.map((m) => (
+		<section class="nav__group" aria-labelledby={`sheet-${m.id}`}>
+			<h2 id={`sheet-${m.id}`}>{m.label}</h2>
+			<div class="nav__list">
+				{m.items.map((it) => (
+					<a class="nav__card nav__card--sheet" href={it.href} data-sheet-link {...(it.external ? { target: '_blank', rel: 'noreferrer' } : {})}>
+						<span class="nav__icon" aria-hidden="true">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d={glyphs[it.icon]} /></svg>
+						</span>
+						<span class="nav__text">
+							<span class="nav__title">{it.title}{it.badge && <em>{it.badge}</em>}</span>
+							<span class="nav__sub">{it.sub}</span>
+						</span>
+						{it.external && (
+							<svg class="nav__ext" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8" /></svg>
+						)}
+					</a>
+				))}
+			</div>
+		</section>
+	))}
+	<section class="nav__group nav__group--foot">
+		<a class="nav__card nav__card--sheet" href="#faq" data-sheet-link>
+			<span class="nav__text"><span class="nav__title">FAQ</span><span class="nav__sub">Six questions, answered honestly</span></span>
+		</a>
+		<a class="btn btn--ink" href={repo} data-sheet-link>Get Started</a>
+	</section>
+</div>
+
+<script>
+	// Hover opens on pointer devices, focus and click open everywhere, Escape and leaving close.
+	const nav = document.querySelector<HTMLElement>('[data-nav]')
+	const buttons = Array.from(nav?.querySelectorAll<HTMLButtonElement>('[data-menu]') ?? [])
+	const panels = Array.from(nav?.querySelectorAll<HTMLElement>('[data-panel]') ?? [])
+	const hoverable = window.matchMedia('(hover: hover)').matches
+	let current: string | null = null
+	const set = (id: string | null) => {
+		current = id
+		for (const b of buttons) b.setAttribute('aria-expanded', String(b.dataset.menu === id))
+		for (const p of panels) p.hidden = p.dataset.panel !== id
+		nav?.toggleAttribute('data-open', id !== null)
+	}
+	for (const b of buttons) {
+		const id = b.dataset.menu ?? null
+		b.addEventListener('click', () => set(current === id ? null : id))
+		b.addEventListener('focus', () => set(id))
+		if (hoverable) b.addEventListener('pointerenter', () => set(id))
+	}
+	if (hoverable) nav?.addEventListener('pointerleave', () => set(null))
+	nav?.addEventListener('focusout', (e) => {
+		if (!(e.relatedTarget instanceof Node) || !nav.contains(e.relatedTarget)) set(null)
+	})
+	document.addEventListener('keydown', (e) => {
+		if (e.key !== 'Escape' || current === null) return
+		const open = buttons.find((b) => b.dataset.menu === current)
+		set(null)
+		open?.focus()
+	})
+	document.addEventListener('pointerdown', (e) => {
+		if (current !== null && e.target instanceof Node && !nav?.contains(e.target)) set(null)
+	})
+
+	// The small-screen sheet: the burger opens it, the cross, Escape, a link, or a wide viewport close it.
+	const sheet = document.querySelector<HTMLElement>('[data-sheet]')
+	const burger = document.querySelector<HTMLButtonElement>('[data-burger]')
+	const closeBtn = sheet?.querySelector<HTMLButtonElement>('[data-sheet-close]')
+	const openSheet = (open: boolean) => {
+		if (!sheet || !burger) return
+		sheet.hidden = !open
+		burger.setAttribute('aria-expanded', String(open))
+		document.documentElement.style.overflow = open ? 'hidden' : ''
+		if (open) closeBtn?.focus()
+		else burger.focus()
+	}
+	burger?.addEventListener('click', () => openSheet(sheet?.hidden ?? true))
+	closeBtn?.addEventListener('click', () => openSheet(false))
+	for (const a of sheet?.querySelectorAll('[data-sheet-link]') ?? []) a.addEventListener('click', () => openSheet(false))
+	document.addEventListener('keydown', (e) => {
+		if (e.key === 'Escape' && sheet && !sheet.hidden) openSheet(false)
+	})
+	window.matchMedia('(min-width: 900px)').addEventListener('change', (e) => {
+		if (e.matches && sheet && !sheet.hidden) openSheet(false)
+	})
+</script>
 
 <style>
 	.nav {
@@ -30,8 +206,12 @@ const repo = 'https://github.com/0xHelico/helico'
 		-webkit-backdrop-filter: blur(10px);
 		backdrop-filter: blur(10px);
 	}
+	.nav[data-open] {
+		background: #ffffff;
+	}
 	.nav__inner {
 		max-width: var(--content-max);
+		margin-top: 0;
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
@@ -41,10 +221,10 @@ const repo = 'https://github.com/0xHelico/helico'
 	.nav__brand {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.45rem;
-		font-weight: 700;
+		gap: 0.5rem;
+		font-weight: 550;
 		letter-spacing: -0.02em;
-		color: var(--color-ink);
+		color: var(--ink-90);
 	}
 	.nav__brand img {
 		border-radius: 50%;
@@ -56,20 +236,216 @@ const repo = 'https://github.com/0xHelico/helico'
 		font-weight: 450;
 		color: var(--ink-65);
 	}
-	.nav__links a {
+	.nav__links a,
+	.nav__links button {
 		display: inline-flex;
 		align-items: center;
 		height: 32px;
 		padding: 0 16px;
+		border: 0;
 		border-radius: 50px;
+		background: none;
+		font: inherit;
+		color: inherit;
+		transition:
+			background-color 0.15s,
+			color 0.15s;
 	}
-	.nav__links a:hover {
+	.nav__links a:hover,
+	.nav__links button:hover,
+	.nav__links button[aria-expanded='true'] {
 		color: var(--ink-90);
-		background: rgba(37, 34, 40, 0.04);
+		background: rgba(0, 0, 0, 0.03);
+	}
+	.nav__panel {
+		position: absolute;
+		left: 0;
+		right: 0;
+		top: 100%;
+		padding: 0.25rem 0 1.25rem;
+		background: #ffffff;
+		box-shadow: 0 1px 0 rgba(0, 0, 0, 0.05);
+	}
+	.nav__panel[hidden] {
+		display: none;
+	}
+	.nav__grid {
+		width: calc(100% - 2 * var(--gutter));
+		max-width: var(--content-max);
+		margin-inline: auto;
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: 16px;
+	}
+	.nav__card {
+		position: relative;
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		min-height: 74px;
+		padding: 16px;
+		border-radius: 24px;
+		border: 1px solid rgba(39, 34, 40, 0.05);
+		background: #ffffff;
+		transition:
+			border-color 0.15s,
+			background-color 0.15s;
+	}
+	.nav__card:hover {
+		border-color: rgba(39, 34, 40, 0.12);
+		background: #fbfbfc;
+	}
+	.nav__icon {
+		flex: none;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 40px;
+		height: 40px;
+		border-radius: 12px;
+		background: rgba(39, 34, 40, 0.06);
+		color: rgba(39, 34, 40, 0.7);
+	}
+	.nav__icon svg {
+		width: 20px;
+		height: 20px;
+	}
+	.nav__text {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		min-width: 0;
+	}
+	.nav__title {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: var(--ink-90);
+	}
+	.nav__title em {
+		display: inline-flex;
+		align-items: center;
+		height: 16px;
+		padding: 0 6px;
+		border-radius: 50px;
+		font-style: normal;
+		font-size: 0.625rem;
+		font-weight: 600;
+		color: var(--lav-text);
+		background: rgba(153, 141, 255, 0.1);
+	}
+	.nav__sub {
+		font-size: 0.875rem;
+		font-weight: 450;
+		line-height: 1.25;
+		color: var(--ink-65);
+	}
+	.nav__ext {
+		position: absolute;
+		top: 12px;
+		right: 12px;
+		width: 12px;
+		height: 12px;
+		color: rgba(39, 34, 40, 0.4);
+	}
+	.nav__right {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+	.nav__burger {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 40px;
+		height: 40px;
+		border: 0;
+		border-radius: 50%;
+		background: none;
+		color: var(--ink-90);
+	}
+	.nav__burger:hover {
+		background: rgba(0, 0, 0, 0.03);
+	}
+	.nav__burger svg {
+		width: 24px;
+		height: 24px;
+	}
+	.nav__sheet {
+		position: fixed;
+		inset: 0;
+		z-index: 60;
+		overflow-y: auto;
+		padding: 0 var(--gutter) 2rem;
+		background: #ffffff;
+	}
+	.nav__sheet[hidden] {
+		display: none;
+	}
+	.nav__sheet-top {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		min-height: 82px;
+		margin: 0 calc(-1 * var(--gutter)) 1rem;
+		padding: 0 var(--gutter);
+		border-bottom: 1px solid rgba(39, 34, 40, 0.06);
+	}
+	.nav__group {
+		margin-top: 1.5rem;
+	}
+	.nav__group h2 {
+		margin: 0 0 1rem;
+		font-size: 1.25rem;
+		font-weight: 450;
+		letter-spacing: -0.01em;
+		color: var(--ink-65);
+	}
+	.nav__list {
+		display: grid;
+		gap: 1rem;
+	}
+	.nav__card--sheet {
+		min-height: 96px;
+		padding: 20px;
+		gap: 16px;
+	}
+	.nav__card--sheet .nav__icon {
+		width: 56px;
+		height: 56px;
+		border-radius: 16px;
+	}
+	.nav__card--sheet .nav__icon svg {
+		width: 26px;
+		height: 26px;
+	}
+	.nav__card--sheet .nav__title {
+		font-size: 1.125rem;
+	}
+	.nav__card--sheet .nav__sub {
+		font-size: 1rem;
+	}
+	.nav__group--foot {
+		display: grid;
+		gap: 1rem;
+		margin-top: 2rem;
+	}
+	.nav__group--foot .btn {
+		justify-self: stretch;
 	}
 	@media (min-width: 900px) {
 		.nav__links {
 			display: flex;
+		}
+		.nav__burger {
+			display: none;
+		}
+	}
+	@media (max-width: 899px) {
+		.nav__panel {
+			display: none;
 		}
 	}
 </style>

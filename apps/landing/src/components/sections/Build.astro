@@ -1,5 +1,6 @@
 ---
 import { readFileSync } from 'node:fs'
+import { Code } from 'astro:components'
 const repo = 'https://github.com/0xHelico/helico'
 const vault = `${repo}/blob/154bcabd85ca3be8f73851bbc55a1a04ea42c6e4/contracts/src/HelicoVault.sol`
 // Read from the vault source at build time, so the page shows the function as this checkout has it.
@@ -7,6 +8,8 @@ const source = readFileSync(new URL('../../../../../contracts/src/HelicoVault.so
 const from = source.indexOf('    function _checkRange(')
 const to = source.indexOf('\n    }\n', from) + '\n    }'.length
 const check = source.slice(from, to).replace(/^ {4}/gm, '')
+// The real line number of the first line, so the gutter matches the file on GitHub.
+const startLine = source.slice(0, from).split('\n').length
 const packages = [
 	{
 		name: '@helico/plugin-uniswap',
@@ -42,9 +45,9 @@ const packages = [
 			<a class="btn btn--secondary" href={`${repo}/tree/main/docs/plans`}>Read the Plans</a>
 		</div>
 
-		<figure class="code">
-			<figcaption>contracts/src/HelicoVault.sol · <code>_checkRange</code> · <a href={`${vault}#L724`}>open on GitHub ↗</a></figcaption>
-			<pre tabindex="0"><code>{check}</code></pre>
+		<figure class="code" style={`--start:${startLine - 1}`}>
+			<figcaption>contracts/src/HelicoVault.sol · <code>_checkRange</code> · <a href={`${vault}#L${startLine}`}>open on GitHub ↗</a></figcaption>
+			<Code code={check} lang="solidity" theme="dark-plus" />
 		</figure>
 
 		<div class="split">
@@ -74,8 +77,8 @@ const packages = [
 		text-align: left;
 		border-radius: 24px;
 		overflow: hidden;
-		background: #0f0f10;
-		color: #e6e4f2;
+		background: #1e1e1e;
+		color: #d4d4d4;
 		box-shadow: 0 40px 80px -40px rgba(93, 76, 230, 0.35);
 	}
 	.code figcaption {
@@ -86,21 +89,39 @@ const packages = [
 		font-family: var(--font-mono);
 		font-size: 0.75rem;
 		color: rgba(255, 255, 255, 0.5);
+		background: #252526;
 		border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 	}
 	.code figcaption code,
 	.code figcaption a {
 		color: #b7abff;
 	}
-	.code pre {
+	/* Shiki's output is global markup, so the gutter and sizing are addressed as such. VS Code's
+	   Dark+ theme and its editor background; the line numbers are the file's real ones. */
+	.code :global(pre.astro-code) {
 		margin: 0;
-		padding: 1.25rem 1.5rem;
+		padding: 1.1rem 0;
 		overflow-x: auto;
 		font-family: var(--font-mono);
 		font-size: 0.78rem;
 		line-height: 1.6;
 		tab-size: 4;
-		/* Verbatim means verbatim: no ligatures turning >= into one glyph. */
 		font-variant-ligatures: none;
+		counter-reset: line var(--start);
+	}
+	.code :global(.astro-code .line) {
+		display: inline-block;
+		min-width: 100%;
+		padding-right: 1.5rem;
+	}
+	.code :global(.astro-code .line)::before {
+		counter-increment: line;
+		content: counter(line);
+		display: inline-block;
+		width: 3.75rem;
+		padding-right: 1.25rem;
+		text-align: right;
+		color: #858585;
+		user-select: none;
 	}
 </style>

@@ -365,6 +365,20 @@ Format: date · what was done · the AI's role · what a human verified.
   the glob pickup, the view-more toggle exercised in a headless browser (12 cells to 20 while
   the list was longer), the Playwright audit at seven viewports.
 
+### 2026-09-06 — Landing page: navigation menus and the highlighted code block
+
+- **Done:** hover menus under the nav bar (four groups of cards with Helico's destinations,
+  measured against the reference), a hamburger and full-screen sheet on small screens, and the
+  range check rendered by Shiki in VS Code's Dark+ with the file's real line numbers.
+- **AI's role:** measured the reference's open menu with a headless browser, wrote the
+  components, the glyphs, and the behaviour (hover, focus, click, Escape, scroll lock), and
+  exercised each in a headless browser at seven viewports. The user chose the reference and
+  asked for the editor look.
+- **Verified:** `astro check` (0 errors), `astro build`, the Playwright audit at seven
+  viewports, and a behaviour script: hover opens and moving onto a card keeps it open, leaving
+  closes, Tab opens, Escape closes and returns focus; the sheet opens, locks scroll, and closes
+  on Escape at 360, 390 and 768.
+
 <!--
 Template for the next entry:
 

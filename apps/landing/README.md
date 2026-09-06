@@ -1,6 +1,6 @@
 # @helico/landing
 
-The landing page, Astro 7. A long single page in four cards: the hero with the canvas, a
+The landing page, Astro 7. Hover menus in the nav (a sheet on small screens), then a long single page in four cards: the hero with the canvas, a
 "built on" logo grid, the mandate (dark, one row per field with the line in the vault that
 enforces it), build (with the vault's range check rendered from source), verified-by-default
 facts with a live tick, then the FAQ, a stay-updated card, and the footer.
