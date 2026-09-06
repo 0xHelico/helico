@@ -600,6 +600,18 @@ Format: date · what was done · the AI's role · what a human verified.
   exists). The SSH password test, the sudo rights and the port list were checked on the box,
   not assumed. The laptop's Docker daemon was not running, so the local check is the server's.
 
+### 2026-09-06 — Backend: the blog API on the VPS
+
+- **Done:** `apps/be/Dockerfile` (static Go build, non-root Alpine runtime, content baked in,
+  `/data` volume), a `be` workflow over the SSH forced command, the landing Dockerfile passing
+  `BE_URL` at build time; on the server the `api.helico.site` nginx site and certificate, the
+  Coolify application with its volume and environment, and the automation's `.env` pointed at
+  it. Plan in `docs/plans/2026-09-06-be-deploy.md`.
+- **AI's role:** all of it, on the owner's "continue" and the earlier instruction that the API
+  would live at `api.helico.site`.
+- **Verified:** the image built by Coolify; `/healthz` and `/api/posts` over TLS; a `PUT` with
+  the token and the post read back; the landing rebuilt against the API.
+
 <!--
 Template for the next entry:
 

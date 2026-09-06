@@ -7,6 +7,9 @@ FROM oven/bun:1.3.14-alpine AS build
 WORKDIR /repo
 COPY . .
 RUN bun install --frozen-lockfile
+# The blog reads the API when BE_URL is set at build time, and the files otherwise.
+ARG BE_URL
+ENV BE_URL=${BE_URL}
 RUN bun run --filter @helico/landing build
 
 # Static files behind nginx running as an unprivileged user on port 8080.
