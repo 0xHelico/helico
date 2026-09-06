@@ -54,8 +54,10 @@ import {TickMath} from "./lib/TickMath.sol";
 ///      **Batching.** `multicall` is inherited so a relayer holding authorisations for several
 ///      users can land them in one transaction. The usual hazard — a `payable` function batched
 ///      with itself, where `msg.value` is visible in full to every `delegatecall` — cannot arise
-///      here, but not for the reason first written down: the vault *does* have a payable
-///      function, `upgradeToAndCall` from UUPS. What makes it safe is that **`multicall` itself
+///      here, but not for the reason first written down: the vault *does* have payable
+///      entries — `upgradeToAndCall` from UUPS, and `receive()`, which no batched call can
+///      reach because a `delegatecall` always carries calldata. What makes it safe is that
+///      **`multicall` itself
 ///      is not payable**, so `msg.value` is zero for the whole batch and there is nothing to
 ///      count twice. `scripts/check-no-payable.py` guards that, since a Solidity test can only
 ///      show that today's `multicall` rejects value.
