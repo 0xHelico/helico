@@ -157,3 +157,43 @@ abstract contract ArbitrumFork is ForkBase {
         )
     {}
 }
+
+/// @notice Ethereum mainnet, and a pool whose hook is a real one someone else deployed.
+///
+/// @dev The pool is Angstrom's USDC/WETH — `poolId`
+///      `0xe500210c7ea6bfd9f69dce044b09ef384ec2b34832f132baec3b418208e3a657`. It is here because
+///      it is the only kind of fixture that proves anything: a hook this project did not write,
+///      on a pair people actually trade, with liquidity in it right now.
+///
+///      **Why not Arbitrum.** Two independent scans of the chain found no hooked pool there with
+///      a major pair and real trading. Writing our own hook would have proved that our hook and
+///      our vault agree, which is not the claim.
+///
+///      **What this hook does, read from the chain rather than from its flags.** Calling each
+///      callback directly in the PoolManager's shoes, from an address with no relationship to
+///      Angstrom: `beforeAddLiquidity` and `beforeRemoveLiquidity` accept, and `beforeSwap`
+///      reverts `CannotSwapWhileLocked()` — Angstrom opens the pool only inside its own auction
+///      bundle. The flag bits alone would have said "gates liquidity", which is the opposite of
+///      what the code does; they are declared so Angstrom can meter its own reward accounting,
+///      not to refuse anyone.
+///
+///      `fee` is `0x800000`, `LPFeeLibrary.DYNAMIC_FEE_FLAG`, not a literal 838.8608%.
+abstract contract MainnetFork is ForkBase {
+    constructor()
+        ForkBase(
+            "mainnet",
+            "MAINNET_RPC_URL",
+            1,
+            IPositionManager(0xbD216513d74C8cf14cf4747E6AaA6420FF64ee9e),
+            IStateView(0x7fFE42C4a5DEeA5b0feC41C94C136Cf115597227),
+            IPoolManager(0x000000000004444c5dc75cB358380D2e3dE08A90),
+            PoolKey({
+                currency0: 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48, // USDC
+                currency1: 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2, // WETH
+                fee: 0x800000,
+                tickSpacing: 10,
+                hooks: 0x0000000aa232009084Bd71A5797d089AA4Edfad4
+            })
+        )
+    {}
+}
