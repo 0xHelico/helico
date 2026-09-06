@@ -10,10 +10,11 @@ import {
 } from '@chainlink/cre-sdk'
 import { type Address, encodeAbiParameters, type Hex, zeroAddress } from 'viem'
 import { z } from 'zod'
-import { recenterParamsAbi } from './abi'
+import { type RecenterParams, recenterParamsAbi } from './abi'
 import { type ChainState, poolIdOf, readChainState } from './chain'
 import { decideRecentre, type Verdict } from './decision'
 import { MANDATE_SECRET_IDS, type Mandate, mandateFromSecrets, mandateHash } from './mandate'
+import { type Authorisation, encodeAuthorisation, type RecentreDomain, signRecentre } from './sign'
 import { sizeRecentre } from './sizing'
 
 export * from './abi'
@@ -21,6 +22,8 @@ export * from './chain'
 export * from './decision'
 export * from './mandate'
 export * from './math'
+export * from './relay'
+export * from './sign'
 export * from './sizing'
 
 // Lowercased so a checksummed value in config compares equal to keccak output and to what we encode.
@@ -34,12 +37,27 @@ const hex = (bytes: number) =>
 // Everything here is visible to node operators. The mandate's thresholds come from secrets;
 // the position, its range, and the cooldown are read from the vault, which is the source of truth.
 // No `.url()`: zod backs it with `new URL()`, which the WASM runtime does not provide.
-export const configSchema = z.object({
+export const configShape = {
 	schedule: z.string(),
 	/** JSON-RPC endpoint the enclave reads through; any chain with a v4 StateView. */
 	rpcUrl: z.string().regex(/^https?:\/\/\S+$/),
-	/** CRE chain selector name the report is written on, e.g. `robinhood-testnet`. */
-	chainSelectorName: z.string().min(1),
+	/**
+	 * How the verdict reaches the vault. `forwarder`: `EVMClient.writeReport` on `chainSelectorName`,
+	 * for chains with a CRE forwarder. `signature`: the enclave signs an EIP-712 authorisation with
+	 * the agent key from the Vault DON and hands it out for anyone to relay; works on any chain.
+	 */
+	delivery: z.enum(['forwarder', 'signature']),
+	/** CRE chain selector name the report is written on, e.g. `robinhood-testnet`; forwarder delivery only. */
+	chainSelectorName: z.string().min(1).optional(),
+	/** The chain id in the EIP-712 domain; signature delivery only. */
+	chainId: z.number().int().positive().optional(),
+	/** EIP-712 domain name and version the vault uses; signature delivery only. */
+	domainName: z.string().default('HelicoVault'),
+	domainVersion: z.string().default('1'),
+	/** Vault DON secret id holding the agent's private key; signature delivery only. */
+	agentKeySecretId: z.string().default('AGENT_KEY'),
+	/** The vault's nonce getter; signature delivery only. */
+	noncesFunction: z.string().default('nonces'),
 	vault: hex(20),
 	positionManager: hex(20),
 	stateView: hex(20),
@@ -54,23 +72,17 @@ export const configSchema = z.object({
 	/** Enclave policy: refuse to route a re-centre through a pool whose LP fee is above this, in pips. */
 	maxPoolFeePips: z.number().int().min(0).max(1_000_000),
 	deadlineSeconds: z.number().int().positive(),
-})
-export type Config = z.infer<typeof configSchema>
-
-export type RecenterParams = {
-	owner: Address
-	tickLower: number
-	tickUpper: number
-	liquidityToMint: bigint
-	amount0Min: bigint
-	amount1Min: bigint
-	amount0Max: bigint
-	amount1Max: bigint
-	zeroForOne: boolean
-	amountIn: bigint
-	minAmountOut: bigint
-	deadline: bigint
 }
+
+export const configSchema = z
+	.object(configShape)
+	.refine((c) => c.delivery !== 'forwarder' || c.chainSelectorName !== undefined, {
+		message: 'forwarder delivery needs chainSelectorName',
+	})
+	.refine((c) => c.delivery !== 'signature' || c.chainId !== undefined, {
+		message: 'signature delivery needs chainId',
+	})
+export type Config = z.infer<typeof configSchema>
 
 const REPORT_ABI = [{ type: 'bool' }, { type: 'bytes32' }, recenterParamsAbi] as const
 
@@ -158,13 +170,14 @@ export function decide(config: Config, mandate: Mandate, state: ChainState, now:
 }
 
 // ─── TEE cron callback ───────────────────────────────────────
-export const onCronTrigger = (runtime: TeeRuntime<Config>): string => {
+export const onCronTrigger = async (runtime: TeeRuntime<Config>): Promise<string> => {
 	const config = runtime.config
+	const signs = config.delivery === 'signature'
 
-	// 1. The mandate's thresholds, released by the Vault DON into this enclave only.
-	const secrets = runtime
-		.getSecrets(Object.values(MANDATE_SECRET_IDS).map((id) => ({ id })))
-		.result()
+	// 1. The mandate's thresholds, and in signature mode the agent key, released by the Vault DON
+	//    into this enclave only. The key is used here and never crosses out.
+	const ids = [...Object.values(MANDATE_SECRET_IDS), ...(signs ? [config.agentKeySecretId] : [])]
+	const secrets = runtime.getSecrets(ids.map((id) => ({ id }))).result()
 	const mandate = mandateFromSecrets(config.poolId as Hex, secrets)
 	const hash = mandateHash(mandate)
 	const now = Math.floor(runtime.now().getTime() / 1000)
@@ -183,17 +196,49 @@ export const onCronTrigger = (runtime: TeeRuntime<Config>): string => {
 		},
 		config.owner as Address,
 		config.poolId as Hex,
+		{ withNonce: signs, noncesFunction: config.noncesFunction },
 	)
 
-	// 4. Decide, then size the mint the burn will fund.
+	// 4. Decide, then size the swap and the mint the burn will fund.
 	const outcome = decide(config, mandate, state, now)
 	if (!outcome.act) return `HOLD (${outcome.reason})`
-
-	// 5. Cross back with the verdict only, and deliver it to the vault through the forwarder.
-	const txHash = deliver(runtime.usingTheDons(), config, encodeReport(true, hash, outcome.params))
 	const { tickLower, tickUpper } = outcome.params
+
+	// 5. Cross back with the verdict only.
+	if (signs) {
+		const key = secrets[config.agentKeySecretId]?.value as Hex | undefined
+		if (!key) throw new Error(`Secret ${config.agentKeySecretId} is missing`)
+		if (state.nonce === undefined) throw new Error('The vault did not answer the nonce read')
+		const auth: Authorisation = { params: outcome.params, mandateHash: hash, nonce: state.nonce }
+		const domain: RecentreDomain = {
+			name: config.domainName,
+			version: config.domainVersion,
+			chainId: config.chainId as number,
+			verifyingContract: config.vault as Address,
+		}
+		const { signature, signer } = await signRecentre(key, domain, auth)
+		// The authorisation is public by design once relayed; it is what the DON attests to.
+		runtime
+			.usingTheDons()
+			.report({
+				encodedPayload: hexToBase64(encodeAuthorisation(auth, signature)),
+				encoderName: 'evm',
+				signingAlgo: 'ecdsa',
+				hashingAlgo: 'keccak256',
+			})
+			.result()
+		return `RECENTER ${tickLower}..${tickUpper} ${authorisationJson(auth, signature, signer)}`
+	}
+	const txHash = deliver(runtime.usingTheDons(), config, encodeReport(true, hash, outcome.params))
 	return `RECENTER ${tickLower}..${tickUpper} tx ${txHash}`
 }
+
+/** The signed authorisation as the simulator prints it, for a relayer to pick up. */
+export const authorisationJson = (auth: Authorisation, signature: Hex, signer: Address): string =>
+	JSON.stringify(
+		{ params: auth.params, mandateHash: auth.mandateHash, nonce: auth.nonce, signature, signer },
+		(_, v) => (typeof v === 'bigint' ? v.toString() : v),
+	)
 
 /** Signs `payload` as a DON report and writes it to the vault. Returns the transaction hash. */
 export function deliver(don: Runtime<Config>, config: Config, payload: Hex): Hex {
@@ -205,7 +250,10 @@ export function deliver(don: Runtime<Config>, config: Config, payload: Hex): Hex
 			hashingAlgo: 'keccak256',
 		})
 		.result()
-	const network = getNetwork({ chainFamily: 'evm', chainSelectorName: config.chainSelectorName })
+	const network = getNetwork({
+		chainFamily: 'evm',
+		chainSelectorName: config.chainSelectorName ?? '',
+	})
 	if (!network) throw new Error(`Unknown chain selector name ${config.chainSelectorName}`)
 	const written = new EVMClient(network.chainSelector.selector)
 		.writeReport(don, { receiver: config.vault, report, gasConfig: { gasLimit: config.gasLimit } })

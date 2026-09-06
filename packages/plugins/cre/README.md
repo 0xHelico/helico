@@ -27,8 +27,13 @@ Every run (cron trigger, `handlerInTee`):
    price stays inside the new range), and the liquidity the result funds; Uniswap's own
    arithmetic on native `BigInt`, scaled by `slippageBps`. A zero mint, or one below the
    mandate's `minRetainedBps` of the old liquidity, is a hold.
-5. `deliver`: `runtime.report(...)` over `abi.encode(bool act, bytes32 mandateHash, RecenterParams p)`
-   and `EVMClient.writeReport` to the vault on `chainSelectorName`. A hold writes nothing.
+5. Crosses out with the verdict only, one of two ways. `delivery: 'signature'` (Robinhood
+   mainnet, no CRE forwarder): the agent key, a Vault DON secret released only into the
+   enclave, signs an EIP-712 `Recenter(RecenterParams params, bytes32 mandateHash, uint256 nonce)`
+   with the vault's nonce, and the authorisation leaves as the DON report and as the handler's
+   result for a relayer; the key never leaves. `delivery: 'forwarder'` (chains with a CRE
+   forwarder): `EVMClient.writeReport` of `abi.encode(bool act, bytes32 mandateHash, RecenterParams p)`.
+   A hold signs and writes nothing.
 
 ## Why there is a swap in the report
 
@@ -42,11 +47,12 @@ hold (`NothingToMint`).
 
 | | |
 |---|---|
-| TEE registration, `handlerInTee` | [`src/index.ts#L220-L228`](src/index.ts#L220-L228) |
-| The enclave callback, steps 1 to 5 | [`src/index.ts#L161-L196`](src/index.ts#L161-L196) |
-| Policy and sizing on the chain state | [`src/index.ts#L99-L158`](src/index.ts#L99-L158) `decide` |
-| Report to the vault through the forwarder | [`src/index.ts#L199-L217`](src/index.ts#L199-L217) `deliver` |
-| Reads from inside the enclave | [`src/chain.ts#L95-L189`](src/chain.ts#L95-L189) `readChainState` |
+| TEE registration, `handlerInTee` | [`src/index.ts#L268-L276`](src/index.ts#L268-L276) |
+| The enclave callback, steps 1 to 5 | [`src/index.ts#L173-L234`](src/index.ts#L173-L234) |
+| Policy and sizing on the chain state | [`src/index.ts#L111-L170`](src/index.ts#L111-L170) `decide` |
+| Report to the vault through the forwarder | [`src/index.ts#L244-L265`](src/index.ts#L244-L265) `deliver` |
+| The signed authorisation, EIP-712 | [`src/sign.ts#L65-L75`](src/sign.ts#L65-L75) `signRecentre`, typed data above it |
+| Reads from inside the enclave | [`src/chain.ts#L98-L201`](src/chain.ts#L98-L201) `readChainState` |
 | Mandate struct and hash | [`src/mandate.ts`](src/mandate.ts) |
 | The vault's range rule, mirrored | [`src/decision.ts`](src/decision.ts) `vaultRejects` |
 | Uniswap arithmetic, cross-checked against the SDK | [`src/math.ts`](src/math.ts) |
@@ -58,8 +64,8 @@ hold (`NothingToMint`).
 |---|---|
 | Registers a TEE handler with `handlerInTee` | ✅ |
 | Decision logic is Helico's | ✅ mandate hash check, in-enclave reads, re-centre rule aligned with the vault, swap and mint sizing, fee ceiling |
-| Delivers the verdict to the vault | code and tests only; **no forwarder on Robinhood mainnet**, so on the target chain this leg is replaced by the enclave signing the params (#41) |
-| Unit tests, `bun test` | ✅ 100: mandate hash and report tuple pinned to `cast`-produced vectors (commands in the tests), decision table, grid, and boundaries, arithmetic against `@uniswap/v3-sdk` including the swap step, fake `TeeRuntime` answering `eth_call` by selector, failing on RPC faults, and recording `writeReport` |
+| Delivers the verdict to the vault | ✅ code and tests for both modes: the enclave signs the params with the agent key (#41, any chain) or writes a DON report through a forwarder; **not yet run against a deployed vault**, whose `nonces` and `recenterWithSignature` are contract-side work |
+| Unit tests, `bun test` | ✅ 110: EIP-712 digest checked against the spec by hand, signature recovery, mandate hash and report tuple pinned to `cast`-produced vectors (commands in the tests), decision table, grid, and boundaries, arithmetic against `@uniswap/v3-sdk` including the swap step, fake `TeeRuntime` answering `eth_call` by selector, failing on RPC faults, and recording `writeReport` |
 | Compiles to WASM and simulates in the CRE simulator | the decision alone did (#33, #36, older binary); **this binary has not been simulated**, it needs a deployed vault to read |
 | Deployed | ❌ deploy access exists on the team's CRE org; the Confidential Workflows private beta is requested (#41) |
 
@@ -73,8 +79,12 @@ const runner = await Runner.newRunner({ configSchema })
 await runner.run(initWorkflow)
 ```
 
-Config: `{ schedule, rpcUrl, chainSelectorName, vault, positionManager, stateView, owner, poolId,
-mandateHash, gasLimit, slippageBps, maxPoolFeePips, deadlineSeconds }`. Hex values are lowercased on parse. `secrets.yaml` must map
+Config: `{ schedule, rpcUrl, delivery, vault, positionManager, stateView, owner, poolId,
+mandateHash, gasLimit, slippageBps, maxPoolFeePips, deadlineSeconds }` plus, for `delivery:
+'signature'`, `chainId` and optionally `domainName` (`HelicoVault`), `domainVersion` (`1`),
+`agentKeySecretId` (`AGENT_KEY`), `noncesFunction` (`nonces`); for `delivery: 'forwarder'`,
+`chainSelectorName`. Hex values are lowercased on parse. In signature mode `secrets.yaml` also
+maps `AGENT_KEY` to the env var holding the agent's private key. `secrets.yaml` must map
 `MANDATE_RANGE_WIDTH_TICKS`, `MANDATE_MIN_IMPROVEMENT_BPS`, `MANDATE_COOLDOWN_SECONDS`,
 `MANDATE_MAX_LIQUIDITY`, `MANDATE_EXPIRY`, `MANDATE_MIN_RETAINED_BPS` to env vars, with the same
 values the user passed to `setMandate`. Any chain with a v4 `StateView` and a CRE forwarder works; on Robinhood that is
@@ -107,8 +117,12 @@ bun run --filter @helico/plugin-cre test
 
 ## Do not forget
 
-- The binary is not confidential, only the data it computes over. Never put the tick or the
-  RPC response through `usingTheDons()`; the verdict is the whole report.
+- The binary is not confidential, only the data it computes over. Never put the tick, the RPC
+  response, or the agent key through `usingTheDons()`; the verdict or the signed authorisation
+  is the whole report.
+- In the simulator the enclave is the simulator, so the agent key is on the machine that runs
+  it. The design makes "no re-centre the enclave did not sign" true once deployed with the
+  Confidential Workflows beta; until then say so.
 - `vaultRejects` and the `RecenterParams` tuple in `abi.ts` must change whenever the vault does; the tuple is
   pinned to a `cast abi-encode` vector in `index.test.ts`, so a drift fails there first. `rangeWidthTicks` is a
   width in ticks and `minImprovementBps` is a relative shrink of the gap to the range's

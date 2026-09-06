@@ -6,6 +6,7 @@ import {
 	encodeFunctionData,
 	type Hex,
 	keccak256,
+	parseAbi,
 } from 'viem'
 import { positionManagerAbi, stateViewAbi, vaultAbi } from './abi'
 
@@ -89,6 +90,8 @@ export type ChainState = {
 	tickLower: number
 	tickUpper: number
 	poolKey: PoolKey
+	/** The vault's nonce for the owner, read only when the enclave signs. */
+	nonce?: bigint
 }
 
 /** Everything the decision needs, in two batches: the account and the pool, then the position. */
@@ -98,8 +101,15 @@ export function readChainState(
 	{ vault, positionManager, stateView }: Addresses,
 	owner: Address,
 	poolId: Hex,
+	options: { withNonce?: boolean; noncesFunction?: string } = {},
 ): ChainState {
-	const [positionOf, lastActionAt, isActive, slot0, poolLiquidityHex] = ethCallBatch(
+	const noncesAbi = parseAbi([
+		`function ${options.noncesFunction ?? 'nonces'}(address owner) view returns (uint256)`,
+	])
+	const nonceCall = options.withNonce
+		? [{ to: vault, data: encodeFunctionData({ abi: noncesAbi, args: [owner] }) }]
+		: []
+	const [positionOf, lastActionAt, isActive, slot0, poolLiquidityHex, nonceHex] = ethCallBatch(
 		runtime,
 		rpcUrl,
 		[
@@ -127,8 +137,9 @@ export function readChainState(
 					args: [poolId],
 				}),
 			},
+			...nonceCall,
 		],
-	) as [Hex, Hex, Hex, Hex, Hex]
+	) as [Hex, Hex, Hex, Hex, Hex, Hex | undefined]
 	const tokenId = decodeFunctionResult({
 		abi: vaultAbi,
 		functionName: 'positionOf',
@@ -185,5 +196,6 @@ export function readChainState(
 		}),
 		...unpackPositionInfo(info),
 		poolKey,
+		nonce: nonceHex ? decodeFunctionResult({ abi: noncesAbi, data: nonceHex }) : undefined,
 	}
 }

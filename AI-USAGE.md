@@ -262,6 +262,21 @@ Format: date · what was done · the AI's role · what a human verified.
 - **Verified:** `typecheck` (tests included now, three type mismatches in existing tests fixed),
   `test` (105 pass), `bun run check`; the example in the package README was produced by the
   script from the pool state read with `cast` at block 55182962.
+### 2026-09-05 — CRE plugin: the enclave signs the re-centre
+
+- **Done:** `packages/plugins/cre/src/sign.ts` (EIP-712 `Recenter(RecenterParams params, bytes32
+  mandateHash, uint256 nonce)` with the vault's struct nested, `signRecentre`,
+  `recoverRecentreSigner`, `encodeAuthorisation`), `relay.ts` (calldata for the vault's
+  signature entry point), and `delivery: 'signature'` in the handler: the agent key comes from
+  the Vault DON as a secret, the nonce from the vault, and only the signed authorisation crosses
+  out. `delivery: 'forwarder'` keeps `writeReport`.
+- **AI's role:** proved signing inside the TEE handler in the simulator (#41), wrote the module,
+  the by-hand EIP-712 digest check, the handler tests including "the key never leaves", and the
+  docs. The collaborator accepted the typed struct; the contract side is his.
+- **Plan:** [`docs/plans/2026-09-05-cre-enclave-signature.md`](docs/plans/2026-09-05-cre-enclave-signature.md).
+- **Verified:** `typecheck`, `test` (110 pass), `bun run check`. Not simulated with this
+  binary and not run against a deployed vault: the vault's `nonces` and
+  `recenterWithSignature` do not exist yet, so the simulation is recorded as pending.
 
 <!--
 Template for the next entry:

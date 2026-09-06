@@ -4,6 +4,9 @@ import type { Config } from '../index'
 
 export type EthCallHandler = (data: Hex, to: string) => Hex
 
+/** Thrown by a handler to answer the call with a JSON-RPC error, the way a reverting `eth_call` does. */
+export class RpcError extends Error {}
+
 type RpcCall = { to: string; data: Hex }
 type Batch = { id: number; method: string; params: [RpcCall, string] }[]
 
@@ -31,6 +34,7 @@ export function fakeRuntime(input: {
 	const rpcRequests: Batch[] = []
 	const writes: WriteReportCall[] = []
 	const reports: string[] = []
+	const secretRequests: string[] = []
 
 	const answer = ({ to, data }: RpcCall): Hex => {
 		const handler = input.handlers[slice(data, 0, 4)]
@@ -52,11 +56,14 @@ export function fakeRuntime(input: {
 			const raw = typeof p.body === 'string' ? Buffer.from(p.body, 'base64') : Buffer.from(p.body)
 			const batch = JSON.parse(raw.toString()) as Batch
 			rpcRequests.push(batch)
-			const replies = batch.map(({ id, params }) => ({
-				jsonrpc: '2.0',
-				id,
-				result: answer(params[0]),
-			}))
+			const replies = batch.map(({ id, params }) => {
+				try {
+					return { jsonrpc: '2.0', id, result: answer(params[0]) }
+				} catch (e) {
+					if (e instanceof RpcError) return { jsonrpc: '2.0', id, error: { message: e.message } }
+					throw e
+				}
+			})
 			return {
 				result: () => ({
 					statusCode: input.httpStatus ?? 200,
@@ -90,16 +97,25 @@ export function fakeRuntime(input: {
 	}
 	const runtime = {
 		...don,
-		getSecrets: (requests: { id: string }[]) => ({
-			result: () =>
-				Object.fromEntries(
-					requests.map((r) => [
-						r.id,
-						{ id: r.id, namespace: 'main', value: input.secrets[r.id] ?? '' },
-					]),
-				),
-		}),
+		getSecrets: (requests: { id: string }[]) => {
+			secretRequests.push(...requests.map((r) => r.id))
+			return {
+				result: () =>
+					Object.fromEntries(
+						requests.map((r) => [
+							r.id,
+							{ id: r.id, namespace: 'main', value: input.secrets[r.id] ?? '' },
+						]),
+					),
+			}
+		},
 		usingTheDons: () => don,
 	}
-	return { runtime: runtime as unknown as TeeRuntime<Config>, rpcRequests, writes, reports }
+	return {
+		runtime: runtime as unknown as TeeRuntime<Config>,
+		rpcRequests,
+		writes,
+		reports,
+		secretRequests,
+	}
 }
