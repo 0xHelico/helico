@@ -7,6 +7,9 @@ solc = "0.8.28"
 optimizer = true
 optimizer_runs = 200
 via_ir = false
+# Emit the storage layout into every artifact, so `forge inspect` can always answer and
+# `scripts/check-storage-layout.py` never reports a stale cache as a mystery.
+extra_output = ["storageLayout"]
 
 [fmt]
 line_length = 110

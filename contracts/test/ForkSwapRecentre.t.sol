@@ -273,7 +273,12 @@ contract ForkSwapRecentreTest is ForkBase {
         );
 
         int24 after_ = _tickOf(demoPool);
-        assertTrue(after_ >= newLower && after_ < newUpper, "the pool halted at the committed edge");
+
+        // Both halves, and the first is the one that matters. Asserting only that the tick
+        // ended inside the range is satisfied by a swap that never moved it at all — which is
+        // how this test read as idle on a deeper pool. It has to have pushed, and been stopped.
+        assertTrue(after_ > tick, "the swap actually moved the price");
+        assertEq(after_, newUpper - 1, "and the pool halted on the last tick inside the range");
         assertTrue(_isInRange(newTokenId, demoPool), "so the position is still on the market");
         assertEq(POSITION_MANAGER.ownerOf(newTokenId), owner, "and it is still the owner's");
 
