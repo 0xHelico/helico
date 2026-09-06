@@ -1,11 +1,13 @@
-// Package httpapi exposes the blog over HTTP: five routes, JSON in and out, problem+json for
-// errors, ETags for caches. Everything about posts themselves lives in the blog package.
+// Package httpapi exposes the API over HTTP: the blog's five routes and the swap
+// conversation, JSON in and out, problem+json for errors, ETags for caches. What a post is
+// lives in the blog package, and what a swap request means lives in the swap package.
 package httpapi
 
 import (
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -13,6 +15,7 @@ import (
 	"time"
 
 	"github.com/0xHelico/helico/apps/be/internal/blog"
+	"github.com/0xHelico/helico/apps/be/internal/swap"
 )
 
 // Options tune the handler; zero values are safe.
@@ -21,6 +24,11 @@ type Options struct {
 	CORSOrigins    []string
 	Logger         *slog.Logger
 	RequestTimeout time.Duration
+	// Swap answers the swap conversation. Nil, or unconfigured, means that route says so.
+	Swap *swap.Service
+	// SwapRatePerMin and SwapDailyMax bound what the paid model costs.
+	SwapRatePerMin int
+	SwapDailyMax   int
 }
 
 // cacheControl is what a CDN or browser may do with a read: keep it for a minute, serve it
@@ -35,13 +43,14 @@ func New(svc *blog.Service, opt Options) http.Handler {
 	if opt.Logger == nil {
 		opt.Logger = slog.Default()
 	}
-	api := &api{svc: svc, opt: opt}
+	api := &api{svc: svc, opt: opt, limit: newLimiter(opt.SwapRatePerMin, opt.SwapDailyMax)}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", api.health)
 	mux.HandleFunc("GET /api/posts", api.list)
 	mux.HandleFunc("GET /api/posts/{slug}", api.get)
 	mux.HandleFunc("PUT /api/posts/{slug}", api.requireAdmin(api.put))
 	mux.HandleFunc("DELETE /api/posts/{slug}", api.requireAdmin(api.delete))
+	mux.HandleFunc("POST /api/swap/intent", api.swapIntent)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { writeProblem(w, http.StatusNotFound, "") })
 
 	var h http.Handler = mux
@@ -57,8 +66,9 @@ func New(svc *blog.Service, opt Options) http.Handler {
 }
 
 type api struct {
-	svc *blog.Service
-	opt Options
+	svc   *blog.Service
+	opt   Options
+	limit *limiter
 }
 
 // postView is the JSON shape of a post. Full includes the body; list items omit it.
@@ -226,5 +236,44 @@ func (a *api) fail(w http.ResponseWriter, r *http.Request, err error) {
 	default:
 		a.opt.Logger.Error("request failed", "err", err, "path", r.URL.Path, "request_id", requestIDFrom(r))
 		writeProblem(w, http.StatusInternalServerError, "")
+	}
+}
+
+// swapIntent turns a sentence into a checked swap intent. It reads nothing and writes nothing:
+// the whole endpoint is an interpreter, and the caller signs whatever they decide to sign.
+func (a *api) swapIntent(w http.ResponseWriter, r *http.Request) {
+	if a.opt.Swap == nil || !a.opt.Swap.Configured() {
+		writeProblem(w, http.StatusServiceUnavailable, "the swap conversation is off: BE_LLM_API_KEY is not set")
+		return
+	}
+	if ok, reason := a.limit.allow(clientAddr(r)); !ok {
+		w.Header().Set("Retry-After", "60")
+		writeProblem(w, http.StatusTooManyRequests, reason)
+		return
+	}
+
+	var body struct {
+		Message string `json:"message"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 4<<10)).Decode(&body); err != nil {
+		writeProblem(w, http.StatusBadRequest, "send {\"message\": \"…\"}")
+		return
+	}
+
+	answer, err := a.opt.Swap.Interpret(r.Context(), body.Message)
+	switch {
+	case errors.Is(err, swap.ErrNotConfigured):
+		writeProblem(w, http.StatusServiceUnavailable, "the swap conversation is off: BE_LLM_API_KEY is not set")
+	case err != nil && r.Context().Err() != nil:
+		writeProblem(w, http.StatusGatewayTimeout, "the model took too long")
+	case err != nil:
+		// The model failing is this service's problem to own. The error can carry the provider's
+		// own message and, when the call never connected, BE_LLM_BASE_URL inside a *url.Error, so
+		// it goes to the log and the caller gets a sentence that says nothing about our setup.
+		a.opt.Logger.Warn("swap intent failed", "error", err)
+		writeProblem(w, http.StatusBadGateway, "the model could not be reached; try again in a moment")
+	default:
+		w.Header().Set("Cache-Control", "no-store")
+		writeJSON(w, http.StatusOK, answer)
 	}
 }
