@@ -316,6 +316,24 @@ Format: date · what was done · the AI's role · what a human verified.
   (append-only, snapshot committed). Mutation-checked: removing the `act` guard and the mandate
   hash check fails exactly the two tests written for them.
 
+### 2026-09-06 — CRE plugin: the forwarder path rehearsed on a fork of Arbitrum One
+
+- **Done:** the workflow, in `delivery: forwarder`, read a vault deployed on a local fork of
+  Arbitrum One (the vault from #70, forwarder set to the CRE CLI's mock), decided a re-centre,
+  and wrote the report; the mock forwarder called `onReport`, the vault burned, swapped, and
+  minted on the real ETH/ARB pool, and the owner ended with a new in-range position holding
+  94.3% of the liquidity. A second run held on the cooldown. Recorded in the forwarder-delivery
+  plan with the recipe and the scratch script; the plugin README's status reflects it.
+- **AI's role:** set up the fork, ran the deploy script, wrote the scratch mint-and-mandate script
+  (a copy of the fork test's helper), configured the consumer, ran the simulations, and verified
+  every number on the fork with `cast`. No package code changed. The collaborator's #70 is the
+  contract side.
+- **Plan:** [`docs/plans/2026-09-05-cre-forwarder-delivery.md`](docs/plans/2026-09-05-cre-forwarder-delivery.md), rehearsal section; tracked in #71.
+- **Verified:** transaction receipt (status 1, `Recentred` emitted), `positionOf`, `ownerOf`,
+  `getPositionLiquidity`, `getPoolAndPositionInfo`, `lastActionAt`, and the vault's balances read
+  back from the fork; `mandateHash()` in the package equal to the vault's hash. Not a live
+  network, not a TEE, and the mock forwarder verifies no signatures.
+
 <!--
 Template for the next entry:
 
