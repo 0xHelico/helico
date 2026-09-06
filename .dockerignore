@@ -1,0 +1,16 @@
+# The landing image builds from the repository root (Bun workspaces); keep the context small.
+.git
+**/node_modules
+**/dist
+**/.astro
+contracts/lib
+contracts/out
+contracts/cache
+contracts/broadcast
+apps/be/*.db*
+**/.env
+**/.env.*
+!**/.env.example
+docs
+*.md
+!apps/be/content/*.md
