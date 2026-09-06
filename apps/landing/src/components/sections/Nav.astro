@@ -3,6 +3,8 @@ import { solidityTests } from '../../lib/solidity-tests'
 import { Image } from 'astro:assets'
 import logoNav from '../../assets/logo-nav.webp'
 const repo = 'https://github.com/0xHelico/helico'
+// Reading about Helico goes to the docs site; looking at the code goes to GitHub.
+const docs = 'https://docs.helico.site/docs'
 const app = 'https://app.helico.site'
 
 // Two-tone 40px icons supplied by the user, in the reference's style; the colours are ours.
@@ -51,7 +53,7 @@ const menus: Menu[] = [
 		label: 'How It Works',
 		items: [
 			{ title: 'Your rules', sub: 'What you decide, and what the contract enforces', href: '/#enforcement', icon: 'document' },
-			{ title: 'The decider', sub: 'A sealed program that decides', href: `${repo}/tree/main/packages/plugins/cre`, icon: 'leaf', external: true },
+			{ title: 'The decider', sub: 'A sealed program that decides', href: `${docs}/chainlink-cre`, icon: 'leaf', external: true },
 			{ title: 'The check', sub: 'The actual code, for builders', href: '/#build', icon: 'book' },
 		],
 	},
@@ -59,9 +61,9 @@ const menus: Menu[] = [
 		id: 'developers',
 		label: 'Developers',
 		items: [
-			{ title: 'Uniswap plugin', badge: '52 tests', sub: 'Pools and positions from the SDK', href: `${repo}/tree/main/packages/plugins/uniswap`, icon: 'percent', external: true },
-			{ title: 'CRE plugin', badge: '116 tests', sub: 'Decide, size, and sign in the enclave', href: `${repo}/tree/main/packages/plugins/cre`, icon: 'pills', external: true },
-			{ title: 'Vault', badge: `${solidityTests} tests`, sub: 'Solidity, Foundry, fork tests', href: `${repo}/tree/main/contracts`, icon: 'coins', external: true },
+			{ title: 'Uniswap plugin', badge: '52 tests', sub: 'Pools and positions from the SDK', href: `${docs}/uniswap-plugin`, icon: 'percent', external: true },
+			{ title: 'CRE plugin', badge: '116 tests', sub: 'Decide, size, and sign in the enclave', href: `${docs}/chainlink-cre`, icon: 'pills', external: true },
+			{ title: 'Vault', badge: `${solidityTests} tests`, sub: 'Solidity, Foundry, fork tests', href: `${docs}/contracts`, icon: 'coins', external: true },
 			{ title: 'Plans and prompts', sub: 'Every plan committed before code', href: `${repo}/tree/main/docs/plans`, icon: 'bars', external: true },
 		],
 	},
@@ -88,6 +90,7 @@ const menus: Menu[] = [
 				{menus.map((m) => (
 					<button type="button" data-menu={m.id} aria-expanded="false" aria-controls={`menu-${m.id}`}>{m.label}</button>
 				))}
+				<a href={`${docs}/introduction`}>Docs</a>
 				<a href="/#faq">FAQ</a>
 				<a href="/blog/">Blog</a>
 			</nav>
@@ -153,6 +156,9 @@ const menus: Menu[] = [
 		</section>
 	))}
 	<section class="nav__group nav__group--foot">
+		<a class="nav__card nav__card--sheet" href={`${docs}/introduction`} data-sheet-link>
+			<span class="nav__text"><span class="nav__title">Docs</span><span class="nav__sub">How it works, and what is proven</span></span>
+		</a>
 		<a class="nav__card nav__card--sheet" href="/#faq" data-sheet-link>
 			<span class="nav__text"><span class="nav__title">FAQ</span><span class="nav__sub">Seven questions, answered honestly</span></span>
 		</a>

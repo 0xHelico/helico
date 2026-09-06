@@ -1,6 +1,8 @@
 ---
 import { forkTests } from '../../lib/solidity-tests'
 const repo = 'https://github.com/0xHelico/helico'
+// Reading about Helico goes to the docs site; looking at the code goes to GitHub.
+const docs = 'https://docs.helico.site/docs'
 // Permalinks pinned at the commit these line numbers were read from, so they stay true when the file moves on.
 const vault = `${repo}/blob/154bcabd85ca3be8f73851bbc55a1a04ea42c6e4/contracts/src/HelicoVault.sol`
 const fields = [
@@ -64,7 +66,7 @@ const templates = [
 		<h2 class="headline" id="enforcement-title">A Program That Cannot Break Your Rules</h2>
 		<p class="lede">You set the rules. The program decides. The contract checks. Nothing moves otherwise.</p>
 		<div class="actions">
-			<a class="btn btn--dark" href={`${repo}#readme`}>Get Started</a>
+			<a class="btn btn--dark" href={`${docs}/introduction`}>Get Started</a>
 			<a class="btn btn--ghost" href={`${vault}#L724`}>Learn More</a>
 		</div>
 
@@ -125,7 +127,7 @@ const templates = [
 				<h3>Rules for every style.</h3>
 				<p>Move often or rarely. Keep more or less. You pick once, and the contract stops everything else.</p>
 			</div>
-			<a class="btn btn--ghost" href={`${repo}/blob/main/contracts/README.md`}>Learn More</a>
+			<a class="btn btn--ghost" href={`${docs}/your-rules`}>Learn More</a>
 		</div>
 		<div class="cards" style="text-align:left">
 			{templates.map((t) => (

@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs'
 import { Code } from 'astro:components'
 import { forkTests, solidityTests } from '../../lib/solidity-tests'
 const repo = 'https://github.com/0xHelico/helico'
+// Reading about Helico goes to the docs site; looking at the code goes to GitHub.
+const docs = 'https://docs.helico.site/docs'
 // Read from the vault source at build time, so the page shows the function as this checkout has it.
 const source = readFileSync(new URL('../../../../../contracts/src/HelicoVault.sol', import.meta.url), 'utf8')
 const from = source.indexOf('    function _checkRange(')
@@ -57,7 +59,7 @@ const packages = [
 				<h3>Open by default.</h3>
 				<p>The code above is the actual check the contract runs, read from the source when this page is built. Every count below points at the code that proves it.</p>
 			</div>
-			<a class="btn btn--secondary" href={`${repo}#readme`}>Learn More</a>
+			<a class="btn btn--secondary" href={`${docs}/builders`}>Learn More</a>
 		</div>
 		<div class="cards" style="text-align:left">
 			{packages.map((p) => (

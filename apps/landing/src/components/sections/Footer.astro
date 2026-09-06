@@ -2,11 +2,13 @@
 import { Image } from 'astro:assets'
 import logo from '../../assets/logo.webp'
 const repo = 'https://github.com/0xHelico/helico'
+// Reading about Helico goes to the docs site; looking at the code goes to GitHub.
+const docs = 'https://docs.helico.site/docs'
 const x = 'https://x.com/0xhelico'
 const columns = [
-	{ title: 'Product', links: [['Vault', `${repo}/tree/main/contracts`], ['Plugins', `${repo}/tree/main/packages/plugins`], ['Evidence', '/#verified']] },
-	{ title: 'Developers', links: [['GitHub', repo], ['Plans', `${repo}/tree/main/docs/plans`], ['AI usage', `${repo}/blob/main/AI-USAGE.md`], ['Contributing', `${repo}/blob/main/CONTRIBUTING.md`]] },
-	{ title: 'Resources', links: [['Blog', '/blog/'], ['README', `${repo}#readme`], ['Uniswap feedback', `${repo}/blob/main/FEEDBACK.md`], ['FAQ', '/#faq']] },
+	{ title: 'Product', links: [['Vault', `${docs}/contracts`], ['Plugins', `${docs}/builders`], ['Evidence', '/#verified']] },
+	{ title: 'Developers', links: [['GitHub', repo], ['Plans', `${repo}/tree/main/docs/plans`], ['AI usage', `${repo}/blob/main/AI-USAGE.md`], ['Contributing', `${docs}/contributing`]] },
+	{ title: 'Resources', links: [['Blog', '/blog/'], ['Docs', `${docs}/introduction`], ['Uniswap feedback', `${repo}/blob/main/FEEDBACK.md`], ['FAQ', '/#faq']] },
 	{ title: 'Project', links: [['ETHOnline 2026', 'https://ethglobal.com/events/ethonline2026'], ['MIT license', `${repo}/blob/main/LICENSE`]] },
 ]
 ---
