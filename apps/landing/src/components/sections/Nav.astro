@@ -3,21 +3,35 @@ import { Image } from 'astro:assets'
 import logo from '../../assets/logo.png'
 const repo = 'https://github.com/0xHelico/helico'
 
-// Simple line glyphs, one path each, drawn for the 40px icon tiles.
-const glyphs: Record<string, string> = {
-	vault: 'M5 11V8a7 7 0 0 1 14 0v3M4 11h16v9H4zM12 15v2',
-	mandate: 'M7 3h7l4 4v14H7zM14 3v4h4M9 12h6M9 16h6',
-	canvas: 'M3 5h18v11H3zM8 21h8M12 16v5M9 9l3 2 3-2',
-	enclave: 'M12 3l7 3v5c0 4-3 7-7 9-4-2-7-5-7-9V6zM9 12l2 2 4-4',
-	code: 'M8 8l-4 4 4 4M16 8l4 4-4 4M13 5l-2 14',
-	plugin: 'M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5',
-	plans: 'M5 5h14M5 12h14M5 19h9M17 17l2 2 3-3',
-	check: 'M12 3l2.5 2 3-.5.5 3 2 2.5-2 2.5-.5 3-3-.5-2.5 2-2.5-2-3 .5-.5-3L4 12l2-2.5-.5-3 3 .5zM9 12l2 2 4-4',
-	ai: 'M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z',
-	feedback: 'M4 5h16v11H9l-5 4zM8 9h8M8 12h5',
+// Two-tone 40px icons supplied by the user, in the reference's style; the colours are ours.
+const icons: Record<string, string> = {
+	document:
+		'<path d="M20.6 6.84C22.84 6.84 23.96 6.84 24.82 7.28C25.57 7.66 26.18 8.27 26.56 9.03C27 9.88 27 11 27 13.24L27 27.44C27 29.68 27 30.8 26.56 31.66C26.18 32.41 25.57 33.02 24.82 33.41C23.96 33.84 22.84 33.84 20.6 33.84L13.4 33.84C11.16 33.84 10.04 33.84 9.18 33.41C8.43 33.02 7.82 32.41 7.44 31.66C7 30.8 7 29.68 7 27.44L7 13.24C7 11 7 9.88 7.44 9.03C7.82 8.27 8.43 7.66 9.18 7.28C10.04 6.84 11.16 6.84 13.4 6.84L20.6 6.84Z" fill="var(--color-4)"/><path d="M29.5 13.24C29.5 12.16 29.5 11.2 29.44 10.41C29.4 9.9 29.32 9.38 29.17 8.85C30.42 8.87 31.19 8.96 31.82 9.28C32.57 9.66 33.18 10.27 33.56 11.03C34 11.88 34 13 34 15.24V25.44C34 27.68 34 28.8 33.56 29.66C33.18 30.41 32.57 31.02 31.82 31.41C31.19 31.73 30.42 31.81 29.17 31.83C29.32 31.31 29.4 30.78 29.44 30.27C29.5 29.48 29.5 28.52 29.5 27.44V13.24Z" fill="var(--color-1)"/><path d="M12 12.84H22M12 19.84H19.14" stroke="#fff" stroke-width="3" stroke-linecap="round"/>',
+	percent:
+		'<rect x="7.6665" y="8" width="10" height="10" rx="5" fill="var(--color-1)"/><rect x="21.6665" y="22" width="10" height="10" rx="5" fill="var(--color-1)"/><path d="M11.6665 28L27.6665 12" stroke="var(--color-4)" stroke-width="4" stroke-linecap="round"/>',
+	book:
+		'<path d="M17 30.76V17.41C17 16.55 17 16.12 17.15 15.75C17.28 15.43 17.49 15.15 17.76 14.94C18.07 14.69 18.49 14.57 19.32 14.34L26.92 12.17C28.31 11.77 29 11.57 29.55 11.73C30.03 11.86 30.44 12.17 30.7 12.6C31 13.08 31 13.8 31 15.24V28.59C31 29.45 31 29.88 30.85 30.25C30.72 30.57 30.51 30.85 30.24 31.06C29.93 31.31 29.51 31.43 28.68 31.66L28.68 31.66L21.08 33.83L21.08 33.83C19.69 34.23 19 34.43 18.45 34.27C17.97 34.14 17.56 33.83 17.3 33.4C17 32.92 17 32.2 17 30.76Z" fill="var(--color-1)"/><path d="M17.92 6.17C19.31 5.77 20 5.57 20.55 5.73C21.03 5.86 21.44 6.17 21.7 6.6C22 7.08 22 7.8 22 9.24V10.45L18.5 11.45C17.96 11.61 16.93 11.85 16.08 12.45L15.91 12.58C15.31 13.05 14.83 13.64 14.5 14.32L14.37 14.62C13.95 15.66 14 16.82 14 17.41V27.28L12.08 27.83L11.16 28.09C10.36 28.31 9.87 28.39 9.45 28.27C8.97 28.14 8.56 27.83 8.3 27.4C8 26.92 8 26.2 8 24.76V13.83C8 12.1 8 11.23 8.3 10.5C8.56 9.86 8.98 9.3 9.53 8.87C10.15 8.39 10.98 8.15 12.64 7.67L17.92 6.17Z" fill="var(--color-4)"/>',
+	coins:
+		'<path d="M31 15.5C31 18.54 26.08 21 20 21C13.92 21 9 18.54 9 15.5C9 12.46 13.92 10 20 10C26.08 10 31 12.46 31 15.5Z" fill="var(--color-1)"/><path d="M30.21 21.45C30.72 22.09 31 22.78 31 23.5C31 26.54 26.08 29 20 29C13.92 29 9 26.54 9 23.5C9 22.78 9.28 22.09 9.79 21.45C10.15 21.68 10.52 21.89 10.88 22.07C13.37 23.32 16.6 24 20 24C23.4 24 26.63 23.32 29.12 22.07C29.48 21.89 29.85 21.68 30.21 21.45Z" fill="var(--color-4)"/>',
+	leaf:
+		'<g transform="translate(4 4) scale(2)"><path d="M3.7135 11.5755C3.26054 10.8233 3 9.94207 3 9V4C3 2.89543 3.89543 2 5 2H11C11.2139 2 11.42 2.03359 11.6133 2.09579L3.7135 11.5755Z" fill="var(--color-4)"/><path d="M4.62109 12.6863L12.7157 2.97266C12.896 3.27303 12.9998 3.62467 12.9998 4.0005V9.00049C12.9998 11.7619 10.7612 14.0005 7.99978 14.0005C6.6972 14.0005 5.51094 13.5024 4.62109 12.6863Z" fill="var(--color-1)"/></g>',
+	bars:
+		'<rect x="6" y="7" width="12" height="26" rx="3" fill="var(--color-4)"/><rect x="21" y="7" width="7" height="26" rx="2" fill="var(--color-1)"/><rect x="31" y="7" width="3" height="26" rx="1.5" fill="var(--color-4)"/>',
+	arcs:
+		'<path d="M9.31 19C8.76 19 8.49 19 8.26 18.87C8.08 18.77 7.9 18.57 7.82 18.38C7.72 18.14 7.75 17.89 7.81 17.4C8.17 14.54 9.46 11.87 11.52 9.81C13.96 7.37 17.27 6 20.71 6C24.16 6 27.47 7.37 29.91 9.81C31.97 11.87 33.26 14.54 33.62 17.4C33.68 17.89 33.71 18.14 33.61 18.38C33.53 18.57 33.35 18.77 33.17 18.87C32.94 19 32.67 19 32.11 19H28.82C28.27 19 28 19 27.81 18.92C27.62 18.84 27.52 18.77 27.4 18.6C27.28 18.44 27.19 18.1 27.02 17.42C26.74 16.29 26.15 15.24 25.31 14.4C24.09 13.18 22.44 12.5 20.71 12.5C18.99 12.5 17.34 13.18 16.12 14.4C15.28 15.24 14.69 16.29 14.41 17.42C14.24 18.1 14.15 18.44 14.03 18.6C13.9 18.77 13.81 18.84 13.62 18.92C13.43 19 13.16 19 12.61 19H9.31Z" fill="var(--color-4)"/><path d="M9.31 34C8.76 34 8.49 34 8.26 33.87C8.08 33.77 7.9 33.57 7.82 33.38C7.72 33.14 7.75 32.89 7.81 32.4C8.17 29.54 9.46 26.87 11.52 24.81C13.96 22.37 17.27 21 20.71 21C24.16 21 27.47 22.37 29.91 24.81C31.97 26.87 33.26 29.54 33.62 32.4C33.68 32.89 33.71 33.14 33.61 33.38C33.53 33.57 33.35 33.77 33.17 33.87C32.94 34 32.67 34 32.11 34H28.82C28.27 34 28 34 27.81 33.92C27.62 33.84 27.52 33.77 27.4 33.6C27.28 33.44 27.19 33.1 27.02 32.42C26.74 31.29 26.15 30.24 25.31 29.4C24.09 28.18 22.44 27.5 20.71 27.5C18.99 27.5 17.34 28.18 16.12 29.4C15.28 30.24 14.69 31.29 14.41 32.42C14.24 33.1 14.15 33.44 14.03 33.6C13.9 33.77 13.81 33.84 13.62 33.92C13.43 34 13.16 34 12.61 34H9.31Z" fill="var(--color-1)"/>',
+	pills:
+		'<path d="M17 34C13.69 34 11 31.31 11 28C11 24.69 13.69 22 17 22L25.4 22C26.89 22 27.63 22 28.25 22.1C31.67 22.64 34.36 25.33 34.9 28.75C35 29.37 35 30.11 35 31.6C35 31.97 35 32.16 34.98 32.31C34.84 33.17 34.17 33.84 33.31 33.98C33.16 34 32.97 34 32.6 34L17 34Z" fill="var(--color-1)"/><path d="M25 6C28.31 6 31 8.69 31 12C31 15.31 28.31 18 25 18L9.4 18C9.03 18 8.84 18 8.69 17.98C7.83 17.84 7.16 17.17 7.02 16.31C7 16.16 7 15.97 7 15.6C7 14.11 7 13.37 7.1 12.75C7.64 9.33 10.33 6.64 13.75 6.1C14.37 6 15.11 6 16.6 6L25 6Z" fill="var(--color-4)"/>',
+	layers:
+		'<path d="M20.43 30.86C25.48 30.86 29.77 27.58 31.28 23.03C31.55 22.21 31.69 21.8 31.52 21.16C31.4 20.69 30.94 20.05 30.53 19.79C29.97 19.43 29.38 19.43 28.2 19.43L12.66 19.43C11.48 19.43 10.88 19.43 10.32 19.79C9.92 20.05 9.45 20.69 9.33 21.16C9.17 21.8 9.31 22.21 9.58 23.03C11.08 27.58 15.37 30.86 20.43 30.86Z" fill="var(--color-4)"/><path d="M20.43 16.43C23.72 16.43 26.5 14.3 27.48 11.34C27.66 10.81 27.75 10.54 27.64 10.12C27.56 9.82 27.26 9.4 27 9.23C26.63 9 26.25 9 25.48 9L15.38 9C14.61 9 14.22 9 13.86 9.23C13.59 9.4 13.29 9.82 13.22 10.12C13.11 10.54 13.2 10.81 13.37 11.34C14.35 14.3 17.14 16.43 20.43 16.43Z" fill="var(--color-1)"/>',
+	scales:
+		'<path d="M12.68 16.76C11.99 15.25 11.64 14.49 11.16 14.25C10.74 14.05 10.26 14.05 9.84 14.25C9.36 14.49 9.01 15.25 8.32 16.76L5.72 22.42C5.7 22.47 5.69 22.49 5.68 22.51C5.35 23.3 5.75 24.22 6.56 24.51C6.58 24.52 6.6 24.52 6.65 24.54C6.77 24.58 6.83 24.6 6.88 24.62C9.24 25.36 11.76 25.36 14.12 24.62C14.18 24.6 14.23 24.58 14.35 24.54C14.4 24.52 14.42 24.52 14.44 24.51C15.25 24.22 15.65 23.3 15.32 22.51C15.31 22.49 15.3 22.47 15.28 22.42L12.68 16.76Z" fill="var(--color-1)"/><path d="M31.68 16.76C30.99 15.25 30.64 14.49 30.16 14.25C29.74 14.05 29.26 14.05 28.84 14.25C28.36 14.49 28.01 15.25 27.32 16.76L24.72 22.42C24.7 22.47 24.69 22.49 24.68 22.51C24.35 23.3 24.75 24.22 25.56 24.51C25.58 24.52 25.6 24.52 25.65 24.54C25.77 24.58 25.83 24.6 25.88 24.62C28.24 25.36 30.76 25.36 33.12 24.62C33.18 24.6 33.23 24.58 33.35 24.54C33.4 24.52 33.42 24.52 33.44 24.51C34.25 24.22 34.65 23.3 34.32 22.51C34.31 22.49 34.3 22.47 34.28 22.42L31.68 16.76Z" fill="var(--color-1)"/><path d="M20 7.5C20.83 7.5 21.5 8.17 21.5 9V15.45L23.77 14.19C24.5 13.79 25.41 14.05 25.81 14.77C26.21 15.5 25.95 16.41 25.23 16.81L21.51 18.88L21.5 18.88V31.5H25C25.83 31.5 26.5 32.17 26.5 33C26.5 33.83 25.83 34.5 25 34.5H15C14.17 34.5 13.5 33.83 13.5 33C13.5 32.17 14.17 31.5 15 31.5H18.5V18.88L18.49 18.88L14.77 16.81C14.05 16.41 13.79 15.5 14.19 14.77C14.59 14.05 15.5 13.79 16.23 14.19L18.5 15.45V9C18.5 8.17 19.17 7.5 20 7.5Z" fill="var(--color-4)"/>',
+	bank:
+		'<rect x="9" y="21" width="5" height="11" rx="2" fill="var(--color-1)"/><rect x="17" y="21" width="5" height="11" rx="2" fill="var(--color-1)"/><rect x="25" y="21" width="5" height="11" rx="2" fill="var(--color-1)"/><path d="M16.31 9C17.51 8.27 18.11 7.91 18.76 7.77C19.33 7.64 19.91 7.64 20.48 7.77C21.12 7.91 21.73 8.27 22.93 9L25.95 10.83C29.61 13.04 31.44 14.14 31.69 15.14C31.91 16 31.65 16.91 31.02 17.53C30.29 18.25 28.16 18.25 23.88 18.25H15.36C11.08 18.25 8.95 18.25 8.21 17.53C7.58 16.91 7.33 16 7.55 15.14C7.8 14.14 9.63 13.04 13.29 10.83L16.31 9Z" fill="var(--color-4)"/>',
+	wings:
+		'<path d="M32.8 20.74V11.51C32.8 9.99 31.76 8.6 30.24 8.6C24.58 8.6 20 13.18 20 18.84C20 13.18 15.41 8.6 9.76 8.6C8.24 8.6 7.2 9.99 7.2 11.51V20.74C7.2 22.05 8.45 23 9.76 23C12.22 23 15.63 23.86 17.74 25.31C18.41 25.77 19.18 26.12 20 26.12C20.82 26.12 21.59 25.77 22.26 25.31C24.37 23.86 27.78 23 30.24 23C31.55 23 32.8 22.05 32.8 20.74Z" fill="var(--color-1)"/><path d="M29.83 26.21C31.49 26.33 32.8 27.71 32.8 29.4C32.8 31.17 31.37 32.6 29.6 32.6H10.4C8.63 32.6 7.2 31.17 7.2 29.4C7.2 27.71 8.51 26.33 10.17 26.21C12.07 26.3 14.55 27.01 15.93 27.95C16.86 28.58 18.27 29.32 20 29.32C21.73 29.32 23.14 28.58 24.07 27.95C25.44 27.01 27.93 26.3 29.83 26.21Z" fill="var(--color-4)"/>',
 }
 
-type Item = { title: string; sub: string; href: string; icon: keyof typeof glyphs; badge?: string; external?: boolean }
+type Item = { title: string; sub: string; href: string; icon: keyof typeof icons; badge?: string; external?: boolean }
 type Menu = { id: string; label: string; items: Item[] }
 
 const menus: Menu[] = [
@@ -25,37 +39,37 @@ const menus: Menu[] = [
 		id: 'product',
 		label: 'Product',
 		items: [
-			{ title: 'Helico Vault', sub: 'Liquidity that stays in range', href: '#hero', icon: 'vault' },
-			{ title: 'Mandate', badge: '7 fields', sub: 'Every one enforced on chain', href: '#enforcement', icon: 'mandate' },
-			{ title: 'Live canvas', sub: 'Four scenarios, one enclave', href: '#canvas', icon: 'canvas' },
+			{ title: 'Helico Vault', sub: 'Liquidity that stays in range', href: '#hero', icon: 'bank' },
+			{ title: 'Mandate', badge: '7 fields', sub: 'Every one enforced on chain', href: '#enforcement', icon: 'document' },
+			{ title: 'Live canvas', sub: 'Four scenarios, one enclave', href: '#canvas', icon: 'layers' },
 		],
 	},
 	{
 		id: 'how',
 		label: 'How It Works',
 		items: [
-			{ title: 'The mandate', sub: 'Seven fields you sign once', href: '#enforcement', icon: 'mandate' },
-			{ title: 'The enclave', sub: 'Decides inside the TEE', href: `${repo}/tree/main/packages/plugins/cre`, icon: 'enclave', external: true },
-			{ title: 'The check', sub: 'Twenty lines, read from source', href: '#build', icon: 'code' },
+			{ title: 'The mandate', sub: 'Seven fields you sign once', href: '#enforcement', icon: 'document' },
+			{ title: 'The enclave', sub: 'Decides inside the TEE', href: `${repo}/tree/main/packages/plugins/cre`, icon: 'leaf', external: true },
+			{ title: 'The check', sub: 'Twenty lines, read from source', href: '#build', icon: 'book' },
 		],
 	},
 	{
 		id: 'developers',
 		label: 'Developers',
 		items: [
-			{ title: 'Uniswap plugin', badge: '52 tests', sub: 'Pools and positions from the SDK', href: `${repo}/tree/main/packages/plugins/uniswap`, icon: 'plugin', external: true },
-			{ title: 'CRE plugin', badge: '116 tests', sub: 'Decide, size, and sign in the enclave', href: `${repo}/tree/main/packages/plugins/cre`, icon: 'plugin', external: true },
-			{ title: 'Vault', badge: '74 + 9 tests', sub: 'Solidity, Foundry, fork tests', href: `${repo}/tree/main/contracts`, icon: 'vault', external: true },
-			{ title: 'Plans and prompts', sub: 'Every plan committed before code', href: `${repo}/tree/main/docs/plans`, icon: 'plans', external: true },
+			{ title: 'Uniswap plugin', badge: '52 tests', sub: 'Pools and positions from the SDK', href: `${repo}/tree/main/packages/plugins/uniswap`, icon: 'percent', external: true },
+			{ title: 'CRE plugin', badge: '116 tests', sub: 'Decide, size, and sign in the enclave', href: `${repo}/tree/main/packages/plugins/cre`, icon: 'pills', external: true },
+			{ title: 'Vault', badge: '74 + 9 tests', sub: 'Solidity, Foundry, fork tests', href: `${repo}/tree/main/contracts`, icon: 'coins', external: true },
+			{ title: 'Plans and prompts', sub: 'Every plan committed before code', href: `${repo}/tree/main/docs/plans`, icon: 'bars', external: true },
 		],
 	},
 	{
 		id: 'evidence',
 		label: 'Evidence',
 		items: [
-			{ title: 'Verified by default', sub: 'Counts that are true today', href: '#verified', icon: 'check' },
-			{ title: 'AI usage', sub: 'What was AI-assisted, and how', href: `${repo}/blob/main/AI-USAGE.md`, icon: 'ai', external: true },
-			{ title: 'Uniswap feedback', sub: 'FEEDBACK.md for the Foundation', href: `${repo}/blob/main/FEEDBACK.md`, icon: 'feedback', external: true },
+			{ title: 'Verified by default', sub: 'Counts that are true today', href: '#verified', icon: 'scales' },
+			{ title: 'AI usage', sub: 'What was AI-assisted, and how', href: `${repo}/blob/main/AI-USAGE.md`, icon: 'arcs', external: true },
+			{ title: 'Uniswap feedback', sub: 'FEEDBACK.md for the Foundation', href: `${repo}/blob/main/FEEDBACK.md`, icon: 'wings', external: true },
 		],
 	},
 ]
@@ -81,12 +95,13 @@ const menus: Menu[] = [
 		</div>
 	</div>
 	{menus.map((m) => (
-		<div class="nav__panel" id={`menu-${m.id}`} data-panel={m.id} hidden>
+		<div class="nav__panel" id={`menu-${m.id}`} data-panel={m.id}>
+			<div class="nav__panel-wrap">
 			<div class="nav__grid">
 				{m.items.map((it) => (
 					<a class="nav__card" href={it.href} {...(it.external ? { target: '_blank', rel: 'noreferrer' } : {})}>
 						<span class="nav__icon" aria-hidden="true">
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d={glyphs[it.icon]} /></svg>
+							<svg viewBox="0 0 40 40" fill="none" set:html={icons[it.icon]} />
 						</span>
 						<span class="nav__text">
 							<span class="nav__title">{it.title}{it.badge && <em>{it.badge}</em>}</span>
@@ -97,6 +112,7 @@ const menus: Menu[] = [
 						)}
 					</a>
 				))}
+			</div>
 			</div>
 		</div>
 	))}
@@ -119,7 +135,7 @@ const menus: Menu[] = [
 				{m.items.map((it) => (
 					<a class="nav__card nav__card--sheet" href={it.href} data-sheet-link {...(it.external ? { target: '_blank', rel: 'noreferrer' } : {})}>
 						<span class="nav__icon" aria-hidden="true">
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d={glyphs[it.icon]} /></svg>
+							<svg viewBox="0 0 40 40" fill="none" set:html={icons[it.icon]} />
 						</span>
 						<span class="nav__text">
 							<span class="nav__title">{it.title}{it.badge && <em>{it.badge}</em>}</span>
@@ -151,7 +167,7 @@ const menus: Menu[] = [
 	const set = (id: string | null) => {
 		current = id
 		for (const b of buttons) b.setAttribute('aria-expanded', String(b.dataset.menu === id))
-		for (const p of panels) p.hidden = p.dataset.panel !== id
+		for (const p of panels) p.toggleAttribute('data-open', p.dataset.panel === id)
 		nav?.toggleAttribute('data-open', id !== null)
 	}
 	for (const b of buttons) {
@@ -257,19 +273,35 @@ const menus: Menu[] = [
 		color: var(--ink-90);
 		background: rgba(0, 0, 0, 0.03);
 	}
+	/* The panel unfolds downward: its one grid row goes from 0fr to 1fr, and the cards fade in
+	   just behind it. Closed panels are also invisible to assistive tech. */
 	.nav__panel {
 		position: absolute;
 		left: 0;
 		right: 0;
 		top: 100%;
-		padding: 0.25rem 0 1.25rem;
+		display: grid;
+		grid-template-rows: 0fr;
+		visibility: hidden;
 		background: #ffffff;
 		box-shadow: 0 1px 0 rgba(0, 0, 0, 0.05);
+		transition:
+			grid-template-rows 0.28s cubic-bezier(0.2, 0.7, 0.2, 1),
+			visibility 0s 0.28s;
 	}
-	.nav__panel[hidden] {
-		display: none;
+	.nav__panel[data-open] {
+		grid-template-rows: 1fr;
+		visibility: visible;
+		transition:
+			grid-template-rows 0.28s cubic-bezier(0.2, 0.7, 0.2, 1),
+			visibility 0s;
+	}
+	.nav__panel-wrap {
+		min-height: 0;
+		overflow: hidden;
 	}
 	.nav__grid {
+		padding: 0.25rem 0 1.25rem;
 		width: calc(100% - 2 * var(--gutter));
 		max-width: var(--content-max);
 		margin-inline: auto;
@@ -291,6 +323,28 @@ const menus: Menu[] = [
 			border-color 0.15s,
 			background-color 0.15s;
 	}
+	.nav__panel .nav__card {
+		opacity: 0;
+		transform: translateY(-6px);
+		transition:
+			opacity 0.2s,
+			transform 0.2s,
+			border-color 0.15s,
+			background-color 0.15s;
+	}
+	.nav__panel[data-open] .nav__card {
+		opacity: 1;
+		transform: none;
+		transition-delay: 0.08s;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.nav__panel,
+		.nav__panel[data-open],
+		.nav__panel .nav__card,
+		.nav__panel[data-open] .nav__card {
+			transition: none;
+		}
+	}
 	.nav__card:hover {
 		border-color: rgba(39, 34, 40, 0.12);
 		background: #fbfbfc;
@@ -298,17 +352,19 @@ const menus: Menu[] = [
 	.nav__icon {
 		flex: none;
 		display: inline-flex;
-		align-items: center;
-		justify-content: center;
 		width: 40px;
 		height: 40px;
-		border-radius: 12px;
-		background: rgba(39, 34, 40, 0.06);
-		color: rgba(39, 34, 40, 0.7);
+		--color-1: #b9b7c0;
+		--color-4: #55525b;
+		transition: --color-1 0.15s;
 	}
 	.nav__icon svg {
-		width: 20px;
-		height: 20px;
+		width: 100%;
+		height: 100%;
+	}
+	.nav__card:hover .nav__icon {
+		--color-1: #b7abff;
+		--color-4: #695cff;
 	}
 	.nav__text {
 		display: flex;
@@ -415,11 +471,6 @@ const menus: Menu[] = [
 	.nav__card--sheet .nav__icon {
 		width: 56px;
 		height: 56px;
-		border-radius: 16px;
-	}
-	.nav__card--sheet .nav__icon svg {
-		width: 26px;
-		height: 26px;
 	}
 	.nav__card--sheet .nav__title {
 		font-size: 1.125rem;
@@ -434,6 +485,23 @@ const menus: Menu[] = [
 	}
 	.nav__group--foot .btn {
 		justify-self: stretch;
+	}
+	@media (min-width: 640px) {
+		.nav__sheet {
+			padding-inline: 3rem;
+		}
+		.nav__sheet-top {
+			margin-inline: -3rem;
+			padding-inline: 3rem;
+		}
+		.nav__list {
+			grid-template-columns: repeat(2, 1fr);
+			gap: 1.25rem;
+		}
+		.nav__group--foot {
+			grid-template-columns: 1fr auto;
+			align-items: center;
+		}
 	}
 	@media (min-width: 900px) {
 		.nav__links {

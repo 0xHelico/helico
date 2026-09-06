@@ -211,3 +211,31 @@ the source at build time so they match the GitHub link.
 - "Check every responsive size, not only two views."
 - "Give the code colouring so it looks good, with line numbers, like VS Code."
 
+## Revision — footer, icons, tablet sheet, and the unfolding panel
+
+Four more asks, all against the same reference. The footer now lives inside the last lavender
+card together with the stay-updated card: four link columns with lavender titles, a brand row
+with the wordmark in lavender and the GitHub mark, and a long muted legal line, the way the
+reference closes. The user supplied twelve two-tone icons taken from the reference's own
+navigation and asked that they be used for the nav, with any further ones drawn in the same
+style; they are inlined in `Nav.astro` and recoloured with Helico's own greys, turning lavender
+on hover. On tablets the sheet lays its cards in two columns. And the panel no longer appears:
+its single grid row unfolds from `0fr` to `1fr` and the cards fade in just behind it, with the
+transition removed under `prefers-reduced-motion`.
+
+On writing, the user pointed out that every heading on the reference is a general claim about
+the product rather than an explanation ("The World's Savings App", "Trusted by Default", "The
+home of stablecoins."). Helico's headings already followed that pattern except one, which was
+explanatory ("Why the swap is inside the vault.") and is now a claim ("Moves that keep the
+position.") with the explanation in the line under it.
+
+### Prompts, verbatim in translation
+
+- "Tidy the footer too, it is very different; match the style."
+- "Look at the writing on the reference: every section heading is a general claim about what
+  it is and its advantage, not an explanation. Right?"
+- "Here, for the tablet nav." (a screenshot of the two-column sheet)
+- (twelve SVG icons) "Use these for the nav; for the others you can draw your own in a similar
+  style."
+- "And when hovering a menu there is an animation, the menu comes down, not appearing at once."
+

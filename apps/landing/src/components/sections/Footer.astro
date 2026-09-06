@@ -2,64 +2,83 @@
 import { Image } from 'astro:assets'
 import logo from '../../assets/logo.png'
 const repo = 'https://github.com/0xHelico/helico'
+const watch = `${repo}/subscription`
 const columns = [
-	{ title: 'Product', links: [['Vault', `${repo}/tree/main/contracts`], ['Plugins', `${repo}/tree/main/packages/plugins`], ['Evidence', `${repo}#readme`]] },
-	{ title: 'Developers', links: [['GitHub', repo], ['Plans', `${repo}/tree/main/docs/plans`], ['AI usage', `${repo}/blob/main/AI-USAGE.md`]] },
-	{ title: 'Resources', links: [['README', `${repo}#readme`], ['Uniswap feedback', `${repo}/blob/main/FEEDBACK.md`], ['Contributing', `${repo}/blob/main/CONTRIBUTING.md`]] },
+	{ title: 'Product', links: [['Vault', `${repo}/tree/main/contracts`], ['Plugins', `${repo}/tree/main/packages/plugins`], ['Evidence', '#verified']] },
+	{ title: 'Developers', links: [['GitHub', repo], ['Plans', `${repo}/tree/main/docs/plans`], ['AI usage', `${repo}/blob/main/AI-USAGE.md`], ['Contributing', `${repo}/blob/main/CONTRIBUTING.md`]] },
+	{ title: 'Resources', links: [['README', `${repo}#readme`], ['Uniswap feedback', `${repo}/blob/main/FEEDBACK.md`], ['FAQ', '#faq']] },
 	{ title: 'Project', links: [['ETHOnline 2026', 'https://ethglobal.com/events/ethonline2026'], ['MIT license', `${repo}/blob/main/LICENSE`]] },
 ]
 ---
 
-<footer class="wrap footer">
-	<div class="footer__grid">
-		<a class="footer__brand" href="#hero">
-			<Image src={logo} alt="" width={28} height={28} densities={[1, 2]} />
-			<span>helico</span>
-		</a>
-		{columns.map((c) => (
-			<div class="footer__col">
-				<h3>{c.title}</h3>
-				<ul>{c.links.map(([label, href]) => <li><a href={href}>{label}</a></li>)}</ul>
+<div class="wrap">
+	<div class="section-card closing">
+		<section class="section-card section-card--white center updates" aria-label="Stay updated">
+			<h2>Stay Updated</h2>
+			<p>Be the first to hear when the vault goes live.</p>
+			<a class="btn btn--ink" href={watch}>Watch on GitHub</a>
+		</section>
+
+		<footer class="footer">
+			<div class="footer__grid">
+				{columns.map((c) => (
+					<div class="footer__col">
+						<h3>{c.title}</h3>
+						<ul>{c.links.map(([label, href]) => <li><a href={href}>{label}</a></li>)}</ul>
+					</div>
+				))}
 			</div>
-		))}
+			<div class="footer__brand-row">
+				<a class="footer__brand" href="#hero" aria-label="Helico, back to top">
+					<Image src={logo} alt="" width={28} height={28} densities={[1, 2]} />
+					<span>helico</span>
+				</a>
+				<a class="footer__gh" href={repo} aria-label="Helico on GitHub">
+					<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2.2c-3.3.7-4-1.4-4-1.4-.5-1.4-1.3-1.8-1.3-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1.1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-5.9 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.7.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .5z" /></svg>
+				</a>
+			</div>
+			<p class="footer__legal">
+				Helico is a hackathon submission built for ETHOnline 2026. Nothing on this page is financial
+				advice. The vault has not been audited for production use, and the scenarios shown are
+				illustrative, using numbers recorded in the repository. Nothing is deployed to a live network
+				yet.
+			</p>
+		</footer>
 	</div>
-	<div class="footer__bottom">
-		<a class="footer__gh" href={repo} aria-label="Helico on GitHub">
-			<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2.2c-3.3.7-4-1.4-4-1.4-.5-1.4-1.3-1.8-1.3-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1.1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-5.9 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.7.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .5z" /></svg>
-		</a>
-		<p>
-			Helico is a hackathon submission built for ETHOnline 2026. Nothing on this page is financial advice.
-			The vault has not been audited for production use, and the scenarios shown are illustrative,
-			using numbers recorded in the repository. Nothing is deployed to a live network yet.
-		</p>
-	</div>
-</footer>
+</div>
 
 <style>
+	.closing {
+		padding-top: 1.5rem;
+		padding-bottom: 2.5rem;
+	}
+	.updates h2 {
+		margin: 0;
+		font-size: 1.5rem;
+		font-weight: 450;
+		line-height: 1.35;
+		letter-spacing: -0.03em;
+		color: var(--ink-solid);
+	}
+	.updates p {
+		margin: 0.5rem auto 1.5rem;
+		max-width: 620px;
+		font-size: 1.25rem;
+		line-height: 1.36;
+		letter-spacing: -0.01em;
+		color: var(--ink-65);
+	}
 	.footer {
 		max-width: var(--content-max);
-		margin-top: clamp(2.5rem, 6vw, 4rem);
-		padding: 3rem 0;
+		margin: clamp(3rem, 7vw, 6rem) auto 0;
 	}
 	.footer__grid {
 		display: grid;
 		gap: 2rem 1.5rem;
 		grid-template-columns: repeat(2, 1fr);
 	}
-	.footer__brand {
-		grid-column: 1 / -1;
-		display: inline-flex;
-		align-items: center;
-		gap: 0.5rem;
-		font-weight: 550;
-		letter-spacing: -0.02em;
-		color: var(--ink-90);
-	}
-	.footer__brand img {
-		border-radius: 50%;
-	}
 	.footer__col h3 {
-		margin: 0 0 0.9rem;
+		margin: 0 0 1rem;
 		font-size: 0.875rem;
 		font-weight: 450;
 		letter-spacing: 0.01em;
@@ -70,7 +89,7 @@ const columns = [
 		padding: 0;
 		list-style: none;
 		display: grid;
-		gap: 0.6rem;
+		gap: 0.75rem;
 	}
 	.footer__col a {
 		font-size: 0.875rem;
@@ -81,38 +100,45 @@ const columns = [
 	.footer__col a:hover {
 		color: var(--ink-90);
 	}
-	.footer__bottom {
+	.footer__brand-row {
 		display: flex;
-		flex-wrap: wrap;
-		align-items: flex-start;
-		gap: 1rem 1.5rem;
-		margin-top: 3rem;
-		padding-top: 1.5rem;
-		border-top: 1px solid rgba(37, 34, 40, 0.08);
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		margin-top: clamp(3rem, 6vw, 5rem);
+	}
+	.footer__brand {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-weight: 550;
+		letter-spacing: -0.02em;
+		color: var(--lav-text);
+	}
+	.footer__brand img {
+		border-radius: 50%;
 	}
 	.footer__gh {
-		flex: none;
+		display: inline-flex;
+		color: rgba(39, 34, 40, 0.4);
+	}
+	.footer__gh:hover {
 		color: var(--ink-90);
 	}
 	.footer__gh svg {
-		width: 1.25rem;
-		height: 1.25rem;
+		width: 1.35rem;
+		height: 1.35rem;
 	}
-	.footer__bottom p {
-		flex: 1 1 24rem;
-		margin: 0;
-		max-width: 60rem;
-		font-size: 0.75rem;
+	.footer__legal {
+		margin: clamp(2.5rem, 5vw, 4rem) 0 0;
+		font-size: 0.875rem;
 		line-height: 1.6;
-		color: var(--ink-65);
+		letter-spacing: -0.01em;
+		color: rgba(39, 34, 40, 0.5);
 	}
 	@media (min-width: 768px) {
 		.footer__grid {
-			grid-template-columns: 1.2fr repeat(4, 1fr);
-		}
-		.footer__brand {
-			grid-column: auto;
-			align-self: start;
+			grid-template-columns: repeat(4, 1fr);
 		}
 	}
 </style>

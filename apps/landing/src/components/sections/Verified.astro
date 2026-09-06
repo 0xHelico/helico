@@ -38,8 +38,8 @@ const bars = [
 
 		<div class="split">
 			<div>
-				<h3>Why the swap is inside the vault.</h3>
-				<p>An out-of-range position holds one token. Burn it and mint a new range without a swap, and the pool cannot take the second side: nothing is minted out of range, and 13% survives in range.</p>
+				<h3>Moves that keep the position.</h3>
+				<p>The vault swaps inside its own lock, so a move funds both sides of the new range. Without that swap an out-of-range position mints nothing, and an in-range one keeps 13%.</p>
 			</div>
 		</div>
 		<div class="card chart" style="text-align:left">

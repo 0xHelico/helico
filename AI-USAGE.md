@@ -379,6 +379,18 @@ Format: date · what was done · the AI's role · what a human verified.
   closes, Tab opens, Escape closes and returns focus; the sheet opens, locks scroll, and closes
   on Escape at 360, 390 and 768.
 
+### 2026-09-06 — Landing page: footer, nav icons, tablet sheet, unfolding panel
+
+- **Done:** the footer folded into the last lavender card with the stay-updated card; twelve
+  two-tone nav icons supplied by the user, recoloured and turning lavender on hover; a
+  two-column sheet on tablets; the nav panel unfolding with a height transition and a card fade,
+  off under reduced motion; one explanatory heading rewritten as a claim.
+- **AI's role:** wrote the CSS and markup, inlined the icons the user supplied, and verified the
+  transition and the closed state in a headless browser. The user supplied the icons and the
+  reference screenshots.
+- **Verified:** `astro check` (0 errors), `astro build`, the Playwright audit at seven viewports,
+  a transition probe (row height 0 → 139px at 90 ms → 206px open → closed again on leave).
+
 <!--
 Template for the next entry:
 
