@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import {ForkBase} from "./ForkBase.sol";
+import {ArbitrumFork} from "./ForkBase.sol";
 import {MandateLib, PoolKey} from "../src/Mandate.sol";
 import {TickMath} from "../src/lib/TickMath.sol";
 
 /// @notice Proves the fork harness reaches the real chain and reads it correctly, so a failure
 ///         in the swap tests is about the vault rather than about the environment.
-contract ForkSanityTest is ForkBase {
+contract ForkSanityTest is ArbitrumFork {
     using MandateLib for PoolKey;
 
     function test_ReadsTheDemoPool() public {
@@ -43,7 +43,7 @@ contract ForkSanityTest is ForkBase {
 }
 
 /// @notice The vendored `TickMath`, checked against the live pool rather than against itself.
-contract ForkTickMathTest is ForkBase {
+contract ForkTickMathTest is ArbitrumFork {
     using MandateLib for PoolKey;
 
     /// @dev The defining property: the pool's price sits at or above the price of its current
