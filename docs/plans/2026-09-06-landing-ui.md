@@ -403,3 +403,8 @@ to the next section.
 
 - Prompt: "The top-right nav button 'Launch App', later pointing at app.helico.site. In the
   hero just a 'Learn More' button."
+
+The hero's "Learn More" goes to `https://docs.helico.site` (not live yet; the user's
+decision).
+
+- Prompt: "And Learn More later goes to docs.helico.site."
