@@ -3,12 +3,12 @@ title: "Seven fields, every one enforced on chain"
 summary: "The mandate is seven numbers. Here is what each one means, and the line in the vault that refuses a move that breaks it."
 author: "Helico"
 tags: ["vault", "mandate", "solidity"]
-published_at: 2026-09-05T15:00:00Z
+published_at: 2026-09-06T09:42:00Z
 ---
 
 The mandate is a small struct: seven fields, committed with `keccak256(abi.encode(mandate))` when you set it. The vault does not store your intentions in prose; it stores numbers it can check. Below, each field, what it protects, and where the vault refuses.
 
-Line references point at the vault as it is on `main` at commit `154bcab`, so they stay true when the file moves on.
+Line references are pinned at commit `154bcab`, the revision they were read from, so they stay true when the file moves on.
 
 ## poolId
 

@@ -3,7 +3,7 @@ title: "Liquidity that stays in range"
 summary: "What Helico is, in plain words: a mandate you sign once, an enclave that decides, and a vault that refuses everything else."
 author: "Helico"
 tags: ["product", "uniswap-v4", "chainlink-cre"]
-published_at: 2026-09-05T09:00:00Z
+published_at: 2026-09-06T09:40:00Z
 ---
 
 A concentrated liquidity position on Uniswap v4 earns fees only while the market price sits inside its range. The moment the price leaves, the position stops earning and starts holding one token. Keeping it in range means moving it, and moving it means someone has to be trusted to do the moving.

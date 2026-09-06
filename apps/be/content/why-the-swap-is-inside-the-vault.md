@@ -3,7 +3,7 @@ title: "Why the swap is inside the vault"
 summary: "Two numbers from a live pool, 0% and 13%, and the design decision they forced."
 author: "Helico"
 tags: ["vault", "uniswap-v4", "design"]
-published_at: 2026-09-06T08:00:00Z
+published_at: 2026-09-06T09:44:00Z
 ---
 
 An out-of-range position holds one token. If the price has moved above the range, the position is all of the quote token; below it, all of the base. That is not a bug in Uniswap, it is what concentrated liquidity means. It does, though, make re-centring harder than it looks.
