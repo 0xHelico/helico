@@ -59,6 +59,7 @@ jobs:
           COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
         run: |
           test -n "$COOLIFY_APP_UUID" && test -n "$COOLIFY_TOKEN"
-          curl --fail --silent --show-error \
+          # Coolify 4.3 answers GET here with "This endpoint has changed to a POST request."
+          curl --fail --silent --show-error -X POST \
             -H "Authorization: Bearer $COOLIFY_TOKEN" \
             "$COOLIFY_URL/api/v1/deploy?uuid=$COOLIFY_APP_UUID&force=false"

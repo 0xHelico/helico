@@ -590,6 +590,9 @@ Format: date · what was done · the AI's role · what a human verified.
   Closes #100 once the Coolify application exists, which only the owner can create.
 - **AI's role:** the survey, the files and the server steps. The owner's instruction, verbatim
   in translation, is in the plan.
+- **Follow-up:** the Coolify project and application created through Coolify's API from the
+  server, a deploy-only token placed in the repository secrets, the deploy call corrected to
+  `POST`, and squash/rebase merging switched off in the repository settings.
 - **Verified:** the image built on the VPS and run on a private port: every route 200, 404 on
   a missing page, gzip, immutable cache on hashed assets, headers, non-root nginx, health
   `healthy`; `https://helico.site` answers with a valid certificate (502 until the container
