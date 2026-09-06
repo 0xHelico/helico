@@ -195,7 +195,7 @@ contract HelicoVault is
     event UpgradeScheduled(address indexed implementation, uint64 readyAt, bytes32 codehash);
     event UpgradeCancelled(address indexed implementation);
     event ForwarderSet(address indexed forwarder);
-    event ReportRejected(address indexed owner, bytes32 mandateHash);
+    event ReportHeld(address indexed owner, bytes32 mandateHash);
 
     error NotPositionOwner();
     error MandateInactive();
@@ -471,7 +471,7 @@ contract HelicoVault is
             abi.decode(report, (bool, bytes32, RecenterParams));
 
         if (!act) {
-            emit ReportRejected(p.owner, mandateHash);
+            emit ReportHeld(p.owner, mandateHash);
             return;
         }
         if (_accounts[p.owner].mandate.hash() != mandateHash) revert MandateChanged();
