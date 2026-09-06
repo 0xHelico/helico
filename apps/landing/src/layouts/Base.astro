@@ -6,7 +6,8 @@ interface Props {
 	description?: string
 }
 
-const site = 'https://helico.xyz'
+// Absolute URLs for the social cards come from `site` in astro.config once the page is deployed.
+const origin = (Astro.site ?? Astro.url).origin
 const {
 	title,
 	description = 'Commit a mandate once. A Chainlink CRE enclave watches your Uniswap v4 position and decides when to re-centre; the vault refuses anything outside what you signed.',
@@ -30,11 +31,11 @@ const {
 		<meta property="og:site_name" content="Helico" />
 		<meta property="og:title" content={title} />
 		<meta property="og:description" content={description} />
-		<meta property="og:image" content={`${site}/og.webp`} />
+		<meta property="og:image" content={`${origin}/og.webp`} />
 		<meta name="twitter:card" content="summary" />
 		<meta name="twitter:title" content={title} />
 		<meta name="twitter:description" content={description} />
-		<meta name="twitter:image" content={`${site}/og.webp`} />
+		<meta name="twitter:image" content={`${origin}/og.webp`} />
 		<link rel="preconnect" href="https://fonts.googleapis.com" />
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 		<link
