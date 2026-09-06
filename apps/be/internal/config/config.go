@@ -24,6 +24,9 @@ type Config struct {
 	RequestTimeout time.Duration
 	// ShutdownTimeout bounds the drain on SIGTERM.
 	ShutdownTimeout time.Duration
+	// SessionSecret signs the session cookie. Empty means a random one at boot, which signs
+	// everyone out on every restart — the process says so rather than leaving it a mystery.
+	SessionSecret string
 }
 
 // Lookup is the shape of os.LookupEnv, so tests can feed a map.
@@ -44,6 +47,7 @@ func FromEnv(lookup Lookup) (Config, error) {
 		ContentDir:      get("BE_CONTENT_DIR", "content"),
 		RequestTimeout:  10 * time.Second,
 		ShutdownTimeout: 10 * time.Second,
+		SessionSecret:   get("BE_SESSION_SECRET", ""),
 	}
 	for _, o := range strings.Split(get("BE_CORS_ORIGINS", "http://localhost:4321,http://localhost:4322"), ",") {
 		if o = strings.TrimSpace(o); o != "" {

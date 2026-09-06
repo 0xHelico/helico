@@ -646,6 +646,49 @@ Format: date · what was done · the AI's role · what a human verified.
   Arbitrum One and `500000000000000000`; the honesty line renders; the console is clean.
   `tsc --noEmit`, `biome check .` and `next build` all pass.
 
+### 2026-09-07 — The dapp does something: the swap executes, the mandate is set, and it is deployed
+
+- **Done:** `bestPoolFor` and `planSwap` in `@helico/plugin-uniswap` (pool, quote, both Permit2
+  approvals, calldata, in one call); the vault's user-facing functions, errors and refusal rules
+  added to `@helico/plugin-cre` with a test that fails if its ABI and `mandateHash` stop
+  describing the same struct; one viem across the workspace; the app's swap card and mandate page;
+  a fork fixture that deploys the real vault and hands over a real position; the container image,
+  the nginx site, the certificate, the Coolify application and the deploy workflow for
+  `app.helico.site`.
+- **AI's role:** all of it, on the owner's instruction to make the dapp fully functional and keep
+  it maintainable. The instruction and the design decisions are in the plan.
+- **Plan:** docs/plans/2026-09-07-app-fully-functional.md
+- **Verified:** by running, never by reading. On an anvil fork of Arbitrum One: 0.1 ETH bought
+  248.974068 USDC and half came back as 0.049937 ETH through approve → approve → swap. Through a
+  browser with a wallet injected: 0.5 ETH became 1244.280761 USDC, and on `/mandate` the rules
+  were committed and revoked with the chain agreeing both times. Live:
+  `https://app.helico.site` answers 200 on `/` and `/mandate`. Two mistakes are recorded in the
+  plan rather than quietly fixed — anvil's default account has code on an Arbitrum fork and
+  drains itself, and `bestPoolFor` used to report an unreachable node as an empty pair.
+- **Not done, and said so:** the deployed chat answers "the swap service is not answering" until
+  #115 merges, and the mandate page says the vault is not deployed until #85.
+
+### 2026-09-07 — The sidebar back, and the session that makes it mean something
+
+- **Done:** the template's shell restored — `SidebarProvider`, the collapsible sidebar with New
+  chat above a history grouped by age, and the account block in the footer — plus what it needs
+  to be real: EIP-712 sign-in and per-address conversations in `apps/be`
+  (`internal/session`, `internal/chat`, nine routes), and the browser's side of them.
+- **AI's role:** all of it, on the owner's correction that the shell should match the template
+  first and be changed after. The instruction is quoted in the plan.
+- **Plan:** docs/plans/2026-09-07-app-sidebar-and-sessions.md
+- **Verified:** the digest a wallet signs was computed in Go and in viem and matched byte for
+  byte, and that value is pinned in a test — everything else would have agreed with itself even
+  if the domain string were wrong. In a browser with a wallet injected: signed in, sent two
+  messages, reloaded, and the sidebar showed the conversation with both messages still in it; a
+  second wallet in its own context saw none of them. Go tests cover a signature from the wrong
+  address, a replayed nonce, a stale one, a tampered payload, a forged cookie, and an
+  authenticated stranger trying every chat route.
+- **Two bugs the work found rather than review:** turns were ordered by a second-resolution
+  timestamp with a random id as the tiebreak, so a question and its answer came back reversed
+  about half the time; and the session was a plain hook, so every component had its own copy and
+  signing in from the sidebar left the chat still believing it was signed out.
+
 <!--
 Template for the next entry:
 

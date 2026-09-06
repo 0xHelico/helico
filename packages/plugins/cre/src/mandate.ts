@@ -24,6 +24,20 @@ export type Mandate = {
 	minRetainedBps: number
 }
 
+/**
+ * The struct shaped the way viem wants it for a call: Solidity's uint64 and uint128 arrive and
+ * leave as bigint. Keeping the conversion beside the type is the point — `expiry` as a JS number
+ * is a seconds timestamp a person can read, and as a bigint it is what the contract stores, and
+ * the pair of them silently disagreeing is a transaction that reverts for no visible reason.
+ */
+export const toContractMandate = (m: Mandate) => ({ ...m, expiry: BigInt(m.expiry) })
+
+/** The inverse, for a `mandateOf` read. */
+export const fromContractMandate = (m: Omit<Mandate, 'expiry'> & { expiry: bigint }): Mandate => ({
+	...m,
+	expiry: Number(m.expiry),
+})
+
 const MANDATE_ABI = [
 	{ type: 'bytes32' },
 	{ type: 'uint16' },
@@ -87,4 +101,37 @@ export function mandateFromSecrets(
 		expiry: integer(read('expiry'), MANDATE_SECRET_IDS.expiry),
 		minRetainedBps: integer(read('minRetainedBps'), MANDATE_SECRET_IDS.minRetainedBps),
 	}
+}
+
+/** The vault's own bound on anything measured in basis points. */
+export const BPS = 10_000
+
+/**
+ * The reason `setMandate` would refuse this, or `undefined` if it would accept it.
+ *
+ * Every branch mirrors one `revert` in `HelicoVault.setMandate`, and returns that error's own
+ * name — so a form can say why before asking anyone to pay gas to be told the same thing, and
+ * the name it shows matches the one an explorer would decode from the failed transaction.
+ *
+ * It does not replace the contract's checks and cannot: ownership of the position and the pool
+ * behind it are only knowable on chain. Passing this means the terms themselves are sound.
+ */
+export function mandateRefusedBecause(
+	m: Mandate,
+	{
+		tickSpacing,
+		nowSeconds = Math.floor(Date.now() / 1000),
+	}: { tickSpacing: number; nowSeconds?: number },
+): string | undefined {
+	if (m.expiry <= nowSeconds) return 'MandateExpired'
+	if (m.rangeWidthTicks === 0) return 'RangeWidthZero'
+	if (m.maxLiquidity === 0n) return 'MaxLiquidityZero'
+	if (m.minImprovementBps >= BPS) return 'ImprovementOutOfRange'
+	if (m.minRetainedBps > BPS) return 'RetentionOutOfRange'
+	// A zero cooldown lets an agent re-centre repeatedly in one block, each time paying the
+	// pool's fee and the gas out of the position.
+	if (m.cooldownSeconds === 0) return 'CooldownZero'
+	// The width a user signs is the width they get: the vault refuses rather than snapping.
+	if (tickSpacing <= 0 || m.rangeWidthTicks % tickSpacing !== 0) return 'RangeWidthNotSpaced'
+	return undefined
 }

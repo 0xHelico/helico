@@ -1,10 +1,39 @@
 import { type Address, parseAbi } from 'viem'
 
+/** The `Mandate` struct as the vault declares it, field for field and width for width. */
+const MANDATE_TUPLE =
+	'(bytes32 poolId, uint16 rangeWidthTicks, uint16 minImprovementBps, uint32 cooldownSeconds, uint128 maxLiquidity, uint64 expiry, uint16 minRetainedBps)'
+
+/**
+ * What the enclave reads and what a person's wallet calls. The reads came first; the writes and
+ * the errors are here because the app needs them, and one ABI is the only way the two stay
+ * describing the same contract.
+ *
+ * The errors matter as much as the functions: without them a rejected `setMandate` reaches the
+ * user as an unreadable revert, when the contract went to the trouble of saying exactly which
+ * rule was broken.
+ */
 export const vaultAbi = parseAbi([
 	'function positionOf(address owner) view returns (uint256)',
 	'function lastActionAt(address owner) view returns (uint64)',
 	'function isActive(address owner) view returns (bool)',
 	'function nonces(address owner) view returns (uint256)',
+	`function mandateOf(address owner) view returns (${MANDATE_TUPLE})`,
+	`function setMandate(uint256 tokenId, ${MANDATE_TUPLE} m)`,
+	'function revoke()',
+	'event MandateSet(address indexed owner, uint256 indexed tokenId, bytes32 mandateHash)',
+	'event Revoked(address indexed owner, uint256 indexed tokenId)',
+	'error NotPositionOwner()',
+	'error MandateInactive()',
+	'error MandateExpired()',
+	'error MandateAlreadyActive(uint256 tokenId)',
+	'error PoolNotPermitted()',
+	'error RangeWidthZero()',
+	'error RangeWidthNotSpaced()',
+	'error MaxLiquidityZero()',
+	'error ImprovementOutOfRange()',
+	'error RetentionOutOfRange()',
+	'error CooldownZero()',
 ])
 
 export const positionManagerAbi = parseAbi([

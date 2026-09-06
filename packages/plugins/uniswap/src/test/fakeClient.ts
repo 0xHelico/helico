@@ -8,7 +8,12 @@ import {
 } from 'viem'
 import type { ChainClient } from '../client'
 
-export type FakeContract = { address: Address; abi: Abi; results: Record<string, unknown> }
+/**
+ * A result is either a fixed value or a function of the call's arguments, which is what a test
+ * needs when the same function is asked about several pools in one go.
+ */
+export type FakeResult = unknown | ((...args: readonly unknown[]) => unknown)
+export type FakeContract = { address: Address; abi: Abi; results: Record<string, FakeResult> }
 export type RecordedCall = {
 	to: Address
 	functionName: string
@@ -32,10 +37,11 @@ export function fakeClient(chainId: number, contracts: FakeContract[]) {
 		calls.push({ to, functionName, args: args ?? [], value: value ? BigInt(value) : undefined })
 		if (!(functionName in contract.results))
 			throw new Error(`fake client: no result for ${functionName}`)
+		const answer = contract.results[functionName]
 		return encodeFunctionResult({
 			abi: contract.abi,
 			functionName,
-			result: contract.results[functionName],
+			result: typeof answer === 'function' ? answer(...(args ?? [])) : answer,
 		})
 	}
 	return { client: { chain: { id: chainId }, request } as unknown as ChainClient, calls }
