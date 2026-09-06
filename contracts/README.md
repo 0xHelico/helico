@@ -176,7 +176,7 @@ the block time is 0.101 seconds, so a pinned fork works on the machine that warm
 cache and fails for everyone else within the hour. They fork `latest` and derive what they need
 from what they read.
 
-73 tests, 7 of them on a fork. `VaultAttacks.t.sol` holds the audit's findings as regression tests — each one was
+78 tests, 9 of them on a fork. `VaultAttacks.t.sol` holds the audit's findings as regression tests — each one was
 written before the contract could pass it, and the commit that added them is red on all nine.
 `HelicoVault.t.sol` covers every rejection path above, all three exits (paused, agent removed,
 upgrade pending), the upgrade path, and the hash agreement with the CRE workflow — pinned to a literal
