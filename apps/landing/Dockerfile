@@ -7,8 +7,11 @@ FROM oven/bun:1.3.14-alpine AS build
 WORKDIR /repo
 COPY . .
 RUN bun install --frozen-lockfile
-# The blog reads the API when BE_URL is set at build time, and the files otherwise.
-ARG BE_URL
+# The blog is built from the API, and falls back to the Markdown files when it does not answer
+# (see src/lib/posts.ts, which says which in the build log). The default is here rather than in
+# the deployment, because an image built from this repository is the deployed landing and should
+# not depend on a build argument reaching it: pass --build-arg BE_URL= to build from the files.
+ARG BE_URL=https://api.helico.site
 ENV BE_URL=${BE_URL}
 RUN bun run --filter @helico/landing build
 
