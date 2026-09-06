@@ -13,10 +13,13 @@ export function HeroCanvas() {
 	// `activeIdx` is always wrapped modulo the list, and the list is not empty.
 	const cycle = CYCLES[activeIdx] as Cycle
 
+	// Re-armed on every change of scenario, not of duration: two neighbours with the same
+	// duration used to leave the timer unarmed, and the loop stopped on the last one.
 	useEffect(() => {
-		const id = setTimeout(() => setActiveIdx((i) => (i + 1) % CYCLES.length), cycle.durationMs)
+		const wait = (CYCLES[activeIdx] as Cycle).durationMs
+		const id = setTimeout(() => setActiveIdx((i) => (i + 1) % CYCLES.length), wait)
 		return () => clearTimeout(id)
-	}, [cycle.durationMs])
+	}, [activeIdx])
 
 	return (
 		<div className="relative">

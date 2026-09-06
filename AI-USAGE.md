@@ -485,6 +485,7 @@ Format: date · what was done · the AI's role · what a human verified.
   JSON-LD). Verified with `astro check`, the build, and the audits at zero.
 - **Wording:** "deposit" became "funds" throughout the page at the user's request; grammar fixed by hand.
 - **Logos:** the "Built with" grid swaps three wordmarks for logos the user supplied (Ethereum, FREE-PI, One Dollar Audit), converted to lossless webp; the user is asked to confirm the last two were used.
+- **Motion:** the canvas loop bug (timer keyed on duration, two neighbours share one) fixed; sections reveal their parts in sequence on first view, JS- and reduced-motion-guarded. Watched headless: the loop returns to Mandate; 53 parts arm and complete; audit at zero.
 
 ### 2026-09-06 — Landing page: plain words
 

@@ -81,5 +81,27 @@ const website = {
 	</head>
 	<body>
 		<slot />
+		<script>
+			// Each [data-reveal] container shows its parts in order once it scrolls into view.
+			// Lists (cards, FAQ items, logos, buttons) count their own children as parts.
+			document.documentElement.classList.add('js')
+			const lists = '.cards, .faq__list, .brands__grid, .updates__actions, .actions, .hero__copy'
+			for (const box of document.querySelectorAll<HTMLElement>('[data-reveal]')) {
+				const items = Array.from(box.children).flatMap((c) => (c.matches(lists) ? Array.from(c.children) : [c])) as HTMLElement[]
+				items.forEach((el, i) => {
+					el.classList.add('reveal-item')
+					el.style.setProperty('--i', String(i))
+				})
+				const io = new IntersectionObserver(
+					(entries) => {
+						if (!entries.some((e) => e.isIntersecting)) return
+						for (const el of items) el.classList.add('is-in')
+						io.disconnect()
+					},
+					{ threshold: 0.1 },
+				)
+				io.observe(box)
+			}
+		</script>
 	</body>
 </html>
