@@ -11,6 +11,7 @@ import {
 import { type Address, encodeAbiParameters, type Hex, zeroAddress } from 'viem'
 import { z } from 'zod'
 import { type RecenterParams, recenterParamsAbi } from './abi'
+import { AI_SECRET_IDS, describeForOwner, explain } from './ai'
 import { type ChainState, poolIdOf, readChainState } from './chain'
 import { decideRecentre, type Verdict } from './decision'
 import { MANDATE_SECRET_IDS, type Mandate, mandateFromSecrets, mandateHash } from './mandate'
@@ -18,6 +19,7 @@ import { type Authorisation, encodeAuthorisation, type RecentreDomain, signRecen
 import { sizeRecentre } from './sizing'
 
 export * from './abi'
+export * from './ai'
 export * from './chain'
 export * from './decision'
 export * from './mandate'
@@ -72,6 +74,27 @@ export const configShape = {
 	/** Enclave policy: refuse to route a re-centre through a pool whose LP fee is above this, in pips. */
 	maxPoolFeePips: z.number().int().min(0).max(1_000_000),
 	deadlineSeconds: z.number().int().positive(),
+
+	// ─── The enclave's explanation ───────────────────────────────
+	// A model turns the verdict into a sentence the position's owner can read. It decides
+	// nothing: `decide` has already chosen and the vault re-checks every rule on chain, so a
+	// confused model produces a confusing sentence and cannot move a position.
+	//
+	// It can only run here. A non-confidential workflow calls an endpoint from every node and
+	// takes a consensus; ten nodes asking a model the same question get ten different answers,
+	// and free text has no median. Inside the enclave the call happens once.
+	//
+	// Leave `aiUrl` empty to turn it off — every path then behaves as it did before.
+	aiUrl: z
+		.string()
+		.regex(/^https?:\/\/\S+$/)
+		.or(z.literal(''))
+		.default(''),
+	aiModel: z.string().default('ag/claude-opus-4-6-thinking'),
+	/** Tried when the first errors, times out, or returns something the guards reject. */
+	aiFallbackModel: z.string().default('ag/gemini-3-flash'),
+	aiMaxTokens: z.number().int().positive().default(1200),
+	aiTimeoutSeconds: z.number().int().positive().max(60).default(30),
 }
 
 export const configSchema = z
@@ -176,7 +199,11 @@ export const onCronTrigger = async (runtime: TeeRuntime<Config>): Promise<string
 
 	// 1. The mandate's thresholds, and in signature mode the agent key, released by the Vault DON
 	//    into this enclave only. The key is used here and never crosses out.
-	const ids = [...Object.values(MANDATE_SECRET_IDS), ...(signs ? [config.agentKeySecretId] : [])]
+	const ids = [
+		...Object.values(MANDATE_SECRET_IDS),
+		...(signs ? [config.agentKeySecretId] : []),
+		...(config.aiUrl ? Object.values(AI_SECRET_IDS) : []),
+	]
 	const secrets = runtime.getSecrets(ids.map((id) => ({ id }))).result()
 	const mandate = mandateFromSecrets(config.poolId as Hex, secrets)
 	const hash = mandateHash(mandate)
@@ -201,7 +228,15 @@ export const onCronTrigger = async (runtime: TeeRuntime<Config>): Promise<string
 
 	// 4. Decide, then size the swap and the mint the burn will fund.
 	const outcome = decide(config, mandate, state, now)
-	if (!outcome.act) return `HOLD (${outcome.reason})`
+
+	// 4b. Ask the model to say why, in the owner's words. Never load-bearing: a missing or
+	//     rejected answer changes nothing about what happens next.
+	const reason = config.aiUrl
+		? explain(runtime, config, secrets, describeForOwner(config, mandate, state, outcome, now))
+		: undefined
+	const because = reason ? ` — ${reason}` : ''
+
+	if (!outcome.act) return `HOLD (${outcome.reason})${because}`
 	const { tickLower, tickUpper } = outcome.params
 
 	// 5. Cross back with the verdict only.
@@ -227,10 +262,10 @@ export const onCronTrigger = async (runtime: TeeRuntime<Config>): Promise<string
 				hashingAlgo: 'keccak256',
 			})
 			.result()
-		return `RECENTER ${tickLower}..${tickUpper} ${authorisationJson(auth, signature, signer)}`
+		return `RECENTER ${tickLower}..${tickUpper} ${authorisationJson(auth, signature, signer)}${because}`
 	}
 	const txHash = deliver(runtime.usingTheDons(), config, encodeReport(true, hash, outcome.params))
-	return `RECENTER ${tickLower}..${tickUpper} tx ${txHash}`
+	return `RECENTER ${tickLower}..${tickUpper} tx ${txHash}${because}`
 }
 
 /** The signed authorisation as the simulator prints it, for a relayer to pick up. */

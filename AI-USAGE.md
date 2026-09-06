@@ -574,6 +574,21 @@ Format: date · what was done · the AI's role · what a human verified.
   existing tests were quietly relying on the silent replacement and now `revoke()` first, which
   is the flow a user has.
 
+### 2026-09-06 — CRE: the enclave explains its own verdict
+
+- **Done:** `packages/plugins/cre/src/ai.ts` asks a language model to turn the decision into a
+  sentence the position's owner can read, over the HTTP capability from inside the TEE, with the
+  router's two credentials released by the Vault DON. It decides nothing — `decide` has already
+  chosen and the vault re-checks every rule on chain. Off unless `aiUrl` is set.
+- **AI's role:** tested all sixteen non-Grok models on the router against two scenarios and
+  picked on the results rather than on reputation; wrote the client, the guards and the tests.
+  The user supplied the router and its credentials and asked for reasoning on the LP move.
+- **Plan:** docs/plans/2026-09-06-ai-reasoning-in-the-enclave.md
+- **Verified:** 181 tests pass. Three guards, each mutated to confirm exactly one test fails
+  without it — and the notice guard needed a second test, because the recorded fixture was
+  caught by the token guard first and proved nothing about it. Fixtures are real bodies from
+  the router, recorded today; every one of them arrived as HTTP 200.
+
 <!--
 Template for the next entry:
 
