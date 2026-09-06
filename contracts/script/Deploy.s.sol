@@ -1,0 +1,115 @@
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.28;
+
+import {Script} from "forge-std/Script.sol";
+import {console} from "forge-std/console.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+
+import {HelicoVault} from "../src/HelicoVault.sol";
+
+/// @notice Deploys `HelicoVault` behind a proxy that is initialised in the same transaction.
+///
+/// @dev **Why one transaction.** A proxy deployed uninitialised can be initialised by whoever
+///      reaches it first, and `initialize` hands out `DEFAULT_ADMIN_ROLE`. Passing the call
+///      into the `ERC1967Proxy` constructor removes that window entirely rather than narrowing
+///      it. The twelve-agent audit left this open as a lead precisely because no deploy script
+///      existed to answer it.
+///
+///      Run:
+///        forge script script/Deploy.s.sol:Deploy --rpc-url $ROBINHOOD_RPC_URL --broadcast
+///
+///      Environment:
+///        AGENT_ADDRESS   the enclave's signer. Not an EOA we hold — the key exists only
+///                        inside the enclave, which is the whole point of the signature path.
+///        ADMIN_ADDRESS   optional; defaults to the broadcaster. Should be a multisig.
+contract Deploy is Script {
+    uint256 constant ROBINHOOD_MAINNET = 4663;
+
+    // Verified on chain rather than copied from a table: each has code at these addresses.
+    address constant POSITION_MANAGER = 0x58daec3116aae6D93017bAAea7749052E8a04fA7;
+    address constant STATE_VIEW = 0xF3334192D15450CdD385c8B70e03f9A6bD9E673b;
+    address constant POOL_MANAGER = 0x8366a39CC670B4001A1121B8F6A443A643e40951;
+
+    error WrongChain(uint256 actual);
+    error NoAgentAddress();
+    error NoAdminAddress();
+    error DependencyHasNoCode(address dependency);
+
+    function run() external returns (HelicoVault vault) {
+        // A mainnet script that will run anywhere is a mainnet script that will eventually run
+        // somewhere else.
+        if (block.chainid != ROBINHOOD_MAINNET) revert WrongChain(block.chainid);
+
+        address agent = vm.envAddress("AGENT_ADDRESS");
+        if (agent == address(0)) revert NoAgentAddress();
+
+        // The address that will actually sign, resolved the way Foundry resolves it. Not
+        // `address(this)`: a script contract is ephemeral, Foundry refuses to let its address
+        // be relied on, and every call below is broadcast from the wallet rather than from here.
+        address deployer = msg.sender;
+        address admin = vm.envOr("ADMIN_ADDRESS", deployer);
+        if (admin == address(0)) revert NoAdminAddress();
+
+        // The addresses above are constants, so this catches a chain that answers with the
+        // right id but is not the chain we think it is.
+        _requireCode(POSITION_MANAGER);
+        _requireCode(STATE_VIEW);
+        _requireCode(POOL_MANAGER);
+
+        vm.startBroadcast();
+        vault = _deploy(deployer, admin, agent);
+        vm.stopBroadcast();
+
+        console.log("vault (proxy)  ", address(vault));
+        console.log("admin          ", admin);
+        console.log("agent (enclave)", agent);
+        console.log("chain          ", block.chainid);
+    }
+
+    /// @dev The deployment itself, taking the deployer explicitly so it works both under a
+    ///      broadcast (where the caller is the wallet) and in a fork test (where it is the test
+    ///      contract). The first version took `address(this)`, which Foundry rejects outright
+    ///      inside a broadcast — and the fork test could not catch it, because calling `deploy`
+    ///      externally makes `address(this)` the script rather than the sender. A rehearsal
+    ///      through a door production does not use is not a rehearsal.
+    ///
+    ///      The deployer holds the admin role only for the length of this sequence: it grants
+    ///      the three roles, passes the admin role on, and renounces its own. Note that a
+    ///      broadcast is a signed *sequence*, not one transaction, so those steps land in
+    ///      separate blocks — the deployer is briefly the sole admin, which is why it should be
+    ///      a key you control and discard, and why `ADMIN_ADDRESS` should be a multisig.
+    function _deploy(address deployer, address admin, address agent) internal returns (HelicoVault vault) {
+        HelicoVault implementation = new HelicoVault();
+        vault = HelicoVault(
+            payable(address(
+                    new ERC1967Proxy(
+                        address(implementation),
+                        abi.encodeCall(
+                            HelicoVault.initialize, (deployer, POSITION_MANAGER, STATE_VIEW, POOL_MANAGER)
+                        )
+                    )
+                ))
+        );
+
+        // The enclave is the only thing that may propose an action. Its key exists nowhere
+        // else, which is why this is not an address we hold.
+        vault.grantRole(vault.AGENT_ROLE(), agent);
+        vault.grantRole(vault.GUARDIAN_ROLE(), admin);
+        vault.grantRole(vault.UPGRADER_ROLE(), admin);
+
+        bytes32 adminRole = vault.DEFAULT_ADMIN_ROLE();
+        vault.grantRole(adminRole, admin);
+        if (admin != deployer) vault.renounceRole(adminRole, deployer);
+
+        console.log("implementation ", address(implementation));
+    }
+
+    /// @dev Kept for fork tests, which call it as the deployer themselves.
+    function deploy(address admin, address agent) public returns (HelicoVault) {
+        return _deploy(address(this), admin, agent);
+    }
+
+    function _requireCode(address dependency) internal view {
+        if (dependency.code.length == 0) revert DependencyHasNoCode(dependency);
+    }
+}
