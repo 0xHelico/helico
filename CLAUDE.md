@@ -152,6 +152,9 @@ costs one slot, not several.
 **1inch:**
 - [x] The Aqua app is custom, not a fork of `XYCSwap` — ours replaces the strategy struct with a
       mandate and adds refusals the example has none of. Merged in #148
+- [ ] **"a sophisticated DeFi position"** — open, and the partner's answer leans against. The
+      *app* is custom; the *position* it implements is constant product, the same one the
+      example implements. See the warning below
 - [x] README points at the contract and what it enforces
 
 **The Graph:**
@@ -170,12 +173,34 @@ costs one slot, not several.
 > Graph Products*. Qualifying for one does not automatically qualify for the other — the tracks
 > are binary.
 
-> ⚠️ **The scope of the Aqua track is not settled.** The prize text reads *"Create a custom Aqua
-> app that implements a sophisticated DeFi position"* (read off the prize page directly, not
-> from a search summary). Whether an app whose novelty is **policy** rather than **price
-> discovery** satisfies "a sophisticated DeFi position" is a question that has been drafted for
-> `#partner-1inch` and **not yet answered**. Do not write a checklist line here claiming it
-> qualifies until there is an answer to point at.
+> ⚠️ **The Aqua scope question was answered on 7 September, and the answer is not "yes".** The
+> prize text reads *"Create a custom Aqua app that implements a sophisticated DeFi position"*.
+> Asked in `#partner-1inch` whether an app whose novelty is **policy** rather than **price
+> discovery** satisfies that, the answer was:
+>
+> > *"Aqua app with swaps respect maker signed limits sounds quite general. Good luck in building
+> > what you feel interesting on Aqua"*
+>
+> That is not a refusal and not an endorsement. It declines to bless the design and calls it
+> general, which is the reading to work from. **Do not write a checklist line claiming this
+> qualifies.**
+>
+> The evidence agrees with them, and it is checkable rather than a matter of taste.
+> `@1inch/swap-vm-sdk@0.4.1` ships these position primitives:
+>
+> ```
+> concentrate    dutch-auction   twap-swap    pegged-swap
+> oracle-price-adjuster          limit-swap   decay
+> xyc-swap       fee   min-rate  base-fee-adjuster  invalidators  controls
+> ```
+>
+> plus `XYCConcentrate.sol` and its `computeLiquidityFromAmounts(availableLt, availableGt,
+> sqrtPspot, sqrtPmin, sqrtPmax)`. `HelicoMandateSwap._quote` is `xyc-swap` — the baseline the
+> example is named after. So the position our app implements is the example's position; what is
+> custom is the mandate around it. That is precisely what "quite general" describes.
+>
+> What would answer it is tracked in the Aqua-position issue. Deciding whether to act is
+> @ghozzza's call — it is their contract, and it is six days out from the deadline.
 
 ### Finalist track (optional)
 
