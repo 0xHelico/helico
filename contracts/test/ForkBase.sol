@@ -197,3 +197,44 @@ abstract contract MainnetFork is ForkBase {
         )
     {}
 }
+
+/// @notice Arbitrum One, and a pool whose hook only wants to hear about swaps.
+///
+/// @dev The complement of `MainnetFork`. Angstrom accepts the liquidity callbacks and refuses the
+///      swap; this hook does not implement the liquidity callbacks at all and accepts the swap —
+///      so between them a re-centre's whole surface is covered by hooks somebody else wrote.
+///
+///      **And this one is on the chain the product runs on.** Which matters, because the honest
+///      version of "Helico works in pools that have hooks" is stronger when at least one of the
+///      pools is on Arbitrum One rather than only on Ethereum.
+///
+///      `LimitOrderHook`, `0xD733…00c0`, `poolId`
+///      `0x015537a47e3865bd59fa4b0feed5546f1b5d27660447dddcdf86808bce384d98`. Its permission bits
+///      are `0x00c0` — `beforeSwap` and `afterSwap`, nothing else — decoded from the address
+///      rather than read off a registry, and matching what `Uniswap/hooklist` says about it.
+///
+///      **It was nearly missed.** Two scans concluded Arbitrum had no hooked pool worth using;
+///      both were pointed away from it by a conclusion drawn before the search. It sits in
+///      Uniswap's own registry, and `hookrank.io` — which Uniswap's own team recommends — lists
+///      it on the first screen.
+///
+///      `fee` is `0x800000`, dynamic; it read 1000 pips when this was written.
+abstract contract ArbitrumHookedFork is ForkBase {
+    constructor()
+        ForkBase(
+            "arbitrum",
+            "ARBITRUM_RPC_URL",
+            42161,
+            IPositionManager(0xd88F38F930b7952f2DB2432Cb002E7abbF3dD869),
+            IStateView(0x76Fd297e2D437cd7f76d50F01AfE6160f86e9990),
+            IPoolManager(0x360E68faCcca8cA495c1B759Fd9EEe466db9FB32),
+            PoolKey({
+                currency0: address(0), // native ETH
+                currency1: 0xaf88d065e77c8cC2239327C5EDb3A432268e5831, // USDC
+                fee: 0x800000,
+                tickSpacing: 10,
+                hooks: 0xD73339564Ac99F3E09b0EBc80603Ff8B796500c0
+            })
+        )
+    {}
+}
