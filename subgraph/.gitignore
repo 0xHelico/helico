@@ -1,3 +1,9 @@
 node_modules
 generated
 build
+
+# `graph test` writes these: a compiled wasm of the handlers and a cache marker. Both are
+# rebuilt from source on every run, and the wasm is 56K of binary that changes whenever any
+# handler does — the kind of file that makes a diff unreadable for no benefit.
+tests/.bin
+tests/.latest.json
