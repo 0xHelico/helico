@@ -26,9 +26,6 @@
     "@streamdown/mermaid": "^1.0.2",
     "@tanstack/react-query": "^5.102.8",
     "@wagmi/core": "^3.6.5",
-    "@x402/core": "^2.25.0",
-    "@x402/evm": "^2.25.0",
-    "@x402/svm": "^2.25.0",
     "ai": "7.0.93",
     "class-variance-authority": "^0.7.1",
     "classnames": "^2.5.1",
@@ -56,6 +53,10 @@
     "wagmi": "^3.7.7",
     "zod": "^4.5.4"
   },
+  "trustedDependencies": [
+    "playwright",
+    "@biomejs/biome"
+  ],
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
     "@tailwindcss/typography": "^0.5.20",
