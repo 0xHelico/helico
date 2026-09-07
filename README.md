@@ -58,13 +58,13 @@ released there by the Vault DON. Only the verdict crosses back out.
 
 | What | Where |
 |---|---|
-| `handlerInTee` registration | [`index.ts#L268-L276`](https://github.com/0xHelico/helico/blob/89054c6fe9fdb8c7cfe7b978e11f9b37a1e42c25/packages/plugins/cre/src/index.ts#L268-L276) |
-| The confidential handler itself | [`index.ts#L173-L234`](https://github.com/0xHelico/helico/blob/89054c6fe9fdb8c7cfe7b978e11f9b37a1e42c25/packages/plugins/cre/src/index.ts#L173-L234) |
-| The re-centre decision, Helico's own logic | [`index.ts#L111-L170`](https://github.com/0xHelico/helico/blob/89054c6fe9fdb8c7cfe7b978e11f9b37a1e42c25/packages/plugins/cre/src/index.ts#L111-L170) |
+| `handlerInTee` registration | [`index.ts#L303-L311`](https://github.com/0xHelico/helico/blob/85fe235e1a2fab7521bd5f7020d8ac1bd2505f00/packages/plugins/cre/src/index.ts#L303-L311) |
+| The confidential handler itself | [`index.ts#L196-L269`](https://github.com/0xHelico/helico/blob/85fe235e1a2fab7521bd5f7020d8ac1bd2505f00/packages/plugins/cre/src/index.ts#L196-L269) |
+| The re-centre decision, Helico's own logic | [`index.ts#L134-L193`](https://github.com/0xHelico/helico/blob/85fe235e1a2fab7521bd5f7020d8ac1bd2505f00/packages/plugins/cre/src/index.ts#L134-L193) |
 | Chain reads made from inside the enclave | [`chain.ts#L20-L44`](https://github.com/0xHelico/helico/blob/89054c6fe9fdb8c7cfe7b978e11f9b37a1e42c25/packages/plugins/cre/src/chain.ts#L20-L44) |
 | The mandate hash, tying the verdict to what the user signed | [`mandate.ts#L52-L64`](https://github.com/0xHelico/helico/blob/89054c6fe9fdb8c7cfe7b978e11f9b37a1e42c25/packages/plugins/cre/src/mandate.ts#L52-L64) |
 
-| The verdict delivered to the vault | [`index.ts#L244-L265`](https://github.com/0xHelico/helico/blob/89054c6fe9fdb8c7cfe7b978e11f9b37a1e42c25/packages/plugins/cre/src/index.ts#L244-L265) |
+| The verdict delivered to the vault | [`index.ts#L279-L300`](https://github.com/0xHelico/helico/blob/85fe235e1a2fab7521bd5f7020d8ac1bd2505f00/packages/plugins/cre/src/index.ts#L279-L300) |
 | The vault receiving it | [`HelicoVault.sol#L504-L517`](https://github.com/0xHelico/helico/blob/89054c6fe9fdb8c7cfe7b978e11f9b37a1e42c25/contracts/src/HelicoVault.sol#L504-L517) |
 
 **Run it yourself:** `cp apps/cre/.env.example apps/cre/.env && cd apps/cre && ./rehearse.sh`.
