@@ -111,6 +111,51 @@ caught.** What that turned up, and the four limits it did not fix, are in
 > exist in the currently pinned commit would fail the check for all the other rows. Pinning
 > them together is the only honest way to do it.
 
+#### One wallet, three positions, no deposit
+
+Aqua is an allowance ledger rather than a vault, and the consequence is easy to state and easier
+to disbelieve: **opening a position moves no tokens at all.** `ship` writes an entry; the tokens
+are only touched when a fill happens, straight from the maker to the recipient.
+
+So one wallet's balance can back several positions at once.
+[`@helico/plugin-1inch`](packages/plugins/1inch/) builds them, priced by 1inch's deployed SwapVM
+rather than by arithmetic of ours, and one command shows it on a fork of Arbitrum One:
+
+```sh
+anvil --fork-url https://arb1.arbitrum.io/rpc --port 8549 --silent &
+bun scripts/check-aqua.ts
+```
+
+```
+ship $2,800–3,200   3 Aqua events, 0 token transfers
+ship $2,900–3,100   3 Aqua events, 0 token transfers
+ship $1,000–9,000   3 Aqua events, 0 token transfers
+
+wallet after    10000000000000000000 WETH   20000000000 USDC
+moved           0 WETH   0 USDC
+committed       30000000000000000000 WETH against 10000000000000000000 held  —  300%
+
+  $2,800–3,200   1,000 USDC -> 0.337011 WETH   @ $2967.26
+  $2,900–3,100   1,000 USDC -> 0.334501 WETH   @ $2989.53
+  $1,000–9,000   1,000 USDC -> 0.386875 WETH   @ $2584.81
+```
+
+Three concentrated ranges on the same ten ETH and twenty thousand USDC. **On a pool this is three
+positions and the capital split three ways**; here it is three ledger writes and the wallet is as
+full afterwards as it was before. The price spread across them is the concentration effect — the
+same money quoted tighter fills better.
+
+300% committed is not leverage. `pull` ends in `safeTransferFrom` from the maker's own wallet, so
+whichever strategy fills first gets the tokens and the rest revert. It is a number an agent has to
+watch rather than a position it can hold, which is exactly the job the enclave and the subgraph do
+here: nothing on chain can list a maker's strategies, and after a fill the ones left over quote
+prices the wallet can no longer honour.
+
+> The pricing is 1inch's on purpose. `concentrate` is one of thirteen instructions their SDK
+> ships, and `xyc-swap` — the one `HelicoMandateSwap` implements by hand — is the baseline their
+> own example is named after. The three ways this integration can be wrong *without reverting*
+> are in [the plugin's README](packages/plugins/1inch/README.md), each with a test.
+
 ### The Graph
 
 > **Deployed to Subgraph Studio, and pointed at the wrong contract until it is redeployed.**
