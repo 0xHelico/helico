@@ -226,6 +226,8 @@ End on the repo URL. No outro music.
   answer back. Say *"the enclave decides, and a model explains it"*
 - **"It finds the best yield across protocols"** — not yet. Today it holds a target share against
   a liquid buffer at one market, with a threshold so it does not churn. `0xHelico/helico#179`
-- **"The Graph tells the agent what to work on"** — not yet either. The subgraph is real and
-  answering, but the agent reads an RPC. `0xHelico/helico#178`
+- **"The Graph tells the agent what to work on"** — no. What is true, and sayable: *the workflow
+  asks The Graph how much the maker's mandates could demand, and sizes the liquid buffer to it.*
+  It still reads the account's own balances over RPC. The distinction is small and a judge who
+  knows the stack will hear it
 - Any figure not read off the take being recorded
