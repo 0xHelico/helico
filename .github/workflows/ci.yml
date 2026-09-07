@@ -10,6 +10,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The README's code links are pinned to commits, and `check-readme-links.py` compares
+          # each pin against the working tree. A shallow clone does not have those commits, and
+          # the script says so rather than passing: `cannot compare against … — fetch it`.
+          fetch-depth: 0
       # The backend's vet and tests run through the same Turborepo tasks as everything else.
       - uses: actions/setup-go@v5
         with:
@@ -27,6 +32,10 @@ jobs:
       # the repository. `bun run check` skips it by design, so nothing linted it until this.
       - run: bunx turbo run lint
       - run: bun run typecheck
+      # A judge has to be able to find the code behind each claim. The script existed and nothing
+      # ran it, so five of the twenty-three pins had drifted by the time anyone looked — and a
+      # permalink to the wrong lines is worse than none, because it looks checked.
+      - run: python3 scripts/check-readme-links.py
       # Runs every package's `test` script through Turborepo. A package without one is skipped,
       # so this step proves only what the packages define.
       - run: bun run test
@@ -53,6 +62,13 @@ jobs:
       - name: Check formatting
         working-directory: contracts
         run: forge fmt --check
+      # Before the build, because the compiler's own message names a version requirement rather
+      # than the file that is out of step. Two green branches can still merge into a main that
+      # does not compile -- one moves the pin, the other adds a file carrying the old one, and
+      # neither CI run can see the other. This catches it on the second merge rather than on
+      # whoever pulls main next.
+      - name: Every pragma matches the pinned compiler
+        run: python3 scripts/check-pragmas.py
       - name: Build
         working-directory: contracts
         run: forge build

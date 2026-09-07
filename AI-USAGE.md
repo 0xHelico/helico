@@ -651,6 +651,20 @@ Format: date · what was done · the AI's role · what a human verified.
   performance 93 → 74 and largest paint 2.9s → 5.0s; injected after load it measures 98, and a
   browser confirms the tag and the collect beacon both fire.
 
+### 2026-09-06 — CRE: the enclave explains its own verdict
+- **Done:** `packages/plugins/cre/src/ai.ts` asks a language model to turn the decision into a
+  sentence the position's owner can read, over the HTTP capability from inside the TEE, with the
+  router's two credentials released by the Vault DON. It decides nothing — `decide` has already
+  chosen and the vault re-checks every rule on chain. Off unless `aiUrl` is set.
+- **AI's role:** tested all sixteen non-Grok models on the router against two scenarios and
+  picked on the results rather than on reputation; wrote the client, the guards and the tests.
+  The user supplied the router and its credentials and asked for reasoning on the LP move.
+- **Plan:** docs/plans/2026-09-06-ai-reasoning-in-the-enclave.md
+- **Verified:** 181 tests pass. Three guards, each mutated to confirm exactly one test fails
+  without it — and the notice guard needed a second test, because the recorded fixture was
+  caught by the token guard first and proved nothing about it. Fixtures are real bodies from
+  the router, recorded today; every one of them arrived as HTTP 200.
+
 ### 2026-09-07 — The dapp: a wallet, and a sentence that becomes a checked intent
 
 - **Done:** `apps/app` — the `vercel/chatbot` template pruned to a chat surface and added to
@@ -746,6 +760,37 @@ Format: date · what was done · the AI's role · what a human verified.
   first hash it printed was helico's own. And the pinned constant-product literal was recomputed
   in integer arithmetic outside Solidity, because copying a passing run's output would assert
   only that the contract agrees with itself.
+
+### 2026-09-07 — The deploy script, the build that was killing the VPS, and three tracks
+
+- **Done:** `DeployMandateSwap.s.sol` and `ForkMandateSwap.t.sol`, the API image moved off the
+  VPS into Actions, `main` un-broken with a guard, and every document realigned to the three
+  tracks actually submitted — Chainlink, 1inch, The Graph.
+- **AI's role:** all of it, on the owner's decisions: move the builds to Actions, drop Uniswap
+  for The Graph, fix everything to match, close what can be closed.
+- **Plan:** `docs/deployment.md` for the build move; the demo script was rewritten rather than
+  planned separately.
+- **Verified:** the Aqua address the script will broadcast to was checked **on chain**, not read
+  off 1inch's README — code present, `rawBalances` answers `(0,0)` for an unshipped strategy,
+  `safeBalances` reverts with `SafeBalancesForTokenNotInActiveStrategy`. The API image was built
+  and *run*: `/healthz` returned ok and `/api/posts` returned content, the second one because
+  `.dockerignore` excludes `*.md` with an exception for `apps/be/content`, so a healthy container
+  serving an empty blog is a failure a health check reports as fine. Deploy dry run: 1,060,741
+  gas, 0.0000426 ETH.
+- **The near miss worth recording:** the Aqua address was typed by hand and one character was
+  wrong, and **it compiled**. `forge fmt` rewrites an address literal's EIP-55 checksum to match
+  whatever hex is present, so solc's mistyped-address check passes on a mistyped address. The
+  unit suite could not have caught it — nothing in it touches that constant. The fork suite now
+  does.
+- **A break nobody caused:** `main` stopped compiling after seven PRs merged. One branch moved the
+  tree to solc 0.8.30 for Aqua; another, cut before it, added a file still pinned to 0.8.28. Both
+  were green, and **no CI run on either branch could see the other**. Fixed in one line, with
+  `scripts/check-pragmas.py` added and verified in both directions against the real break, because
+  the category of failure matters more than the instance.
+- **What was corrected in someone else's analysis, and in my own:** the case against the 1inch
+  track said an Aqua app "requires their SwapVM contracts". It does not — `SwapVM` is not an
+  `AquaApp` and the string appears zero times in that repository. And a claim that #101 was still
+  failing was four hours older than its fix; I nearly repeated it as current.
 
 <!--
 Template for the next entry:

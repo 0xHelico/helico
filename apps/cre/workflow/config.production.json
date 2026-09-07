@@ -12,5 +12,10 @@
 	"gasLimit": "3000000",
 	"slippageBps": 50,
 	"maxPoolFeePips": 10000,
-	"deadlineSeconds": 600
+	"deadlineSeconds": 600,
+	"aiUrl": "https://9router.godza.site/v1/chat/completions",
+	"aiModel": "ag/claude-opus-4-6-thinking",
+	"aiFallbackModel": "ag/gemini-3-flash",
+	"aiMaxTokens": 1200,
+	"aiTimeoutSeconds": 30
 }

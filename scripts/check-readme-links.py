@@ -37,16 +37,52 @@ def main() -> int:
 
     problems = 0
 
-    # A pin older than HEAD is normal and not worth reporting: a docs commit does not move the
-    # code the links point at. What matters is whether a file has changed since the pin its own
-    # links use, because then those pinned lines and the working tree have diverged.
+    # **A permalink is a snapshot, and that is the whole point of pinning one.**
     #
-    # Compared per pin, against only the files *that pin's own links* name. Comparing every pin
-    # against every referenced file made re-pinning one file report every other pin as stale,
-    # which is a check that cries wolf — and a check nobody believes is worse than none.
+    # The ranges are therefore checked against the file *as it was in the commit each link
+    # pins*, not against the working tree. A pin whose lines were right when it was made stays
+    # right forever, however much the file moves afterwards.
+    #
+    # This started out the other way round and it was wrong twice over. It failed CI on `main`
+    # every time a merge touched a pinned file, which is a check that fails for doing its job;
+    # and it could have passed a genuinely broken pin, because it never looked at what the pin
+    # actually points at.
+    #
+    # A file that has moved since its pin is reported as INFO. It is worth knowing — a pin can
+    # go stale enough to mislead even while remaining accurate — but it is a judgement call
+    # about freshness, not a defect, so it does not fail.
+    def blob(sha: str, rel: str) -> list[str] | None:
+        got = subprocess.run(
+            ["git", "show", f"{sha}:{rel}"], cwd=ROOT, capture_output=True, text=True
+        )
+        return None if got.returncode != 0 else got.stdout.split("\n")
+
+    for sha, rel, start, end in links:
+        a, b = int(start), int(end)
+        lines = blob(sha, rel)
+        if lines is None:
+            # Either the commit is missing (a shallow clone) or the path did not exist in it.
+            # Both mean this pin cannot be trusted, and both are worth failing on.
+            print(f"UNRESOLVED {rel}#L{a}-L{b} at {sha[:8]} — fetch the commit, or the pin is wrong")
+            problems += 1
+            continue
+        if b > len(lines):
+            print(f"PAST EOF  {rel}#L{a}-L{b} at {sha[:8]} ({len(lines)} lines in that commit)")
+            problems += 1
+            continue
+        first, last = lines[a - 1].strip(), lines[b - 1].strip()
+        if not first.startswith(OPENERS) or last not in CLOSERS:
+            print(f"BROKEN    {rel}#L{a}-L{b} at {sha[:8]} does not bracket a declaration")
+            print(f"          first: {first[:68]}")
+            print(f"          last:  {last[:68]}")
+            problems += 1
+
+    # Freshness, reported and not enforced. Grouped per pin so that re-pinning one file does not
+    # report every other pin as stale.
     by_sha: dict[str, set[str]] = {}
     for sha, rel, _, _ in links:
         by_sha.setdefault(sha, set()).add(rel)
+    stale = 0
     for sha, referenced in sorted(by_sha.items()):
         moved = subprocess.run(
             ["git", "diff", "--name-only", sha, "HEAD", "--", *sorted(referenced)],
@@ -54,34 +90,13 @@ def main() -> int:
             capture_output=True,
             text=True,
         )
-        if moved.returncode != 0:
-            print(f"cannot compare against {sha[:8]} — fetch it, or the pin is wrong")
-            problems += 1
-        elif moved.stdout.strip():
+        if moved.returncode == 0 and moved.stdout.strip():
             for changed in moved.stdout.strip().split("\n"):
-                print(f"CHANGED  {changed} has moved since the pin {sha[:8]}")
-            problems += 1
+                print(f"INFO      {changed} has moved since its pin {sha[:8]} — link still valid")
+                stale += 1
 
-    for sha, rel, start, end in links:
-        a, b = int(start), int(end)
-        path = ROOT / rel
-        if not path.exists():
-            print(f"MISSING  {rel}")
-            problems += 1
-            continue
-        lines = path.read_text().split("\n")
-        if b > len(lines):
-            print(f"PAST EOF {rel}#L{a}-L{b} ({len(lines)} lines)")
-            problems += 1
-            continue
-        first, last = lines[a - 1].strip(), lines[b - 1].strip()
-        if not first.startswith(OPENERS) or last not in CLOSERS:
-            print(f"DRIFTED  {rel}#L{a}-L{b}")
-            print(f"         first: {first[:70]}")
-            print(f"         last:  {last[:70]}")
-            problems += 1
-
-    print(f"{len(links)} links checked, {problems} need attention")
+    suffix = f", {stale} pin(s) older than the file" if stale else ""
+    print(f"{len(links)} links checked, {problems} broken{suffix}")
     return 1 if problems else 0
 
 
