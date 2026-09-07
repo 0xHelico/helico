@@ -233,3 +233,42 @@ written before the contract could pass it, and the commit that added them is red
 upgrade pending), the upgrade path, and the hash agreement with the CRE workflow — pinned to a literal
 vector that `packages/plugins/cre` asserts too, generated with `cast` so neither side marks
 its own homework.
+
+## Deploying
+
+`forge` reads `contracts/.env` on its own — copy `.env.example` and fill it in. The deployer's
+key is **not** in that file: `Deploy.s.sol` calls `vm.startBroadcast()` with no argument, so the
+signer comes from the command line, and the safe place for it is Foundry's encrypted keystore.
+
+```bash
+cast wallet import helico-deployer --interactive   # once; asks for the key, then a password
+cast wallet list                                   # confirm
+
+cd contracts
+forge script script/Deploy.s.sol:Deploy \
+  --rpc-url "$ARBITRUM_RPC_URL" --account helico-deployer --broadcast
+```
+
+Foundry asks for the keystore password each run. The key never reaches `.env`, shell history, or
+a process listing — which is worth the extra prompt, because `--private-key` on a command line
+puts it in all three.
+
+**Before the first one**, `AGENT_ADDRESS` has to be the enclave's signer, and it is the one value
+here you cannot guess: the key behind it exists only inside the Confidential Workflow's TEE. A
+wrong address deploys a vault that honours authorisations nobody can produce, and fixing it means
+granting `AGENT_ROLE` to the right one afterwards rather than a redeploy — recoverable, but only
+if you notice.
+
+`FORWARDER_ADDRESS` can be left unset. The report path is then off, and `setForwarder` turns it on
+later without redeploying.
+
+### After it lands
+
+Three files want the address, and nothing reads it from the chain:
+
+| | |
+|---|---|
+| `apps/cre/workflow/config.production.json` | `vault`, currently the zero address |
+| `apps/app` deployment | `NEXT_PUBLIC_VAULT_ADDRESS` |
+| `README.md` | wherever the deployment is described |
+
