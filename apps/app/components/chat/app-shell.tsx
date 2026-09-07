@@ -47,13 +47,16 @@ export function AppShell({
       </div>
     );
   }
-  if (!session.ready) {
+  // Narrowed here rather than re-checked below: everything past this point is mounted only for
+  // a wallet that has connected and proved itself, so the address is a prop from here on and no
+  // component under it has to ask again — or carry a branch for an answer it can never get.
+  if (!(session.ready && session.address)) {
     return <ConnectGate />;
   }
 
   return (
     <SidebarProvider defaultOpen={defaultOpen}>
-      <AppSidebar />
+      <AppSidebar address={session.address} />
       <SidebarInset>{children}</SidebarInset>
     </SidebarProvider>
   );
