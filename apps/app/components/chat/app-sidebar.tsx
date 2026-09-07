@@ -57,7 +57,7 @@ export function AppSidebar({ address }: { address: `0x${string}` }) {
 
   const handleNewChat = useCallback(() => {
     setOpenMobile(false);
-    router.push("/");
+    router.push("/chat");
   }, [router, setOpenMobile]);
 
   const handleShowDeleteAllDialog = useCallback(() => {
@@ -66,7 +66,7 @@ export function AppSidebar({ address }: { address: `0x${string}` }) {
 
   const handleDeleteAll = useCallback(() => {
     setShowDeleteAllDialog(false);
-    router.replace("/");
+    router.replace("/chat");
     mutate(HISTORY_KEY, [], { revalidate: false });
 
     api.deleteConversations().catch(() => undefined);
@@ -86,8 +86,8 @@ export function AppSidebar({ address }: { address: `0x${string}` }) {
                   className="size-8 !px-0 items-center justify-center group-data-[collapsible=icon]:group-hover/logo:opacity-0"
                   tooltip="Helico"
                 >
-                  {/* The mark, and it goes to a new chat. Getting back to helico.site is what
-                      the landing's own links are for. */}
+                  {/* The mark, and it goes to the front door. Getting back to helico.site is
+                      what the landing's own links are for. */}
                   <Link href="/" onClick={closeMobile}>
                     <Image
                       alt=""
@@ -124,24 +124,24 @@ export function AppSidebar({ address }: { address: `0x${string}` }) {
               <SidebarMenu>
                 <SidebarMenuItem>
                   <SidebarMenuButton
+                    asChild
                     className="h-8 rounded-lg border border-sidebar-border text-[13px] text-sidebar-foreground/70 transition-colors duration-150 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                    tooltip="Mandate"
+                  >
+                    <Link href="/" onClick={closeMobile}>
+                      <ShieldIcon className="size-4" />
+                      <span className="font-medium">Mandate</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    className="h-8 rounded-lg text-[13px] text-sidebar-foreground/70 transition-colors duration-150 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
                     onClick={handleNewChat}
                     tooltip="New Chat"
                   >
                     <PenSquareIcon className="size-4" />
                     <span className="font-medium">New chat</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    className="h-8 rounded-lg text-[13px] text-sidebar-foreground/70 transition-colors duration-150 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                    tooltip="Mandate"
-                  >
-                    <Link href="/mandate" onClick={closeMobile}>
-                      <ShieldIcon className="size-4" />
-                      <span className="font-medium">Mandate</span>
-                    </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>

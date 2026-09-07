@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { upstreamHeaders } from "@/lib/upstream";
+
 // The thinking is not here. This hands the sentence to apps/be, which turns it into a checked
 // swap intent or a question back, and returns exactly what it said. Going through the server
 // keeps the backend's address out of the browser and avoids a cross-origin request.
@@ -27,7 +29,9 @@ export async function POST(request: Request) {
   try {
     const upstream = await fetch(`${BE_API_URL}/api/swap/intent`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      // Carries the caller's address, so the backend rate-limits per visitor rather than
+      // counting the whole app as one client. See lib/upstream.ts.
+      headers: upstreamHeaders(request.headers),
       body: JSON.stringify({ message }),
       signal: AbortSignal.timeout(30_000),
     });

@@ -53,6 +53,13 @@ jobs:
       - name: Check formatting
         working-directory: contracts
         run: forge fmt --check
+      # Before the build, because the compiler's own message names a version requirement rather
+      # than the file that is out of step. Two green branches can still merge into a main that
+      # does not compile -- one moves the pin, the other adds a file carrying the old one, and
+      # neither CI run can see the other. This catches it on the second merge rather than on
+      # whoever pulls main next.
+      - name: Every pragma matches the pinned compiler
+        run: python3 scripts/check-pragmas.py
       - name: Build
         working-directory: contracts
         run: forge build
