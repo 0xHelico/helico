@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import {
   ModelSelector,
   ModelSelectorContent,
@@ -22,9 +22,10 @@ import { SparklesIcon } from "./icons";
  * and every other entry is disabled and says why. A list that let you pick a model nobody wired
  * would be a menu of things that silently do not work.
  */
-export function ModelPicker({ config }: { config: SwapConfig | null }) {
+export function ModelPicker({ config }: { config: SwapConfig }) {
   const [open, setOpen] = useState(false);
-  const active = config?.available ? config.model : null;
+  const active = config.available ? config.model : null;
+  const handleSelect = useCallback(() => setOpen(false), []);
   const choices = modelChoices(active);
   const byProvider = choices.reduce<Record<string, typeof choices>>(
     (acc, m) => {
@@ -63,6 +64,10 @@ export function ModelPicker({ config }: { config: SwapConfig | null }) {
                   className="justify-between gap-3"
                   disabled={!m.available}
                   key={m.id}
+                  // There is one model to pick and it is already in use, so choosing it only
+                  // has to close the popover. Without this the row swallows the click and the
+                  // menu stays open, which reads as broken rather than as settled.
+                  onSelect={handleSelect}
                   value={m.id}
                 >
                   <span className={cn(!m.available && "opacity-50")}>

@@ -229,7 +229,7 @@ export function Chat({ conversationId }: { conversationId?: string }) {
             />
             <PromptInputFooter className="px-3 pb-3">
               <PromptInputTools>
-                <ModelPicker config={swap} />
+                {swap ? <ModelPicker config={swap} /> : null}
               </PromptInputTools>
               <PromptInputSubmit
                 className={cn(
