@@ -1,19 +1,24 @@
-/** A subgraph, addressed either by its network id or by a Subgraph Studio URL. */
+/**
+ * A subgraph, addressed either by its network id or by a Subgraph Studio URL — and the type is
+ * what says which.
+ *
+ * Exactly one of `id` and `url` is set. They are not two ways to reach the same thing: the
+ * gateway serves subgraphs **published to the network** and authenticates every request, while
+ * Studio serves what an account has **deployed**, is rate limited, and takes no key. Ours is
+ * deployed, not published, so a URL is the only address it has.
+ *
+ * `id` was `string` with `''` standing in for "Studio". A sentinel is not a type — it made
+ * `gateway()` build `…/subgraphs/id/` and send a key to it, which is a request that looks
+ * authenticated and addresses nothing. Optional says the same thing and the compiler enforces
+ * it. The diagnosis is @ghozzza's, in #161.
+ */
 export type Subgraph = {
 	/** Human name, for errors and logs. Never sent anywhere. */
 	name: string
-	/** The id shown in the Graph Explorer, not the deployment id. Empty for a Studio endpoint. */
-	id: string
 	chainId: number
-	/**
-	 * A Subgraph Studio development endpoint, which addresses a subgraph by URL rather than by
-	 * id and takes no key. Set it and `query` goes there instead of the gateway.
-	 *
-	 * The two are not interchangeable. The gateway serves subgraphs *published to the network*
-	 * and authenticates every request; Studio serves what an account has *deployed*, is rate
-	 * limited, and is what The Graph's own qualification names for subgraphs. Ours is deployed,
-	 * not published, so this is the only address it has.
-	 */
+	/** The id shown in the Graph Explorer, not the deployment id. Absent for a Studio endpoint. */
+	id?: string
+	/** A Subgraph Studio development endpoint. Absent for one published to the network. */
 	url?: string
 }
 
@@ -88,7 +93,6 @@ export type PoolHistory = {
 export const HELICO_AQUA: Record<number, Subgraph> = {
 	42161: {
 		name: 'Helico — Aqua on Arbitrum One',
-		id: '',
 		chainId: 42161,
 		url: 'https://api.studio.thegraph.com/query/1758877/helico-arbitrum-one/version/latest',
 	},

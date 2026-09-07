@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 
-import { endpoint, query } from './client'
+import { endpoint, gateway, query } from './client'
 import { makerMandates, spendable, toMandates } from './mandates'
 import { HELICO_AQUA, UNISWAP_V4 } from './types'
 
@@ -46,6 +46,12 @@ describe('Studio and the gateway are different doors', () => {
 
 	test('and a published one still goes to the gateway', () => {
 		expect(endpoint(UNISWAP_V4[42161])).toStartWith('https://gateway.thegraph.com/')
+	})
+
+	// The shape this replaces: `id: ''`, which built `…/subgraphs/id/` and sent a key to it —
+	// a well-formed request addressing nothing. Diagnosis is @ghozzza's, #161.
+	test('asking for a gateway URL for a Studio subgraph is refused, not fabricated', () => {
+		expect(() => gateway(AQUA)).toThrow(/not published to the network/)
 	})
 
 	// Studio takes no key. Sending an empty bearer would be refused by some proxies and is a
