@@ -3,26 +3,49 @@
 import { useEffect, useRef } from "react";
 
 /**
- * The gate's left panel: a lavender bloom across the top that falls away to black.
+ * The gate's left panel: the reference's gradient, measured rather than guessed.
  *
- * Modelled on the reference video rather than shipping it — that file is somebody else's and it
- * is 13 MB. The shape matters more than the technique: one wide, soft band anchored to the top
- * edge, drifting slowly, over a hard fall to true black by the middle of the panel. Scattered
- * radial blobs read as fog; this reads as light coming from above, which is what the reference
- * does.
+ * A frame of the reference video was sampled to get both halves of this. The colour ramp below
+ * is its centre column, top to bottom. The curve is the part that is easy to get backwards — I
+ * built a centred bloom first, and the measurements say the opposite: the reference is
+ * *brighter at the left and right edges*, and the violet reaches lower there. At a fifth of the
+ * way down the edges are ~1.7x the centre's brightness, and each column crosses half its own
+ * peak at y=0.22 at the edges against y=0.14 in the middle.
  *
- * The panel stays dark in both themes because it is artwork, not chrome — which is also why the
- * text over it is light in both.
+ * So it is one vertical ramp, drawn column by column, pushed further down the nearer the column
+ * is to an edge. That single offset produces the arc and the edge brightening together.
  *
- * Drawn at a third size and scaled up; the effect is a blur either way. The grain is load
- * bearing: a wash this smooth bands badly on 8-bit displays, and noise is what hides it.
+ * Drawn at a third of the panel and scaled up, since the whole thing is a blur. The grain is
+ * load bearing: a wash this smooth bands badly on 8-bit displays, and the reference has grain
+ * for the same reason.
  */
 
-/** From the landing's tokens: --lav #978eff and --lav-btn #695cff. */
-const LAV = "151,142,255";
-const DEEP = "105,92,255";
+/** The reference's centre column, sampled at 1/88ths and kept as measured. */
+const RAMP: [number, string][] = [
+  [0.0, "#bf99e0"],
+  [0.05, "#a677d9"],
+  [0.09, "#8a55cb"],
+  [0.14, "#6e3aba"],
+  [0.18, "#582ca5"],
+  [0.23, "#44238b"],
+  [0.27, "#331b6f"],
+  [0.32, "#241452"],
+  [0.36, "#19103a"],
+  [0.41, "#110a29"],
+  [0.45, "#0b091c"],
+  [0.5, "#090714"],
+  [0.55, "#07050c"],
+  [0.64, "#040407"],
+  [0.77, "#050508"],
+  [0.86, "#08050e"],
+  [1.0, "#10091a"],
+];
 
 const SCALE = 3;
+/** How much further down the ramp sits at the very edge, as a fraction of the height. */
+const ARC = 0.085;
+/** Columns the ramp is drawn in. Enough that the arc reads as a curve, few enough to be free. */
+const COLUMNS = 48;
 
 export function Aurora({ className }: { className?: string }) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -53,7 +76,7 @@ export function Aurora({ className }: { className?: string }) {
         image.data[i] = v;
         image.data[i + 1] = v;
         image.data[i + 2] = v;
-        image.data[i + 3] = 14;
+        image.data[i + 3] = 15;
       }
       gctx.putImageData(image, 0, 0);
     }
@@ -66,66 +89,32 @@ export function Aurora({ className }: { className?: string }) {
       canvas.height = height;
     };
 
-    /** A wide ellipse of light, drawn by squashing a radial gradient. */
-    const band = (
-      cx: number,
-      cy: number,
-      rx: number,
-      ry: number,
-      colour: string,
-      alpha: number,
-    ) => {
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.scale(1, ry / rx);
-      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, rx);
-      g.addColorStop(0, `rgba(${colour},${alpha})`);
-      g.addColorStop(0.5, `rgba(${colour},${alpha * 0.45})`);
-      g.addColorStop(1, `rgba(${colour},0)`);
-      ctx.fillStyle = g;
-      ctx.fillRect(-rx, -rx, rx * 2, rx * 2);
-      ctx.restore();
-    };
-
     const draw = (t: number) => {
       ctx.globalCompositeOperation = "source-over";
-      ctx.fillStyle = "#000";
+      ctx.fillStyle = RAMP[RAMP.length - 1][1];
       ctx.fillRect(0, 0, width, height);
 
-      ctx.globalCompositeOperation = "lighter";
-      // The main band: wider than the panel, sitting just above the top edge so only its lower
-      // half shows. It slides a little and breathes, slowly and out of phase.
-      const slide = Math.sin(t * 0.000_06) * width * 0.12;
-      const breathe = 1 + Math.sin(t * 0.000_09) * 0.06;
-      band(
-        width * 0.5 + slide,
-        -height * 0.34,
-        width * 1.45 * breathe,
-        height * 0.95 * breathe,
-        LAV,
-        0.95,
-      );
-      // A second, deeper one offset the other way, for the colour shift across the top.
-      band(
-        width * 0.5 - slide * 1.4,
-        -height * 0.06,
-        width * 1.0,
-        height * 0.5,
-        DEEP,
-        0.45,
-      );
+      // Breathing, slowly and out of phase, so the loop never visibly repeats. A still frame
+      // would be a picture; the reference moves.
+      const lift = Math.sin(t * 0.000_055) * 0.02;
+      const sway = Math.sin(t * 0.000_037) * 0.06;
+      const step = width / COLUMNS;
 
-      // The fall to black. The reference is essentially pure black below the middle, and that
-      // contrast is most of what makes the top read as light rather than as a purple wash.
-      ctx.globalCompositeOperation = "source-over";
-      const fade = ctx.createLinearGradient(0, 0, 0, height);
-      fade.addColorStop(0, "rgba(0,0,0,0)");
-      fade.addColorStop(0.3, "rgba(0,0,0,0.15)");
-      fade.addColorStop(0.55, "rgba(0,0,0,0.82)");
-      fade.addColorStop(0.75, "rgba(0,0,0,0.98)");
-      fade.addColorStop(1, "rgb(0,0,0)");
-      ctx.fillStyle = fade;
-      ctx.fillRect(0, 0, width, height);
+      for (let i = 0; i < COLUMNS; i++) {
+        const x = i * step;
+        const centre = (i + 0.5) / COLUMNS;
+        // Distance from the middle, biased by the sway so the arc leans as it breathes.
+        const d = Math.min(1, Math.abs(centre - (0.5 + sway)) * 2);
+        const offset = (ARC * d * d + lift) * height;
+
+        const g = ctx.createLinearGradient(0, offset, 0, offset + height);
+        for (const [stop, colour] of RAMP) {
+          g.addColorStop(stop, colour);
+        }
+        ctx.fillStyle = g;
+        // A hair of overlap, so the seams between columns never show.
+        ctx.fillRect(x, 0, step + 1, height);
+      }
 
       const pattern = ctx.createPattern(grain, "repeat");
       if (pattern) {
