@@ -11,21 +11,34 @@ dataSources:
     name: Aqua
     network: arbitrum-one
     source:
-      address: "0x499943E74FB0cE105688beeE8Ef2ABec5D936d31"
+      # The Aqua 1inch actually uses. This was 0x499943E7…, which is a real Aqua, has real
+      # events, and has been dead since block 451,737,844 — see #165.
+      #
+      # Two checks settle which is which, and neither is a matter of opinion:
+      #   - `@1inch/aqua-sdk` exports AQUA_CONTRACT_ADDRESSES[42161] = this address
+      #   - the deployed AquaSwapVMRouter (0x111111338c…) has this address in its bytecode
+      #     and no reference at all to 0x499943E7…
+      #
+      # They are not the same contract, either: this one answers `owner()` with
+      # 0x5AFc5DF416640348235a0571dBEEf9064cb0338D, and 0x499943E7… reverts on it. All six
+      # external selectors match, and a ship-then-quote against this one on a fork works where
+      # the same sequence against the old one reverted.
+      address: "0x1111113ccf1426a8e30e2bff5e005d929bf6a90a"
       abi: Aqua
-      # The block of Aqua's first event on this chain, found by scanning `eth_getLogs` forward
-      # from 400,000,000.
+      # This contract's first log — an `OwnershipTransferred`, so this is its deployment. Its
+      # first `Shipped` is 485,793,304; starting at deployment costs 288k blocks of empty
+      # scanning and cannot be wrong, which is worth more than the saving.
       #
-      # It was 431256499 until a review caught it, and the way that number was produced is worth
-      # keeping: a binary search on `eth_getCode`, with `2>/dev/null` on the call. The public RPC
-      # does not serve state that old — it *errors* rather than returning empty — and the
-      # redirect turned every one of those errors into an empty string, which the search read as
-      # "no code yet". So it did not find the deployment. It found the node's pruning boundary,
-      # 28 million blocks too late, sitting in a gap where Aqua happens to have no events at all.
+      # Found with `eth_getLogs`, bisected. Not with `eth_getCode`, and the previous comment
+      # here is why — that search, with `2>/dev/null` on the call, read every "state too old"
+      # error as "no code yet" and returned the node's pruning boundary instead of a
+      # deployment, 28 million blocks late.
       #
-      # The cost of that would have been 75 events dropped, 5 of 43 mandates never created, both
-      # `Docked` events missed, and one of the two makers on this chain absent entirely.
-      startBlock: 403010640
+      # The address above was found by scanning forward for a contract emitting Aqua's events.
+      # That is the same class of mistake one level up: scanning for a contract that behaves
+      # like Aqua finds a contract that behaves like Aqua. It cannot tell you whether anyone
+      # still uses it. Read the address out of the vendor's own SDK instead.
+      startBlock: 485505646
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
