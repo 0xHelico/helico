@@ -1,0 +1,69 @@
+name: app
+
+# Builds the dapp image on every merge to main, publishes it to GHCR, and asks the VPS to
+# redeploy. The deploy step only runs when the VPS variables exist, so a fork or a clone still
+# gets the build without the deploy. The ask goes over SSH with a key that can run exactly one
+# command on the server (a forced command that names the app); the Coolify token never leaves
+# the box (#108).
+on:
+  push:
+    branches: [main]
+    paths:
+      - apps/app/**
+      - packages/plugins/**
+      - package.json
+      - bun.lock
+      - .dockerignore
+      - .github/workflows/app-deploy.yml
+  workflow_dispatch:
+
+concurrency:
+  group: app-deploy
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/app/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/0xhelico/helico-app:latest
+            ghcr.io/0xhelico/helico-app:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: image
+    runs-on: ubuntu-latest
+    if: ${{ vars.VPS_HOST != '' }}
+    steps:
+      - name: Ask the VPS to redeploy the app
+        env:
+          VPS_HOST: ${{ vars.VPS_HOST }}
+          VPS_USER: ${{ vars.VPS_USER }}
+          VPS_KNOWN_HOSTS: ${{ vars.VPS_KNOWN_HOSTS }}
+          VPS_DEPLOY_KEY: ${{ secrets.VPS_DEPLOY_KEY }}
+        run: |
+          umask 077
+          trap 'rm -f deploy_key known_hosts' EXIT
+          printf '%s\n' "$VPS_DEPLOY_KEY" > deploy_key
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > known_hosts
+          # The server's forced command waits for a new container to answer before it
+          # returns, so a deploy that never came up fails this step rather than passing.
+          ssh -i deploy_key -o UserKnownHostsFile=known_hosts -o StrictHostKeyChecking=yes \
+            -o BatchMode=yes "$VPS_USER@$VPS_HOST" app

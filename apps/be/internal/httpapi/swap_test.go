@@ -201,3 +201,35 @@ func TestLimiterRefillsAndCapsTheDay(t *testing.T) {
 		t.Fatalf("after a day: %q", reason)
 	}
 }
+
+// The composer shows this before anyone types, so it has to be true even when the key is
+// missing — which is exactly the state that produced a 503 in production with nothing on the
+// page to explain it.
+func TestSwapConfigReportsTheModelAndWhetherItCanAnswer(t *testing.T) {
+	read := func(t *testing.T, key string) (bool, string) {
+		t.Helper()
+		srv := swapServer(t, key, "{}", 10)
+		res, err := srv.Client().Get(srv.URL + "/api/swap/config")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		var got struct {
+			Available bool   `json:"available"`
+			Model     string `json:"model"`
+		}
+		if err := json.NewDecoder(res.Body).Decode(&got); err != nil {
+			t.Fatal(err)
+		}
+		return got.Available, got.Model
+	}
+
+	if available, model := read(t, "a-key"); !available || model != "test-model" {
+		t.Fatalf("configured: available=%v model=%q", available, model)
+	}
+	// A model nobody can reach is noise on the page, and its name says something about the
+	// deployment that an unauthenticated caller has no reason to learn.
+	if available, model := read(t, ""); available || model != "" {
+		t.Fatalf("unconfigured: available=%v model=%q", available, model)
+	}
+}

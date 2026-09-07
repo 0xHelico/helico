@@ -1,8 +1,10 @@
-# The landing image builds from the repository root (Bun workspaces); keep the context small.
+# The landing and the app both build from the repository root (Bun workspaces); keep the
+# context small.
 .git
 **/node_modules
 **/dist
 **/.astro
+**/.next
 contracts/lib
 contracts/out
 contracts/cache
