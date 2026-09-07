@@ -79,10 +79,69 @@ struct Strategy {
 
 Four refusals, each its own error, each with a test that fails when the check is deleted.
 
-The struct is **under review rather than settled** — an independent pass is critiquing it as this
-is written, and two questions are already open: whether `maxNotionalIn` is meaningful when either
-token can be the input, and how an owner rotates `agent` when Aqua makes strategies immutable.
-Whatever comes back changes this document before it changes the contract.
+The struct was **under review rather than settled** when this was written, and two questions were
+open: whether `maxNotionalIn` is meaningful when either token can be the input, and how an owner
+rotates `agent` when Aqua makes strategies immutable. Both came back with an answer, and the first
+one changed the struct. What shipped is in the next section; this block is left as written so the
+change is legible rather than invisible.
+
+## What the review returned, and what it changed
+
+The three passes finished. All of them ran code rather than reading it, and two of the answers
+changed the struct above before it was written.
+
+**`maxNotionalIn` was the wrong limit, on the wrong side.** Two objections, both correct:
+
+- *Wrong units.* Either token can be the input, so one scalar has to mean two things. `1000e6` is
+  1000 USDC in one direction and 10^-12 WETH in the other.
+- *Wrong side.* A maker's loss is in what they hand over. An input ceiling bounds the output only
+  through the curve — and the curve can be made to pay out everything.
+
+That last point came with a measurement. Aqua's `ship` validates nothing, and a strategy shipped
+with a zero amount on one side is **active**. Constant product then reads
+`amountOut = amountIn * balanceOut / (0 + amountIn)`, which is the entire opposite reserve, for two
+wei of input. No input ceiling is small enough to notice, because the number it checks is not the
+number that is wrong.
+
+So `maxNotionalIn` became `maxOut0` and `maxOut1`, per token, on the way out — and a
+`DegenerateReserves` check refuses a swap whose reserves cannot support one.
+
+**`agent` cannot mean an EOA, and this is not our choice.** solc emits an `EXTCODESIZE` check
+before a high-level call to a function with no return value, so the taker callback can only land
+on a contract. An EOA taker reverts with or without a gate. The consequence for tests is sharper
+than the consequence for the design: a negative test using a plain address would pass against a
+contract with no gate at all. Every refusal test therefore uses a funded, approved callback
+contract, and the agent test has a control — the *same* contract succeeding once a mandate names
+it.
+
+**Rotation stays expensive, and stays.** Changing `agent` means `dock` plus a re-ship under a new
+salt, because Aqua freezes a strategy for the lifetime of its hash and docking burns that hash
+permanently. The proper fix is an EIP-712 signature from the agent, with the key outside the
+strategy. That is a larger change than this app needs today, and it is written down here rather
+than discovered later.
+
+**One thing the plan got right and the review confirmed:** liquidity never moves. `ship` transfers
+nothing, `pull` sends maker to recipient directly, `push` sends payer to maker directly. Aqua is
+never even an intermediary. A test asserts that Aqua and the app both hold zero before and after.
+
+Two further limits are now documented by tests rather than by prose, because both are the kind of
+claim that would be a disqualification if a README overstated it:
+
+- **The ceiling is per swap, not a budget.** The lock is released when each call returns, so a
+  loop in one transaction multiplies it freely.
+- **Fee-on-transfer tokens desync the ledger.** `push` credits the nominal amount while the maker
+  receives less. Measured, not assumed.
+
+### The suite, and why it is believed
+
+28 tests, against a real Aqua deployed in `setUp` — nothing mocks Aqua or the app. Then every
+guard was cut out, one at a time, and the suite re-run. All 11 mutations are caught.
+
+The reentrancy mutation is the one worth recording. Deleting the modifier makes
+`_safeCheckAquaPush` revert with `MissingNonReentrantModifier`, so *every* test fails and none of
+them say anything about the attack. Cutting the guard **and** inlining the identical balance check
+leaves a contract that looks correct — and then exactly one test fails, on *"did not revert as
+expected"*, because two overlapping swaps snapshot the same balance and one payment satisfies both.
 
 ## What is being validated in parallel, and why separately
 

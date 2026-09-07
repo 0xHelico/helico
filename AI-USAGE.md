@@ -710,6 +710,43 @@ Format: date · what was done · the AI's role · what a human verified.
   about half the time; and the session was a plain hook, so every component had its own copy and
   signing in from the sidebar left the chat still believing it was signed out.
 
+### 2026-09-07 — HelicoMandateSwap, an Aqua app, and the mutation run that judges it
+
+- **Done:** `HelicoMandateSwap` and `IHelicoMandateSwapCallback` — an [1inch Aqua](https://github.com/1inch/aqua)
+  app where the strategy *is* a mandate: an expiry, a named agent, and a per-token ceiling on
+  what may leave the maker's wallet. Aqua added as a pinned dependency (`v1.0.0`), the compiler
+  moved 0.8.28 → 0.8.30 across all 20 files, and 28 tests added. Existing suite untouched:
+  89 → 117 passing, 0 failing.
+- **AI's role:** all of it, under the owner's instruction to *"build until finished, make sure
+  every case is covered — positive, negative and edge."* Three subagents ran first, deliberately
+  independent and each told it was free to contradict the plan: one produced the compile recipe
+  in an isolated worktree, one specified Aqua's semantics by running its code, and one derived a
+  test matrix without seeing ours, asked first for *"which cases would pass even if the feature
+  were deleted."*
+- **Plan:** docs/plans/2026-09-07-aqua-mandate-swap.md — committed before the contract, and
+  amended afterwards with what the review changed rather than rewritten to look prescient.
+- **Verified:** every guard was cut out of the contract one at a time and the suite re-run.
+  **11 of 11 mutations caught** — ceiling removed, ceiling reading the wrong side, expiry off by
+  one, agent gate removed, agent gate always closed, reserves unchecked, fee bound removed,
+  identical tokens allowed, reentrancy guard removed, payment check removed, minimum output
+  ignored. Each mutation asserts the file actually changed before the suite runs, because a
+  mutation that fails to apply is indistinguishable from one nothing catches.
+- **What the review changed, and what a test found:** the planned `maxNotionalIn` was the wrong
+  limit on the wrong side — either token can be the input, so one scalar means two things, and an
+  input ceiling bounds the output only through a curve that can be made to pay out everything.
+  Aqua's `ship` validates nothing, so a strategy with a zero reserve on one side is *active*, and
+  constant product then returns the whole opposite reserve for two wei. Became `maxOut0`/`maxOut1`
+  plus a `DegenerateReserves` refusal. Separately, the suite found that `quoteExactIn` refused
+  anyone who was not the agent — the gate belongs on the swap path only; refusing to price a
+  mandate protects nothing and breaks routers.
+- **Three claims checked rather than assumed:** the aqua tag `v1.0.0` resolves to `81c26e4`, not
+  the `9c5c42e` the subagents specified against — the five source files are byte-identical, and
+  that was verified through the API rather than trusted. `git rev-parse` inside `lib/aqua`
+  answers from the *parent* repo, because `forge install --no-git` removes the `.git`, so the
+  first hash it printed was helico's own. And the pinned constant-product literal was recomputed
+  in integer arithmetic outside Solidity, because copying a passing run's output would assert
+  only that the contract agrees with itself.
+
 <!--
 Template for the next entry:
 

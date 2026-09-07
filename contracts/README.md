@@ -1,5 +1,12 @@
 # Contracts
 
+Two contracts, one idea: a user commits to rules, and an agent may act only inside them.
+
+- **`HelicoVault`** enforces a mandate on an agent that re-centres a Uniswap v4 liquidity
+  position.
+- **`HelicoMandateSwap`** enforces a mandate on an agent that swaps against a maker's wallet,
+  through [1inch Aqua](https://github.com/1inch/aqua).
+
 `HelicoVault` enforces a user's committed mandate on an agent that re-centres their Uniswap v4
 liquidity position.
 
@@ -178,6 +185,85 @@ An upgradeable contract means the operator *can* change the rules, which sits aw
 This is a real limitation, not a solved problem, and it is described that way wherever the
 project is presented.
 
+## HelicoMandateSwap
+
+An Aqua app. The maker's tokens never move into it, or into Aqua: `ship` transfers nothing,
+`pull` sends the maker's tokens straight to the recipient, and `push` sends the taker's straight
+to the maker. Aqua keeps a ledger saying how much of the maker's wallet an app may spend, and
+nothing more. A test asserts that both Aqua and the app hold zero before and after a swap.
+
+What this app adds is the mandate:
+
+```solidity
+struct SwapMandate {
+    address maker;
+    address token0;
+    address token1;
+    uint256 feeBps;
+    uint256 maxOut0;   // per-swap ceiling on token0 leaving the maker
+    uint256 maxOut1;   // per-swap ceiling on token1 leaving the maker
+    uint64  expiry;    // first dead second; a swap AT expiry is refused
+    address agent;     // zero means open to anyone
+    bytes32 salt;
+}
+```
+
+**Aqua never reads these bytes.** It files a strategy under `keccak256` of whatever the maker
+shipped and hands the app a ledger keyed by that hash. Every field above is therefore enforced
+here or nowhere — and a field nobody reads would be worse than a missing one, because it reads
+as a promise and behaves as decoration.
+
+That also means tampering is not a threat worth a check: change any field and the hash changes,
+so the swap lands on a strategy Aqua has never seen and `safeBalances` refuses it. One test
+covers all of them, rather than restating one protocol fact once per field.
+
+### The ceiling is on the way out, per token
+
+Both halves of that were arrived at by being wrong first.
+
+An **input** ceiling bounds the output only through the curve, and the curve can be made to pay
+out everything. Aqua's `ship` validates nothing, so a strategy shipped with a zero amount on one
+side is active, and constant product then returns the *entire* opposite reserve for two wei of
+input. `DegenerateReserves` refuses that swap — but the limit a maker actually means is still
+"never hand over more than this", which is a limit on the output.
+
+A **single** ceiling cannot mean anything across a pair, because either token can be the input.
+`1000e6` is 1000 USDC one way and 10^-12 WETH the other.
+
+### The agent is a contract, and rotating it is expensive
+
+solc emits an `EXTCODESIZE` check before a high-level call to a function with no return value,
+so the taker callback can only land on a contract. A plain EOA reverts with or without a gate.
+`agent` therefore names an executor contract, not a signing key.
+
+Rotating it costs a `dock` and a re-ship under a new salt, because Aqua freezes a strategy for
+the lifetime of its hash and docking burns that hash permanently. If the agent key leaks, the
+response is one `dock` transaction — which is enough, and is not the same as being able to swap
+the key out. An EIP-712 signature from the agent would fix that properly, with the key outside
+the strategy; it is not built.
+
+### Exact-in only
+
+The ceiling belongs on a number the taker does not name. Under exact-in the output comes from
+the curve; under exact-out the taker names it. Exact-out can be added deliberately later rather
+than arriving as a symmetry nobody asked for.
+
+### Believing the tests
+
+28 tests run against a real `Aqua` deployed in `setUp`. Nothing mocks Aqua or the app, because
+Aqua holds no tokens and needs no other protocol, so a local deployment *is* the real thing.
+
+Every guard was then removed, one at a time, and the suite re-run. All 11 mutations are caught.
+The reentrancy one needed care: deleting the modifier makes `_safeCheckAquaPush` revert with
+`MissingNonReentrantModifier`, so every test fails and none of them say anything about the
+attack. Removing the guard **and** inlining the same balance check leaves a contract that looks
+correct, and then exactly one test fails — because two overlapping swaps snapshot the same
+balance and a single payment satisfies both checks.
+
+Negative tests use funded, approved callback contracts, so deleting the rule under test would
+let the swap *succeed*. The agent test has a control: the same contract that is refused
+succeeds once a mandate names it.
+
 ## Known limitations
 
 Written down rather than glossed over.
@@ -198,6 +284,21 @@ Written down rather than glossed over.
 - **Stray native sent to the vault is stuck.** `receive()` accepts from anyone, and a re-centre
   measures only what it produced, so a loose transfer is never paid to somebody else — but
   there is no path to recover it either. That is the trade for not adding a privileged sweep.
+- **The mandate ceiling is per swap, not a budget.** The reentrancy lock is released when each
+  call returns, so a loop inside one transaction multiplies the ceiling freely. A test asserts
+  this rather than a comment claiming otherwise. A real budget needs storage keyed per mandate,
+  incremented *before* the callback — and sibling mandates of the same maker are reachable from
+  inside a callback, so a per-maker counter would be wrong.
+- **Fee-on-transfer and rebasing tokens desync Aqua's ledger.** `push` credits the nominal
+  amount while the maker receives less, so the ledger overstates the wallet and pulls eventually
+  fail. Measured in a test, not assumed. Do not ship such tokens into a mandate.
+- **A sufficient ledger is not a promise of settlement.** Tokens are pulled from the maker's own
+  wallet, so a maker who moves their balance out breaks their own mandate. The quote still
+  answers, because it reads the ledger. 1inch's `SafeERC20` swallows the token's revert reason,
+  so every settlement failure looks like `SafeTransferFromFailed()`.
+- **`expiry = 0` means permanently dead, not "no expiry".** Because a mandate is immutable and
+  docking burns its hash, the typo cannot be repaired in place — only re-issued under a new
+  salt.
 - **The mock is not Uniswap.** `RealisticPositionManager` models authorisation and settlement
   faithfully; it does not model the sqrt-price curve, and `MockPoolManager` refuses to model a
   swap at all. Anything asserted about the swap is asserted on a fork or not at all.
