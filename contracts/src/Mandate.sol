@@ -9,6 +9,9 @@ struct PoolKey {
     address currency1;
     uint24 fee;
     int24 tickSpacing;
+    /// @dev The pool's hook, or the zero address. The vault never reads this field; v4's
+    ///      singleton is what dispatches a hook's callbacks, so carrying the key whole is the
+    ///      whole of the integration. See the `Pools with hooks` note on `HelicoVault`.
     address hooks;
 }
 

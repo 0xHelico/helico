@@ -65,6 +65,25 @@ import {LiquidityAmounts} from "./lib/LiquidityAmounts.sol";
 ///      count twice. `scripts/check-no-payable.py` guards that, since a Solidity test can only
 ///      show that today's `multicall` rejects value.
 ///
+///      **Pools with hooks.** Nothing in this contract reads `PoolKey.hooks`, and that is the
+///      reason it works in a pool that has one. A hook's address is a field of the pool's own
+///      identity, so the whole key travels to `poolManager.swap` and to the position manager
+///      unchanged, and v4's singleton is what dispatches the callbacks. One re-centre can reach
+///      six of them: before and after each of remove, swap and add.
+///
+///      What makes that safe is not knowing about hooks — it is never assuming an amount. Every
+///      quantity this contract acts on is *measured*: `_balanceOf` at the top of `unlockCallback`, and the
+///      difference again after each leg. So a hook that takes a cut, sets a dynamic fee, or
+///      returns a delta changes a number the vault reads rather than invalidating one it
+///      predicted. A vault that hard-coded "the burn returns X" would need a case for every
+///      hook that exists; this one needs none.
+///
+///      It is not immunity. A hook may refuse outright, and then the whole re-centre reverts and
+///      the position is left exactly as it was — the only correct outcome, since the old
+///      position is burnt before the swap. `test/ForkHookedPool.t.sol` proves both halves
+///      against Angstrom's live USDC/WETH pool on Ethereum: the callbacks are reached, and that
+///      hook's refusal of a third-party swap unwinds everything.
+///
 ///      **What it cannot promise.** The agent picks the slippage bounds on the withdrawal, so
 ///      a dishonest one can still choose bad ones and let the re-range be sandwiched. That is
 ///      bounded by `amount0Min`/`amount1Min` reaching the pool unmodified, and it is the next
