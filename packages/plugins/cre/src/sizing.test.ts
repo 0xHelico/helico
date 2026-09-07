@@ -1,236 +1,93 @@
 import { describe, expect, test } from 'bun:test'
-import { getAmount0Delta, getAmount1Delta, getSqrtRatioAtTick } from './math'
-import type { Sizing } from './sizing'
-import { sizeRecentre } from './sizing'
+import { sizeIdleMove } from './sizing'
 
-describe('sizeRecentre', () => {
-	const sqrtPriceX96 = 78_971_408_793_868_239_585_893_302_751n // the live testnet pool, tick -65
-	const liquidity = 10n ** 15n
-	const pool = { poolLiquidity: 0n, feePips: 500 }
-	const deep = { poolLiquidity: 10n ** 18n, feePips: 500 }
-	const proposed = { tickLower: -560, tickUpper: 440 }
+const base = {
+	amount: 800_000_000n,
+	venueLiquidity: 29_318_183_885_841n,
+	maxMoveAmount: 1_000_000_000_000n,
+}
 
-	/** What the mint needs at the post-swap price, rounded up as the position manager does, fits what is held. */
-	const affordable = (s: Sizing) => {
-		const need0 = getAmount0Delta(
-			s.sqrtPriceAfter,
-			getSqrtRatioAtTick(proposed.tickUpper),
-			s.liquidityToMint,
-			true,
-		)
-		const need1 = getAmount1Delta(
-			getSqrtRatioAtTick(proposed.tickLower),
-			s.sqrtPriceAfter,
-			s.liquidityToMint,
-			true,
-		)
-		expect(need0).toBeLessThanOrEqual(s.amount0Max)
-		expect(need1).toBeLessThanOrEqual(s.amount1Max)
-	}
-
-	test('an out-of-range position holds one token, and one token buys no two-sided range', () => {
-		// Below its range the old position is all token0. A range containing the price needs both
-		// tokens, and the vault's burn-and-mint plan has no swap, so nothing can be minted.
-		const s = sizeRecentre({
-			liquidity,
-			sqrtPriceX96,
-			current: { tickLower: 100, tickUpper: 1_100 },
-			proposed,
-			...pool,
-			slippageBps: 50,
+describe('sizeIdleMove', () => {
+	test('leaves a move alone when nothing is in the way', () => {
+		expect(sizeIdleMove({ ...base, supply: true })).toEqual({
+			amount: 800_000_000n,
+			limitedBy: 'none',
 		})
-		expect(s.withdrawn.amount1).toBe(0n)
-		expect(s.withdrawn.amount0).toBeGreaterThan(0n)
-		expect(s.liquidityToMint).toBe(0n)
+		expect(sizeIdleMove({ ...base, supply: false })).toEqual({
+			amount: 800_000_000n,
+			limitedBy: 'none',
+		})
 	})
 
-	test('the mint it proposes is affordable from the burn, with the slippage margin', () => {
-		// In range but off-centre: the burn returns both tokens and a centred range can be funded.
-		const s = sizeRecentre({
-			liquidity,
-			sqrtPriceX96,
-			current: { tickLower: -1_000, tickUpper: 0 },
-			proposed,
-			...pool,
-			slippageBps: 50,
+	/**
+	 * A supply adds to the market's liquidity, so its own emptiness cannot bound it. Applying the
+	 * cap in both directions would refuse to put money into exactly the market that most needs it.
+	 */
+	test('a supply is not capped by what the market can pay out', () => {
+		expect(sizeIdleMove({ ...base, supply: true, venueLiquidity: 0n })).toEqual({
+			amount: 800_000_000n,
+			limitedBy: 'none',
 		})
-		expect(s.withdrawn.amount0).toBeGreaterThan(0n)
-		expect(s.withdrawn.amount1).toBeGreaterThan(0n)
-		expect(s.liquidityToMint).toBeGreaterThan(0n)
-		expect(s.liquidityToMint).toBeLessThan(liquidity)
-		// What the mint needs, rounded up as the position manager does, fits under the ceilings.
-		const need0 = getAmount0Delta(sqrtPriceX96, getSqrtRatioAtTick(440), s.liquidityToMint, true)
-		const need1 = getAmount1Delta(getSqrtRatioAtTick(-560), sqrtPriceX96, s.liquidityToMint, true)
-		expect(need0).toBeLessThanOrEqual(s.amount0Max)
-		expect(need1).toBeLessThanOrEqual(s.amount1Max)
-		// Floors are the withdrawn amounts less the slippage.
-		expect(s.amount0Min).toBe((s.withdrawn.amount0 * 9_950n) / 10_000n)
-		expect(s.amount1Min).toBe((s.withdrawn.amount1 * 9_950n) / 10_000n)
 	})
 
-	test('an in-range position re-centred on itself keeps almost all of its liquidity', () => {
-		const s = sizeRecentre({
-			liquidity,
-			sqrtPriceX96,
-			current: { tickLower: -560, tickUpper: 440 },
-			proposed,
-			...pool,
-			slippageBps: 0,
+	test('a withdrawal takes no more than the market can pay out right now', () => {
+		expect(sizeIdleMove({ ...base, supply: false, venueLiquidity: 300_000_000n })).toEqual({
+			amount: 300_000_000n,
+			limitedBy: 'the venue liquidity',
 		})
-		expect(s.liquidityToMint).toBeLessThanOrEqual(liquidity)
-		expect(s.liquidityToMint).toBeGreaterThan(liquidity - 1_000n)
 	})
 
-	test('one-sided withdrawals need a one-sided target: all-token1 cannot fund a range above the price', () => {
-		const s = sizeRecentre({
-			liquidity,
-			sqrtPriceX96,
-			current: { tickLower: -2_000, tickUpper: -1_000 },
-			proposed: { tickLower: 1_000, tickUpper: 2_000 },
-			...pool,
-			slippageBps: 0,
-		})
-		expect(s.withdrawn.amount0).toBe(0n)
-		expect(s.liquidityToMint).toBe(0n)
-	})
-
-	test('with a pool to swap through, an out-of-range position funds a two-sided range', () => {
-		const s = sizeRecentre({
-			liquidity,
-			sqrtPriceX96,
-			current: { tickLower: 100, tickUpper: 1_100 },
-			proposed,
-			...deep,
-			slippageBps: 50,
-		})
-		expect(s.zeroForOne).toBe(true)
-		expect(s.amountIn).toBeGreaterThan(0n)
-		expect(s.amountIn).toBeLessThan(s.withdrawn.amount0)
-		expect(s.liquidityToMint).toBeGreaterThan(0n)
-		// The price after the swap stays inside the new range, where the vault's limit would stop it anyway.
-		expect(s.sqrtPriceAfter).toBeGreaterThanOrEqual(getSqrtRatioAtTick(proposed.tickLower))
-		expect(s.sqrtPriceAfter).toBeLessThan(sqrtPriceX96)
-		expect(s.amount0Max).toBe(s.withdrawn.amount0 - s.amountIn)
-		expect(s.amount1Max).toBeGreaterThan(0n)
-		expect(s.minAmountOut).toBe((s.amount1Max * 9_950n) / 10_000n)
-		affordable(s)
-	})
-
-	test('a swap bounded by the range edge stops short of it in both directions', () => {
-		// A huge position against a thin pool wants to swap far more than the pool can absorb inside
-		// the range, so the bound is the edge, not the wallet.
-		//
-		// This checks the invariant, not a guard: the sizing has no special case for the edge, and
-		// the vault's own price limit is what makes the edge unreachable. Adding `- 1` to the bound
-		// in `sizing.ts` does not change a single number this test reads.
-		for (const [current, expectUp] of [
-			[{ tickLower: -2_000, tickUpper: -1_000 }, true],
-			[{ tickLower: 100, tickUpper: 1_100 }, false],
-		] as [typeof proposed, boolean][]) {
-			const s = sizeRecentre({
-				liquidity: 10n ** 21n,
-				sqrtPriceX96,
-				current,
-				proposed,
-				poolLiquidity: 10n ** 15n,
-				feePips: 500,
-				slippageBps: 0,
+	test('the per-move ceiling binds in both directions', () => {
+		for (const supply of [true, false]) {
+			expect(sizeIdleMove({ ...base, supply, maxMoveAmount: 50_000_000n })).toEqual({
+				amount: 50_000_000n,
+				limitedBy: 'the per-move ceiling',
 			})
-			expect(s.zeroForOne).toBe(!expectUp)
-			if (expectUp) expect(s.sqrtPriceAfter).toBeLessThan(getSqrtRatioAtTick(proposed.tickUpper))
-			else expect(s.sqrtPriceAfter).toBeGreaterThanOrEqual(getSqrtRatioAtTick(proposed.tickLower))
-			expect(s.amountIn).toBeGreaterThan(0n)
 		}
 	})
 
-	test('above its range it sells token1, and the price moves up but not past the new upper edge', () => {
-		const s = sizeRecentre({
-			liquidity,
-			sqrtPriceX96,
-			current: { tickLower: -2_000, tickUpper: -1_000 },
-			proposed,
-			...deep,
-			slippageBps: 50,
-		})
-		expect(s.zeroForOne).toBe(false)
-		expect(s.withdrawn.amount0).toBe(0n)
-		expect(s.amountIn).toBeLessThan(s.withdrawn.amount1)
-		expect(s.sqrtPriceAfter).toBeGreaterThan(sqrtPriceX96)
-		expect(s.sqrtPriceAfter).toBeLessThan(getSqrtRatioAtTick(proposed.tickUpper))
-		expect(s.liquidityToMint).toBeGreaterThan(0n)
-		affordable(s)
+	/**
+	 * Which bound is reported is not cosmetic: "the market is drained" and "your own ceiling is
+	 * low" ask the owner for opposite things, so the one actually in the way has to win.
+	 */
+	test('when both bind, the tighter one is the one named', () => {
+		expect(
+			sizeIdleMove({
+				...base,
+				supply: false,
+				venueLiquidity: 300_000_000n,
+				maxMoveAmount: 50_000_000n,
+			}),
+		).toEqual({ amount: 50_000_000n, limitedBy: 'the per-move ceiling' })
+		expect(
+			sizeIdleMove({
+				...base,
+				supply: false,
+				venueLiquidity: 50_000_000n,
+				maxMoveAmount: 300_000_000n,
+			}),
+		).toEqual({ amount: 50_000_000n, limitedBy: 'the venue liquidity' })
 	})
 
-	test('the swap is balanced: neither side is left far in excess', () => {
-		const s = sizeRecentre({
-			liquidity,
-			sqrtPriceX96,
-			current: { tickLower: 100, tickUpper: 1_100 },
-			proposed,
-			...deep,
-			slippageBps: 0,
+	test('a drained market sizes a withdrawal at nothing rather than at something impossible', () => {
+		expect(sizeIdleMove({ ...base, supply: false, venueLiquidity: 0n })).toEqual({
+			amount: 0n,
+			limitedBy: 'the venue liquidity',
 		})
-		const l0 =
-			(s.amount0Max * s.sqrtPriceAfter * getSqrtRatioAtTick(440)) /
-			((1n << 96n) * (getSqrtRatioAtTick(440) - s.sqrtPriceAfter))
-		const l1 = (s.amount1Max * (1n << 96n)) / (s.sqrtPriceAfter - getSqrtRatioAtTick(-560))
-		const larger = l0 > l1 ? l0 : l1
-		const smaller = l0 > l1 ? l1 : l0
-		expect(larger - smaller).toBeLessThan(larger / 1_000n)
-		expect(s.liquidityToMint).toBe(smaller)
 	})
 
-	test('a thin pool means a small swap and a small mint, never a price pushed out of the range', () => {
-		const thin = sizeRecentre({
-			liquidity,
-			sqrtPriceX96,
-			current: { tickLower: 100, tickUpper: 1_100 },
-			proposed,
-			poolLiquidity: 10n ** 12n,
-			feePips: 500,
-			slippageBps: 0,
-		})
-		const rich = sizeRecentre({
-			liquidity,
-			sqrtPriceX96,
-			current: { tickLower: 100, tickUpper: 1_100 },
-			proposed,
-			...deep,
-			slippageBps: 0,
-		})
-		expect(thin.amountIn).toBeLessThan(rich.amountIn)
-		expect(thin.liquidityToMint).toBeLessThan(rich.liquidityToMint)
-		expect(thin.sqrtPriceAfter).toBeGreaterThanOrEqual(getSqrtRatioAtTick(proposed.tickLower))
-	})
-
-	test('a higher fee costs liquidity, and the slippage scale is applied to what is minted', () => {
-		const cheap = sizeRecentre({
-			liquidity,
-			sqrtPriceX96,
-			current: { tickLower: 100, tickUpper: 1_100 },
-			proposed,
-			...deep,
-			slippageBps: 0,
-		})
-		const dear = sizeRecentre({
-			liquidity,
-			sqrtPriceX96,
-			current: { tickLower: 100, tickUpper: 1_100 },
-			proposed,
-			poolLiquidity: 10n ** 18n,
-			feePips: 200_000,
-			slippageBps: 0,
-		})
-		const cautious = sizeRecentre({
-			liquidity,
-			sqrtPriceX96,
-			current: { tickLower: 100, tickUpper: 1_100 },
-			proposed,
-			...deep,
-			slippageBps: 50,
-		})
-		expect(dear.liquidityToMint).toBeLessThan(cheap.liquidityToMint)
-		expect(cautious.liquidityToMint).toBeLessThan(cheap.liquidityToMint)
-		expect(cautious.amount0Min).toBe((cautious.withdrawn.amount0 * 9_950n) / 10_000n)
+	test('never returns more than it was asked for, whatever the bounds are', () => {
+		for (const amount of [0n, 1n, 10n ** 6n, 10n ** 12n]) {
+			for (const venueLiquidity of [0n, 1n, 10n ** 9n, 10n ** 18n]) {
+				for (const maxMoveAmount of [1n, 10n ** 6n, 10n ** 18n]) {
+					for (const supply of [true, false]) {
+						const sized = sizeIdleMove({ supply, amount, venueLiquidity, maxMoveAmount })
+						expect(sized.amount).toBeLessThanOrEqual(amount)
+						expect(sized.amount).toBeLessThanOrEqual(maxMoveAmount)
+						if (!supply) expect(sized.amount).toBeLessThanOrEqual(venueLiquidity)
+					}
+				}
+			}
+		}
 	})
 })

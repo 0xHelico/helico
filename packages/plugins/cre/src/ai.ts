@@ -1,11 +1,11 @@
 import { bytesToBase64, cre, ok, type TeeRuntime, text } from '@chainlink/cre-sdk'
 
 /**
- * The enclave explaining its own verdict, in words the position's owner can read.
+ * The enclave explaining its own verdict, in words the account's owner can read.
  *
- * **This decides nothing.** `decide` has already chosen, the vault checks every mandate rule
- * again on chain, and the sentence produced here is not an input to any of it. A confused model
- * writes a confusing sentence; it cannot move a position.
+ * **This decides nothing.** `decide` has already chosen, and the account enforces the shape of
+ * what an agent may ask for whatever this says. A confused model writes a confusing sentence; it
+ * cannot move a single unit of anyone's capital.
  *
  * **Why it is here and can be nowhere else.** A non-confidential CRE workflow calls an HTTP
  * endpoint from every node and takes a consensus of the answers. Ten nodes asking a language
@@ -42,7 +42,7 @@ export type AiConfig = {
 const ROUTER_NOTICES = ['is no longer available', 'please switch to', 'model not found']
 
 const SYSTEM_PROMPT =
-	'You explain one liquidity decision to the position owner in at most three sentences. ' +
+	'You explain one idle-capital decision to the account owner in at most three sentences. ' +
 	'State only what the data supports. No advice, no hedging, no markdown, no invented numbers.'
 
 type Choice = { finish_reason?: string; message?: { content?: string } }
@@ -184,49 +184,50 @@ export function explain(
 /**
  * What the model is told. Facts the enclave already read or computed, and nothing else.
  *
- * Deliberately narrow. No prices in dollars, no history, no opinion about the market — the
- * model can only be as wrong as the numbers it is handed, and everything here came from the
- * chain or from the mandate the user signed.
+ * Deliberately narrow. No prices in dollars, no history, no opinion about the market — the model
+ * can only be as wrong as the numbers it is handed, and everything here came from the chain or
+ * from the policy the owner set.
  *
  * The verdict is included because the model is explaining a decision already made, not making
  * one. Handing it the answer is what keeps it out of the loop that moves money.
+ *
+ * Amounts are printed in the asset's own units, undecorated. Dividing by the decimals here would
+ * mean the enclave reading them from somewhere, and a prose helper is the wrong place for a
+ * number that would then differ from the one in the report.
  */
 export function describeForOwner(
-	pool: { poolId: string },
-	mandate: {
-		rangeWidthTicks: number
-		minImprovementBps: number
-		cooldownSeconds: number
-		minRetainedBps: number
-		expiry: number
+	venue: { pool: string; asset: string },
+	policy: {
+		targetWorkingBps: number
+		minIdleAmount: bigint
+		minMoveAmount: bigint
+		minMoveBps: number
+		maxMoveAmount: bigint
 	},
-	state: {
-		tick: number
-		lpFee: number
-		liquidity: bigint
-		tickLower: number
-		tickUpper: number
-		lastActionAt: number
-	},
+	state: { idle: bigint; supplied: bigint; venueLiquidity: bigint; supplyRateRay: bigint },
+	split: { total: bigint; wantIdle: bigint; wantWorking: bigint; deadband: bigint },
 	outcome:
 		| { act: false; reason: string }
-		| {
-				act: true
-				params: { tickLower: number; tickUpper: number; amountIn: bigint; zeroForOne: boolean }
-		  },
-	now: number,
+		| { act: true; params: { amount: bigint; supply: boolean } },
 ): string {
-	const elapsed = state.lastActionAt === 0 ? 'never moved' : `${now - state.lastActionAt} s ago`
 	const facts = [
-		`Uniswap v4 pool ${pool.poolId}, LP fee ${state.lpFee} pips. Current tick ${state.tick}.`,
-		`The owner's position covers ticks [${state.tickLower}, ${state.tickUpper}) and holds ${state.liquidity} units of liquidity.`,
-		`Mandate: range width ${mandate.rangeWidthTicks} ticks, minimum improvement ${mandate.minImprovementBps} bps, cooldown ${mandate.cooldownSeconds} s, retain at least ${mandate.minRetainedBps / 100}%.`,
-		`Last move: ${elapsed}.`,
+		`Lending market ${venue.pool}, asset ${venue.asset}, paying ${rayToPercent(state.supplyRateRay)} and able to pay out ${state.venueLiquidity} right now.`,
+		`The account holds ${state.idle} idle and has ${state.supplied} supplied, ${split.total} in total.`,
+		`Policy: ${policy.targetWorkingBps / 100}% of it should be working, never less than ${policy.minIdleAmount} left liquid, no move under ${policy.minMoveAmount} or under ${policy.minMoveBps / 100}% of the total, none over ${policy.maxMoveAmount}.`,
+		`That puts the target at ${split.wantWorking} working and ${split.wantIdle} idle, and makes the smallest move worth making ${split.deadband}.`,
 	]
 	facts.push(
 		outcome.act
-			? `Decision: swap ${outcome.params.amountIn} of ${outcome.params.zeroForOne ? 'token0' : 'token1'}, then mint [${outcome.params.tickLower}, ${outcome.params.tickUpper}). Explain to the owner why this happens now.`
+			? `Decision: ${outcome.params.supply ? 'supply' : 'withdraw'} ${outcome.params.amount}. Explain to the owner why this happens now.`
 			: `Decision: do nothing this run, because ${outcome.reason}. Explain to the owner why nothing happened.`,
 	)
 	return facts.join(' ')
 }
+
+const RAY = 10n ** 27n
+
+/**
+ * A ray as a percentage with two decimals, for prose only. Nothing reads this back: the decision
+ * compares rays to rays, so this rounding cannot move a threshold.
+ */
+export const rayToPercent = (ray: bigint): string => `${Number((ray * 10_000n) / RAY) / 100}%`

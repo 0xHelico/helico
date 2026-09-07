@@ -8,6 +8,7 @@ import {
 	type Hex,
 	parseAbiParameters,
 	toFunctionSelector,
+	zeroAddress,
 } from 'viem'
 import {
 	type Config,
@@ -15,116 +16,132 @@ import {
 	configShape,
 	deliver,
 	encodeReport,
+	idleMoveParamsAbi,
 	initWorkflow,
-	MANDATE_SECRET_IDS,
-	mandateHash,
 	onCronTrigger,
-	recenterParamsAbi,
-	recoverRecentreSigner,
+	POLICY_SECRET_IDS,
+	policyHash,
+	recoverIdleMoveSigner,
 } from './index'
 import { fakeRuntime, RpcError } from './test/fakeRuntime'
 
-// ─── Fixtures: the Robinhood testnet ETH/WETH pool at tick -65 ───────────────
-const poolId = '0xea84630b1ccfd69145b791334c55a7d8be1565910cb6e290c489413c977fd9c5'
-const poolKey = {
-	currency0: '0x0000000000000000000000000000000000000000',
-	currency1: '0x7943e237c7F95DA44E0301572D358911207852Fa',
-	fee: 500,
-	tickSpacing: 10,
-	hooks: '0x0000000000000000000000000000000000000000',
-} as const
-const sqrtPriceX96 = 78_971_408_793_868_239_585_893_302_751n
-const owner = getAddress('0x746182d0cccc5cefc69853bb0325c850029388c0')
+// ─── Fixtures: Aave v3 and USDC on Arbitrum One, verified 8 September 2026 ───
+const AAVE_POOL = '0x794a61358D6845594F94dc1DB02A252b5b4814aD'
+const USDC = '0xaf88d065e77c8cC2239327C5EDb3A432268e5831'
+const AUSDC = '0x724dc807b04555b71ed48a6896b6F41593b8C637'
+const account = getAddress('0x746182d0cccc5cefc69853bb0325c850029388c0')
+// Anvil's first account. The enclave holds the key behind it in signature mode.
+const agent = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
+const agentKey = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
+
+/** USDC has six decimals, so every amount below is `whole * 1e6`. */
+const usdc = (whole: number): bigint => BigInt(whole) * 1_000_000n
+const RATE = 27_514_566_416_591_863_466_760_475n // 2.75%, the live USDC rate on the day
+
 const secrets = {
-	[MANDATE_SECRET_IDS.rangeWidthTicks]: '1000',
-	[MANDATE_SECRET_IDS.minImprovementBps]: '50',
-	[MANDATE_SECRET_IDS.cooldownSeconds]: '3600',
-	[MANDATE_SECRET_IDS.maxLiquidity]: '1000000000000000000',
-	[MANDATE_SECRET_IDS.expiry]: '1800000000',
-	[MANDATE_SECRET_IDS.minRetainedBps]: '9000',
+	[POLICY_SECRET_IDS.targetWorkingBps]: '8000',
+	[POLICY_SECRET_IDS.minIdleAmount]: '100000000',
+	[POLICY_SECRET_IDS.minMoveAmount]: '25000000',
+	[POLICY_SECRET_IDS.minMoveBps]: '50',
+	[POLICY_SECRET_IDS.minSupplyRateRay]: '0',
+	[POLICY_SECRET_IDS.maxMoveAmount]: '1000000000000',
+	[POLICY_SECRET_IDS.expiry]: '2000000000',
 }
-const committedHash = mandateHash({
-	poolId,
-	rangeWidthTicks: 1000,
-	minImprovementBps: 50,
-	cooldownSeconds: 3600,
-	maxLiquidity: 10n ** 18n,
-	expiry: 1_800_000_000,
-	minRetainedBps: 9000,
+const committedHash = policyHash({
+	targetWorkingBps: 8_000,
+	minIdleAmount: usdc(100),
+	minMoveAmount: usdc(25),
+	minMoveBps: 50,
+	minSupplyRateRay: 0n,
+	maxMoveAmount: usdc(1_000_000),
+	expiry: 2_000_000_000,
 })
+
 const config: Config = {
-	// The explanation is off by default in these tests: an empty `aiUrl` means the workflow
-	// asks for no AI secrets and calls no model, so every assertion below is about the decision
-	// rather than about prose. `ai.test.ts` covers the other path.
+	// The explanation is off by default in these tests: an empty `aiUrl` means the workflow asks
+	// for no AI secrets and calls no model, so every assertion below is about the decision rather
+	// than about prose. `ai.test.ts` covers the other path.
 	aiUrl: '',
 	aiModel: 'ag/claude-opus-4-6-thinking',
 	aiFallbackModel: 'ag/gemini-3-flash',
 	aiMaxTokens: 1200,
 	aiTimeoutSeconds: 30,
 	schedule: '0 */5 * * * *',
-	rpcUrl: 'https://rpc.testnet.chain.robinhood.com/rpc',
+	rpcUrl: 'https://arb1.arbitrum.io/rpc',
 	delivery: 'forwarder',
-	chainSelectorName: 'robinhood-testnet',
-	domainName: 'HelicoVault',
+	chainSelectorName: 'ethereum-mainnet-arbitrum-1',
+	domainName: 'HelicoAccount',
 	domainVersion: '1',
 	agentKeySecretId: 'AGENT_KEY',
-	noncesFunction: 'nonces',
-	vault: '0x1111111111111111111111111111111111111111',
-	positionManager: '0x58daec3116aae6D93017bAAea7749052E8a04fA7',
-	stateView: '0xF3334192D15450CdD385c8B70e03f9A6bD9E673b',
-	owner,
-	poolId,
-	mandateHash: committedHash,
+	nonceFunction: 'nonce',
+	account: account.toLowerCase(),
+	pool: AAVE_POOL.toLowerCase(),
+	asset: USDC.toLowerCase(),
+	agent: agent.toLowerCase(),
+	reportReceiver: '0x3333333333333333333333333333333333333333',
+	policyHash: committedHash,
 	gasLimit: '1500000',
-	slippageBps: 50,
-	maxPoolFeePips: 10_000,
 	deadlineSeconds: 600,
 }
 const now = 1_700_000_000
 
 type Chain = {
-	tokenId: bigint
-	lastActionAt: bigint
-	active: boolean
-	tick: number
-	liquidity: bigint
-	range: [number, number]
-	poolLiquidity?: bigint
-	lpFee?: number
-	poolKeyOverride?: Partial<typeof poolKey>
+	agent?: Address
+	permitted?: boolean
+	idle: bigint
+	supplied: bigint
+	receipt?: Address
+	receiptAsset?: Address
+	venueLiquidity?: bigint
+	rate?: bigint
 	nonce?: bigint
 }
 
 const sel = (sig: string): Hex => toFunctionSelector(sig)
-const u256 = (x: bigint | number | boolean): Hex =>
-	encodeAbiParameters([{ type: 'uint256' }], [BigInt(x)])
+const word = (x: bigint | number | boolean | string): Hex =>
+	typeof x === 'string'
+		? encodeAbiParameters([{ type: 'address' }], [x as Address])
+		: encodeAbiParameters([{ type: 'uint256' }], [BigInt(x)])
 
-/** The five reads the enclave makes, answered from one description of the chain. */
+/**
+ * The reads the enclave makes, answered from one description of the chain. `balanceOf` is asked
+ * of two different contracts, so it dispatches on the address rather than on the selector.
+ */
 const handlers = (c: Chain) => ({
-	[sel('function positionOf(address)')]: () => u256(c.tokenId),
-	[sel('function lastActionAt(address)')]: () => u256(c.lastActionAt),
-	[sel('function isActive(address)')]: () => u256(c.active),
-	[sel('function nonces(address)')]: () => u256(c.nonce ?? 0n),
-	[sel('function getSlot0(bytes32)')]: () =>
-		encodeAbiParameters(parseAbiParameters('uint160, int24, uint24, uint24'), [
-			sqrtPriceX96,
-			c.tick,
-			0,
-			c.lpFee ?? 500,
-		]),
-	[sel('function getLiquidity(bytes32)')]: () => u256(c.poolLiquidity ?? 0n),
-	[sel('function getPositionLiquidity(uint256)')]: () => u256(c.liquidity),
-	[sel('function getPoolAndPositionInfo(uint256)')]: () =>
-		encodeAbiParameters(parseAbiParameters('(address,address,uint24,int24,address), uint256'), [
+	[sel('function agent()')]: () => word(c.agent ?? agent),
+	[sel('function permittedVenue(address)')]: () => word(c.permitted ?? true),
+	[sel('function nonce()')]: () => word(c.nonce ?? 0n),
+	[sel('function getReserveAToken(address)')]: () => word(c.receipt ?? AUSDC),
+	[sel('function getVirtualUnderlyingBalance(address)')]: () =>
+		word(c.venueLiquidity ?? 29_318_183_885_841n),
+	[sel('function UNDERLYING_ASSET_ADDRESS()')]: () => word(c.receiptAsset ?? USDC),
+	[sel('function balanceOf(address)')]: (_: Hex, to: string) =>
+		word(to.toLowerCase() === USDC.toLowerCase() ? c.idle : c.supplied),
+	[sel('function getReserveData(address)')]: () =>
+		encodeAbiParameters(
+			parseAbiParameters(
+				'(uint256, uint128, uint128, uint128, uint128, uint128, uint40, uint16, address, address, address, address, uint128, uint128, uint128)',
+			),
 			[
-				c.poolKeyOverride?.currency0 ?? poolKey.currency0,
-				c.poolKeyOverride?.currency1 ?? poolKey.currency1,
-				c.poolKeyOverride?.fee ?? poolKey.fee,
-				c.poolKeyOverride?.tickSpacing ?? poolKey.tickSpacing,
-				c.poolKeyOverride?.hooks ?? poolKey.hooks,
+				[
+					0n,
+					10n ** 27n,
+					c.rate ?? RATE,
+					10n ** 27n,
+					0n,
+					0n,
+					now,
+					12,
+					AUSDC,
+					zeroAddress,
+					zeroAddress,
+					zeroAddress,
+					0n,
+					0n,
+					0n,
+				],
 			],
-			((BigInt(c.range[1]) & 0xffffffn) << 32n) | ((BigInt(c.range[0]) & 0xffffffn) << 8n),
-		]),
+		),
 })
 
 type Faults = {
@@ -149,101 +166,110 @@ const run = async (chain: Chain, overrides: Partial<Config> = {}, faults: Faults
 
 const decodeReport = (rawReport: Uint8Array) =>
 	decodeAbiParameters(
-		[{ type: 'bool' }, { type: 'bytes32' }, recenterParamsAbi],
+		[{ type: 'bool' }, { type: 'bytes32' }, idleMoveParamsAbi],
 		bytesToHex(rawReport),
 	)
 
-// In range but off-centre, so the burn returns both tokens and a centred range can be funded.
-const offCentre: Chain = {
-	tokenId: 7n,
-	lastActionAt: 0n,
-	active: true,
-	tick: -65,
-	liquidity: 10n ** 15n,
-	range: [-1_000, 0],
-}
+/** 1,000 USDC sitting idle and nothing working: 800 of it should be at the market. */
+const allIdle: Chain = { idle: usdc(1_000), supplied: 0n }
 
 // ─── Tests ───────────────────────────────────────────────────
 describe('configSchema', () => {
-	test('carries no threshold and no position: both are read from secrets and the vault', async () => {
-		for (const key of ['position', 'tickSpacing', 'minImprovementBps', 'minRetainedBps']) {
+	test('carries no threshold: every one of them comes from a secret', () => {
+		for (const key of Object.keys(POLICY_SECRET_IDS)) {
 			expect(Object.keys(configShape)).not.toContain(key)
 		}
 	})
 
-	test('lowercases hex values so a checksummed config compares equal to keccak output', async () => {
-		const parsed = configSchema.parse({
-			...config,
-			poolId: poolId.toUpperCase().replace('0X', '0x'),
-		})
-		expect(parsed.poolId).toBe(poolId)
-		expect(parsed.vault).toBe(config.vault.toLowerCase())
+	test('lowercases hex values so a checksummed config compares equal to what the chain returns', () => {
+		const parsed = configSchema.parse({ ...config, pool: AAVE_POOL, asset: USDC, agent })
+		expect(parsed.pool).toBe(AAVE_POOL.toLowerCase())
+		expect(parsed.asset).toBe(USDC.toLowerCase())
+		expect(parsed.agent).toBe(agent.toLowerCase())
+	})
+
+	test('ties chainId to signature delivery and chainSelectorName to the forwarder', () => {
+		expect(() => configSchema.parse({ ...config, delivery: 'signature' })).toThrow('chainId')
+		expect(() => configSchema.parse({ ...config, chainSelectorName: undefined })).toThrow(
+			'chainSelectorName',
+		)
+		expect(configSchema.parse({ ...config, delivery: 'signature', chainId: 42_161 }).delivery).toBe(
+			'signature',
+		)
 	})
 })
 
 describe('onCronTrigger', () => {
-	test('refuses, and never reads the chain, when the secrets do not match the committed hash', async () => {
-		const { result, rpcRequests, writes } = await run(offCentre, {
-			mandateHash: `0x${'ab'.repeat(32)}`,
+	test('refuses, and never reads the chain, when the secrets do not match the published hash', async () => {
+		const { result, rpcRequests, writes } = await run(allIdle, {
+			policyHash: `0x${'ab'.repeat(32)}`,
 		})
-		expect(result).toBe('HOLD (mandate hash mismatch)')
+		expect(result).toBe('HOLD (policy hash mismatch)')
 		expect(rpcRequests).toHaveLength(0)
 		expect(writes).toHaveLength(0)
 	})
 
-	test('reads the account and the pool, then the position, in two batches from inside the enclave', async () => {
-		const { rpcRequests } = await run({ ...offCentre, range: [-2_000, -1_000], tick: -65 })
-		expect(rpcRequests).toHaveLength(2)
-		const lower = (a: string) => a.toLowerCase()
-		expect(rpcRequests[0]?.map((r) => r.params[0].to)).toEqual(
-			[config.vault, config.vault, config.vault, config.stateView, config.stateView].map(lower),
-		)
-		expect(rpcRequests[1]?.map((r) => r.params[0].to)).toEqual(
-			[config.positionManager, config.positionManager].map(lower),
-		)
-		expect(rpcRequests[1]?.[0]?.params[0].data).toBe(
-			`${sel('function getPositionLiquidity(uint256)')}${'0'.repeat(63)}7`,
-		)
+	/** A zero hash is the owner saying they published none, not a hash that happens to be zero. */
+	test('a zero hash means nothing was committed, and the run goes ahead', async () => {
+		const { result } = await run(allIdle, { policyHash: `0x${'0'.repeat(64)}` })
+		expect(result).toStartWith('SUPPLY')
 	})
 
-	// Out of range below, with a pool deep enough to swap into a two-sided range.
-	const belowRange: Chain = { ...offCentre, range: [100, 1_100], poolLiquidity: 10n ** 18n }
+	test('reads the account and the market, then the receipt, in two batches from inside the enclave', async () => {
+		const { rpcRequests } = await run(allIdle)
+		expect(rpcRequests).toHaveLength(2)
+		const lower = (a: string) => a.toLowerCase()
+		expect(rpcRequests[0]?.map((r) => lower(r.params[0].to))).toEqual(
+			[account, account, USDC, AAVE_POOL, AAVE_POOL, AAVE_POOL].map(lower),
+		)
+		// The receipt's address came out of the first batch, from the market. Asking the receipt
+		// which market it belongs to would read as the same check and is not one.
+		expect(rpcRequests[1]?.map((r) => lower(r.params[0].to))).toEqual([lower(AUSDC), lower(AUSDC)])
+	})
 
 	test.each([
-		['a revoked mandate', { ...offCentre, active: false }, 'HOLD (mandate revoked)'],
 		[
-			'a position still in range',
-			{ ...offCentre, range: [-560, 440] as [number, number] },
-			'HOLD (in range)',
-		],
-		['the cooldown', { ...belowRange, lastActionAt: BigInt(now - 60) }, 'HOLD (cooldown)'],
-		[
-			'an empty position',
-			{ ...belowRange, liquidity: 0n },
-			'HOLD (vault would reject: NothingToMove)',
+			'the owner revoked the agent',
+			{ ...allIdle, agent: zeroAddress },
+			'HOLD (the account has not nominated this agent)',
 		],
 		[
-			'a position over the cap',
-			{ ...belowRange, liquidity: 10n ** 19n },
-			'HOLD (vault would reject: LiquidityTooLarge)',
+			'the owner nominated somebody else',
+			{ ...allIdle, agent: AAVE_POOL as Address },
+			'HOLD (the account has not nominated this agent)',
 		],
 		[
-			'a pool whose fee is above the enclave ceiling',
-			{ ...belowRange, lpFee: 200_000 },
-			'HOLD (pool fee above the enclave ceiling)',
+			'the owner took the venue off the allowlist',
+			{ ...allIdle, permitted: false },
+			'HOLD (the owner has not permitted this venue)',
 		],
 		[
-			'a position in a pool other than the mandated one',
-			{ ...belowRange, poolKeyOverride: { fee: 3_000 } },
-			'HOLD (position is not in the mandated pool)',
+			'the market does not list the asset',
+			{ ...allIdle, receipt: zeroAddress },
+			'HOLD (the venue does not list this asset)',
 		],
 		[
-			'an out-of-range position in a pool with no liquidity to swap against',
-			{ ...offCentre, range: [100, 1_100] as [number, number] },
-			'HOLD (vault would reject: NothingToMint)',
+			'the receipt is for a different asset',
+			{ ...allIdle, receiptAsset: AAVE_POOL as Address },
+			"HOLD (the venue's receipt is for a different asset)",
+		],
+		[
+			'the account is empty',
+			{ idle: 0n, supplied: 0n },
+			'HOLD (the account holds nothing to place)',
+		],
+		[
+			'the split is already met',
+			{ idle: usdc(200), supplied: usdc(800) },
+			'HOLD (already at the target split)',
+		],
+		[
+			'the drift is smaller than the deadband',
+			{ idle: usdc(210), supplied: usdc(800) },
+			'HOLD (inside the deadband)',
 		],
 	] as [string, Chain, string][])(
-		'holds on %s without writing anything',
+		'holds when %s, and writes nothing',
 		async (_, chain, expected) => {
 			const { result, writes } = await run(chain)
 			expect(result).toBe(expected)
@@ -251,89 +277,111 @@ describe('onCronTrigger', () => {
 		},
 	)
 
-	test('a retention floor of zero does not let a zero mint through', async () => {
-		const zeroFloor = { ...secrets, [MANDATE_SECRET_IDS.minRetainedBps]: '0' }
-		const hash = mandateHash({
-			poolId,
-			rangeWidthTicks: 1000,
-			minImprovementBps: 50,
-			cooldownSeconds: 3600,
-			maxLiquidity: 10n ** 18n,
-			expiry: 1_800_000_000,
-			minRetainedBps: 0,
-		})
-		const { result, writes } = await run(
-			{ ...offCentre, range: [100, 1_100] },
-			{ mandateHash: hash },
-			{ secrets: zeroFloor },
-		)
-		expect(result).toBe('HOLD (vault would reject: NothingToMint)')
-		expect(writes).toHaveLength(0)
+	/** No receipt means no second batch: there is nothing to ask and nowhere to ask it. */
+	test('an unlisted asset costs one batch, not two', async () => {
+		const { rpcRequests } = await run({ ...allIdle, receipt: zeroAddress })
+		expect(rpcRequests).toHaveLength(1)
 	})
 
-	test('holds below the retention floor rather than shrinking the position', async () => {
-		const strict = { ...secrets, [MANDATE_SECRET_IDS.minRetainedBps]: '9999' }
-		const hash = mandateHash({
-			poolId,
-			rangeWidthTicks: 1000,
-			minImprovementBps: 50,
-			cooldownSeconds: 3600,
-			maxLiquidity: 10n ** 18n,
-			expiry: 1_800_000_000,
-			minRetainedBps: 9999,
+	test('holds when the policy has expired', async () => {
+		const expired = { ...secrets, [POLICY_SECRET_IDS.expiry]: '1600000000' }
+		const hash = policyHash({
+			targetWorkingBps: 8_000,
+			minIdleAmount: usdc(100),
+			minMoveAmount: usdc(25),
+			minMoveBps: 50,
+			minSupplyRateRay: 0n,
+			maxMoveAmount: usdc(1_000_000),
+			expiry: 1_600_000_000,
 		})
-		const { result, writes } = await run(belowRange, { mandateHash: hash }, { secrets: strict })
-		expect(result).toBe("HOLD (below the mandate's retention floor)")
-		expect(writes).toHaveLength(0)
+		const { result } = await run(allIdle, { policyHash: hash }, { secrets: expired })
+		expect(result).toBe('HOLD (policy expired)')
 	})
 
-	test('re-centres an out-of-range position by swapping through the pool and delivers the sized params', async () => {
-		const { result, writes, reports } = await run(belowRange)
-		expect(result).toBe(`RECENTER -560..440 tx 0x${'ab'.repeat(32)}`)
+	test('holds when the market pays less than the owner asked for', async () => {
+		const floor = { ...secrets, [POLICY_SECRET_IDS.minSupplyRateRay]: '30000000000000000000000000' }
+		const hash = policyHash({
+			targetWorkingBps: 8_000,
+			minIdleAmount: usdc(100),
+			minMoveAmount: usdc(25),
+			minMoveBps: 50,
+			minSupplyRateRay: 30_000_000_000_000_000_000_000_000n,
+			maxMoveAmount: usdc(1_000_000),
+			expiry: 2_000_000_000,
+		})
+		const { result } = await run(allIdle, { policyHash: hash }, { secrets: floor })
+		expect(result).toBe('HOLD (the venue pays below the policy floor)')
+	})
+
+	test('supplies the excess and delivers the move as a report', async () => {
+		const { result, writes, reports } = await run(allIdle)
+		expect(result).toBe(`SUPPLY 800000000 tx 0x${'ab'.repeat(32)}`)
 		expect(writes).toHaveLength(1)
 		const write = writes[0] as NonNullable<(typeof writes)[0]>
-		expect(bytesToHex(write.receiver)).toBe(config.vault.toLowerCase() as Hex)
+		expect(bytesToHex(write.receiver)).toBe(config.reportReceiver as Hex)
 		expect(write.gasConfig?.gasLimit).toBe(1_500_000n)
 		const [act, hash, p] = decodeReport(write.report?.rawReport ?? new Uint8Array())
 		expect(act).toBe(true)
 		expect(hash).toBe(committedHash)
-		expect(p.owner).toBe(owner)
-		expect([p.tickLower, p.tickUpper]).toEqual([-560, 440])
-		// Below its range the position is all token0, so the swap sells token0.
-		expect(p.zeroForOne).toBe(true)
-		expect(p.amountIn).toBeGreaterThan(0n)
-		expect(p.amountIn).toBeLessThan(p.amount0Min)
-		expect(p.minAmountOut).toBeGreaterThan(0n)
-		expect(p.liquidityToMint).toBeGreaterThan(0n)
-		expect(p.liquidityToMint).toBeLessThan(belowRange.liquidity)
-		// The floors are the burn's, the ceilings are what is held after the swap.
-		expect(p.amount0Max).toBeLessThan(p.amount0Min)
-		expect(p.amount1Min).toBe(0n)
-		expect(p.amount1Max).toBeGreaterThan(0n)
+		expect(p.account).toBe(account)
+		expect(p.pool).toBe(getAddress(AAVE_POOL))
+		expect(p.asset).toBe(getAddress(USDC))
+		expect(p.supply).toBe(true)
+		expect(p.amount).toBe(usdc(800))
 		expect(p.deadline).toBe(BigInt(now + 600))
 		expect(reports).toHaveLength(1)
 	})
 
-	test('above its range the position is all token1, so the swap sells token1', async () => {
-		const { result, writes } = await run({
-			...offCentre,
-			range: [-2_000, -1_000],
-			poolLiquidity: 10n ** 18n,
-		})
-		expect(result).toBe(`RECENTER -560..440 tx 0x${'ab'.repeat(32)}`)
+	test('withdraws when the account has fallen below the buffer it needs to cover a swap', async () => {
+		const { result, writes } = await run({ idle: usdc(10), supplied: usdc(990) })
+		expect(result).toBe(`WITHDRAW 190000000 tx 0x${'ab'.repeat(32)}`)
 		const [, , p] = decodeReport(writes[0]?.report?.rawReport ?? new Uint8Array())
-		expect(p.zeroForOne).toBe(false)
-		expect(p.amount0Min).toBe(0n)
-		expect(p.amountIn).toBeLessThan(p.amount1Min)
+		expect(p.supply).toBe(false)
+		expect(p.amount).toBe(usdc(190))
 	})
 
-	test('the cooldown ends exactly at lastActionAt + cooldownSeconds, as in the vault', async () => {
-		expect((await run({ ...belowRange, lastActionAt: BigInt(now - 3_600) })).result).toStartWith(
-			'RECENTER',
-		)
-		expect((await run({ ...belowRange, lastActionAt: BigInt(now - 3_599) })).result).toBe(
-			'HOLD (cooldown)',
-		)
+	/**
+	 * The deadband is applied twice, and this is why. The split asked for 190 USDC, which clears
+	 * it easily; a drained market leaves 3, which does not. Without the second check the run
+	 * would pay gas to move three dollars because the market could not manage the rest.
+	 */
+	test('holds when the market can only return a fragment of what was wanted', async () => {
+		const { result, writes } = await run({
+			idle: usdc(10),
+			supplied: usdc(990),
+			venueLiquidity: usdc(3),
+		})
+		expect(result).toBe('HOLD (the venue liquidity leaves a move inside the deadband)')
+		expect(writes).toHaveLength(0)
+	})
+
+	test('holds when the market can return nothing at all', async () => {
+		const { result } = await run({ idle: usdc(10), supplied: usdc(990), venueLiquidity: 0n })
+		expect(result).toBe('HOLD (the venue cannot return anything right now)')
+	})
+
+	test('a market that can only pay part of it still moves that part, when the part is worth moving', async () => {
+		const { result } = await run({
+			idle: usdc(10),
+			supplied: usdc(990),
+			venueLiquidity: usdc(120),
+		})
+		expect(result).toStartWith('WITHDRAW 120000000 tx')
+	})
+
+	test('the per-move ceiling bounds what one run can do', async () => {
+		const capped = { ...secrets, [POLICY_SECRET_IDS.maxMoveAmount]: '100000000' }
+		const hash = policyHash({
+			targetWorkingBps: 8_000,
+			minIdleAmount: usdc(100),
+			minMoveAmount: usdc(25),
+			minMoveBps: 50,
+			minSupplyRateRay: 0n,
+			maxMoveAmount: usdc(100),
+			expiry: 2_000_000_000,
+		})
+		const { result } = await run(allIdle, { policyHash: hash }, { secrets: capped })
+		expect(result).toStartWith('SUPPLY 100000000 tx')
 	})
 
 	test.each([
@@ -349,55 +397,56 @@ describe('onCronTrigger', () => {
 			'eth_call 0 failed: execution reverted',
 		],
 	])('fails loudly on %s rather than deciding on a partial view', async (_, faults, message) => {
-		await expect(run(belowRange, {}, faults)).rejects.toThrow(message)
+		await expect(run(allIdle, {}, faults)).rejects.toThrow(message)
 	})
 })
 
 describe('signature delivery', () => {
-	// Anvil's first account, a public test key; the fake hands it out as the AGENT_KEY secret.
-	const agentKey = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
-	const agentAddress = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
-	const signing: Partial<Config> = { delivery: 'signature', chainId: 46630 }
+	const signing: Partial<Config> = { delivery: 'signature', chainId: 42_161 }
 	const withKey = { ...secrets, AGENT_KEY: agentKey }
-	const belowRange: Chain = { ...offCentre, range: [100, 1_100], poolLiquidity: 10n ** 18n }
-	const chain: Chain = { ...belowRange, nonce: 7n }
+	const chain: Chain = { ...allIdle, nonce: 7n }
 
-	test('signs the sized params with the agent key and lets only the authorisation out', async () => {
+	test('signs the move with the agent key and lets only the statement out', async () => {
 		const { result, writes, reports, secretRequests } = await run(chain, signing, {
 			secrets: withKey,
 		})
 		expect(secretRequests).toContain('AGENT_KEY')
-		expect(result.startsWith('RECENTER -560..440 {')).toBe(true)
+		expect(result.startsWith('SUPPLY 800000000 {')).toBe(true)
 		const auth = JSON.parse(result.slice(result.indexOf('{'))) as {
-			params: Record<string, string | number | boolean>
-			mandateHash: Hex
+			params: Record<string, string | boolean>
+			policyHash: Hex
 			nonce: string
 			signature: Hex
 			signer: Address
+			call: { to: Address; data: Hex }
 		}
-		expect(auth.signer).toBe(agentAddress)
+		expect(auth.signer).toBe(agent)
 		expect(auth.nonce).toBe('7')
-		expect(auth.mandateHash).toBe(committedHash)
-		// No forwarder write; the DON report carries the authorisation and nothing else.
+		expect(auth.policyHash).toBe(committedHash)
+		// The call the relayer makes is in the statement, so there is nothing left to encode.
+		expect(auth.call.to).toBe(config.account as Address)
+		expect(auth.call.data.slice(0, 10)).toBe('0x853112a5')
+		// No forwarder write; the DON report carries the statement and nothing else.
 		expect(writes).toHaveLength(0)
 		expect(reports).toHaveLength(1)
 		const [p, hash, nonce, sig] = decodeAbiParameters(
-			[recenterParamsAbi, { type: 'bytes32' }, { type: 'uint256' }, { type: 'bytes' }],
+			[idleMoveParamsAbi, { type: 'bytes32' }, { type: 'uint256' }, { type: 'bytes' }],
 			bytesToHex(Buffer.from(reports[0] ?? '', 'base64')),
 		)
 		expect(hash).toBe(committedHash)
 		expect(nonce).toBe(7n)
 		expect(sig).toBe(auth.signature)
-		expect([p.tickLower, p.tickUpper]).toEqual([-560, 440])
-		// The signature verifies against the vault's domain for exactly these params.
+		expect(p.amount).toBe(usdc(800))
+		expect(p.supply).toBe(true)
+		// The signature verifies against the account's own domain for exactly this move.
 		const domain = {
-			name: 'HelicoVault',
+			name: 'HelicoAccount',
 			version: '1',
-			chainId: 46630,
-			verifyingContract: config.vault as Address,
+			chainId: 42_161,
+			verifyingContract: config.account as Address,
 		}
-		expect(await recoverRecentreSigner(domain, { params: p, mandateHash: hash, nonce }, sig)).toBe(
-			agentAddress,
+		expect(await recoverIdleMoveSigner(domain, { params: p, policyHash: hash, nonce }, sig)).toBe(
+			agent,
 		)
 		// The key itself never crosses out.
 		for (const leaked of [
@@ -409,17 +458,17 @@ describe('signature delivery', () => {
 		}
 	})
 
-	test('a hold signs nothing and asks for nothing more than the mandate', async () => {
-		const { result, reports, secretRequests } = await run({ ...chain, active: false }, signing, {
+	test('a hold signs nothing and asks for nothing more than the policy', async () => {
+		const { result, reports, secretRequests } = await run({ ...chain, permitted: false }, signing, {
 			secrets: withKey,
 		})
-		expect(result).toBe('HOLD (mandate revoked)')
+		expect(result).toBe('HOLD (the owner has not permitted this venue)')
 		expect(reports).toHaveLength(0)
 		expect(secretRequests).toContain('AGENT_KEY')
 	})
 
 	test('forwarder delivery never asks the Vault DON for the agent key', async () => {
-		const { secretRequests } = await run(belowRange)
+		const { secretRequests } = await run(allIdle)
 		expect(secretRequests).not.toContain('AGENT_KEY')
 	})
 
@@ -427,57 +476,43 @@ describe('signature delivery', () => {
 		await expect(run(chain, signing)).rejects.toThrow('Secret AGENT_KEY is missing')
 	})
 
-	test('a vault without nonces fails loudly instead of signing against nothing', async () => {
-		const noNonces = handlers(chain)
-		noNonces[sel('function nonces(address)')] = () => {
+	test('an account without a nonce fails loudly instead of signing against nothing', async () => {
+		const noNonce = handlers(chain)
+		noNonce[sel('function nonce()')] = () => {
 			throw new RpcError('execution reverted')
 		}
 		const fake = fakeRuntime({
 			config: configSchema.parse({ ...config, ...signing }),
 			secrets: withKey,
 			now,
-			handlers: noNonces,
+			handlers: noNonce,
 		})
 		await expect(onCronTrigger(fake.runtime)).rejects.toThrow(
-			'eth_call 5 failed: execution reverted',
+			'eth_call 6 failed: execution reverted',
 		)
 		expect(fake.reports).toHaveLength(0)
-	})
-
-	test('the schema ties chainId to signature delivery and chainSelectorName to the forwarder', () => {
-		expect(() => configSchema.parse({ ...config, delivery: 'signature' })).toThrow('chainId')
-		expect(() => configSchema.parse({ ...config, chainSelectorName: undefined })).toThrow(
-			'chainSelectorName',
-		)
-		expect(configSchema.parse({ ...config, ...signing }).delivery).toBe('signature')
 	})
 })
 
 describe('deliver', () => {
 	const params = {
-		owner,
-		tickLower: -560,
-		tickUpper: 440,
-		liquidityToMint: 129_997_405_203_692n,
-		amount0Min: 3_234_967_638_235n,
-		amount1Min: 45_299_872_474_506n,
-		amount0Max: 3_251_223_757_021n,
-		amount1Max: 45_527_510_024_630n,
-		zeroForOne: true,
-		amountIn: 1_000_000_000_000n,
-		minAmountOut: 995_000_000_000n,
+		account,
+		pool: getAddress(AAVE_POOL),
+		asset: getAddress(USDC),
+		amount: usdc(800),
+		supply: true,
 		deadline: BigInt(now + 600),
 	}
 
-	test("encodes the tuple in the vault's field order: pinned to an encoding produced by cast", async () => {
-		// cast abi-encode "f(bool,bytes32,(address,int24,int24,uint256,uint128,uint128,uint128,uint128,bool,uint256,uint256,uint256))" \
-		//   true 0x134be6bb…6225 "(0x7461…88C0,-560,440,129997405203692,3234967638235,45299872474506,3251223757021,45527510024630,true,1000000000000,995000000000,1700000600)"
+	test('encodes the tuple in its declared order: pinned to an encoding produced by cast', () => {
+		// cast abi-encode "f(bool,bytes32,(address,address,address,uint256,bool,uint256))" \
+		//   true 0x63252eb3…9584 "(0x7461…88C0,0x794a…14aD,0xaf88…5831,800000000,true,1700000600)"
 		expect(encodeReport(true, committedHash, params)).toBe(
-			'0x0000000000000000000000000000000000000000000000000000000000000001134be6bb4e1c442551c22dfe96cb5b7c3c31babb386e2e9a051e57ee329a6225000000000000000000000000746182d0cccc5cefc69853bb0325c850029388c0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffdd000000000000000000000000000000000000000000000000000000000000001b80000000000000000000000000000000000000000000000000000763b6128acec000000000000000000000000000000000000000000000000000002f13318d0db0000000000000000000000000000000000000000000000000000293332cea58a000000000000000000000000000000000000000000000000000002f4fc0980dd00000000000000000000000000000000000000000000000000002968331001b60000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000e8d4a51000000000000000000000000000000000000000000000000000000000e7aa9f1e00000000000000000000000000000000000000000000000000000000006553f358',
+			'0x000000000000000000000000000000000000000000000000000000000000000163252eb3d00b4713a7ae923551b77107f12c2aa057b94494fda994b235499584000000000000000000000000746182d0cccc5cefc69853bb0325c850029388c0000000000000000000000000794a61358d6845594f94dc1db02a252b5b4814ad000000000000000000000000af88d065e77c8cc2239327c5edb3a432268e5831000000000000000000000000000000000000000000000000000000002faf08000000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006553f358',
 		)
 	})
 
-	test('signs the report through the DON and writes it to the vault on the configured chain', async () => {
+	test('signs the report through the DON and writes it to the receiver on the configured chain', () => {
 		const fake = fakeRuntime({ config, secrets, now, handlers: {} })
 		const txHash = deliver(
 			fake.runtime.usingTheDons(),
@@ -487,9 +522,8 @@ describe('deliver', () => {
 		expect(txHash).toBe(`0x${'ab'.repeat(32)}`)
 		expect(fake.writes).toHaveLength(1)
 		const write = fake.writes[0] as NonNullable<(typeof fake.writes)[0]>
-		expect(bytesToHex(write.receiver)).toBe(config.vault.toLowerCase() as Hex)
-		expect(write.gasConfig?.gasLimit).toBe(1_500_000n)
-		// The bytes the DON signed are the bytes the vault receives, and they decode as its own struct.
+		expect(bytesToHex(write.receiver)).toBe(config.reportReceiver as Hex)
+		// The bytes the DON signed are the bytes the receiver gets, and they decode as the tuple.
 		expect(Buffer.from(fake.reports[0] ?? '', 'base64')).toEqual(
 			Buffer.from(write.report?.rawReport ?? new Uint8Array()),
 		)
@@ -501,45 +535,55 @@ describe('deliver', () => {
 		expect(fake.rpcRequests).toHaveLength(0)
 	})
 
-	test('fails loudly when the write does not succeed', async () => {
+	/**
+	 * `HelicoAccount` has no `onReport`, so there is nothing deployed to write to yet and the
+	 * placeholder in both config files is zero. A write to an address with no code succeeds as a
+	 * transaction and moves nothing, which in a log is indistinguishable from a move.
+	 */
+	test('refuses to write into the void when no receiver is deployed', () => {
+		const fake = fakeRuntime({ config, secrets, now, handlers: {} })
+		expect(() =>
+			deliver(
+				fake.runtime.usingTheDons(),
+				{ ...config, reportReceiver: zeroAddress },
+				encodeReport(true, committedHash, params),
+			),
+		).toThrow('No report receiver is deployed')
+		expect(fake.writes).toHaveLength(0)
+	})
+
+	test('fails loudly when the write does not succeed', () => {
 		const fake = fakeRuntime({ config, secrets, now, handlers: {}, writeStatus: 1 })
 		expect(() =>
 			deliver(fake.runtime.usingTheDons(), config, encodeReport(true, committedHash, params)),
 		).toThrow('writeReport failed: REVERTED')
 	})
 
-	test('rejects a chain selector name the SDK does not know', async () => {
-		const fake = fakeRuntime({
-			config: { ...config, chainSelectorName: 'nowhere' },
-			secrets,
-			now,
-			handlers: {},
-		})
+	test('rejects a chain selector name the SDK does not know', () => {
+		const nowhere = { ...config, chainSelectorName: 'nowhere' }
+		const fake = fakeRuntime({ config: nowhere, secrets, now, handlers: {} })
 		expect(() =>
-			deliver(
-				fake.runtime.usingTheDons(),
-				{ ...config, chainSelectorName: 'nowhere' },
-				encodeReport(false, committedHash),
-			),
+			deliver(fake.runtime.usingTheDons(), nowhere, encodeReport(false, committedHash)),
 		).toThrow('Unknown chain selector name')
 	})
 })
 
 describe('encodeReport', () => {
-	test('a hold encodes as act = false with zeroed params, so the layout never changes', async () => {
+	test('a hold encodes as act = false with zeroed params, so the layout never changes', () => {
 		const [act, hash, p] = decodeAbiParameters(
-			[{ type: 'bool' }, { type: 'bytes32' }, recenterParamsAbi],
+			[{ type: 'bool' }, { type: 'bytes32' }, idleMoveParamsAbi],
 			encodeReport(false, committedHash),
 		)
 		expect(act).toBe(false)
 		expect(hash).toBe(committedHash)
-		expect(p.owner).toBe('0x0000000000000000000000000000000000000000' as Address)
-		expect(encodeReport(false, committedHash).length).toBe(2 + 14 * 64)
+		expect(p.account).toBe(zeroAddress)
+		expect(p.supply).toBe(false)
+		expect(encodeReport(false, committedHash).length).toBe(2 + 8 * 64)
 	})
 })
 
 describe('initWorkflow', () => {
-	test('registers the cron handler inside a Nitro enclave in us-west-2', async () => {
+	test('registers the cron handler inside a Nitro enclave in us-west-2', () => {
 		const [handler] = initWorkflow(config)
 		expect(handler).toMatchObject({
 			requirements: {
