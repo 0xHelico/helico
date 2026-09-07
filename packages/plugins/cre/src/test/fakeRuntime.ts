@@ -30,8 +30,19 @@ export function fakeRuntime(input: {
 	/** Fault injection for the RPC leg: an HTTP status other than 200, or a body that replaces the batch reply. */
 	httpStatus?: number
 	rpcBody?: string
+	/**
+	 * What the Aqua subgraph answers, when `config.subgraphUrl` names one. Dispatched by URL
+	 * rather than by body, because a GraphQL POST and an `eth_call` batch go through the same
+	 * capability and a batch parser handed a GraphQL document fails in a way that looks like the
+	 * workflow's bug rather than the fixture's.
+	 */
+	graphStatus?: number
+	graphBody?: string
+	/** Thrown from inside `sendRequest`, the way an unreachable host or an oversized body is. */
+	graphThrows?: boolean
 }) {
 	const rpcRequests: Batch[] = []
+	const graphRequests: { query: string; variables: Record<string, unknown> }[] = []
 	const writes: WriteReportCall[] = []
 	const reports: string[] = []
 	const secretRequests: string[] = []
@@ -54,6 +65,16 @@ export function fakeRuntime(input: {
 		if (capabilityId.startsWith('http-actions')) {
 			const p = payload as { url: string; body: Uint8Array | string }
 			const raw = typeof p.body === 'string' ? Buffer.from(p.body, 'base64') : Buffer.from(p.body)
+			if (input.config.subgraphUrl && p.url === input.config.subgraphUrl) {
+				graphRequests.push(JSON.parse(raw.toString()))
+				if (input.graphThrows) throw new Error('the subgraph did not answer')
+				return {
+					result: () => ({
+						statusCode: input.graphStatus ?? 200,
+						body: new TextEncoder().encode(input.graphBody ?? '{"data":{"balances":[]}}'),
+					}),
+				}
+			}
 			const batch = JSON.parse(raw.toString()) as Batch
 			rpcRequests.push(batch)
 			const replies = batch.map(({ id, params }) => {
@@ -114,6 +135,7 @@ export function fakeRuntime(input: {
 	return {
 		runtime: runtime as unknown as TeeRuntime<Config>,
 		rpcRequests,
+		graphRequests,
 		writes,
 		reports,
 		secretRequests,

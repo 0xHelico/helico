@@ -12,6 +12,8 @@
 	"policyHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
 	"gasLimit": "3000000",
 	"deadlineSeconds": 600,
+	"subgraphUrl": "https://api.studio.thegraph.com/query/1758877/helico-arbitrum-one/version/latest",
+	"subgraphTimeoutSeconds": 20,
 	"aiUrl": "https://9router.godza.site/v1/chat/completions",
 	"aiModel": "ag/claude-opus-4-6-thinking",
 	"aiFallbackModel": "ag/gemini-3-flash",

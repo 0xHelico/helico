@@ -71,6 +71,11 @@ const config: Config = {
 	aiFallbackModel: 'ag/gemini-3-flash',
 	aiMaxTokens: 1200,
 	aiTimeoutSeconds: 30,
+	// The subgraph is off by default here for the same reason `aiUrl` is: an empty endpoint means
+	// no request is made and the buffer is the owner's `minIdleAmount` alone, which is what every
+	// assertion below was written against. `the Aqua buffer` covers the other path.
+	subgraphUrl: '',
+	subgraphTimeoutSeconds: 20,
 	schedule: '0 */5 * * * *',
 	rpcUrl: 'https://arb1.arbitrum.io/rpc',
 	delivery: 'forwarder',
@@ -180,6 +185,9 @@ type Faults = {
 	httpStatus?: number
 	rpcBody?: string
 	secrets?: Record<string, string>
+	graphStatus?: number
+	graphBody?: string
+	graphThrows?: boolean
 }
 const run = async (chain: Chain, overrides: Partial<Config> = {}, faults: Faults = {}) => {
 	const fake = fakeRuntime({
@@ -190,6 +198,9 @@ const run = async (chain: Chain, overrides: Partial<Config> = {}, faults: Faults
 		writeStatus: faults.writeStatus,
 		httpStatus: faults.httpStatus,
 		rpcBody: faults.rpcBody,
+		graphStatus: faults.graphStatus,
+		graphBody: faults.graphBody,
+		graphThrows: faults.graphThrows,
 	})
 	const result = await onCronTrigger(fake.runtime)
 	return { ...fake, result }
@@ -603,6 +614,174 @@ describe('migrating between markets', () => {
 	test('a single-market account never migrates', async () => {
 		const { result } = await run(one(usdc(200), usdc(800)))
 		expect(result).toBe('HOLD (already at the target split)')
+	})
+})
+
+// ─── The Aqua buffer, from The Graph ─────────────────────────
+/**
+ * The buffer is sized by what this account's own Aqua mandates could still be asked to pay out of
+ * its wallet, and that question has no on-chain answer: `_balances` is private and four levels
+ * deep and none of Aqua's four events indexes a parameter. The index is the only place the number
+ * exists — and every one of its failure modes has to leave the run with a decision that is worse
+ * rather than wrong.
+ */
+describe('the Aqua buffer', () => {
+	const SUBGRAPH =
+		'https://api.studio.thegraph.com/query/1758877/helico-arbitrum-one/version/latest'
+	const indexed: Partial<Config> = { subgraphUrl: SUBGRAPH }
+
+	/** `tokensCount` 2 is Aqua's sentinel for a live two-token ship. */
+	const balances = (...amounts: bigint[]) =>
+		JSON.stringify({
+			data: { balances: amounts.map((amount) => ({ amount: String(amount), tokensCount: 2 })) },
+		})
+
+	test('is not asked for at all when no endpoint is configured', async () => {
+		const { result, graphRequests } = await run(allIdle)
+		expect(graphRequests).toHaveLength(0)
+		expect(result).toBe(`SUPPLY 800000000 to ${aave} tx 0x${'ab'.repeat(32)}`)
+	})
+
+	test('asks the index for this account’s live balances of the asset it manages', async () => {
+		const { graphRequests } = await run(allIdle, indexed, { graphBody: balances() })
+		expect(graphRequests).toHaveLength(1)
+		const { variables } = graphRequests[0] as NonNullable<(typeof graphRequests)[0]>
+		expect(variables).toEqual({
+			maker: account.toLowerCase(),
+			token: USDC.toLowerCase(),
+			first: 1000,
+		})
+	})
+
+	/**
+	 * 1,000 USDC and a policy asking for 100 liquid would supply 800. Mandates that could demand
+	 * 400 leave only 600 free to work, and the buffer is what changed — nothing else in the
+	 * policy moved.
+	 */
+	test('raises the buffer to what the mandates could demand, and the move follows', async () => {
+		const { result } = await run(allIdle, indexed, { graphBody: balances(usdc(250), usdc(150)) })
+		expect(result).toStartWith(
+			`SUPPLY 600000000 to ${aave} [buffer 400000000: policy floor 100000000, 2 live Aqua balances could demand 400000000]`,
+		)
+	})
+
+	/** A demand larger than the account's idle side is what pulls capital back out of the market. */
+	test('a mandate the account cannot cover turns a hold into a withdrawal', async () => {
+		const settled = one(usdc(200), usdc(800))
+		expect((await run(settled)).result).toBe('HOLD (already at the target split)')
+		const { result } = await run(settled, indexed, { graphBody: balances(usdc(400)) })
+		expect(result).toStartWith(`WITHDRAW 200000000 from ${aave} [buffer 400000000`)
+	})
+
+	/**
+	 * The direction that must never happen. The owner's minimum is theirs; an index reporting less
+	 * than it has nothing to say about a number they set themselves.
+	 */
+	test('never lowers the owner’s floor, however little the mandates demand', async () => {
+		const { result } = await run(allIdle, indexed, { graphBody: balances(1n) })
+		expect(result).toStartWith(
+			`SUPPLY 800000000 to ${aave} [buffer 100000000: policy floor 100000000, 1 live Aqua balance could demand 1]`,
+		)
+	})
+
+	/**
+	 * The raised floor is not the owner's published policy and must never be hashed as if it were:
+	 * a run with a live mandate would then look like a policy edited underneath the workflow, and
+	 * every run would hold.
+	 */
+	test('the report still carries the hash the owner published, not one recomputed from the raised floor', async () => {
+		const { result, writes } = await run(allIdle, indexed, { graphBody: balances(usdc(400)) })
+		expect(result).not.toContain('policy hash mismatch')
+		const [, hash] = decodeReport(writes[0]?.report?.rawReport ?? new Uint8Array())
+		expect(hash).toBe(committedHash)
+	})
+
+	/** A mismatch stops before the chain, and before the index too — there is nothing to size. */
+	test('a policy the owner did not publish stops before the index is asked', async () => {
+		const { result, graphRequests } = await run(
+			allIdle,
+			{ ...indexed, policyHash: `0x${'ab'.repeat(32)}` },
+			{ graphBody: balances(usdc(400)) },
+		)
+		expect(result).toBe('HOLD (policy hash mismatch)')
+		expect(graphRequests).toHaveLength(0)
+	})
+
+	/**
+	 * Every way the index can fail to answer, and the same outcome each time: the owner's own
+	 * floor, the move the workflow would have made before the subgraph was in the loop, and a
+	 * verdict that says which of the two buffers it used.
+	 */
+	test.each([
+		['it cannot be reached', { graphThrows: true }, 'the subgraph could not be reached'],
+		['it answers a bad status', { graphStatus: 502 }, 'the subgraph answered HTTP 502'],
+		[
+			'it answers 200 with errors, the way GraphQL refuses a query',
+			{ graphBody: '{"errors":[{"message":"indexers not available"}]}' },
+			'the subgraph answered indexers not available',
+		],
+		[
+			'it answers something that is not JSON',
+			{ graphBody: '<html>504 Gateway Time-out</html>' },
+			'the subgraph answered something that is not JSON',
+		],
+	])('falls back to the policy floor when %s, and says so', async (_, faults, reason) => {
+		const { result, writes } = await run(allIdle, indexed, faults)
+		expect(result).toBe(
+			`SUPPLY 800000000 to ${aave} [buffer 100000000: policy floor only, ${reason}] tx 0x${'ab'.repeat(32)}`,
+		)
+		// The fallback is a decision, not a hold: the run still moves capital.
+		expect(writes).toHaveLength(1)
+	})
+
+	/**
+	 * An empty answer and an absent one produce the same buffer and are reported differently on
+	 * purpose. One is a fact about the maker — no live mandate in this asset — and the other is a
+	 * fact about the index.
+	 */
+	test('an empty index is a fact about the maker, not a failure', async () => {
+		const { result } = await run(allIdle, indexed, { graphBody: balances() })
+		expect(result).toContain(
+			'[buffer 100000000: policy floor 100000000, 0 live Aqua balances could demand 0]',
+		)
+	})
+
+	/**
+	 * An indexer behind the chain under-reports, so the buffer comes out too small and more
+	 * capital is supplied than ideal. That degrades into the path the swap takes today —
+	 * `HelicoMandateSwap._cover` unwinds inside the swap — rather than into a wrong move, which is
+	 * why lag is survivable and why the floor may only ever be raised.
+	 */
+	test('an indexer that lags under-reports, which is the safe direction', async () => {
+		const behind = await run(allIdle, indexed, { graphBody: balances(usdc(250)) })
+		const current = await run(allIdle, indexed, { graphBody: balances(usdc(250), usdc(150)) })
+		// The lagging run supplies 150 more than it should, which is 150 the next swap has to
+		// unwind from Aave inside itself. Slower and refusable, but the existing path.
+		expect(behind.result).toStartWith('SUPPLY 750000000')
+		expect(current.result).toStartWith('SUPPLY 600000000')
+	})
+
+	/** A full page may be a prefix, and a sum over a prefix is a floor rather than the total. */
+	test('a full page says so rather than passing a prefix off as the whole', async () => {
+		const page = balances(...Array.from({ length: 1000 }, () => 1_000_000n))
+		const { result } = await run(allIdle, indexed, { graphBody: page })
+		expect(result).toContain('could demand 1000000000; a full page, so there may be more')
+	})
+
+	/**
+	 * `rehearse-idle.sh` lifts the signed statement out of this line with a greedy match to the
+	 * last `}`, so anything printed after the JSON would be swallowed into what it parses. The
+	 * note goes in front, and this is the script's own regex run against the real output.
+	 */
+	test('the note never lands where the rehearsal reads the signed statement', async () => {
+		const { result } = await run(
+			{ ...allIdle, nonce: 7n },
+			{ ...indexed, delivery: 'signature', chainId: 42_161 },
+			{ secrets: { ...secrets, AGENT_KEY: agentKey }, graphBody: balances(usdc(400)) },
+		)
+		expect(result).toContain('[buffer 400000000')
+		const lifted = result.match(/\{"params.*\}/)?.[0] as string
+		expect(JSON.parse(lifted).params.amount).toBe('600000000')
 	})
 })
 

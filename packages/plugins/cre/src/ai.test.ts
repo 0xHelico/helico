@@ -184,6 +184,51 @@ describe('describeForOwner', () => {
 	})
 
 	/**
+	 * The floor handed to the model is the **effective** one, so where it came from is a fact the
+	 * model needs: a buffer the maker's Aqua mandates raised would otherwise read as a number the
+	 * owner typed, and the sentence about their policy would be false.
+	 */
+	test('says which of the two floors the buffer is, and what the mandates could demand', () => {
+		const raised = { ...policy, minIdleAmount: 400_000_000n }
+		const prompt = describeForOwner(
+			asset,
+			raised,
+			state,
+			split,
+			{ act: true, params: { pool: AAVE, amount: 600_000_000n, supply: true } },
+			{ policy, demand: { known: true, amount: 400_000_000n, balances: 2, complete: true } },
+		)
+		expect(prompt).toContain('never less than 400000000 left liquid')
+		expect(prompt).toContain(
+			'The liquid floor of 400000000 is the larger of two numbers: the 100000000 the owner set, and the 400000000 that 2 live Aqua mandate balances could still ask this account to pay out of its wallet.',
+		)
+	})
+
+	/** A missing answer is a fact too, and the one worth having if a later swap cannot be covered. */
+	test('says when the index did not answer, rather than passing the policy floor off as sized', () => {
+		const prompt = describeForOwner(
+			asset,
+			policy,
+			state,
+			split,
+			{ act: false, reason: 'inside the deadband' },
+			{ policy, demand: { known: false, reason: 'answered HTTP 502' } },
+		)
+		expect(prompt).toContain(
+			'The Aqua index did not answer this run — the subgraph answered HTTP 502 — so the liquid floor is the 100000000 the owner set and no mandate raised it.',
+		)
+	})
+
+	/** With no subgraph consulted there is nothing to say about one, and nothing is said. */
+	test('says nothing about the index when none was consulted', () => {
+		const prompt = describeForOwner(asset, policy, state, split, {
+			act: false,
+			reason: 'inside the deadband',
+		})
+		expect(prompt).not.toContain('Aqua')
+	})
+
+	/**
 	 * Every market the decision could have chosen, not only the one it did. A hold that comes
 	 * down to a rate gap is not explicable without both rates in front of the model.
 	 */

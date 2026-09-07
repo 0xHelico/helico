@@ -18,6 +18,7 @@ import { type IdlePolicy, POLICY_SECRET_IDS, policyFromSecrets, policyHash } fro
 import { encodeIdleMove } from './relay'
 import { type Authorisation, encodeAuthorisation, type IdleMoveDomain, signIdleMove } from './sign'
 import { sizeIdleMove } from './sizing'
+import { bufferNote, readMandateDemand, withMandateBuffer } from './subgraph'
 import { eligibleVenues } from './venues'
 
 export * from './abi'
@@ -29,6 +30,7 @@ export * from './policy'
 export * from './relay'
 export * from './sign'
 export * from './sizing'
+export * from './subgraph'
 export * from './venues'
 
 // Lowercased so a checksummed value in config compares equal to keccak output, to what an
@@ -128,6 +130,21 @@ export const configShape = {
 	aiFallbackModel: z.string().default('ag/gemini-3-flash'),
 	aiMaxTokens: z.number().int().positive().default(1200),
 	aiTimeoutSeconds: z.number().int().positive().max(60).default(30),
+
+	// ─── The index the chain cannot replace ──────────────────────
+	// Aqua's `_balances` is private and four levels deep and none of its four events indexes a
+	// parameter, so "what could this maker's mandates still spend?" has no on-chain answer. The
+	// buffer that has to cover exactly that is sized from the subgraph, and only ever raised by
+	// it — see `subgraph.ts`.
+	//
+	// Leave `subgraphUrl` empty to turn it off; the buffer is then the owner's `minIdleAmount`
+	// alone, which is what every run did before this existed.
+	subgraphUrl: z
+		.string()
+		.regex(/^https?:\/\/\S+$/)
+		.or(z.literal(''))
+		.default(''),
+	subgraphTimeoutSeconds: z.number().int().positive().max(60).default(20),
 }
 
 export const configSchema = z
@@ -265,9 +282,22 @@ export const onCronTrigger = async (runtime: TeeRuntime<Config>): Promise<string
 		{ withNonce: signs, nonceFunction: config.nonceFunction },
 	)
 
+	// 3b. Ask The Graph what this account's live Aqua mandates could still spend of the asset, and
+	//     raise the liquid buffer to it. The account is the maker in Aqua's ledger, a swap against
+	//     one of its mandates is served out of the wallet first, and that question has no
+	//     on-chain answer — so the index is the only place the number exists. An index that is
+	//     down, empty or behind never turns the decision into a wrong one: it can only fail to
+	//     raise a floor, and the run falls back to the owner's own `minIdleAmount`. See
+	//     `subgraph.ts` for what each of those does to the next swap.
+	const demand = readMandateDemand(runtime, config, config.account, config.asset)
+	// Never hashed: `hash` above commits to the secrets the owner published, and this is not
+	// those secrets.
+	const effective = withMandateBuffer(policy, demand)
+	const buffer = config.subgraphUrl ? ` [${bufferNote(policy, demand)}]` : ''
+
 	// 4. Decide which market the capital should sit in, and how much of the difference is worth
 	//    moving. One move leaves per run, because the account's nonce is strictly sequential.
-	const outcome = decide(config, policy, state, now)
+	const outcome = decide(config, effective, state, now)
 
 	// 4b. Ask the model to say why, in the owner's words. Never load-bearing: a missing or
 	//     rejected answer changes nothing about what happens next. It is handed every market the
@@ -281,16 +311,20 @@ export const onCronTrigger = async (runtime: TeeRuntime<Config>): Promise<string
 				secrets,
 				describeForOwner(
 					config.asset,
-					policy,
+					effective,
 					{ idle: state.idle, venues: usable },
-					targetSplit(policy, { idle: state.idle, venues: usable }),
+					targetSplit(effective, { idle: state.idle, venues: usable }),
 					outcome,
+					// The model is handed the buffer it is explaining *and* where that buffer came
+					// from. Without it, a floor raised by a mandate reads as the owner's own number
+					// and the sentence about the policy is wrong.
+					config.subgraphUrl ? { policy, demand } : undefined,
 				),
 			)
 		: undefined
 	const because = reason ? ` — ${reason}` : ''
 
-	if (!outcome.act) return `HOLD (${outcome.reason})${because}`
+	if (!outcome.act) return `HOLD (${outcome.reason})${buffer}${because}`
 	// The market is named in the line, not only in the report: with several to choose between,
 	// "SUPPLY 800000000" no longer says what happened.
 	const move = outcome.params.supply
@@ -320,10 +354,13 @@ export const onCronTrigger = async (runtime: TeeRuntime<Config>): Promise<string
 				hashingAlgo: 'keccak256',
 			})
 			.result()
-		return `${move} ${authorisationJson(auth, signature, signer)}${because}`
+		// The buffer note goes before the statement, never after: `rehearse-idle.sh` reads the
+		// JSON out of this line with a greedy match to the last `}`, and prose behind it would be
+		// swallowed into what it tries to parse.
+		return `${move}${buffer} ${authorisationJson(auth, signature, signer)}${because}`
 	}
 	const txHash = deliver(runtime.usingTheDons(), config, encodeReport(true, hash, outcome.params))
-	return `${move} tx ${txHash}${because}`
+	return `${move}${buffer} tx ${txHash}${because}`
 }
 
 /**

@@ -44,7 +44,10 @@ MISSING=$(comm -23 \
 FORK_URL=${ARBITRUM_RPC_URL:-https://arb1.arbitrum.io/rpc}
 
 say() { printf '\n\033[1m== %s\033[0m\n' "$1"; }
-cleanup() { [ -n "${ANVIL_PID:-}" ] && kill "$ANVIL_PID" 2>/dev/null || true; }
+cleanup() {
+	[ -n "${ANVIL_PID:-}" ] && kill "$ANVIL_PID" 2>/dev/null || true
+	type restore_config >/dev/null 2>&1 && restore_config
+}
 trap cleanup EXIT
 
 say "1/7  fork Arbitrum One on $PORT"
@@ -79,6 +82,10 @@ echo "working  $(cast call "$AUSDC" 'balanceOf(address)(uint256)' "$ACCOUNT" --r
 echo "agent    $(cast call "$ACCOUNT" 'agent()(address)' --rpc-url "$RPC")"
 
 say "5/7  point the workflow at what we just built"
+# Copied rather than left to `git checkout` afterwards. That command reverts the whole file, so
+# it would silently undo any unrelated edit in it -- which is a trap, not a cleanup.
+cp workflow/config.staging.json /tmp/helico-staging-backup.$$
+restore_config() { cp /tmp/helico-staging-backup.$$ workflow/config.staging.json 2>/dev/null || true; }
 # `aiUrl` is dropped: the rehearsal must not depend on a model endpoint being reachable, and the
 # model explains the verdict rather than deciding it.
 #
@@ -120,6 +127,7 @@ echo "idle     $(cast call "$USDC" 'balanceOf(address)(uint256)' "$ACCOUNT" --rp
 echo "agent's own USDC $(cast call "$USDC" 'balanceOf(address)(uint256)' "$AGENT" --rpc-url "$RPC" | awk '{print $1}')"
 [ "$AFTER" != "$BEFORE" ] || { echo; echo "Nothing moved, whatever the transaction says."; exit 1; }
 
+restore_config
 echo
-echo "workflow/config.staging.json was rewritten with the account this run deployed."
-echo "git checkout apps/cre/workflow/config.staging.json to restore it."
+echo "workflow/config.staging.json was rewritten for this run and has been restored from a copy."
+echo "Not with git checkout, which would also revert anything else you had changed in it."

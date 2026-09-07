@@ -1,4 +1,5 @@
 import { bytesToBase64, cre, ok, type TeeRuntime, text } from '@chainlink/cre-sdk'
+import type { MandateDemand } from './subgraph'
 
 /**
  * The enclave explaining its own verdict, in words the account's owner can read.
@@ -199,6 +200,11 @@ export function explain(
  * Amounts are printed in the asset's own units, undecorated. Dividing by the decimals here would
  * mean the enclave reading them from somewhere, and a prose helper is the wrong place for a
  * number that would then differ from the one in the report.
+ *
+ * `policy` is the **effective** policy, whose `minIdleAmount` may have been raised by the maker's
+ * Aqua mandates. Where that number came from is therefore a fact the model needs: without
+ * `mandate`, a floor the subgraph raised reads as one the owner typed, and the sentence about the
+ * owner's policy would be false. Omit `mandate` only when no subgraph was consulted at all.
  */
 export function describeForOwner(
 	asset: string,
@@ -217,6 +223,7 @@ export function describeForOwner(
 	outcome:
 		| { act: false; reason: string }
 		| { act: true; params: { pool: string; amount: bigint; supply: boolean } },
+	mandate?: { policy: { minIdleAmount: bigint }; demand: MandateDemand },
 ): string {
 	const supplied = state.venues.reduce((sum, venue) => sum + venue.supplied, 0n)
 	const facts = [
@@ -230,6 +237,14 @@ export function describeForOwner(
 		`That puts the target at ${split.wantWorking} working and ${split.wantIdle} idle, and makes the smallest move worth making ${split.deadband}.`,
 		`Moving capital from one market to another takes two runs and pays gas twice, so it has to clear twice that.`,
 	]
+	if (mandate) {
+		const { demand } = mandate
+		facts.push(
+			demand.known
+				? `The liquid floor of ${policy.minIdleAmount} is the larger of two numbers: the ${mandate.policy.minIdleAmount} the owner set, and the ${demand.amount} that ${demand.balances} live Aqua mandate balance${demand.balances === 1 ? '' : 's'} could still ask this account to pay out of its wallet.`
+				: `The Aqua index did not answer this run — the subgraph ${demand.reason} — so the liquid floor is the ${policy.minIdleAmount} the owner set and no mandate raised it.`,
+		)
+	}
 	facts.push(
 		outcome.act
 			? `Decision: ${outcome.params.supply ? `supply ${outcome.params.amount} to` : `withdraw ${outcome.params.amount} from`} ${outcome.params.pool}. Explain to the owner why this happens now.`
