@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.28;
+pragma solidity 0.8.30;
 
 /// @notice The slice of Uniswap v4's `StateView` lens the vault needs.
 /// @dev v4 keeps pool state in transient-packed storage on the singleton PoolManager, so the
