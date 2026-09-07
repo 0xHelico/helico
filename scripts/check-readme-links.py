@@ -38,12 +38,18 @@ def main() -> int:
     problems = 0
 
     # A pin older than HEAD is normal and not worth reporting: a docs commit does not move the
-    # code the links point at. What matters is whether any *referenced file* has changed since
-    # the pin, because then the pinned lines and the working tree have diverged.
-    referenced = sorted({rel for _, rel, _, _ in links})
-    for sha in {sha for sha, _, _, _ in links}:
+    # code the links point at. What matters is whether a file has changed since the pin its own
+    # links use, because then those pinned lines and the working tree have diverged.
+    #
+    # Compared per pin, against only the files *that pin's own links* name. Comparing every pin
+    # against every referenced file made re-pinning one file report every other pin as stale,
+    # which is a check that cries wolf — and a check nobody believes is worse than none.
+    by_sha: dict[str, set[str]] = {}
+    for sha, rel, _, _ in links:
+        by_sha.setdefault(sha, set()).add(rel)
+    for sha, referenced in sorted(by_sha.items()):
         moved = subprocess.run(
-            ["git", "diff", "--name-only", sha, "HEAD", "--", *referenced],
+            ["git", "diff", "--name-only", sha, "HEAD", "--", *sorted(referenced)],
             cwd=ROOT,
             capture_output=True,
             text=True,
