@@ -7,11 +7,17 @@ Working guide for Claude Code in this repository.
 An **ETHOnline 2026** hackathon submission. Monorepo: `contracts/` for Solidity, `apps/` for
 runnable services (`apps/cre/`, `apps/be/`), `packages/plugins/` for partner integrations.
 
-**Every partner integration goes in `packages/plugins/<name>` as `@helico/plugin-<name>`** —
-apps consume them, apps never talk to a protocol directly. This is not only tidiness: the
-Uniswap bounty rewards tooling built for the broader ecosystem, and both partner prizes
-require a README pointing at the exact lines proving the integration, which stays far easier
-when each partner owns one package.
+**Every partner integration that is off-chain code goes in `packages/plugins/<name>` as
+`@helico/plugin-<name>`** — apps consume them, apps never talk to a protocol directly. This is
+not only tidiness: the Uniswap bounty rewards tooling built for the broader ecosystem, and the
+partner prizes require a README pointing at the exact lines proving the integration, which
+stays far easier when each partner owns one package.
+
+**On-chain integrations are the exception, and live in `contracts/`.** `HelicoMandateSwap` is
+an 1inch Aqua app, so it is a Solidity contract that inherits `AquaApp` — there is no package
+to put it in, and wrapping it in one would add a layer that proves nothing. The rule is about
+where protocol knowledge lives, not about the directory: `contracts/` owns what is deployed,
+`packages/plugins/` owns what talks to what is deployed.
 
 The rules below come from ETHGlobal's official workshops and the event prize page, not
 from guesswork. The research notes behind them are kept outside this repository.
@@ -143,6 +149,18 @@ costs one slot, not several.
 **Chainlink:**
 - [ ] The workflow registers and uses **`handlerInTee`** (TypeScript) or **`cre.HandlerInTee`**
 - [ ] The Confidential Workflow performs a **meaningful part** of the application, not a token gesture
+
+**1inch:**
+- [ ] The Aqua app is custom, not a fork of `XYCSwap` — ours replaces the strategy struct with a
+      mandate and adds four refusals the example has none of
+- [ ] README points at the contract and what it enforces
+
+> ⚠️ **The scope of the Aqua track is not settled.** The prize text reads *"Create a custom Aqua
+> app that implements a sophisticated DeFi position"* (read off the prize page directly, not
+> from a search summary). Whether an app whose novelty is **policy** rather than **price
+> discovery** satisfies "a sophisticated DeFi position" is a question that has been drafted for
+> `#partner-1inch` and **not yet answered**. Do not write a checklist line here claiming it
+> qualifies until there is an answer to point at.
 
 ### Finalist track (optional)
 
