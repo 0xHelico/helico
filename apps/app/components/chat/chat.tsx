@@ -13,20 +13,19 @@ import {
   PromptInputTools,
 } from "@/components/ai-elements/prompt-input";
 import { Greeting } from "@/components/chat/greeting";
-import { SparklesIcon } from "@/components/chat/icons";
+import { ModelPicker } from "@/components/chat/model-picker";
 import { PageHeader } from "@/components/chat/page-header";
 import { HISTORY_KEY } from "@/components/chat/sidebar-history";
 import { SuggestedActions } from "@/components/chat/suggested-actions";
 import { ThinkingMessage } from "@/components/chat/thinking-message";
 import { Turn } from "@/components/chat/turn";
 import { SwapCard } from "@/components/swap-card";
-import { Button } from "@/components/ui/button";
 import { useHelicoSession } from "@/hooks/use-helico-session";
 import { api, type SwapConfig } from "@/lib/api";
 import type { Intent } from "@/lib/intent";
 import { cn } from "@/lib/utils";
 
-type Turn = {
+type ChatTurn = {
   id: string;
   from: "user" | "assistant";
   text: string;
@@ -40,7 +39,7 @@ export function Chat({ conversationId }: { conversationId?: string }) {
   const router = useRouter();
   const { mutate } = useSWRConfig();
   const session = useHelicoSession();
-  const [turns, setTurns] = useState<Turn[]>([]);
+  const [turns, setTurns] = useState<ChatTurn[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   // Which model answers, read from the backend rather than from this app's own environment —
@@ -230,42 +229,7 @@ export function Chat({ conversationId }: { conversationId?: string }) {
             />
             <PromptInputFooter className="px-3 pb-3">
               <PromptInputTools>
-                {/* The template's model chip, with its own classes. It is not a selector here:
-                    there is one model, and the backend names it. */}
-                {swap ? (
-                  <Button
-                    className={cn(
-                      "h-7 max-w-[200px] cursor-default justify-between gap-1.5 rounded-lg px-2 text-[12px] transition-colors",
-                      swap.available
-                        ? "text-muted-foreground hover:text-foreground"
-                        : "text-destructive",
-                    )}
-                    data-testid="model-name"
-                    title={
-                      swap.available
-                        ? "The model apps/be asks"
-                        : "No model is configured, so a sentence cannot be read yet"
-                    }
-                    type="button"
-                    variant="ghost"
-                  >
-                    <SparklesIcon size={13} />
-                    <span className="truncate">
-                      {swap.available ? swap.model : "no model configured"}
-                    </span>
-                  </Button>
-                ) : null}
-                <span className="flex h-7 items-center gap-1.5 px-1 text-[12px] text-muted-foreground">
-                  <span
-                    className={cn(
-                      "size-1.5 rounded-full",
-                      session.isConnected
-                        ? "bg-emerald-500"
-                        : "bg-muted-foreground/40",
-                    )}
-                  />
-                  Arbitrum One
-                </span>
+                <ModelPicker config={swap} />
               </PromptInputTools>
               <PromptInputSubmit
                 className={cn(

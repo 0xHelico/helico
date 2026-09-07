@@ -182,10 +182,11 @@ export function AppSidebar() {
                   size="sm"
                   variant="outline"
                 >
-                  {session.signing
-                    ? "Check your wallet…"
-                    : "Sign in to save chats"}
+                  {session.signing ? "Check your wallet…" : "Verify wallet"}
                 </Button>
+                <p className="mt-2 text-[11px] text-sidebar-foreground/50 leading-relaxed">
+                  One signature, no gas. It keeps conversations to this wallet.
+                </p>
                 {session.error ? (
                   <p className="mt-2 text-destructive text-xs">
                     {session.error}
