@@ -2,11 +2,11 @@
   "name": "@helico/subgraph",
   "private": true,
   "version": "0.1.0",
-  "description": "Aqua on Arbitrum One, indexed",
+  "description": "Aqua on Arbitrum One, indexed for Helico",
   "scripts": {
     "codegen": "graph codegen",
     "build": "graph build",
-    "deploy": "graph deploy helico-aqua-arbitrum-one",
+    "deploy": "graph deploy helico-arbitrum-one",
     "test": "graph test"
   },
   "dependencies": {

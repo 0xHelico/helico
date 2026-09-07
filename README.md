@@ -133,7 +133,11 @@ an agent deciding what it is permitted to do for a wallet that just connected, t
 performance problem — it is the problem. An indexer is the only answer, which is what makes this
 load-bearing rather than decorative.
 
-Planned: a subgraph over Aqua on Arbitrum One filtered to our app, consumed by the enclave as a
+The subgraph is published as **Helico Arbitrum One** — our name, but it indexes **1inch Aqua**
+rather than any contract of ours, because that is where every relevant event is emitted.
+`subgraph/README.md` opens by saying so, since the two are easy to confuse.
+
+Planned: consumption by the enclave as a
 second private input alongside the mandate thresholds, and the Subgraph MCP server so the agent
 discovers the schema rather than having it hard-coded.
 
