@@ -10,7 +10,7 @@ import {
 import { addresses, poolId } from "@helico/plugin-uniswap";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { erc721Abi, zeroAddress } from "viem";
 import {
   useAccount,
@@ -21,7 +21,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MANDATE_DEFAULTS, vaultAbi, vaultAddress } from "@/lib/vault";
+import { VaultSetup } from "@/components/vault-setup";
+import { configuredVault, MANDATE_DEFAULTS, vaultAbi } from "@/lib/vault";
 
 const CHAIN_ID = 42161;
 const DAY = 24 * 60 * 60;
@@ -34,16 +35,15 @@ const snap = (ticks: number, spacing: number) =>
 
 export function MandatePanel() {
   const { address, isConnected, chainId } = useAccount();
+  // Bumped when an address is saved, so the panel re-reads it without a reload.
+  const [nonce, setNonce] = useState(0);
   const publicClient = usePublicClient({ chainId: CHAIN_ID });
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-read whenever an address is saved
+  const vaultAddress = useMemo(() => configuredVault(), [nonce]);
+
   if (!vaultAddress) {
-    return (
-      <Note>
-        Helico's vault is not deployed to Arbitrum One yet, so there is nothing
-        to commit rules to. When it is, this is where you set them and where you
-        take them back.
-      </Note>
-    );
+    return <VaultSetup current={null} onSaved={() => setNonce((n) => n + 1)} />;
   }
   if (!(isConnected && address)) {
     return <Note>Connect a wallet to see the rules on your position.</Note>;
@@ -55,11 +55,17 @@ export function MandatePanel() {
     return <Note>No connection to Arbitrum One.</Note>;
   }
 
-  return <Connected address={address} />;
+  return <Connected address={address} vaultAddress={vaultAddress} />;
 }
 
-function Connected({ address }: { address: `0x${string}` }) {
-  const vault = vaultAddress as `0x${string}`;
+function Connected({
+  address,
+  vaultAddress,
+}: {
+  address: `0x${string}`;
+  vaultAddress: `0x${string}`;
+}) {
+  const vault = vaultAddress;
   const contract = {
     address: vault,
     abi: vaultAbi,
@@ -88,20 +94,29 @@ function Connected({ address }: { address: `0x${string}` }) {
         mandate={fromContractMandate(raw.result)}
         onDone={() => state.refetch()}
         tokenId={(tokenId?.result as bigint) ?? 0n}
+        vaultAddress={vaultAddress}
       />
     );
   }
-  return <Compose address={address} onDone={() => state.refetch()} />;
+  return (
+    <Compose
+      address={address}
+      onDone={() => state.refetch()}
+      vaultAddress={vaultAddress}
+    />
+  );
 }
 
 function Active({
   mandate,
   tokenId,
   onDone,
+  vaultAddress,
 }: {
   mandate: Mandate;
   tokenId: bigint;
   onDone: () => void;
+  vaultAddress: `0x${string}`;
 }) {
   const { writeContractAsync } = useWriteContract();
   const publicClient = usePublicClient({ chainId: CHAIN_ID });
@@ -109,7 +124,7 @@ function Active({
   const revoke = useMutation({
     mutationFn: async () => {
       const hash = await writeContractAsync({
-        address: vaultAddress as `0x${string}`,
+        address: vaultAddress,
         abi: vaultAbi,
         functionName: "revoke",
       });
@@ -170,9 +185,11 @@ function Active({
 function Compose({
   address,
   onDone,
+  vaultAddress,
 }: {
   address: `0x${string}`;
   onDone: () => void;
+  vaultAddress: `0x${string}`;
 }) {
   const publicClient = usePublicClient({ chainId: CHAIN_ID });
   const { writeContractAsync } = useWriteContract();
@@ -258,7 +275,7 @@ function Compose({
     ? mandateRefusedBecause(mandate, { tickSpacing: spacing })
     : undefined;
   const needsApproval = p
-    ? p.approved.toLowerCase() !== (vaultAddress as string).toLowerCase()
+    ? p.approved.toLowerCase() !== vaultAddress.toLowerCase()
     : false;
 
   const commit = useMutation({
@@ -271,12 +288,12 @@ function Compose({
           address: p.positionManager,
           abi: erc721Abi,
           functionName: "approve",
-          args: [vaultAddress as `0x${string}`, tokenId],
+          args: [vaultAddress, tokenId],
         });
         await publicClient.waitForTransactionReceipt({ hash });
       }
       const hash = await writeContractAsync({
-        address: vaultAddress as `0x${string}`,
+        address: vaultAddress,
         abi: vaultAbi,
         functionName: "setMandate",
         args: [tokenId, toContractMandate(mandate)],
