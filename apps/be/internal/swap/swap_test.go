@@ -250,3 +250,84 @@ func TestInterpretBoundsTheMessage(t *testing.T) {
 		t.Fatal("want an error for a long message")
 	}
 }
+
+// The conversation reaches three things now, and which one it reached is decided here rather
+// than in the browser. These are the answers the app switches its screen on.
+func TestInterpretReachesTheActionsTheAppAlreadyDoes(t *testing.T) {
+	cases := []struct {
+		name       string
+		content    string
+		wantAction string
+		wantIntent bool
+	}{
+		{
+			name:       "revoking the mandate needs no parameters and gets no intent",
+			content:    `{"action":"revoke","chain":"","tokenIn":"","tokenOut":"","amount":"","question":""}`,
+			wantAction: ActionRevoke,
+		},
+		{
+			name:       "asking about the position is the same shape",
+			content:    `{"action":"status","chain":"","tokenIn":"","tokenOut":"","amount":"","question":""}`,
+			wantAction: ActionStatus,
+		},
+		{
+			name:       "a swap still goes through the registry and comes back with one",
+			content:    `{"action":"swap","chain":"arbitrum","tokenIn":"ETH","tokenOut":"USDC","amount":"0.5","question":""}`,
+			wantAction: ActionSwap,
+			wantIntent: true,
+		},
+		{
+			// Anything the model does not label is a swap, which keeps every earlier reply valid
+			// and keeps the common case the default.
+			name:       "no action at all is read as a swap",
+			content:    `{"chain":"arbitrum","tokenIn":"ETH","tokenOut":"USDC","amount":"1","question":""}`,
+			wantAction: ActionSwap,
+			wantIntent: true,
+		},
+		{
+			// A model that invents an action must not reach a screen. Falling through to the swap
+			// path means it is checked by build and refused there, rather than switched on.
+			name:       "an invented action does not reach a screen of its own",
+			content:    `{"action":"drain","chain":"arbitrum","tokenIn":"","tokenOut":"","amount":"","question":""}`,
+			wantAction: ActionSwap,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, err := New(fakeModel(t, 200, c.content)).Interpret(context.Background(), "do the thing")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Action != c.wantAction {
+				t.Fatalf("action = %q, want %q", got.Action, c.wantAction)
+			}
+			if (got.Intent != nil) != c.wantIntent {
+				t.Fatalf("intent present = %v, want %v", got.Intent != nil, c.wantIntent)
+			}
+			if strings.TrimSpace(got.Reply) == "" {
+				t.Fatal("every answer needs a sentence a person can read")
+			}
+		})
+	}
+}
+
+// The two parameterless actions must not be able to carry a token or an amount out of the model.
+// Nothing downstream reads them for these actions today, and this is what keeps that true.
+func TestAParameterlessActionCarriesNoIntent(t *testing.T) {
+	for _, action := range []string{ActionRevoke, ActionStatus} {
+		t.Run(action, func(t *testing.T) {
+			content := `{"action":"` + action + `","chain":"arbitrum","tokenIn":"ETH","tokenOut":"USDC","amount":"999999","question":""}`
+			got, err := New(fakeModel(t, 200, content)).Interpret(context.Background(), "stop it")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Intent != nil {
+				t.Fatalf("%s came back carrying an intent for %s %s", action, got.Intent.AmountIn, got.Intent.TokenIn.Symbol)
+			}
+			if len(got.Needs) != 0 {
+				t.Fatalf("%s asked for %v, and needs nothing", action, got.Needs)
+			}
+		})
+	}
+}

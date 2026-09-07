@@ -30,8 +30,18 @@ var (
 	errComma       = errors.New("write the amount with a dot, not a comma: 0.5, not 0,5")
 )
 
-// draft is what the model is asked for: symbols and an amount, nothing else.
+// Actions the conversation can reach. Each one is something the app already does on chain
+// through its own screens, which is the bar for appearing here: a name the model can say and
+// nothing behind it would be a claim rather than a feature.
+const (
+	ActionSwap   = "swap"
+	ActionStatus = "status"
+	ActionRevoke = "revoke"
+)
+
+// draft is what the model is asked for: an action, and for a swap the symbols and an amount.
 type draft struct {
+	Action   string `json:"action"`
 	Chain    string `json:"chain"`
 	TokenIn  string `json:"tokenIn"`
 	TokenOut string `json:"tokenOut"`

@@ -233,3 +233,47 @@ func TestSwapConfigReportsTheModelAndWhetherItCanAnswer(t *testing.T) {
 		t.Fatalf("unconfigured: available=%v model=%q", available, model)
 	}
 }
+
+// The browser picks which card to render from `action`, so the wire shape is a contract and not
+// an implementation detail. This is the test that fails if the field is ever dropped, renamed, or
+// left empty — none of which the swap tests above would notice.
+func TestSwapIntentNamesTheActionOnTheWire(t *testing.T) {
+	cases := []struct {
+		name       string
+		content    string
+		wantAction string
+		wantIntent bool
+	}{
+		{"a swap", `{"action":"swap","chain":"arbitrum","tokenIn":"ETH","tokenOut":"USDC","amount":"1"}`, "swap", true},
+		{"revoking the mandate", `{"action":"revoke"}`, "revoke", false},
+		{"asking about the position", `{"action":"status"}`, "status", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			srv := swapServer(t, "k", c.content, 10)
+			res, body := do(t, http.MethodPost, srv.URL+"/api/swap/intent", map[string]string{"message": "do it"}, nil)
+			if res.StatusCode != http.StatusOK {
+				t.Fatalf("status = %d: %s", res.StatusCode, body)
+			}
+			var got struct {
+				Reply  string `json:"reply"`
+				Action string `json:"action"`
+				Intent *struct {
+					ChainID int64 `json:"chainId"`
+				} `json:"intent"`
+			}
+			if err := json.Unmarshal(body, &got); err != nil {
+				t.Fatal(err)
+			}
+			if got.Action != c.wantAction {
+				t.Fatalf("action = %q, want %q", got.Action, c.wantAction)
+			}
+			if (got.Intent != nil) != c.wantIntent {
+				t.Fatalf("intent present = %v, want %v: %s", got.Intent != nil, c.wantIntent, body)
+			}
+			if strings.TrimSpace(got.Reply) == "" {
+				t.Fatal("every answer needs a sentence a person can read")
+			}
+		})
+	}
+}

@@ -19,17 +19,19 @@ import { HISTORY_KEY } from "@/components/chat/sidebar-history";
 import { SuggestedActions } from "@/components/chat/suggested-actions";
 import { ThinkingMessage } from "@/components/chat/thinking-message";
 import { Turn } from "@/components/chat/turn";
+import { MandateCard } from "@/components/mandate-card";
 import { SwapCard } from "@/components/swap-card";
 import { useHelicoSession } from "@/hooks/use-helico-session";
 import { api, type SwapConfig } from "@/lib/api";
-import type { Intent } from "@/lib/intent";
+import { isIntent, isTurnAction, type TurnResult } from "@/lib/intent";
 import { cn } from "@/lib/utils";
 
 type ChatTurn = {
   id: string;
   from: "user" | "assistant";
   text: string;
-  intent?: Intent | null;
+  /** What the turn produced: a swap to sign, or an action the app already does. */
+  intent?: TurnResult | null;
 };
 
 let localId = 0;
@@ -88,7 +90,7 @@ export function Chat({ conversationId }: { conversationId?: string }) {
             id: m.id,
             from: m.role,
             text: m.body,
-            intent: (m.intent as Intent | undefined) ?? null,
+            intent: (m.intent as TurnResult | undefined) ?? null,
           })),
         );
       })
@@ -150,16 +152,23 @@ export function Chat({ conversationId }: { conversationId?: string }) {
         });
         const body = await res.json();
         const reply = body.reply ?? body.error ?? "Something went wrong.";
+        // A swap stores its intent, as it always has. An action stores its name, in the same
+        // field, so a reloaded conversation shows the same card instead of a bare sentence.
+        const result: TurnResult | null =
+          body.intent ??
+          (body.action === "status" || body.action === "revoke"
+            ? { action: body.action }
+            : null);
         setTurns((t) => [
           ...t,
           {
             id: nextLocalId(),
             from: "assistant",
             text: reply,
-            intent: body.intent ?? null,
+            intent: result,
           },
         ]);
-        await remember("assistant", reply, body.intent ?? undefined);
+        await remember("assistant", reply, result ?? undefined);
         await mutate(HISTORY_KEY);
       } catch {
         setTurns((t) => [
@@ -206,7 +215,11 @@ export function Chat({ conversationId }: { conversationId?: string }) {
                   <p className="whitespace-pre-wrap text-[13px] leading-[1.65]">
                     {turn.text}
                   </p>
-                  {turn.intent ? <SwapCard intent={turn.intent} /> : null}
+                  {isIntent(turn.intent) ? (
+                    <SwapCard intent={turn.intent} />
+                  ) : isTurnAction(turn.intent) ? (
+                    <MandateCard action={turn.intent.action} />
+                  ) : null}
                 </Turn>
               ))}
               {busy ? <ThinkingMessage /> : null}

@@ -4,6 +4,6 @@ export const isProductionEnvironment = process.env.NODE_ENV === "production";
 export const suggestions = [
   "Swap half an ETH into USDC",
   "Move 100 USDC into ETH",
-  "I want to swap 2 ARB into USDC",
-  "What can I swap here?",
+  "What is my position doing?",
+  "Revoke my mandate",
 ];
