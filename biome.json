@@ -14,7 +14,8 @@
 			"!apps/landing/public",
 			"!contracts/lib",
 			"!contracts/out",
-			"!contracts/cache"
+			"!contracts/cache",
+			"!apps/app"
 		]
 	},
 	"formatter": {

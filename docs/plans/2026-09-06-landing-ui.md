@@ -445,6 +445,37 @@ permalinks stay on GitHub, because that is where those things live.
 - "Can the landing redirect to https://docs.helico.site/ instead? Linking to a GitHub README
   feels odd, unless the context really is GitHub." and "In the nav as well as in the content."
 
+## Revision — Google Analytics, loaded after the page rather than during it
+
+Property `G-4G8KMPJLCF`, on every page including the blog. Two things about how, both measured:
+
+**It loads after `load`, not in the head.** The usual snippet puts an `async` script in the head,
+and even async it competes for bandwidth on a slow connection. Measured on the same build:
+
+| | Performance | First paint | Largest paint |
+|---|---|---|---|
+| Tag in the head, async | 74 | 2.9s | 5.0s |
+| Tag injected after load | **98** | **1.8s** | **2.1s** |
+
+Two seconds of largest paint for a pageview is not a trade worth making, and injecting the
+script on `load` costs the paint nothing. A visitor who leaves before `load` fires is not
+counted; on a page this size that is a rounding error against two seconds for everyone else.
+
+**The container's policy allows it exactly three things** — the script from
+`googletagmanager.com`, beacons to `google-analytics.com` and `analytics.google.com`, and the
+pixel — and still refuses everything else that is not this site.
+
+The measurement id sits in the repository. It names a property and grants no access to it, so
+treating it as a secret would be theatre.
+
+Verified with a browser rather than by reading: after load the page requests
+`gtag/js?id=G-4G8KMPJLCF` and then `google-analytics.com/g/collect`, and `dataLayer` holds the
+four entries the snippet pushes.
+
+### Prompt, verbatim in translation
+
+- "Add Google Analytics, G-4G8KMPJLCF. For this one: issue, PR, and merge it straight away."
+
 ## Revision — a Lighthouse pass, and four links that all said the same thing
 
 Run against the live site rather than a local build:
@@ -479,6 +510,27 @@ fair:
 Largest paint is unchanged at 2.9s and blocking time is still zero; what moved is the wait
 before anything appeared. The canvas stays: it is the page's one moving explanation of what the
 product does, and it was never the thing holding the paint.
+
+### Merging the two policies, and one thing that only running it would show
+
+Analytics landed on `main` about two hours after this branch was cut, and it widened the very
+header this branch narrows. Resolving that by taking either side alone would have been wrong in
+a way nothing would report: this branch's version switches Analytics off, and a blocked script
+is a console message on the visitor's machine — the page renders, the deploy check passes,
+`/healthz` answers 200, and the only symptom is a dashboard that stays empty, which looks
+exactly like nobody visiting.
+
+So the header is the union: the Google font origins gone, the Analytics origins kept.
+
+Serving the built site under that exact policy and watching a browser turned up a third thing
+neither side knew about. `@fontsource/jetbrains-mono` inlines its smaller subsets as `data:`
+URIs, and `font-src 'self'` refuses those — four `@font-face` rules blocked, again with no
+symptom but a console line. `font-src 'self' data:` is what a self-hosted font build actually
+needs.
+
+Checked under the merged policy: `gtag/js` requested, the `collect` beacon sent, `dataLayer`
+holding its four entries, four woff2 files from this origin, nothing from Google, and no CSP
+violations at all.
 
 ### Prompt, verbatim in translation
 
