@@ -7,7 +7,7 @@ import {IAqua} from "@1inch/aqua/interfaces/IAqua.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {DeployMandateSwap} from "../script/DeployMandateSwap.s.sol";
-import {HelicoMandateSwap, SwapMandate} from "../src/HelicoMandateSwap.sol";
+import {HelicoMandateSwap, SwapMandate, Venue} from "../src/HelicoMandateSwap.sol";
 import {PayingTaker} from "./MandateTakers.sol";
 
 /// @notice The app against the Aqua that 1inch actually deployed, on the chain we will deploy to.
@@ -109,7 +109,8 @@ contract ForkMandateSwapTest is Test {
             maxOut1: out,
             expiry: uint64(block.timestamp + 1 days),
             agent: address(taker),
-            salt: "fork"
+            salt: "fork",
+            venues: new Venue[](0)
         });
         bytes32 hash = _ship(m);
 
@@ -149,7 +150,8 @@ contract ForkMandateSwapTest is Test {
             maxOut1: out - 1,
             expiry: uint64(block.timestamp + 1 days),
             agent: address(taker),
-            salt: "fork-ceiling"
+            salt: "fork-ceiling",
+            venues: new Venue[](0)
         });
         _ship(m);
 
