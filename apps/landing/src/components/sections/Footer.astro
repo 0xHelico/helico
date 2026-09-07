@@ -46,11 +46,13 @@ const columns = [
 					</a>
 				</div>
 			</div>
+			{/* A signature, not a disclaimer paragraph — but two of the five sentences it replaced
+			     exist nowhere else on the page. "Not audited" and "nothing is deployed" survive in
+			     the FAQ and the panel caption; these two do not, and a reader who never opens the
+			     FAQ would otherwise be told neither. */}
 			<p class="footer__legal">
-				Helico is a hackathon submission built for ETHOnline 2026. Nothing on this page is financial
-				advice. The vault has not been audited for production use, and the scenarios shown are
-				illustrative, using numbers recorded in the repository. Nothing is deployed to a live network
-				yet.
+				© {new Date().getFullYear()} Helico · A hackathon submission for ETHOnline 2026.
+				Nothing here is financial advice.
 			</p>
 		</footer>
 	</div>
