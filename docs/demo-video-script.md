@@ -46,7 +46,7 @@ list is that it changes.
 |---|---|
 | `app.helico.site` (shot 0) | 200. The chat path answers: "swap 1000 USDC to WETH" returns the checked intent, same pair the fork test uses |
 | `helico.site`, `api.helico.site/healthz` | 200 |
-| Shot 3, the swap | **Recordable in full today.** The fork test runs against the Aqua 1inch actually deployed at `0x499943E7…`, so the spoken line about the real deployment is true in the fallback too. Deploying `HelicoMandateSwap` upgrades this shot; it does not unblock it |
+| Shot 3, the swap | ⚠️ **Was wrong when written, and is mine.** I said the fork test runs against *"the Aqua 1inch actually deployed"*. It runs against `0x499943E7…`, which is a real Aqua with no event since block 451,737,844. The live one is `0x1111113ccf…` ([#165](https://github.com/0xHelico/helico/issues/165)). **Do not say "the Aqua 1inch deployed" on camera until the constant in `DeployMandateSwap.s.sol` moves and the fork test repins.** The mechanics of the shot are unchanged; the sentence over it is not true yet |
 | Shot 3, at `-vv` | **Would have cost a take.** One `[PASS]` line, no balances. Use `-vvvv` |
 | Shot 4, the subgraph | Not deployed. Fall back as written |
 | Shot 5, the enclave | Runs. A recorded rehearsal with its numbers checked is in [`docs/evidence/2026-09-07-cre-rehearsal.md`](evidence/2026-09-07-cre-rehearsal.md) |
