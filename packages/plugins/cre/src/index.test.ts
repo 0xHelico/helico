@@ -53,6 +53,14 @@ const committedHash = mandateHash({
 	minRetainedBps: 9000,
 })
 const config: Config = {
+	// The explanation is off by default in these tests: an empty `aiUrl` means the workflow
+	// asks for no AI secrets and calls no model, so every assertion below is about the decision
+	// rather than about prose. `ai.test.ts` covers the other path.
+	aiUrl: '',
+	aiModel: 'ag/claude-opus-4-6-thinking',
+	aiFallbackModel: 'ag/gemini-3-flash',
+	aiMaxTokens: 1200,
+	aiTimeoutSeconds: 30,
 	schedule: '0 */5 * * * *',
 	rpcUrl: 'https://rpc.testnet.chain.robinhood.com/rpc',
 	delivery: 'forwarder',
