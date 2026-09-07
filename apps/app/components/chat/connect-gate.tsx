@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
 const STEPS = [
   "Connect your wallet",
   "Verify it, once",
-  "Say what you want to swap",
+  "Swap by sentence, or set a mandate",
 ] as const;
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
