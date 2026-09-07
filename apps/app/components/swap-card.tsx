@@ -26,6 +26,22 @@ const label = (step: SwapStep, intent: Intent) =>
     swap: `Swap ${intent.amountIn} ${intent.tokenIn.symbol} for ${intent.tokenOut.symbol}`,
   })[step.kind];
 
+/**
+ * The amount, or null if the stored intent does not hold one.
+ *
+ * `intent` is cast out of a stored message without validation, and `BigInt()` throws on anything
+ * that is not an integer string. On the render path that is not a failed query with a message
+ * beside it — it is an uncaught exception, and with no error boundary under `app/` the whole page
+ * goes blank. Low reachability today; a blank page is not a proportionate consequence.
+ */
+function amountOf(wei: string): bigint | null {
+  try {
+    return BigInt(wei);
+  } catch {
+    return null;
+  }
+}
+
 export function SwapCard({ intent }: { intent: Intent }) {
   const { address, isConnected, chainId } = useAccount();
   const publicClient = usePublicClient({ chainId: intent.chainId });
@@ -85,8 +101,8 @@ export function SwapCard({ intent }: { intent: Intent }) {
     },
   });
 
-  const amountIn = BigInt(intent.amountInWei);
-  const short = shortfall(balance.data, amountIn);
+  const amountIn = amountOf(intent.amountInWei);
+  const short = amountIn === null ? null : shortfall(balance.data, amountIn);
 
   const run = useMutation({
     mutationFn: async () => {
@@ -112,6 +128,15 @@ export function SwapCard({ intent }: { intent: Intent }) {
   });
 
   const sentCount = run.data?.length ?? 0;
+
+  if (amountIn === null) {
+    return (
+      <p className="mt-3 rounded-xl border p-4 text-destructive text-xs">
+        This swap was stored with an amount that cannot be read, so nothing is
+        offered for it.
+      </p>
+    );
+  }
 
   return (
     <div className="mt-3 rounded-xl border p-4">
