@@ -1,0 +1,88 @@
+# The question Aqua cannot answer about itself.
+#
+# `_balances` is `private` and four levels deep — maker, app, strategyHash, token — so nothing
+# can enumerate it, and `rawBalances` needs a hash you already have. None of the four events
+# index a single parameter, so logs cannot be filtered by maker either. Between them, that means
+# "which mandates does this wallet have, and what is left in each?" has no on-chain answer at
+# all. Everything below exists to answer exactly that.
+
+"A wallet that has shipped at least one strategy. Its tokens never move into Aqua."
+type Maker @entity(immutable: false) {
+  "The maker's address."
+  id: Bytes!
+  mandates: [Mandate!]! @derivedFrom(field: "maker")
+  "Shipped strategies, including docked ones."
+  mandateCount: Int!
+  "Strategies not yet docked."
+  activeMandateCount: Int!
+}
+
+"An app a maker has given spending rights to. Aqua namespaces every balance by this."
+type App @entity(immutable: false) {
+  "The app's contract address."
+  id: Bytes!
+  mandates: [Mandate!]! @derivedFrom(field: "app")
+  mandateCount: Int!
+  activeMandateCount: Int!
+}
+
+"""
+One strategy, as Aqua files it: the hash of whatever bytes the maker shipped.
+
+`strategy` is kept raw and undecoded on purpose. Aqua never interprets those bytes, and neither
+should an indexer — each app defines its own struct, so decoding here would bake one app's
+layout into a subgraph meant to serve all of them. A consumer decodes it with the ABI it owns.
+"""
+type Mandate @entity(immutable: false) {
+  "maker ‖ app ‖ strategyHash, hashed. Not the strategy hash alone: Aqua keys balances by all three."
+  id: Bytes!
+  maker: Maker!
+  app: App!
+  "Aqua's own identifier: keccak256 of the shipped bytes."
+  strategyHash: Bytes!
+  "The bytes the maker shipped, verbatim."
+  strategy: Bytes!
+  "False once docked. Docking is permanent for this hash — it can never be re-shipped."
+  active: Boolean!
+  balances: [Balance!]! @derivedFrom(field: "mandate")
+  movements: [Movement!]! @derivedFrom(field: "mandate")
+  shippedAt: BigInt!
+  shippedAtBlock: BigInt!
+  shippedTx: Bytes!
+  dockedAt: BigInt
+  "Pulls plus pushes. A swap is normally one of each."
+  movementCount: Int!
+}
+
+"What is left of one token under one mandate. This is the number an agent has to know before acting."
+type Balance @entity(immutable: false) {
+  "mandate id ‖ token."
+  id: Bytes!
+  mandate: Mandate!
+  token: Bytes!
+  "Current spendable amount, as Aqua's ledger holds it."
+  amount: BigInt!
+  "Everything ever pulled out, cumulative."
+  totalPulled: BigInt!
+  "Everything ever pushed in, cumulative — including the initial ship."
+  totalPushed: BigInt!
+}
+
+enum Direction {
+  "Out of the maker's wallet, straight to a recipient."
+  PULL
+  "Into the maker's wallet, straight from a payer."
+  PUSH
+}
+
+"One movement of one token. Immutable: it records something that happened."
+type Movement @entity(immutable: true) {
+  id: Bytes!
+  mandate: Mandate!
+  token: Bytes!
+  amount: BigInt!
+  direction: Direction!
+  timestamp: BigInt!
+  block: BigInt!
+  tx: Bytes!
+}

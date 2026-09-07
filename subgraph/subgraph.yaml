@@ -1,0 +1,42 @@
+specVersion: 1.0.0
+description: >-
+  Aqua on Arbitrum One, indexed so that a maker's strategies can be found at all. Aqua keeps its
+  balances in a private mapping four levels deep and indexes no event parameter, so there is no
+  on-chain way to ask which strategies a wallet has.
+repository: https://github.com/0xHelico/helico
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum/contract
+    name: Aqua
+    network: arbitrum-one
+    source:
+      address: "0x499943E74FB0cE105688beeE8Ef2ABec5D936d31"
+      abi: Aqua
+      # The block Aqua first has code at, found by binary searching `eth_getCode` rather than
+      # taken from a block explorer. Indexing from 0 would cost 431 million blocks to reach the
+      # same first event.
+      startBlock: 431256499
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/aqua.ts
+      entities:
+        - Maker
+        - App
+        - Mandate
+        - Balance
+        - Movement
+      abis:
+        - name: Aqua
+          file: ./abis/Aqua.json
+      eventHandlers:
+        - event: Shipped(address,address,bytes32,bytes)
+          handler: handleShipped
+        - event: Docked(address,address,bytes32)
+          handler: handleDocked
+        - event: Pulled(address,address,bytes32,address,uint256)
+          handler: handlePulled
+        - event: Pushed(address,address,bytes32,address,uint256)
+          handler: handlePushed

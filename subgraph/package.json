@@ -1,0 +1,16 @@
+{
+  "name": "@helico/subgraph",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Aqua on Arbitrum One, indexed",
+  "scripts": {
+    "codegen": "graph codegen",
+    "build": "graph build",
+    "deploy": "graph deploy helico-aqua-arbitrum-one",
+    "test": "graph codegen && graph build"
+  },
+  "dependencies": {
+    "@graphprotocol/graph-cli": "0.97.1",
+    "@graphprotocol/graph-ts": "0.38.1"
+  }
+}
