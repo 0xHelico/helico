@@ -3,9 +3,8 @@ import { Inter } from "next/font/google";
 import { headers } from "next/headers";
 import type { ReactNode } from "react";
 import { Toaster } from "sonner";
-import { AppSidebar } from "@/components/chat/app-sidebar";
+import { AppShell } from "@/components/chat/app-shell";
 import { ThemeProvider } from "@/components/theme-provider";
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppKitProvider } from "@/context";
 import { HelicoSessionProvider } from "@/hooks/use-helico-session";
@@ -79,10 +78,7 @@ export default async function RootLayout({
           <AppKitProvider cookies={cookies}>
             <HelicoSessionProvider>
               <TooltipProvider>
-                <SidebarProvider defaultOpen={!collapsed}>
-                  <AppSidebar />
-                  <SidebarInset>{children}</SidebarInset>
-                </SidebarProvider>
+                <AppShell defaultOpen={!collapsed}>{children}</AppShell>
               </TooltipProvider>
             </HelicoSessionProvider>
           </AppKitProvider>

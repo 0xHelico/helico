@@ -1,6 +1,5 @@
 "use client";
 
-import { useAppKit } from "@reown/appkit/react";
 import {
   PanelLeftIcon,
   PenSquareIcon,
@@ -15,7 +14,6 @@ import { toast } from "sonner";
 import { useSWRConfig } from "swr";
 import { HISTORY_KEY, SidebarHistory } from "@/components/chat/sidebar-history";
 import { SidebarUserNav } from "@/components/chat/sidebar-user-nav";
-import { Button } from "@/components/ui/button";
 import {
   Sidebar,
   SidebarContent,
@@ -30,7 +28,6 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { useHelicoSession } from "@/hooks/use-helico-session";
 import { api } from "@/lib/api";
 import {
   AlertDialog,
@@ -44,9 +41,7 @@ import {
 } from "../ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
-export function AppSidebar() {
-  const session = useHelicoSession();
-  const { open } = useAppKit();
+export function AppSidebar({ address }: { address: `0x${string}` }) {
   const router = useRouter();
   const { setOpenMobile, toggleSidebar } = useSidebar();
   const { mutate } = useSWRConfig();
@@ -149,65 +144,25 @@ export function AppSidebar() {
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
-                {session.ready ? (
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      className="rounded-lg text-sidebar-foreground/40 transition-colors duration-150 hover:bg-destructive/10 hover:text-destructive"
-                      onClick={handleShowDeleteAllDialog}
-                      tooltip="Delete All Chats"
-                    >
-                      <TrashIcon className="size-4" />
-                      <span className="text-[13px]">Delete all</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ) : null}
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    className="rounded-lg text-sidebar-foreground/40 transition-colors duration-150 hover:bg-destructive/10 hover:text-destructive"
+                    onClick={handleShowDeleteAllDialog}
+                    tooltip="Delete All Chats"
+                  >
+                    <TrashIcon className="size-4" />
+                    <span className="text-[13px]">Delete all</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
-          <SidebarHistory signedIn={session.ready} />
+          <SidebarHistory />
         </SidebarContent>
         <SidebarFooter className="border-t border-sidebar-border pt-2 pb-3">
-          {/* Three states rather than two: no wallet, a wallet that has not proved itself, and
-              a session. Signing is a button and never automatic — a prompt nobody asked for is
-              how people learn to click through prompts. */}
-          {session.address ? (
-            session.ready ? (
-              <SidebarUserNav address={session.address} />
-            ) : (
-              <div className="px-1 group-data-[collapsible=icon]:hidden">
-                <Button
-                  className="w-full"
-                  disabled={session.signing}
-                  onClick={session.signIn}
-                  size="sm"
-                  variant="outline"
-                >
-                  {session.signing
-                    ? "Check your wallet…"
-                    : "Sign in to save chats"}
-                </Button>
-                {session.error ? (
-                  <p className="mt-2 text-destructive text-xs">
-                    {session.error}
-                  </p>
-                ) : null}
-              </div>
-            )
-          ) : (
-            <div className="px-1 group-data-[collapsible=icon]:hidden">
-              {/* Not <appkit-button>: the web component brings Reown's own blue and its own
-                  floating avatar, neither of which belongs in this sidebar. Opening the modal
-                  ourselves keeps the button the template's. */}
-              <Button
-                className="w-full"
-                onClick={() => open()}
-                size="sm"
-                variant="outline"
-              >
-                Connect wallet
-              </Button>
-            </div>
-          )}
+          {/* One state, not three. Connecting and signing happen in ConnectGate, which stands in
+              front of this whole tree — by the time the sidebar exists, both are done. */}
+          <SidebarUserNav address={address} />
         </SidebarFooter>
         <SidebarRail />
       </Sidebar>

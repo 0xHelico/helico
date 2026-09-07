@@ -78,7 +78,7 @@ const groupChatsByDate = (chats: Conversation[]): GroupedChats => {
   );
 };
 
-export function SidebarHistory({ signedIn }: { signedIn: boolean }) {
+export function SidebarHistory() {
   const { setOpenMobile } = useSidebar();
   const pathname = usePathname();
   const id = pathname?.startsWith("/chat/") ? pathname.split("/")[2] : null;
@@ -88,7 +88,7 @@ export function SidebarHistory({ signedIn }: { signedIn: boolean }) {
     isLoading,
     mutate,
   } = useSWR<ChatHistory[]>(
-    signedIn ? HISTORY_KEY : null,
+    HISTORY_KEY,
     async () => [{ chats: await api.conversations(), hasMore: false }],
     { fallbackData: [], revalidateOnFocus: false },
   );
@@ -136,19 +136,6 @@ export function SidebarHistory({ signedIn }: { signedIn: boolean }) {
 
   // One page, so reaching the end of the list has nothing left to fetch.
   const handleViewportEnter = useCallback(() => undefined, []);
-
-  if (!signedIn) {
-    return (
-      <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-        <SidebarGroupContent>
-          <div className="flex w-full flex-row items-center justify-center gap-2 px-2 text-[13px] text-sidebar-foreground/60">
-            Connect a wallet to keep conversations. Asking and reading work
-            without one.
-          </div>
-        </SidebarGroupContent>
-      </SidebarGroup>
-    );
-  }
 
   if (isLoading) {
     return (

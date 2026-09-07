@@ -21,6 +21,12 @@ export const vaultAbi = parseAbi([
 	`function mandateOf(address owner) view returns (${MANDATE_TUPLE})`,
 	`function setMandate(uint256 tokenId, ${MANDATE_TUPLE} m)`,
 	'function revoke()',
+	// The three the vault was initialised with. An app given an address can read these and check
+	// they are the chain's real v4 deployment, which is the difference between 'someone typed an
+	// address' and 'this is a Helico vault on Arbitrum One'.
+	'function positionManager() view returns (address)',
+	'function stateView() view returns (address)',
+	'function poolManager() view returns (address)',
 	'event MandateSet(address indexed owner, uint256 indexed tokenId, bytes32 mandateHash)',
 	'event Revoked(address indexed owner, uint256 indexed tokenId)',
 	'error NotPositionOwner()',

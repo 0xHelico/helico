@@ -7,6 +7,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { useAccount, useSignTypedData } from "wagmi";
@@ -17,8 +18,12 @@ type State = "unknown" | "signed-out" | "signing" | "signed-in";
 type Session = {
   address?: `0x${string}`;
   isConnected: boolean;
+  /** False only while the cookie is still being read, so a reload does not flash the gate. */
+  knows: boolean;
   /** Signed in, and as the wallet that is connected right now. */
   ready: boolean;
+  /** The address the cookie belongs to, which is not always the one now connected. */
+  signedInAs: string | null;
   signing: boolean;
   error: string | null;
   signIn: () => Promise<void>;
@@ -36,8 +41,25 @@ export function HelicoSessionProvider({ children }: { children: ReactNode }) {
   const [signedInAs, setSignedInAs] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // What the cookie already says, which is the common case on a reload.
+  // Which address the cookie has already been read for, so it is read once per wallet.
+  const asked = useRef<string | null>(null);
+
+  // Only worth asking once a wallet is connected. Without one the answer changes nothing —
+  // `ready` needs the cookie to match the connected address — so asking would be a 401 on every
+  // cold load for information the page cannot use.
   useEffect(() => {
+    if (!address) {
+      asked.current = null;
+      setSignedInAs(null);
+      // Nothing to find out, rather than not yet found out: the gate can render immediately.
+      setState("signed-out");
+      return;
+    }
+    if (asked.current === address) {
+      return;
+    }
+    asked.current = address;
+    setState("unknown");
     let live = true;
     api
       .whoami()
@@ -49,13 +71,14 @@ export function HelicoSessionProvider({ children }: { children: ReactNode }) {
       })
       .catch(() => {
         if (live) {
+          setSignedInAs(null);
           setState("signed-out");
         }
       });
     return () => {
       live = false;
     };
-  }, []);
+  }, [address]);
 
   const signIn = useCallback(async () => {
     if (!address) {
@@ -100,6 +123,8 @@ export function HelicoSessionProvider({ children }: { children: ReactNode }) {
     () => ({
       address,
       isConnected,
+      knows: state !== "unknown",
+      signedInAs,
       // A cookie for a different wallet than the one now connected is worse than none: it
       // would show someone else's conversations.
       ready:

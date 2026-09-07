@@ -1,9 +1,9 @@
 "use client";
 
-import { planSwap, type SwapStep } from "@helico/plugin-uniswap";
+import { NATIVE, planSwap, type SwapStep } from "@helico/plugin-uniswap";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ArrowRight, Check, Loader2 } from "lucide-react";
-import { formatUnits, type Hex } from "viem";
+import { erc20Abi, formatUnits, type Hex } from "viem";
 import {
   useAccount,
   usePublicClient,
@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { explorerTx, SLIPPAGE_BPS } from "@/lib/chain";
 import type { Intent } from "@/lib/intent";
+import { shortfall } from "@/lib/vault";
 
 /**
  * The words for each transaction. The plugin returns what a step is; what a person reads about
@@ -24,6 +25,22 @@ const label = (step: SwapStep, intent: Intent) =>
     "approve-permit2": `Allow the router to spend your ${intent.tokenIn.symbol}`,
     swap: `Swap ${intent.amountIn} ${intent.tokenIn.symbol} for ${intent.tokenOut.symbol}`,
   })[step.kind];
+
+/**
+ * The amount, or null if the stored intent does not hold one.
+ *
+ * `intent` is cast out of a stored message without validation, and `BigInt()` throws on anything
+ * that is not an integer string. On the render path that is not a failed query with a message
+ * beside it — it is an uncaught exception, and with no error boundary under `app/` the whole page
+ * goes blank. Low reachability today; a blank page is not a proportionate consequence.
+ */
+function amountOf(wei: string): bigint | null {
+  try {
+    return BigInt(wei);
+  } catch {
+    return null;
+  }
+}
 
 export function SwapCard({ intent }: { intent: Intent }) {
   const { address, isConnected, chainId } = useAccount();
@@ -60,6 +77,33 @@ export function SwapCard({ intent }: { intent: Intent }) {
     },
   });
 
+  // What the wallet actually holds of the input token. This is the reason the app asks for a
+  // wallet before it will talk: a quote against a balance that cannot cover it is a number that
+  // wastes somebody's gas to find out.
+  const balance = useQuery({
+    queryKey: ["balance", intent.chainId, intent.tokenIn.address, address],
+    enabled: Boolean(publicClient && address && onRightChain),
+    staleTime: 15_000,
+    retry: false,
+    queryFn: async (): Promise<bigint> => {
+      if (!(publicClient && address)) {
+        throw new Error("No client");
+      }
+      if (intent.tokenIn.address === NATIVE) {
+        return publicClient.getBalance({ address });
+      }
+      return publicClient.readContract({
+        abi: erc20Abi,
+        address: intent.tokenIn.address,
+        args: [address],
+        functionName: "balanceOf",
+      });
+    },
+  });
+
+  const amountIn = amountOf(intent.amountInWei);
+  const short = amountIn === null ? null : shortfall(balance.data, amountIn);
+
   const run = useMutation({
     mutationFn: async () => {
       const steps = plan.data?.steps;
@@ -85,6 +129,15 @@ export function SwapCard({ intent }: { intent: Intent }) {
 
   const sentCount = run.data?.length ?? 0;
 
+  if (amountIn === null) {
+    return (
+      <p className="mt-3 rounded-xl border p-4 text-destructive text-xs">
+        This swap was stored with an amount that cannot be read, so nothing is
+        offered for it.
+      </p>
+    );
+  }
+
   return (
     <div className="mt-3 rounded-xl border p-4">
       <div className="flex items-center gap-3 font-medium text-base">
@@ -104,6 +157,15 @@ export function SwapCard({ intent }: { intent: Intent }) {
         </dd>
         <dt>Receiving</dt>
         <dd>{intent.tokenOut.name}</dd>
+        {balance.data !== undefined ? (
+          <>
+            <dt>You hold</dt>
+            <dd className={short ? "text-destructive" : undefined}>
+              {formatUnits(balance.data, intent.tokenIn.decimals)}{" "}
+              {intent.tokenIn.symbol}
+            </dd>
+          </>
+        ) : null}
         {plan.data ? (
           <>
             <dt>Pool</dt>
@@ -181,6 +243,14 @@ export function SwapCard({ intent }: { intent: Intent }) {
               ))}
             </ol>
 
+            {short ? (
+              <p className="mt-3 text-destructive text-xs">
+                This wallet is {formatUnits(short, intent.tokenIn.decimals)}{" "}
+                {intent.tokenIn.symbol} short. Nothing is sent — the swap would
+                revert and cost you the gas to find out.
+              </p>
+            ) : null}
+
             {run.isSuccess ? (
               <p className="mt-3 text-xs">
                 Filled. Your wallet holds the {intent.tokenOut.symbol}; Helico
@@ -189,7 +259,7 @@ export function SwapCard({ intent }: { intent: Intent }) {
             ) : (
               <Button
                 className="mt-3"
-                disabled={run.isPending}
+                disabled={run.isPending || short !== null}
                 onClick={() => run.mutate()}
                 size="sm"
               >

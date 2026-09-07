@@ -18,10 +18,27 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * How long any of these may take before it is treated as a failure.
+ *
+ * Not optional. Without it a backend that accepts the connection and never answers leaves the
+ * promise pending forever — and the session read is what the whole app waits on, so a hung
+ * request became a permanently blank page rather than an error.
+ */
+const TIMEOUT_MS = 12_000;
+
+/**
+ * The session read is on the app's critical path, so it gets a much shorter budget than the
+ * rest. Twelve seconds of waiting to discover there is no cookie is indistinguishable from a
+ * broken page.
+ */
+const SESSION_TIMEOUT_MS = 3000;
+
 async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     ...init,
     credentials: "include",
+    signal: init.signal ?? AbortSignal.timeout(TIMEOUT_MS),
     headers: { "Content-Type": "application/json", ...init.headers },
   });
   if (res.status === 204) {
@@ -84,7 +101,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
-  whoami: () => call<{ address: string }>("/api/session"),
+  whoami: () =>
+    call<{ address: string }>("/api/session", {
+      signal: AbortSignal.timeout(SESSION_TIMEOUT_MS),
+    }),
   signOut: () => call<void>("/api/session", { method: "DELETE" }),
 
   conversations: () =>
