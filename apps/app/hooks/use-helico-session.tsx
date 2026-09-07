@@ -17,6 +17,8 @@ type State = "unknown" | "signed-out" | "signing" | "signed-in";
 type Session = {
   address?: `0x${string}`;
   isConnected: boolean;
+  /** False only while the cookie is still being read, so a reload does not flash the gate. */
+  knows: boolean;
   /** Signed in, and as the wallet that is connected right now. */
   ready: boolean;
   signing: boolean;
@@ -100,6 +102,7 @@ export function HelicoSessionProvider({ children }: { children: ReactNode }) {
     () => ({
       address,
       isConnected,
+      knows: state !== "unknown",
       // A cookie for a different wallet than the one now connected is worse than none: it
       // would show someone else's conversations.
       ready:
