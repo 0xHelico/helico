@@ -15,9 +15,15 @@
  */
 import { endpoint, HELICO_AQUA, makerMandates } from '../packages/plugins/thegraph/src/index'
 
-// The one maker with mandates on Arbitrum One at the time of writing. Public, on chain, and
-// not ours — which is the point: this reads the real Aqua, not a fixture we control.
-const DEFAULT_MAKER = '0xf54ec0f6996b46b71b8d0c05f8430d2e8ed9413c'
+// The busiest maker on the live Aqua — 48 shipped strategies as of block 502,288,683. Public,
+// on chain, and not ours, which is the point: this reads the real Aqua, not a fixture we
+// control. Forty-eight strategies under one wallet is also the argument for the subgraph
+// existing: `_balances` is private and four levels deep, no event parameter is indexed, and
+// nothing on chain can list them.
+//
+// It was 0xf54ec0f6… until #165 — a maker on 0x499943E7…, which has emitted nothing since
+// block 451,737,844.
+const DEFAULT_MAKER = '0xef9f7f4006fe95afede04f6916e72556a957ebbc'
 
 const subgraph = {
 	...HELICO_AQUA[42161],
@@ -51,8 +57,12 @@ console.log(`\nmaker     ${res.maker}`)
 console.log(`mandates  ${res.mandates.length}, of which ${res.active} still active`)
 
 if (res.spendable.size === 0) {
-	console.log('\nNothing spendable. Either this maker has no live mandate, or the address was')
-	console.log('not one the subgraph knows — an unknown maker returns an empty list, not an error.')
+	console.log('\nNothing spendable. Three things look identical from here, so check `indexed`')
+	console.log('above before concluding anything:')
+	console.log('  - this maker genuinely has no live mandate')
+	console.log('  - the subgraph has not indexed far enough to have seen them yet')
+	console.log('  - the deployed subgraph still points at the Aqua this maker was never on (#165)')
+	console.log('An unknown maker returns an empty list, not an error.')
 } else {
 	console.log('\nstill spendable, summed across active mandates:')
 	for (const [token, amount] of res.spendable) console.log(`  ${token}  ${amount}`)

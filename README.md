@@ -113,19 +113,24 @@ caught.** What that turned up, and the four limits it did not fix, are in
 
 ### The Graph
 
-> **Deployed to Subgraph Studio and answering live queries**, as of 7 September. The subgraph is
-> in [`subgraph/`](subgraph/); `@helico/plugin-thegraph` queries it; one command shows what comes
-> back:
+> **Deployed to Subgraph Studio, and pointed at the wrong contract until it is redeployed.**
+> The subgraph is in [`subgraph/`](subgraph/); `@helico/plugin-thegraph` queries it; one command
+> shows what comes back, and prints `_meta` first:
 >
 > ```sh
 > bun scripts/check-subgraph.ts
 > ```
 >
-> ⚠️ **It is still indexing.** Aqua's first event is at block 403,010,640 and Arbitrum One's head
-> is past 502,700,000; the subgraph was at 421,065,750 when this was written — roughly 18% of the
-> range, and answering every query happily with that partial view. A syncing subgraph does not say
-> so in its results, so treat any count read from it today as a floor, not a total. `_meta` is what
-> tells the truth, and the check script prints it first for that reason.
+> ⚠️ **The manifest is corrected; the deployment is not.** Until 7 September this indexed
+> `0x499943E7…`, which is a real Aqua with real events and has had none since block 451,737,844.
+> The Aqua 1inch actually uses on Arbitrum One is `0x1111113ccf…` — it is what
+> `@1inch/aqua-sdk` names, and the deployed `AquaSwapVMRouter` carries it in its bytecode with no
+> reference to the old one. `subgraph.yaml` now points at it, from its deployment block
+> 485,505,646. **Redeploying to Studio is what makes that true of the data**, and has not
+> happened yet ([#165](https://github.com/0xHelico/helico/issues/165)).
+>
+> One consolation: the new range is ~17M blocks to head rather than ~100M, so the re-index is
+> far shorter than the one it replaces.
 
 Aqua cannot answer the question an agent has to ask first.
 
@@ -148,20 +153,13 @@ performance problem — it is the problem. An indexer is the only answer, which 
 load-bearing rather than decorative.
 
 The subgraph answers exactly that, and `makerMandates` in `@helico/plugin-thegraph` is the call
-that asks. Against the live endpoint today, for the one maker with mandates on this chain:
+that asks. The client works end to end — a maker's mandates, their per-token ledgers, and docked
+ones correctly marked docked rather than merely empty.
 
-```
-maker     0xf54ec0f6996b46b71b8d0c05f8430d2e8ed9413c
-mandates  5, of which 3 still active
-
-still spendable, summed across active mandates:
-  0x912ce59144191c1204e64559fe8253a0e49e6548  26123108069692542503
-  0xaf88d065e77c8cc2239327c5edb3a432268e5831  2401625
-```
-
-Not our wallet and not our app — that is the point. It is the real Aqua on Arbitrum One, read
-through the same code path the product uses, and the two docked mandates come back marked docked
-with their ledgers zeroed, which is the distinction the schema exists to preserve.
+**No figures are quoted here yet, deliberately.** The ones that were are real and come from the
+superseded contract above, which makes them a five-month-old snapshot of a deployment nobody
+uses. They go back once the subgraph is redeployed against `0x1111113ccf…` and the numbers are
+read off that.
 
 Still planned: the enclave consuming this as a second private input alongside the mandate
 thresholds, and the Subgraph MCP server so the agent discovers the schema rather than having it
