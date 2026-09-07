@@ -6,6 +6,7 @@ import Image from "next/image";
 import { useTheme } from "next-themes";
 import { useAccount, useDisconnect } from "wagmi";
 import { Aurora } from "@/components/chat/aurora";
+import { ExampleExchange } from "@/components/chat/example-exchange";
 import { Button } from "@/components/ui/button";
 import { useHelicoSession } from "@/hooks/use-helico-session";
 import { cn } from "@/lib/utils";
@@ -186,7 +187,8 @@ export function ConnectGate() {
             className="stagger text-center text-muted-foreground text-sm"
             style={{ animationDelay: "0.5s" }}
           >
-            Helico never holds your funds.{" "}
+            Helico never holds your funds. <ExampleExchange />
+            {" · "}
             <a
               className="font-medium text-foreground hover:underline"
               href="https://docs.helico.site/docs/introduction"
