@@ -96,7 +96,7 @@ export function Chat({ conversationId }: { conversationId?: string }) {
       })
       .catch(() => {
         if (live) {
-          router.replace("/");
+          router.replace("/chat");
         }
       });
     return () => {

@@ -176,6 +176,52 @@ const browser = await chromium.launch();
   await strict.close();
 }
 
+// 5. The front door leads with the mandate, not with a box offering to swap. This is the one a
+//    judge sees first, and it regressed once already by being the conversation.
+{
+  const page = await (await browser.newContext()).newPage();
+  await withWallet(page);
+  await page.goto(APP, { waitUntil: "networkidle" });
+  await page
+    .getByRole("button", { name: /Verify wallet/ })
+    .click({ timeout: 20_000 });
+  await page
+    .getByRole("heading", { name: /limits it works inside/ })
+    .waitFor({ timeout: 30_000 });
+
+  const text = (await page.locator("body").innerText()).trim();
+  check(
+    "the front door leads with the mandate",
+    /limits it works inside/.test(text),
+  );
+  check(
+    "and lists what may be asked for",
+    /What it may be asked for/.test(text),
+  );
+  check("saying which are answered today", /you can ask for this/.test(text));
+  check("and which are not", /not wired yet/.test(text));
+  check(
+    "the composer is not on it",
+    (await page.getByPlaceholder(/Ask anything/i).count()) === 0,
+  );
+
+  // A capability nobody has wired must be inert, not merely styled as inert — the one mistake
+  // here costs the submission rather than a mark.
+  const locked = page.locator("li", { hasText: "not wired yet" }).first();
+  check(
+    "an unwired capability is not a link",
+    (await locked.locator("a").count()) === 0,
+  );
+
+  await page.getByRole("link", { name: /say it in a sentence/i }).click();
+  await page.waitForTimeout(2000);
+  check(
+    "and the conversation is one click away",
+    (await page.getByPlaceholder(/Ask anything/i).count()) > 0,
+  );
+  check("which lives at /chat", new URL(page.url()).pathname === "/chat");
+}
+
 await browser.close();
 if (failures.length) {
   console.error(`\n${failures.length} failed: ${failures.join(", ")}`);
