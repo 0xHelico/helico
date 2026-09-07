@@ -17,6 +17,22 @@
  * `proxy_set_header X-Real-IP $remote_addr` does. If that ever stops being true, a caller can
  * choose their own rate-limit bucket — which is why the header is forwarded only when it is
  * present, and never synthesised here.
+ *
+ * **Today the header does not survive the trip, and that is the safety margin.** `BE_API_URL`
+ * points at the public `https://api.helico.site`, so this request leaves the network and arrives
+ * at the API's own nginx block as an ordinary client — and that block sets `X-Real-IP` from
+ * `$remote_addr`, overwriting whatever was forwarded. So this change cannot currently be abused,
+ * and cannot currently help either.
+ *
+ * **It becomes load-bearing the moment `BE_API_URL` points at the api container directly.** Over
+ * the shared network there is no second nginx to overwrite anything, and the header this function
+ * forwards is the one the backend trusts. Two things must hold before that move:
+ *
+ *   1. `app.helico.site`'s inbound block sets `X-Real-IP` from `$remote_addr` rather than passing
+ *      through a caller's. The *inbound* block is the guarantee — not the one in front of the API.
+ *   2. Nothing can reach the backend without passing an nginx at all. Publishing it on `0.0.0.0`
+ *      (see #103) would route around both blocks, and that is the change that turns this from
+ *      inert into a hole.
  */
 export function upstreamHeaders(incoming: Headers): Record<string, string> {
   const headers: Record<string, string> = {
