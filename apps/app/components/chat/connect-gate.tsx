@@ -5,6 +5,7 @@ import { MoonIcon, SunIcon } from "lucide-react";
 import Image from "next/image";
 import { useTheme } from "next-themes";
 import { useAccount, useDisconnect } from "wagmi";
+import { Aurora } from "@/components/chat/aurora";
 import { Button } from "@/components/ui/button";
 import { useHelicoSession } from "@/hooks/use-helico-session";
 import { cn } from "@/lib/utils";
@@ -54,7 +55,7 @@ export function ConnectGate() {
       {/* The reference anchors this block to the bottom because a video fills the panel behind
           it. With a gradient there is nothing to sit under, so it is centred. */}
       <section className="relative hidden shrink-0 flex-col items-center justify-center overflow-hidden rounded-3xl px-12 shadow-2xl lg:flex lg:w-[52%]">
-        <div className="drift absolute inset-0 bg-gradient-to-br from-secondary via-muted to-background" />
+        <Aurora className="absolute inset-0" />
         <div className="relative z-10 w-full max-w-80 space-y-8">
           <div
             className="stagger flex items-center gap-2"
@@ -65,10 +66,10 @@ export function ConnectGate() {
           </div>
 
           <div className="stagger" style={{ animationDelay: "0.35s" }}>
-            <h1 className="font-medium text-4xl tracking-tight">
+            <h1 className="font-medium text-4xl text-white tracking-tight">
               Your wallet is the account
             </h1>
-            <p className="mt-3 text-muted-foreground text-sm leading-relaxed">
+            <p className="mt-3 text-sm text-white/60 leading-relaxed">
               No email, no password, nothing to remember. Three steps, and
               nothing moves until you sign it.
             </p>
@@ -80,8 +81,8 @@ export function ConnectGate() {
                 className={cn(
                   "stagger flex items-center gap-3 rounded-xl px-4 py-3.5 font-medium text-sm",
                   i === current
-                    ? "border border-foreground bg-foreground text-background"
-                    : "bg-muted/60 text-foreground",
+                    ? "border border-white bg-white text-black"
+                    : "bg-[#1a1a1a] text-white",
                 )}
                 key={label}
                 style={{ animationDelay: `${0.5 + i * 0.15}s` }}
@@ -90,8 +91,8 @@ export function ConnectGate() {
                   className={cn(
                     "flex size-6 shrink-0 items-center justify-center rounded-full font-semibold text-xs",
                     i === current
-                      ? "bg-background text-foreground"
-                      : "bg-foreground/10 text-muted-foreground",
+                      ? "bg-black text-white"
+                      : "bg-white/10 text-white/40",
                   )}
                 >
                   {i + 1}
