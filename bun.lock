@@ -122,6 +122,10 @@
         "jsbi": "3.2.5",
       },
     },
+    "packages/plugins/thegraph": {
+      "name": "@helico/plugin-thegraph",
+      "version": "0.0.0",
+    },
     "packages/plugins/uniswap": {
       "name": "@helico/plugin-uniswap",
       "version": "0.0.0",
@@ -461,6 +465,8 @@
     "@helico/landing": ["@helico/landing@workspace:apps/landing"],
 
     "@helico/plugin-cre": ["@helico/plugin-cre@workspace:packages/plugins/cre"],
+
+    "@helico/plugin-thegraph": ["@helico/plugin-thegraph@workspace:packages/plugins/thegraph"],
 
     "@helico/plugin-uniswap": ["@helico/plugin-uniswap@workspace:packages/plugins/uniswap"],
 
