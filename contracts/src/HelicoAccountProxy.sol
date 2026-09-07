@@ -46,7 +46,10 @@ contract HelicoAccountProxy is Proxy {
     /// @param implementation_ The first implementation. May be replaced later; this cannot.
     /// @param owner_ Who owns this account.
     /// @param initData Forwarded to the implementation, so the account can initialise itself.
-    constructor(address implementation_, address owner_, bytes memory initData) payable {
+    /// @dev Not payable. The factory deploys with zero value, and a direct deployment with value
+    ///      and an empty `initData` reverts inside OpenZeppelin's `_checkNonPayable` anyway — so
+    ///      `payable` advertised funding-at-deploy that no caller could actually perform.
+    constructor(address implementation_, address owner_, bytes memory initData) {
         if (owner_ == address(0)) revert OwnerIsZero();
         OWNER = owner_;
         ERC1967Utils.upgradeToAndCall(implementation_, initData);

@@ -75,6 +75,15 @@ the maker's position there and the mandate's remaining receipt budget are the ot
 Checking only the first ends the search at a venue that cannot pay and strands a funded one
 further down the list.
 
+**Evidence has to be unsatisfiable if the thing is false.** Three times on 8 September a check
+passed that could not have failed: a NatSpec claim that the canonical Aqua carried no events,
+asserted without ever running `eth_getLogs`; a `subgraph.yaml` comment saying the same, which would
+have started the index 17 million blocks late and looked like an empty subgraph rather than a wrong
+one; and a test proving an account could hold ETH using `vm.deal`, which sets a balance without
+ever performing a transfer — the account could not in fact receive one. Before trusting a check,
+ask what it would look like if the claim were false. If the answer is "the same", it is not a check.
+Two people asserting the same unmeasured thing is not corroboration either.
+
 Each of these has a test in `contracts/test/MandateVenueUnwind.t.sol`, and each of them failed
 before that file existed. An invariant stated only in a comment is a wish: every one of these
 was written down in NatSpec before it was true in code, and the code contradicted all of them.

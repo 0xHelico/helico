@@ -3,6 +3,10 @@ pragma solidity 0.8.30;
 
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+
+import {ILendingVenue} from "./ILendingVenue.sol";
 import {AccountAuth} from "./AccountAuth.sol";
 
 import {HelicoAccountProxy} from "./HelicoAccountProxy.sol";
@@ -38,17 +42,36 @@ contract HelicoAccount is UUPSUpgradeable {
     /// @notice Once true, only the owner may change this account's code. Never returns to false.
     bool public autoUpgradeRefused;
 
+    /// @notice Who may move this account's idle capital between the wallet and a lending market.
+    /// @dev The CRE enclave, in practice. Nominated by the owner and revocable at any time by
+    ///      setting it back to zero, which takes effect on the next call.
+    address public agent;
+
+    /// @notice The lending markets the owner will let their capital sit in.
+    /// @dev The agent cannot add one. That is the difference between "decide where my money
+    ///      works" and "decide what counts as a market", and only the first was delegated:
+    ///      a contract that merely behaves like a lending pool is how an allowlist gets drained.
+    mapping(address pool => bool) public permittedVenue;
+
     error NotOwner(address caller);
     error NotOwnerOrUpgrader(address caller);
     error ImplementationHasNoCode(address implementation);
     error AutoUpgradeAlreadyRefused();
     error CallFailed(address target);
     error AuthorisationExpired(uint256 nowTimestamp, uint256 deadline);
+    error NotOwnerOrAgent(address caller);
+    error VenueNotPermitted(address pool);
 
-    event Upgraded(address indexed implementation, address indexed by);
+    /// @dev Not `Upgraded`: ERC-1967 emits `Upgraded(address)` on the same transaction, and two
+    ///      events sharing a name with different shapes is how an indexer keyed on the name gets
+    ///      two answers.
+    event UpgradeAuthorised(address indexed implementation, address indexed by);
     event AutoUpgradeRefused();
     event Executed(address indexed target, uint256 value, bytes4 selector);
     event SignaturesInvalidated(uint256 newNonce);
+    event AgentChanged(address indexed agent);
+    event VenuePermitted(address indexed pool, bool allowed);
+    event IdleCapitalMoved(address indexed pool, address indexed asset, uint256 amount, bool supplied);
 
     /// @param upgrader The enclave key permitted to keep accounts patched. May be zero, which
     ///        means only the owner ever changes this account's code.
@@ -105,8 +128,16 @@ contract HelicoAccount is UUPSUpgradeable {
     // ------------------------------------------------------------------------------------
 
     /// @notice How many signed calls this account has already accepted.
-    /// @dev Sequential and single-use. The owner can also skip ahead with `invalidateSignatures`,
-    ///      which is how an authorisation that has not been used yet is taken back.
+    ///
+    /// @dev Strictly sequential, and that is a design choice rather than an implementation
+    ///      detail. `executeWithSignature` always reads the current value, so **exactly one
+    ///      authorisation is valid at a time** — a batch cannot be pre-signed, and each
+    ///      signature must be spent before the next is written.
+    ///
+    ///      That is what makes `invalidateSignatures` correct at `+1`: there is only ever one
+    ///      outstanding authorisation to cancel. The natural "improvement" to a bitmap of
+    ///      unordered nonces would allow pre-signed batches and would silently break that,
+    ///      leaving every other pre-signed authorisation valid after a revocation.
     uint256 public nonce;
 
     /// @notice The EIP-712 domain this account verifies against.
@@ -176,6 +207,64 @@ contract HelicoAccount is UUPSUpgradeable {
         emit SignaturesInvalidated(next);
     }
 
+    // ------------------------------------------------------------------------------------
+    // Idle capital
+    // ------------------------------------------------------------------------------------
+
+    /// @notice Nominate who may move idle capital. Zero removes them.
+    function setAgent(address agent_) external {
+        if (msg.sender != owner()) revert NotOwner(msg.sender);
+        agent = agent_;
+        emit AgentChanged(agent_);
+    }
+
+    /// @notice Allow or disallow a lending market for this account.
+    function permitVenue(address pool, bool allowed) external {
+        if (msg.sender != owner()) revert NotOwner(msg.sender);
+        permittedVenue[pool] = allowed;
+        emit VenuePermitted(pool, allowed);
+    }
+
+    /// @notice Put idle capital to work in a market the owner permitted.
+    ///
+    /// @dev **There is no recipient parameter, and that is the whole security argument.** The
+    ///      position is credited to `address(this)` and the withdrawal below returns to
+    ///      `address(this)`, so the pair of calls can move this account's assets between two
+    ///      places that both belong to the account, and nowhere else. An agent holding this
+    ///      authority cannot pay itself, cannot pay a third party, and cannot approve anyone.
+    ///
+    ///      The approval is granted for exactly `amount` and taken back afterwards, so no
+    ///      standing allowance survives the call — an allowance outlives the agent's nomination,
+    ///      and revoking an agent has to actually revoke something.
+    function supplyIdle(address pool, address asset, uint256 amount) external {
+        _requireOwnerOrAgent();
+        if (!permittedVenue[pool]) revert VenueNotPermitted(pool);
+
+        SafeERC20.forceApprove(IERC20(asset), pool, amount);
+        ILendingVenue(pool).supply(asset, amount, address(this), 0);
+        SafeERC20.forceApprove(IERC20(asset), pool, 0);
+
+        emit IdleCapitalMoved(pool, asset, amount, true);
+    }
+
+    /// @notice Bring capital back out of a market, to this account and nowhere else.
+    /// @dev The agent may do this as well as the owner, because an agent that can only put money
+    ///      in is an agent that cannot correct itself.
+    function withdrawIdle(address pool, address asset, uint256 amount) external {
+        _requireOwnerOrAgent();
+        if (!permittedVenue[pool]) revert VenueNotPermitted(pool);
+
+        ILendingVenue(pool).withdraw(asset, amount, address(this));
+
+        emit IdleCapitalMoved(pool, asset, amount, false);
+    }
+
+    function _requireOwnerOrAgent() private view {
+        if (msg.sender == owner()) return;
+        address nominated = agent;
+        if (nominated == address(0) || msg.sender != nominated) revert NotOwnerOrAgent(msg.sender);
+    }
+
     /// @dev An upgrade takes effect immediately. There is no announcement, no waiting period and
     ///      no window in which the owner can cancel one.
     ///
@@ -193,6 +282,6 @@ contract HelicoAccount is UUPSUpgradeable {
     function _authorizeUpgrade(address implementation) internal override {
         _requireMayUpgrade();
         if (implementation.code.length == 0) revert ImplementationHasNoCode(implementation);
-        emit Upgraded(implementation, msg.sender);
+        emit UpgradeAuthorised(implementation, msg.sender);
     }
 }

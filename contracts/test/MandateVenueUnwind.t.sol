@@ -60,7 +60,7 @@ contract MandateVenueUnwindTest is Test {
         tokenB.approve(address(aqua), type(uint256).max);
         receiptB.approve(address(aqua), type(uint256).max);
         tokenB.approve(address(pool), type(uint256).max);
-        pool.supply(address(tokenB), SUPPLIED, maker);
+        pool.supply(address(tokenB), SUPPLIED, maker, 0);
         vm.stopPrank();
 
         taker = new PayingTaker(IAqua(address(aqua)));
@@ -153,7 +153,7 @@ contract MandateVenueUnwindTest is Test {
         vm.stopPrank();
         tokenB.mint(address(this), SUPPLIED);
         tokenB.approve(address(second), type(uint256).max);
-        second.supply(address(tokenB), SUPPLIED, maker);
+        second.supply(address(tokenB), SUPPLIED, maker, 0);
 
         Venue[] memory vs = new Venue[](2);
         vs[0] = Venue({pool: address(pool), receipt0: address(0), receipt1: address(receiptB)});
@@ -204,7 +204,7 @@ contract MandateVenueUnwindTest is Test {
         vm.startPrank(maker);
         tokenB.mint(maker, SUPPLIED);
         tokenB.approve(address(other), type(uint256).max);
-        other.supply(address(tokenB), SUPPLIED, maker);
+        other.supply(address(tokenB), SUPPLIED, maker, 0);
         otherReceipt.approve(address(aqua), type(uint256).max);
         vm.stopPrank();
         _ship(m, address(otherReceipt), SUPPLIED);

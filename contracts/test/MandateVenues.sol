@@ -71,7 +71,7 @@ contract MockLendingPool is ILendingVenue {
         receiptFor[asset] = receipt;
     }
 
-    function supply(address asset, uint256 amount, address onBehalfOf) external {
+    function supply(address asset, uint256 amount, address onBehalfOf, uint16) external {
         SafeERC20.safeTransferFrom(IERC20(asset), msg.sender, address(this), amount);
         receiptFor[asset].mint(onBehalfOf, amount);
     }
