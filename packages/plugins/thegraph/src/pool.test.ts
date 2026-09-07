@@ -78,7 +78,11 @@ describe('the gateway, and the errors it hides inside a 200', () => {
 		(async () => new Response(JSON.stringify(data), { status: 200 })) as unknown as typeof fetch
 
 	test('a subgraph id becomes a gateway URL', () => {
-		expect(gateway(UNISWAP_V4[42161])).toContain(UNISWAP_V4[42161].id)
+		// Bound first rather than asserted non-null: `id` is optional now precisely because a
+		// Studio subgraph does not have one, and a `!` here would hide that from the test.
+		const { id } = UNISWAP_V4[42161]
+		expect(id).toBeDefined()
+		expect(gateway(UNISWAP_V4[42161])).toContain(id as string)
 		expect(gateway(UNISWAP_V4[42161])).toStartWith('https://gateway.thegraph.com/')
 	})
 

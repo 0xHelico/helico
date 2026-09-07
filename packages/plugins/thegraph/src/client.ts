@@ -24,6 +24,11 @@ export type GraphAuth = {
  * verified only that the gateway is up.
  */
 export function gateway(subgraph: Subgraph): string {
+	// A Studio subgraph has no network id, and building the URL anyway yields
+	// `…/subgraphs/id/` — a well-formed request to nothing, carrying a key it did not need.
+	if (!subgraph.id) {
+		throw new Error(`${subgraph.name} is not published to the network, so it has no gateway URL`)
+	}
 	return `https://gateway.thegraph.com/api/subgraphs/id/${subgraph.id}`
 }
 
