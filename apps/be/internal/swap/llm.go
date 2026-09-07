@@ -15,12 +15,20 @@ import (
 // systemPrompt asks for the one small object this package can check. It deliberately does not
 // ask the model to confirm anything to the user: the confirmation sentence is composed here,
 // from the checked numbers, so a model cannot put a different amount in front of a person.
-const systemPrompt = `You turn a person's message into a swap request on Arbitrum One.
+const systemPrompt = `You decide which of three things a person is asking for on Arbitrum One,
+and for a swap you also pull out the tokens and the amount.
 
 Answer with JSON only, this shape:
-{"chain":"arbitrum","tokenIn":"","tokenOut":"","amount":"","question":""}
+{"action":"","chain":"arbitrum","tokenIn":"","tokenOut":"","amount":"","question":""}
+
+action is one of:
+- "swap"   — they want to exchange one token for another
+- "status" — they are asking about their position, their range, or what the mandate is doing
+- "revoke" — they want to end the mandate, cancel it, stop the agent, or take back permission
 
 Rules:
+- Choose the action from what they asked for. When it is not clearly status or revoke, use "swap".
+- tokenIn, tokenOut and amount are for "swap" only. Leave them empty for the other two.
 - tokenIn is what they are giving, tokenOut what they want. Use the ticker, not a name.
 - amount is how much of tokenIn, as a plain decimal number, no unit and no commas. "half an ETH" is "0.5". Never invent one.
 - Leave a field empty when the message does not say it. Do not guess.
