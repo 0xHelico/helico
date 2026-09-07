@@ -30,12 +30,27 @@ that exists, and #22 asks for a full-length take by **11 September** rather than
 
 | Shot | Needs | Fallback if it is not there |
 |---|---|---|
-| 3 — the swap | `HelicoMandateSwap` deployed to Arbitrum One | the fork test, `forge test --match-contract ForkMandateSwapTest -vv` |
+| 3 — the swap | `HelicoMandateSwap` deployed to Arbitrum One | the fork test, `forge test --match-contract ForkMandateSwapTest -vvvv` — **the four `v`s are the shot**, see below |
 | 4 — the query | the subgraph deployed and indexing | skip the shot; give its 25 seconds to shot 5 |
 | 5 — the enclave | nothing, works today | — |
 
 A shot that has to fall back is not a weaker video. A shot that claims something untrue ends the
 submission.
+
+### Pre-flight, run 7 September
+
+Checked so the first take is not spent discovering these. Re-check on the day — the point of the
+list is that it changes.
+
+| | State on 7 September |
+|---|---|
+| `app.helico.site` (shot 0) | 200. The chat path answers: "swap 1000 USDC to WETH" returns the checked intent, same pair the fork test uses |
+| `helico.site`, `api.helico.site/healthz` | 200 |
+| Shot 3, the swap | **Recordable in full today.** The fork test runs against the Aqua 1inch actually deployed at `0x499943E7…`, so the spoken line about the real deployment is true in the fallback too. Deploying `HelicoMandateSwap` upgrades this shot; it does not unblock it |
+| Shot 3, at `-vv` | **Would have cost a take.** One `[PASS]` line, no balances. Use `-vvvv` |
+| Shot 4, the subgraph | Not deployed. Fall back as written |
+| Shot 5, the enclave | Runs. A recorded rehearsal with its numbers checked is in [`docs/evidence/2026-09-07-cre-rehearsal.md`](evidence/2026-09-07-cre-rehearsal.md) |
+| "Deployed", "live", "in production" | Still says nothing that is deployed except Aqua itself, which is 1inch's |
 
 ## Shot list
 
@@ -109,10 +124,22 @@ Speak over the run. Cut the waiting, never speed it up.
 
 *Screen: the swap completing — the maker's wallet balances before and after, and the recipient's.*
 
+> **Run it as `forge test --match-test test_ARealSwapMovesTokensStraightOutOfTheMakersWallet -vvvv`.**
+> At `-vv` this test prints one green `[PASS]` line and nothing else, which is not the screen this
+> shot describes. At `-vvvv` the trace is 83 lines and contains the whole story in the two
+> `Transfer` events: `Alice -> Bob, 296147410319118389` for the WETH, and
+> `PayingTaker -> Alice, 1000000000` for the thousand USDC. Neither Aqua nor `HelicoMandateSwap`
+> appears as a `from` or a `to` on any transfer — which is the sentence below, on screen, checkable
+> by a viewer who pauses.
+
 > A thousand USDC in, and the WETH goes straight out of the maker's wallet to the recipient.
 > Aqua held nothing. The app held nothing. There was never a moment when anyone else had custody.
 
 *Screen: the same swap one wei over the ceiling, refused by name.*
+
+> Same four `v`s: `forge test --match-test test_TheCeilingStillRefusesOnTheRealChain -vvvv`. The
+> line to frame is `MandateCeilingExceeded(0x82aF4944…, 296147410319118389, 296147410319118388)` —
+> asked for, then permitted, one wei apart.
 
 > Ask for more than the mandate allows and it is refused — with the number that was asked for and
 > the number that was permitted.
