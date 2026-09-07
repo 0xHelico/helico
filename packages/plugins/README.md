@@ -10,6 +10,8 @@ A plugin may depend on [`@helico/core`](../core/) through `workspace:*`; none do
 |---|---|---|
 | [`cre/`](cre/) | `@helico/plugin-cre` | Chainlink CRE confidential workflows |
 | [`uniswap/`](uniswap/) | `@helico/plugin-uniswap` | Uniswap v4 on-chain, any chain: pools, quotes, swaps, Permit2 approvals, liquidity |
+| [`thegraph/`](thegraph/) | `@helico/plugin-thegraph` | The Graph: our Aqua subgraph, and Uniswap v4's published one |
+| [`1inch/`](1inch/) | `@helico/plugin-1inch` | 1inch Aqua: concentrated positions priced by the deployed SwapVM |
 
 ## Why a package rather than code inside an app
 
