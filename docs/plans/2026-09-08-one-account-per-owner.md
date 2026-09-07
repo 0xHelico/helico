@@ -64,6 +64,31 @@ memindahkan dana. Pintu darurat hanya menolong pemilik yang sempat memakainya. S
 pertahanan sesungguhnya adalah kunci itu memang hidup di dalam enclave dan tidak pernah keluar —
 yang justru inti klaim Chainlink kami, dan sekarang jadi taruhannya juga.
 
+#### Keputusan 8 September: kuasanya tetap, penjaganya di backend
+
+Audit dan riset arsitektur sama-sama menyarankan mencabut kuasa upgrade otomatis dari CRE. Ghoza
+menolak saran itu, dan memilih penjaga yang lebih sederhana:
+
+> **Backend memeriksa implementation address setiap account sebelum CRE mengeksekusi. Kalau bukan
+> implementation yang dikenal, CRE tidak jalan.**
+
+Bentuknya: daftar `codehash` implementasi yang sudah ditinjau, disimpan di sisi backend. Sebelum
+menyusun laporan CRE untuk sebuah account, backend membaca slot EIP-1967 account itu, mengambil
+`extcodehash` implementasinya, dan membandingkan. Tidak cocok berarti account itu dilewati —
+bukan gagal, hanya tidak dilayani — dan selisihnya dicatat.
+
+Apa yang penjaga ini beli, dan apa yang tidak — dicatat supaya tidak dikira lebih dari yang benar:
+
+- **Dibeli:** implementasi asing tidak bisa memakai CRE sebagai eksekutornya. Upgrade yang tidak
+  kami kenal langsung melepas account itu dari otomasi, tanpa perlu ada yang menyadarinya dulu.
+  Juga: mismatch adalah alarm, bukan cuma penolakan.
+- **Tidak dibeli:** ini tidak menghentikan pemegang kunci upgrade yang jahat. Siapa pun yang
+  menguasai kunci itu bisa mengganti kode lalu memindahkan dana lewat account-nya sendiri, tanpa
+  pernah menyentuh CRE. Pemeriksaan ini adalah lapis deteksi dan penahanan, bukan pencabutan
+  wewenang.
+
+Kedua kalimat itu berlaku bersamaan, dan itu memang yang dipilih.
+
 ### CRE boleh memakai protokol lending di luar daftar pemiliknya
 
 Yang dibeli: modal mengejar hasil terbaik tanpa pemiliknya harus memperbarui mandat.
