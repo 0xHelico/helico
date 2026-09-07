@@ -2,48 +2,123 @@
 import '../styles/global.css'
 
 interface Props {
-	title: string
+	/** Page name; the home page passes none and gets the tagline. */
+	title?: string
 	description?: string
+	type?: 'website' | 'article'
+	/** Extra JSON-LD for the page, already an object. */
+	jsonLd?: Record<string, unknown>
 }
 
-// Absolute URLs for the social cards come from `site` in astro.config once the page is deployed.
+const site = 'Helico'
+// Google Analytics measurement id. Public by design: it identifies the property, and cannot
+// read from it.
+const GA_ID = 'G-4G8KMPJLCF'
+const tagline = 'Your Funds, on Autopilot'
 const origin = (Astro.site ?? Astro.url).origin
+const canonical = new URL(Astro.url.pathname, origin).href
 const {
 	title,
-	description = 'Commit a mandate once. A Chainlink CRE enclave watches your Uniswap v4 position and decides when to re-centre; the vault refuses anything outside what you signed.',
+	description = 'Helico keeps your funds working while prices move, under rules you set once. It can move your money. It can never keep it.',
+	type = 'website',
+	jsonLd,
 } = Astro.props
+const fullTitle = title ? `${title} | ${site}` : `${site} | ${tagline}`
+const image = `${origin}/og.webp`
+const organisation = {
+	'@context': 'https://schema.org',
+	'@type': 'Organization',
+	name: site,
+	url: origin,
+	logo: `${origin}/icon-512.webp`,
+	sameAs: ['https://x.com/0xhelico', 'https://github.com/0xHelico/helico'],
+}
+const website = {
+	'@context': 'https://schema.org',
+	'@type': 'WebSite',
+	name: site,
+	url: origin,
+}
 ---
 
 <html lang="en">
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>{title}</title>
+		<title>{fullTitle}</title>
 		<meta name="description" content={description} />
 		<meta name="generator" content={Astro.generator} />
+		<meta name="robots" content="index, follow, max-image-preview:large" />
 		<meta name="theme-color" content="#ffffff" />
+		<link rel="canonical" href={canonical} />
+		<link rel="sitemap" href="/sitemap.xml" />
 		<link rel="icon" href="/favicon.ico" sizes="any" />
 		<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
 		<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
 		<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
 		<link rel="manifest" href="/site.webmanifest" />
-		<meta property="og:type" content="website" />
-		<meta property="og:site_name" content="Helico" />
-		<meta property="og:title" content={title} />
+		<meta property="og:type" content={type} />
+		<meta property="og:site_name" content={site} />
+		<meta property="og:locale" content="en_US" />
+		<meta property="og:url" content={canonical} />
+		<meta property="og:title" content={fullTitle} />
 		<meta property="og:description" content={description} />
-		<meta property="og:image" content={`${origin}/og.webp`} />
+		<meta property="og:image" content={image} />
+		<meta property="og:image:width" content="512" />
+		<meta property="og:image:height" content="512" />
+		<meta property="og:image:alt" content="The Helico mark" />
 		<meta name="twitter:card" content="summary" />
-		<meta name="twitter:title" content={title} />
+		<meta name="twitter:site" content="@0xhelico" />
+		<meta name="twitter:title" content={fullTitle} />
 		<meta name="twitter:description" content={description} />
-		<meta name="twitter:image" content={`${origin}/og.webp`} />
-		<link rel="preconnect" href="https://fonts.googleapis.com" />
-		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-		<link
-			href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=Instrument+Serif:ital@1&family=JetBrains+Mono:wght@400;500&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap"
-			rel="stylesheet"
-		/>
+		<meta name="twitter:image" content={image} />
+		{/* Google Analytics, fetched only once the page has finished loading. Even `async`, the
+		    tag competes for bandwidth on a slow connection and cost 2.1s of largest paint when it
+		    was in the head; after load it costs the paint nothing. The measurement id names a
+		    property and grants no access to it, so it lives here rather than in a secret. */}
+		<script is:inline define:vars={{ GA_ID }}>
+			window.dataLayer = window.dataLayer || []
+			function gtag() {
+				window.dataLayer.push(arguments)
+			}
+			gtag('js', new Date())
+			gtag('config', GA_ID)
+			const loadAnalytics = () => {
+				const s = document.createElement('script')
+				s.async = true
+				s.src = `https://www.googletagmanager.com/gtag/js?id=${GA_ID}`
+				document.head.appendChild(s)
+			}
+			if (document.readyState === 'complete') loadAnalytics()
+			else window.addEventListener('load', loadAnalytics, { once: true })
+		</script>
+		<script type="application/ld+json" set:html={JSON.stringify(organisation)} />
+		<script type="application/ld+json" set:html={JSON.stringify(website)} />
+		{jsonLd && <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />}
 	</head>
 	<body>
 		<slot />
+		<script>
+			// Each [data-reveal] container shows its parts in order once it scrolls into view.
+			// Lists (cards, FAQ items, logos, buttons) count their own children as parts.
+			document.documentElement.classList.add('js')
+			const lists = '.cards, .faq__list, .brands__grid, .updates__actions, .actions, .hero__copy'
+			for (const box of document.querySelectorAll<HTMLElement>('[data-reveal]')) {
+				const items = Array.from(box.children).flatMap((c) => (c.matches(lists) ? Array.from(c.children) : [c])) as HTMLElement[]
+				items.forEach((el, i) => {
+					el.classList.add('reveal-item')
+					el.style.setProperty('--i', String(i))
+				})
+				const io = new IntersectionObserver(
+					(entries) => {
+						if (!entries.some((e) => e.isIntersecting)) return
+						for (const el of items) el.classList.add('is-in')
+						io.disconnect()
+					},
+					{ threshold: 0.1 },
+				)
+				io.observe(box)
+			}
+		</script>
 	</body>
 </html>

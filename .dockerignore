@@ -1,0 +1,18 @@
+# The landing and the app both build from the repository root (Bun workspaces); keep the
+# context small.
+.git
+**/node_modules
+**/dist
+**/.astro
+**/.next
+contracts/lib
+contracts/out
+contracts/cache
+contracts/broadcast
+apps/be/*.db*
+**/.env
+**/.env.*
+!**/.env.example
+docs
+*.md
+!apps/be/content/*.md

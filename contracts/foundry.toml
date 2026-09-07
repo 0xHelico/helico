@@ -20,3 +20,5 @@ bracket_spacing = false
 # at their own node; `forge test` skips the fork suite when it is unset.
 [rpc_endpoints]
 arbitrum = "${ARBITRUM_RPC_URL}"
+base = "${BASE_RPC_URL}"
+mainnet = "${MAINNET_RPC_URL}"

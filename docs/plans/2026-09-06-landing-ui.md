@@ -332,3 +332,232 @@ phones and a sidebar from tablet up.
   general, not all crypto-native. Look at aave.com and morpho.org."
 - "Look at aave.com: even a web2 person or someone who does not know crypto understands it
   easily, right?"
+
+## Revision — what a user actually needs to know
+
+Looking at the result, the user found four places still written for us rather than for a
+reader who only wants to know whether their money keeps earning and stays theirs:
+
+- the rule rows in the panel carried a label, a field name, a value and a sentence each; now
+  one line per rule (label, value, a few muted words, the link), field names moved into the
+  link's tooltip;
+- the three templates read "Tight / Steady / Guarded" with tick chips; now "Active / Relaxed /
+  Cautious", each labelled by what it is for ("Earns the most", "Moves the least", "Keeps the
+  most") with two plain chips;
+- the "Verified by default" grid of six counts and a two-bar chart is gone; in its place
+  "Your money stays yours" with three promises (never held, never outside your rules, nothing
+  hidden) and the one number a reader can hold, 94% kept working in the rehearsal, with its
+  caveat. The live price marker went with it: a number no reader could use;
+- the builders' section is labelled "For builders" and "Built in the Open", with the code
+  figure and package cards shown directly, as the user asked, rather than behind a toggle.
+
+The FAQ answers now unfold downward (`::details-content` height transition, instant where the
+browser lacks it, off under reduced motion).
+
+SEO in the same pass: titles as `Page | Helico` with the tagline on the home page, a
+consumer-language default description, canonical and `og:url`, image size and alt, the X
+handle, `robots.txt`, a generated `sitemap.xml` listing the posts, and JSON-LD for the
+organisation, the site and each blog post. `site` in the Astro config is `https://helico.site`.
+
+### Prompts, verbatim in translation
+
+- "Too much; it becomes less clear." (the rule rows)
+- "The language is too complex." (the templates)
+- "Does the user need to know this?" (the package cards) and "Again, what is a user supposed
+  to do with this; a user only cares about profit." (the counts)
+- "Too complex." (the chart)
+- "And when an FAQ is clicked, give the answer a downward animation."
+- "Improve all the SEO, and use a pipe as the site title separator."
+- "Just show it directly, no need for this button." (the builders' toggle)
+- "No need for a Read the FAQ button, is there?"
+
+And one word: "deposit" is "funds" everywhere a reader meets it ("Your Funds, on Autopilot",
+"your funds stay in your wallet"), because a deposit sounds like something handed over.
+
+- Prompt: "Can the word deposit be changed to funds?"
+
+The logo grid is "Built with", and OpenZeppelin, Foundry and ETHGlobal (wordmarks, no logo
+files) are replaced by the three logos the user supplied: Ethereum, FREE-PI and One Dollar
+Audit. The last two are not referenced anywhere else in the repository; the user is asked to
+confirm they were in fact used, since a claim the repository cannot back does not belong here.
+
+- Prompt: "Use these to replace OpenZeppelin, Foundry, ETHGlobal." (three images)
+
+The hero's lede is one sentence: "Your funds keep earning while prices move, under rules you
+set once." The three-sentence version explained the mechanism first, and the user found it too
+long and unclear for a general reader; the safety line lives in "Your money stays yours".
+
+- Prompt: "'Money in a trading pool earns only while…' is too long and not clear enough for a
+  general user."
+
+Shorter still, at the reference's length ("The World's Savings App / Get paid every second
+with global rates and Balance Protection."): "Your funds keep earning while prices move."
+The rules are the next section's subject.
+
+- Prompt: "Aave is like this: 'The World's Savings App / Get paid every second…'. Ours is too
+  long."
+
+The nav's button is "Launch App", pointing at `https://app.helico.site` (not live yet; the
+user's decision), on desktop and in the phone sheet. The hero has one button, "Learn More",
+to the next section.
+
+- Prompt: "The top-right nav button 'Launch App', later pointing at app.helico.site. In the
+  hero just a 'Learn More' button."
+
+The hero's "Learn More" goes to `https://docs.helico.site` (not live yet; the user's
+decision).
+
+- Prompt: "And Learn More later goes to docs.helico.site."
+
+## Revision — motion: the canvas loops, and sections arrive in order
+
+The hero canvas stopped on "Hold": its timer was re-armed only when the scenario's duration
+changed, and the last two scenarios share one. It is re-armed on every change of scenario now,
+so after Hold it returns to Mandate and keeps going (watched for a minute headless:
+Mandate → Re-centre → Refuse → Hold → Mandate).
+
+Every section is a `[data-reveal]` container whose parts (heading, lede, buttons, each card,
+each FAQ item, each logo) fade and rise one after another, 90 ms apart, the first time the
+section scrolls into view. Only with JavaScript (nothing is hidden without it) and only when
+the reader has not asked for reduced motion.
+
+### Prompts, verbatim in translation
+
+- "Make the canvas go back to Mandate after Hold finishes, so it always loops."
+- "And give each component an entrance animation in sequence, so they do not all appear at
+  once."
+
+## Revision — the docs site is the destination for reading
+
+Every "learn more" used to land on a README on GitHub, which reads as a detour unless the
+reader came for the repository. Now that `docs.helico.site` exists, one rule decides each link:
+a link that means **read about Helico** goes to the docs site, and a link that means **look at
+the code or a repository artifact** stays on GitHub with a label that says so.
+
+So the nav gains a Docs entry (desktop and phone sheet); the concept entries in its menus point
+at the matching docs pages; "Get Started", both "Learn More" buttons, "See the Record" and
+"Learn More About Helico" go to docs pages; and "See the Code", "Read the Plans", "open on
+GitHub", "Read the source", "AI usage", "Uniswap feedback", the licence and the vault line
+permalinks stay on GitHub, because that is where those things live.
+
+### Prompt, verbatim in translation
+
+- "Can the landing redirect to https://docs.helico.site/ instead? Linking to a GitHub README
+  feels odd, unless the context really is GitHub." and "In the nav as well as in the content."
+
+## Revision — Google Analytics, loaded after the page rather than during it
+
+Property `G-4G8KMPJLCF`, on every page including the blog. Two things about how, both measured:
+
+**It loads after `load`, not in the head.** The usual snippet puts an `async` script in the head,
+and even async it competes for bandwidth on a slow connection. Measured on the same build:
+
+| | Performance | First paint | Largest paint |
+|---|---|---|---|
+| Tag in the head, async | 74 | 2.9s | 5.0s |
+| Tag injected after load | **98** | **1.8s** | **2.1s** |
+
+Two seconds of largest paint for a pageview is not a trade worth making, and injecting the
+script on `load` costs the paint nothing. A visitor who leaves before `load` fires is not
+counted; on a page this size that is a rounding error against two seconds for everyone else.
+
+**The container's policy allows it exactly three things** — the script from
+`googletagmanager.com`, beacons to `google-analytics.com` and `analytics.google.com`, and the
+pixel — and still refuses everything else that is not this site.
+
+The measurement id sits in the repository. It names a property and grants no access to it, so
+treating it as a secret would be theatre.
+
+Verified with a browser rather than by reading: after load the page requests
+`gtag/js?id=G-4G8KMPJLCF` and then `google-analytics.com/g/collect`, and `dataLayer` holds the
+four entries the snippet pushes.
+
+### Prompt, verbatim in translation
+
+- "Add Google Analytics, G-4G8KMPJLCF. For this one: issue, PR, and merge it straight away."
+
+## Revision — the bar hands over earlier, and the sheet ends with the button
+
+Seven menu entries and a call to action fit on one row down to about 900px, but "fits" and
+"reads as deliberate" are different things, and before the webfont loads the fallback is wider,
+so "How It Works" is the first label to break across two lines. The bar now hands over to the
+sheet below **1240px**, and the labels never wrap.
+
+In the sheet, "Launch App" shared a row with the last card. It spans the full width and ends
+the sheet on its own now.
+
+The footer's legal paragraph is a copyright line. The caveats it carried are not lost: the FAQ
+answers *"Is it live? Is it audited?"* with *"Neither, yet"*, the panel is captioned *"An
+example, not a live account. Nothing is deployed yet"*, and the docs have a Status page. A
+footer is a signature, not the place to repeat them.
+
+And the bar no longer changes height when a menu opens at the top of the page. Scrolling and
+opening shared one rule, so hovering shrank the bar from 82 to 64 and moved the very thing the
+pointer was aiming at. Scrolling still shortens it; opening only makes it solid.
+
+### Prompts, verbatim in translation
+
+- "And fix the nav: at that width it should already be a hamburger."
+- "And put Launch App at the very bottom on its own."
+- "Replace [the legal paragraph] with just a Helico copyright."
+- "By the way, when I hover the nav at the top of the page, why does its height change?"
+
+## Revision — a Lighthouse pass, and four links that all said the same thing
+
+Run against the live site rather than a local build:
+
+| | Performance | Accessibility | Best practices | SEO |
+|---|---|---|---|---|
+| Landing, mobile | 82 | 100 | 100 | 92 → **100** |
+| Landing, desktop | 98 | 100 | 100 | 92 → **100** |
+| Blog, mobile | 90 | 100 | 100 | 100 |
+
+The only thing marked down was link text: **four buttons all said "Learn More"** and went to four
+different places, which tells a search engine nothing and a reader less. They now say what they
+are: *Read the Docs*, *See the Contract*, *About the Rules*, *Docs for Builders*, and the FAQ's
+closing link is *Read the Helico docs*. The three *Read the source ↗* links keep their words and
+gain an accessible name naming the package, so a screen reader reading links out of context can
+tell them apart.
+
+Performance had one real cause, and it was not the canvas. **Nothing painted until the
+stylesheet from `fonts.googleapis.com` answered**: first paint and largest paint were the same
+moment, 3.6s on throttled 4G, because a third-party render-blocking request has to finish before
+anything is drawn. The fonts are served from this origin now, through `@fontsource`, and the
+Google origins are gone from the page and from the container's Content-Security-Policy.
+
+Measured on the same machine, same throttling, both builds served locally so the comparison is
+fair:
+
+| | Performance | First paint | SEO |
+|---|---|---|---|
+| Before | 89 | 2.9s | 92 |
+| After | 93 | **2.2s** | **100** |
+
+Largest paint is unchanged at 2.9s and blocking time is still zero; what moved is the wait
+before anything appeared. The canvas stays: it is the page's one moving explanation of what the
+product does, and it was never the thing holding the paint.
+
+### Merging the two policies, and one thing that only running it would show
+
+Analytics landed on `main` about two hours after this branch was cut, and it widened the very
+header this branch narrows. Resolving that by taking either side alone would have been wrong in
+a way nothing would report: this branch's version switches Analytics off, and a blocked script
+is a console message on the visitor's machine — the page renders, the deploy check passes,
+`/healthz` answers 200, and the only symptom is a dashboard that stays empty, which looks
+exactly like nobody visiting.
+
+So the header is the union: the Google font origins gone, the Analytics origins kept.
+
+Serving the built site under that exact policy and watching a browser turned up a third thing
+neither side knew about. `@fontsource/jetbrains-mono` inlines its smaller subsets as `data:`
+URIs, and `font-src 'self'` refuses those — four `@font-face` rules blocked, again with no
+symptom but a console line. `font-src 'self' data:` is what a self-hosted font build actually
+needs.
+
+Checked under the merged policy: `gtag/js` requested, the `collect` beacon sent, `dataLayer`
+holding its four entries, four woff2 files from this origin, nothing from Google, and no CSP
+violations at all.
+
+### Prompt, verbatim in translation
+
+- "Run a Lighthouse audit of the landing."

@@ -479,6 +479,15 @@ Format: date · what was done · the AI's role · what a human verified.
 - **Copy overhaul:** after the user pointed at aave.com and morpho.org, the tabs, rule labels,
   values, template chips, nav titles and one new FAQ were rewritten in the words a savings app
   would use, with the field names kept beside the plain labels for builders. Facts unchanged.
+- **Second pass, from screenshots:** one line per rule, plainer templates, the counts and
+  chart replaced by three promises and the rehearsal's 94%, the builders' section labelled as
+  such, the FAQ unfolding, and an SEO pass (pipe-separated titles, canonical, robots, sitemap,
+  JSON-LD). Verified with `astro check`, the build, and the audits at zero.
+- **Wording:** "deposit" became "funds" throughout the page at the user's request; grammar fixed by hand.
+- **Logos:** the "Built with" grid swaps three wordmarks for logos the user supplied (Ethereum, FREE-PI, One Dollar Audit), converted to lossless webp; the user is asked to confirm the last two were used.
+- **Motion:** the canvas loop bug (timer keyed on duration, two neighbours share one) fixed; sections reveal their parts in sequence on first view, JS- and reduced-motion-guarded. Watched headless: the loop returns to Mandate; 53 parts arm and complete; audit at zero.
+- **Links:** reading links repointed from GitHub READMEs to docs.helico.site, in the nav and
+  every section; code links unchanged. All eight docs URLs checked live, audit at zero.
 
 ### 2026-09-06 — Landing page: plain words
 
@@ -574,8 +583,75 @@ Format: date · what was done · the AI's role · what a human verified.
   existing tests were quietly relying on the silent replacement and now `revoke()` first, which
   is the flow a user has.
 
-### 2026-09-06 — CRE: the enclave explains its own verdict
+### 2026-09-06 — Landing: container image, VPS, and a deploy on every merge
 
+- **Done:** a read-only security survey of the VPS recorded in
+  `docs/plans/2026-09-06-landing-deploy.md`; `apps/landing/Dockerfile` (Bun build, nginx
+  unprivileged, cache and security headers, health check) and `.dockerignore`; a workflow that
+  publishes the image to GHCR on every merge to `main` and asks Coolify to redeploy; the
+  `helico.site` nginx site and certificate on the VPS within the deploy user's granted rights.
+  Closes #100 once the Coolify application exists, which only the owner can create.
+- **AI's role:** the survey, the files and the server steps. The owner's instruction, verbatim
+  in translation, is in the plan.
+- **Follow-up:** the forced command now waits for a new container to answer the public URL
+  before it returns, so a deploy that never came up fails the workflow; the script is committed
+  at `scripts/coolify-deploy.sh`. Both workflows clean their key files with a `trap`.
+- **Follow-up (#108):** the deploy call moved from an HTTP bearer token to SSH with a
+  forced command on the server; the exposed tokens were revoked. Verified by a run.
+- **Follow-up:** the Coolify project and application created through Coolify's API from the
+  server, a deploy-only token placed in the repository secrets, the deploy call corrected to
+  `POST`, and squash/rebase merging switched off in the repository settings.
+- **Verified:** the image built on the VPS and run on a private port: every route 200, 404 on
+  a missing page, gzip, immutable cache on hashed assets, headers, non-root nginx, health
+  `healthy`; `https://helico.site` answers with a valid certificate (502 until the container
+  exists). The SSH password test, the sudo rights and the port list were checked on the box,
+  not assumed. The laptop's Docker daemon was not running, so the local check is the server's.
+
+### 2026-09-06 — Backend: the swap conversation
+
+- **Done:** `internal/swap` (a token registry whose addresses were read from Arbitrum One, the
+  checks that turn a model's draft into an intent or a refusal, an OpenAI-compatible client, and
+  the service that composes its own confirmation sentence), `POST /api/swap/intent` with a rate
+  limiter and a 503 when no model is configured, the `BE_LLM_*` and `BE_SWAP_*` settings, and the
+  README section. The half of #99 that is not the enclave's; #101 is the other half.
+- **AI's role:** wrote it, on the owner's "continue, you execute". The design rule it follows is
+  the vault's: the model proposes, the code checks, and an address can only come from the file
+  the project committed.
+- **Review fixes:** a comma in the amount was read as a thousands separator and turned `0,5`
+  into five; the rate limit counted a caller-written header; `BE_LLM_TIMEOUT` could not be
+  reached under the request timeout; and the 502 handed the provider's error text out. Each was
+  reproduced, fixed, and pinned with a test, including the reviewer's own forged-header probe.
+- **Verified:** `go vet`, `gofmt`, `go test -race ./...` across every package; table tests for the
+  amount arithmetic and each refusal; a fake model over `httptest` for the endpoint, the 503, the
+  429 and the limiter's refill. Then four real messages against `gpt-4o-mini`, including one where
+  the model invented a token and the registry refused it — the table is in the plan. Each token
+  address was checked on chain with `symbol()` and `decimals()`, which is how the `USD₮0` naming
+  came to be written down.
+
+### 2026-09-06 — Backend: the blog API on the VPS
+
+- **Done:** `apps/be/Dockerfile` (static Go build, non-root Alpine runtime, content baked in,
+  `/data` volume), a `be` workflow over the SSH forced command, the landing Dockerfile passing
+  `BE_URL` at build time; on the server the `api.helico.site` nginx site and certificate, the
+  Coolify application with its volume and environment, and the automation's `.env` pointed at
+  it. Plan in `docs/plans/2026-09-06-be-deploy.md`.
+- **AI's role:** all of it, on the owner's "continue" and the earlier instruction that the API
+  would live at `api.helico.site`.
+- **Verified:** the image built by Coolify; `/healthz` and `/api/posts` over TLS; a `PUT` with
+  the token and the post read back; the landing rebuilt against the API.
+
+### 2026-09-06 — Landing: a Lighthouse pass, and analytics that costs nothing
+
+- **Done:** the audit's one finding fixed (four links reading "Learn More" to four destinations),
+  the fonts moved off `fonts.googleapis.com` to this origin, and Google Analytics added, injected
+  after `load` rather than placed in the head.
+- **AI's role:** ran the audit, read the waterfall, made the changes, measured each one.
+- **Verified:** Lighthouse against the live site and then both builds served locally so the
+  comparison was fair. Fonts: first paint 2.9s → 2.2s, SEO 92 → 100. Analytics in the head cost
+  performance 93 → 74 and largest paint 2.9s → 5.0s; injected after load it measures 98, and a
+  browser confirms the tag and the collect beacon both fire.
+
+### 2026-09-06 — CRE: the enclave explains its own verdict
 - **Done:** `packages/plugins/cre/src/ai.ts` asks a language model to turn the decision into a
   sentence the position's owner can read, over the HTTP capability from inside the TEE, with the
   router's two credentials released by the Vault DON. It decides nothing — `decide` has already
@@ -588,6 +664,65 @@ Format: date · what was done · the AI's role · what a human verified.
   without it — and the notice guard needed a second test, because the recorded fixture was
   caught by the token guard first and proved nothing about it. Fixtures are real bodies from
   the router, recorded today; every one of them arrived as HTTP 200.
+
+### 2026-09-07 — The dapp: a wallet, and a sentence that becomes a checked intent
+
+- **Done:** `apps/app` — the `vercel/chatbot` template pruned to a chat surface and added to
+  the monorepo as a workspace member, Reown AppKit as the only identity (Arbitrum One, email
+  and social login switched off), a server route that forwards the sentence to `apps/be` and
+  renders exactly what came back, and an intent card that ends by saying signing is not wired
+  yet. `ncu -u` inside `apps/app` only.
+- **AI's role:** all of it, on the owner's instructions, which are recorded verbatim in
+  translation in the plan.
+- **Plan:** docs/plans/2026-09-07-app-dapp.md
+- **Verified:** in a browser against a local `apps/be` built from the #115 branch with a real
+  model key. The Reown modal lists 310 wallets and offers no email field; "Swap half an ETH
+  into USDC" comes back as *Swapping 0.5 ETH into USDC on Arbitrum One*; the card shows
+  Arbitrum One and `500000000000000000`; the honesty line renders; the console is clean.
+  `tsc --noEmit`, `biome check .` and `next build` all pass.
+
+### 2026-09-07 — The dapp does something: the swap executes, the mandate is set, and it is deployed
+
+- **Done:** `bestPoolFor` and `planSwap` in `@helico/plugin-uniswap` (pool, quote, both Permit2
+  approvals, calldata, in one call); the vault's user-facing functions, errors and refusal rules
+  added to `@helico/plugin-cre` with a test that fails if its ABI and `mandateHash` stop
+  describing the same struct; one viem across the workspace; the app's swap card and mandate page;
+  a fork fixture that deploys the real vault and hands over a real position; the container image,
+  the nginx site, the certificate, the Coolify application and the deploy workflow for
+  `app.helico.site`.
+- **AI's role:** all of it, on the owner's instruction to make the dapp fully functional and keep
+  it maintainable. The instruction and the design decisions are in the plan.
+- **Plan:** docs/plans/2026-09-07-app-fully-functional.md
+- **Verified:** by running, never by reading. On an anvil fork of Arbitrum One: 0.1 ETH bought
+  248.974068 USDC and half came back as 0.049937 ETH through approve → approve → swap. Through a
+  browser with a wallet injected: 0.5 ETH became 1244.280761 USDC, and on `/mandate` the rules
+  were committed and revoked with the chain agreeing both times. Live:
+  `https://app.helico.site` answers 200 on `/` and `/mandate`. Two mistakes are recorded in the
+  plan rather than quietly fixed — anvil's default account has code on an Arbitrum fork and
+  drains itself, and `bestPoolFor` used to report an unreachable node as an empty pair.
+- **Not done, and said so:** the deployed chat answers "the swap service is not answering" until
+  #115 merges, and the mandate page says the vault is not deployed until #85.
+
+### 2026-09-07 — The sidebar back, and the session that makes it mean something
+
+- **Done:** the template's shell restored — `SidebarProvider`, the collapsible sidebar with New
+  chat above a history grouped by age, and the account block in the footer — plus what it needs
+  to be real: EIP-712 sign-in and per-address conversations in `apps/be`
+  (`internal/session`, `internal/chat`, nine routes), and the browser's side of them.
+- **AI's role:** all of it, on the owner's correction that the shell should match the template
+  first and be changed after. The instruction is quoted in the plan.
+- **Plan:** docs/plans/2026-09-07-app-sidebar-and-sessions.md
+- **Verified:** the digest a wallet signs was computed in Go and in viem and matched byte for
+  byte, and that value is pinned in a test — everything else would have agreed with itself even
+  if the domain string were wrong. In a browser with a wallet injected: signed in, sent two
+  messages, reloaded, and the sidebar showed the conversation with both messages still in it; a
+  second wallet in its own context saw none of them. Go tests cover a signature from the wrong
+  address, a replayed nonce, a stale one, a tampered payload, a forged cookie, and an
+  authenticated stranger trying every chat route.
+- **Two bugs the work found rather than review:** turns were ordered by a second-resolution
+  timestamp with a random id as the tiebreak, so a question and its answer came back reversed
+  about half the time; and the session was a plain hook, so every component had its own copy and
+  signing in from the sidebar left the chat still believing it was signed out.
 
 <!--
 Template for the next entry:

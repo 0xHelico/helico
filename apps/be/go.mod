@@ -3,7 +3,9 @@ module github.com/0xHelico/helico/apps/be
 go 1.25.0
 
 require (
+	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1
 	github.com/yuin/goldmark v1.8.6
+	golang.org/x/crypto v0.41.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.58.0
 )

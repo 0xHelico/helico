@@ -2,24 +2,24 @@
 import { Image } from 'astro:assets'
 import logo from '../../assets/logo.webp'
 const repo = 'https://github.com/0xHelico/helico'
-const watch = `${repo}/subscription`
+// Reading about Helico goes to the docs site; looking at the code goes to GitHub.
+const docs = 'https://docs.helico.site/docs'
 const x = 'https://x.com/0xhelico'
 const columns = [
-	{ title: 'Product', links: [['Vault', `${repo}/tree/main/contracts`], ['Plugins', `${repo}/tree/main/packages/plugins`], ['Evidence', '/#verified']] },
-	{ title: 'Developers', links: [['GitHub', repo], ['Plans', `${repo}/tree/main/docs/plans`], ['AI usage', `${repo}/blob/main/AI-USAGE.md`], ['Contributing', `${repo}/blob/main/CONTRIBUTING.md`]] },
-	{ title: 'Resources', links: [['Blog', '/blog/'], ['README', `${repo}#readme`], ['Uniswap feedback', `${repo}/blob/main/FEEDBACK.md`], ['FAQ', '/#faq']] },
+	{ title: 'Product', links: [['Vault', `${docs}/contracts`], ['Plugins', `${docs}/builders`], ['Evidence', '/#verified']] },
+	{ title: 'Developers', links: [['GitHub', repo], ['Plans', `${repo}/tree/main/docs/plans`], ['AI usage', `${repo}/blob/main/AI-USAGE.md`], ['Contributing', `${docs}/contributing`]] },
+	{ title: 'Resources', links: [['Blog', '/blog/'], ['Docs', `${docs}/introduction`], ['Uniswap feedback', `${repo}/blob/main/FEEDBACK.md`], ['FAQ', '/#faq']] },
 	{ title: 'Project', links: [['ETHOnline 2026', 'https://ethglobal.com/events/ethonline2026'], ['MIT license', `${repo}/blob/main/LICENSE`]] },
 ]
 ---
 
 <div class="wrap">
-	<div class="section-card closing">
+	<div class="section-card closing" data-reveal>
 		<section class="section-card section-card--white center updates" aria-label="Stay updated">
 			<h2>Stay Updated</h2>
 			<p>Be the first to hear when the vault goes live.</p>
 			<div class="updates__actions">
 				<a class="btn btn--ink" href={x} target="_blank" rel="noreferrer">Follow on X</a>
-				<a class="btn btn--secondary" href={watch}>Watch on GitHub</a>
 			</div>
 		</section>
 
@@ -46,11 +46,13 @@ const columns = [
 					</a>
 				</div>
 			</div>
+			{/* A signature, not a disclaimer paragraph — but two of the five sentences it replaced
+			     exist nowhere else on the page. "Not audited" and "nothing is deployed" survive in
+			     the FAQ and the panel caption; these two do not, and a reader who never opens the
+			     FAQ would otherwise be told neither. */}
 			<p class="footer__legal">
-				Helico is a hackathon submission built for ETHOnline 2026. Nothing on this page is financial
-				advice. The vault has not been audited for production use, and the scenarios shown are
-				illustrative, using numbers recorded in the repository. Nothing is deployed to a live network
-				yet.
+				© {new Date().getFullYear()} Helico · A hackathon submission for ETHOnline 2026.
+				Nothing here is financial advice.
 			</p>
 		</footer>
 	</div>

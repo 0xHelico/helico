@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import {ForkBase} from "./ForkBase.sol";
+import {ArbitrumFork} from "./ForkBase.sol";
 import {Deploy} from "../script/Deploy.s.sol";
 import {HelicoVault} from "../src/HelicoVault.sol";
 
@@ -10,7 +10,7 @@ import {HelicoVault} from "../src/HelicoVault.sol";
 /// @dev A deploy script nobody has run is the same as no deploy script, and the first time to
 ///      find out that a dependency address is wrong is not while paying mainnet gas with the
 ///      deadline in sight.
-contract ForkDeployTest is ForkBase {
+contract ForkDeployTest is ArbitrumFork {
     Deploy script;
 
     address admin = makeAddr("admin");
@@ -52,7 +52,7 @@ contract ForkDeployTest is ForkBase {
             vault.eip712Domain();
         assertEq(name, "HelicoVault");
         assertEq(version, "1");
-        assertEq(chainId, ARBITRUM_ONE, "the domain binds the chain it was deployed to");
+        assertEq(chainId, expectedChainId, "the domain binds the chain it was deployed to");
         assertEq(verifying, address(vault), "and the address it lives at");
     }
 

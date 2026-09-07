@@ -106,8 +106,12 @@ func cors(origins []string) func(http.Handler) http.Handler {
 				h := w.Header()
 				h.Set("Access-Control-Allow-Origin", origin)
 				h.Add("Vary", "Origin")
-				h.Set("Access-Control-Allow-Methods", "GET, PUT, DELETE, OPTIONS")
+				h.Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 				h.Set("Access-Control-Allow-Headers", "Authorization, Content-Type, If-None-Match")
+				// The session is a cookie, and a cookie only crosses an origin when both sides
+				// say so. Only the allow-list above reaches this line, never a wildcard — the
+				// two are not allowed together, and for good reason.
+				h.Set("Access-Control-Allow-Credentials", "true")
 				h.Set("Access-Control-Expose-Headers", "ETag, X-Request-Id")
 				h.Set("Access-Control-Max-Age", "600")
 				if r.Method == http.MethodOptions {

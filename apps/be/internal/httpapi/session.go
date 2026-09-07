@@ -1,0 +1,215 @@
+package httpapi
+
+import (
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/0xHelico/helico/apps/be/internal/session"
+)
+
+// SessionCookie is the cookie the browser carries. Named plainly: it is not a secret that a
+// session exists, only whose it is.
+const SessionCookie = "helico_session"
+
+// maxSessionBody bounds a sign-in body. A signature is 65 bytes and a nonce is 22 characters.
+const maxSessionBody = 4 << 10
+
+// nonce hands out something to sign, and the typed data to sign it as. The backend builds the
+// payload so the browser cannot quietly sign a different struct.
+func (a *api) nonce(w http.ResponseWriter, r *http.Request) {
+	wallet, err := session.Normalise(r.URL.Query().Get("address"))
+	if err != nil {
+		writeProblem(w, http.StatusBadRequest, "address must be a 20-byte hex address")
+		return
+	}
+	now := a.now()
+	value, err := a.nonces.Issue(now)
+	if err != nil {
+		a.opt.Logger.Error("issue nonce", "err", err, "request_id", requestIDFrom(r))
+		writeProblem(w, http.StatusInternalServerError, "")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"nonce":     value,
+		"issuedAt":  now.Unix(),
+		"typedData": session.TypedData(wallet, value, now.Unix()),
+	})
+}
+
+// refusedNonJSON refuses a state-changing request that does not say it is JSON, and reports
+// whether it did. Demanding application/json is what makes a request non-simple: the browser
+// must preflight, and the origin allow-list gets to refuse before anything is written or set.
+//
+// Both writing routes need it, and for different reasons. requireSession guards a request that
+// already carries the cookie. signIn guards the request that *creates* one, which is the
+// heavier of the two: an attacker fetches a nonce for their own wallet, signs it with their own
+// key — both legitimate — and posts it from a page the victim opens. The victim is then signed
+// in as the attacker, and everything they type afterwards is stored in the attacker's session.
+//
+// SameSite does not cover that one. A cross-site POST response may still store its cookie; what
+// SameSite decides is whether the cookie is *sent* later, and by the victim's next visit to the
+// app the request is same-site and it is sent. So this check, not the cookie policy, is what
+// closes it.
+//
+// POST only, because POST is the only state-changing method that can be simple. DELETE already
+// forces a preflight by being DELETE, so demanding a content-type on a request with no body
+// would buy nothing and would surprise anyone holding curl.
+func refusedNonJSON(w http.ResponseWriter, r *http.Request) bool {
+	if r.Method != http.MethodPost {
+		return false
+	}
+	if ct := r.Header.Get("Content-Type"); strings.HasPrefix(strings.ToLower(ct), "application/json") {
+		return false
+	}
+	writeProblem(w, http.StatusUnsupportedMediaType, "send application/json")
+	return true
+}
+
+// signIn verifies the signature, spends the nonce, and sets the cookie.
+func (a *api) signIn(w http.ResponseWriter, r *http.Request) {
+	if refusedNonJSON(w, r) {
+		return
+	}
+	var body struct {
+		Wallet    string `json:"wallet"`
+		Nonce     string `json:"nonce"`
+		IssuedAt  int64  `json:"issuedAt"`
+		Signature string `json:"signature"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSessionBody)).Decode(&body); err != nil {
+		writeProblem(w, http.StatusBadRequest, "send wallet, nonce, issuedAt and signature")
+		return
+	}
+	sig, err := hex.DecodeString(strings.TrimPrefix(body.Signature, "0x"))
+	if err != nil || len(sig) != 65 {
+		writeProblem(w, http.StatusBadRequest, "signature must be 65 bytes of hex")
+		return
+	}
+	now := a.now()
+	// Verify before spending: a signature that does not check out should not cost the nonce,
+	// or a wrong wallet could burn someone else's in-flight sign-in.
+	wallet, err := session.Verify(body.Wallet, body.Nonce, body.IssuedAt, sig, now)
+	if err != nil {
+		writeProblem(w, http.StatusUnauthorized, verifyDetail(err))
+		return
+	}
+	if err := a.nonces.Spend(body.Nonce, now); err != nil {
+		writeProblem(w, http.StatusUnauthorized, "that nonce is unknown, already used, or expired — ask for another")
+		return
+	}
+	value, err := a.cookies.Issue(wallet, now)
+	if err != nil {
+		a.opt.Logger.Error("issue cookie", "err", err, "request_id", requestIDFrom(r))
+		writeProblem(w, http.StatusInternalServerError, "")
+		return
+	}
+	http.SetCookie(w, a.sessionCookie(value, a.cookies.Life()))
+	writeJSON(w, http.StatusOK, map[string]any{"address": wallet})
+}
+
+func verifyDetail(err error) string {
+	switch {
+	case errors.Is(err, session.ErrStale):
+		return "that signature is too old — ask for a new nonce and sign again"
+	case errors.Is(err, session.ErrBadSignature):
+		return "that signature does not come from the address it claims"
+	default:
+		return "could not verify that signature"
+	}
+}
+
+// whoami reports the address behind the cookie.
+func (a *api) whoami(w http.ResponseWriter, r *http.Request) {
+	wallet, ok := a.address(r)
+	if !ok {
+		writeProblem(w, http.StatusUnauthorized, "no session")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"address": wallet})
+}
+
+// signOut forgets the cookie. Stateless sessions cannot be revoked server-side, so this is
+// exactly as strong as clearing it in the browser — and no weaker.
+func (a *api) signOut(w http.ResponseWriter, _ *http.Request) {
+	http.SetCookie(w, a.sessionCookie("", -time.Hour))
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// sessionCookie builds the session cookie.
+//
+// SameSite=Lax, and the reason is a correction: app.helico.site and api.helico.site are
+// different *origins* but the same *site*. SameSite is decided on the registrable domain, and
+// both are helico.site. This was None on the belief they were different sites, which was wrong
+// and expensive — None makes it a third-party cookie everywhere the page is not on helico.site,
+// and browsers increasingly refuse those. Signing in from a page served anywhere else simply
+// did not stick.
+//
+// Lax is sent on same-site requests of any kind, so app.helico.site reaches api.helico.site
+// with it. Secure stays: a session cookie has no business on a plain connection, and browsers
+// make an exception for localhost so a local run still works.
+func (a *api) sessionCookie(value string, life time.Duration) *http.Cookie {
+	return &http.Cookie{
+		Name:     SessionCookie,
+		Value:    value,
+		Path:     "/",
+		MaxAge:   int(life.Seconds()),
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	}
+}
+
+// digestForSession exists so a test can build the same digest the handler verifies, rather
+// than an independent one that could agree with a mistake.
+func digestForSession(wallet, nonce string, issuedAt int64) ([]byte, error) {
+	return session.Digest(wallet, nonce, issuedAt)
+}
+
+// address is the caller's address, or false when there is no usable session.
+func (a *api) address(r *http.Request) (string, bool) {
+	c, err := r.Cookie(SessionCookie)
+	if err != nil {
+		return "", false
+	}
+	wallet, err := a.cookies.Read(c.Value, a.now())
+	if err != nil {
+		return "", false
+	}
+	return wallet, true
+}
+
+// requireSession refuses anything without one. Chat routes read the address from here and from
+// nowhere else — never from the body, never from a query parameter.
+//
+// It also refuses a state-changing request that does not say it is JSON. Under SameSite=Lax a
+// cross-site form post no longer carries the cookie, so this is now defence in depth rather
+// than the only thing standing there — but it stays: it costs one `if`, it holds if the cookie
+// policy is ever loosened again, and a `text/plain` body reaching a JSON endpoint is worth
+// refusing on its own. `json.Decoder` will happily read a valid JSON prefix and ignore a
+// trailing `=`.
+//
+// Demanding application/json is what makes the request non-simple, so the browser has to ask
+// first and the origin allow-list gets to refuse. One `if`, and the cross-site write is gone.
+//
+// POST only, because POST is the only state-changing method that can be simple. DELETE already
+// forces a preflight by being DELETE, so demanding a content-type on a request with no body
+// would buy nothing and would surprise anyone holding curl.
+func (a *api) requireSession(next func(http.ResponseWriter, *http.Request, string)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		wallet, ok := a.address(r)
+		if !ok {
+			writeProblem(w, http.StatusUnauthorized, "connect a wallet and sign in first")
+			return
+		}
+		// After the session, not before: the attack this stops is a request that already
+		// carries the cookie, and a caller without one deserves to be told that first.
+		if refusedNonJSON(w, r) {
+			return
+		}
+		next(w, r, wallet)
+	}
+}

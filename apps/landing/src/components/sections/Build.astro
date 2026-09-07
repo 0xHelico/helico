@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs'
 import { Code } from 'astro:components'
 import { forkTests, solidityTests } from '../../lib/solidity-tests'
 const repo = 'https://github.com/0xHelico/helico'
+// Reading about Helico goes to the docs site; looking at the code goes to GitHub.
+const docs = 'https://docs.helico.site/docs'
 // Read from the vault source at build time, so the page shows the function as this checkout has it.
 const source = readFileSync(new URL('../../../../../contracts/src/HelicoVault.sol', import.meta.url), 'utf8')
 const from = source.indexOf('    function _checkRange(')
@@ -38,12 +40,12 @@ const packages = [
 ---
 
 <section class="wrap" id="build" aria-labelledby="build-title">
-	<div class="section-card center">
-		<span class="eyebrow">Helico Plugins</span>
-		<h2 class="headline" id="build-title">Build with Helico</h2>
-		<p class="lede">For builders. Two packages that decide, one contract that enforces, and the tests for each.</p>
+	<div class="section-card center" data-reveal>
+		<span class="eyebrow">For builders</span>
+		<h2 class="headline" id="build-title">Built in the Open</h2>
+		<p class="lede">Every line is public: the contract, the program that decides, and the tests for both.</p>
 		<div class="actions">
-			<a class="btn btn--primary" href={`${repo}/tree/main/packages/plugins`}>Start Building</a>
+			<a class="btn btn--primary" href={repo}>See the Code</a>
 			<a class="btn btn--secondary" href={`${repo}/tree/main/docs/plans`}>Read the Plans</a>
 		</div>
 
@@ -57,7 +59,7 @@ const packages = [
 				<h3>Open by default.</h3>
 				<p>The code above is the actual check the contract runs, read from the source when this page is built. Every count below points at the code that proves it.</p>
 			</div>
-			<a class="btn btn--secondary" href={`${repo}#readme`}>Learn More</a>
+			<a class="btn btn--secondary" href={`${docs}/builders`}>Docs for Builders</a>
 		</div>
 		<div class="cards" style="text-align:left">
 			{packages.map((p) => (
@@ -65,7 +67,7 @@ const packages = [
 					<span class="label">{p.name}</span>
 					<span class="stat">{p.stat} <small>{p.unit}</small></span>
 					<p>{p.copy}</p>
-					<a class="link" href={p.href}>Read the source ↗</a>
+					<a class="link" href={p.href} aria-label={`Read the source of ${p.name}`}>Read the source ↗</a>
 				</div>
 			))}
 		</div>
