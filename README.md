@@ -109,8 +109,9 @@ caught.** What that turned up, and the four limits it did not fix, are in
 
 ### The Graph
 
-> ⚠️ **Not built yet.** This section names the work rather than claiming it. It will say what
-> was built, with a link to it, or it will be deleted — it will not stay a description.
+> ⚠️ **Built, not deployed.** The subgraph is in [`subgraph/`](subgraph/) with 8 passing tests.
+> It has not been deployed to Subgraph Studio yet, and nothing queries it, so no part of the
+> product depends on it today. This paragraph changes when that does.
 
 Aqua cannot answer the question an agent has to ask first.
 
@@ -143,8 +144,18 @@ discovers the schema rather than having it hard-coded.
 | Delivery before payment, and the check that makes it safe | [`HelicoMandateSwap.sol#L187-L202`](https://github.com/0xHelico/helico/blob/89054c6fe9fdb8c7cfe7b978e11f9b37a1e42c25/contracts/src/HelicoMandateSwap.sol#L187-L202) |
 | A quote anyone may ask for, under the same rules | [`HelicoMandateSwap.sol#L126-L134`](https://github.com/0xHelico/helico/blob/89054c6fe9fdb8c7cfe7b978e11f9b37a1e42c25/contracts/src/HelicoMandateSwap.sol#L126-L134) |
 
-One thing worth saying plainly: **Aqua on Arbitrum One is empty** — zero events across the last
-10,000,000 blocks. Until somebody else ships a strategy there, this indexes our own activity.
+**A correction, kept rather than quietly edited.** This section said Aqua on Arbitrum One was
+empty. It is not: **1,289 events, 43 strategies shipped by two makers**, between blocks
+403,010,640 and 453,182,946. The query behind the original claim asked for the last 10,000,000
+blocks — and the most recent Aqua event is 49 million blocks old, so it was looking past all of
+it. Absence of evidence read as evidence of absence.
+
+The same mistake put the subgraph's `startBlock` 28 million blocks too late. It came from a
+binary search on `eth_getCode` with `2>/dev/null` on the call: the public RPC *errors* on state
+that old rather than returning empty, and the redirect turned every error into an empty string
+the search read as "no code yet". It found the node's pruning boundary, not the deployment.
+
+Both are fixed, and the real history is what the subgraph indexes.
 
 ### Uniswap v4 — real, tested, and not a submitted track
 
