@@ -72,13 +72,13 @@ It is upgradeable behind a timelock, non-custodial, and every rejection path is 
 
 | What | Where |
 |---|---|
-| The mandate a user commits | [`Mandate.sol#L20-L62`](https://github.com/0xHelico/helico/blob/9b1e8194098425ddab6cdaabc95d6796c5de9fcf/contracts/src/Mandate.sol#L20-L62) |
-| Committing it, checked against the position's real pool | [`HelicoVault.sol#L290-L328`](https://github.com/0xHelico/helico/blob/9b1e8194098425ddab6cdaabc95d6796c5de9fcf/contracts/src/HelicoVault.sol#L290-L328) |
-| The action the agent may propose | [`HelicoVault.sol#L537-L590`](https://github.com/0xHelico/helico/blob/9b1e8194098425ddab6cdaabc95d6796c5de9fcf/contracts/src/HelicoVault.sol#L537-L590) |
-| Every range rule, including the one the price must satisfy | [`HelicoVault.sol#L843-L867`](https://github.com/0xHelico/helico/blob/9b1e8194098425ddab6cdaabc95d6796c5de9fcf/contracts/src/HelicoVault.sol#L843-L867) |
-| The swap that makes an out-of-range position recoverable | [`HelicoVault.sol#L597-L613`](https://github.com/0xHelico/helico/blob/9b1e8194098425ddab6cdaabc95d6796c5de9fcf/contracts/src/HelicoVault.sol#L597-L613) |
-| An agent that cannot send transactions: the signed authorisation | [`HelicoVault.sol#L435-L455`](https://github.com/0xHelico/helico/blob/9b1e8194098425ddab6cdaabc95d6796c5de9fcf/contracts/src/HelicoVault.sol#L435-L455) |
-| The exit, which nothing can block | [`HelicoVault.sol#L338-L350`](https://github.com/0xHelico/helico/blob/9b1e8194098425ddab6cdaabc95d6796c5de9fcf/contracts/src/HelicoVault.sol#L338-L350) |
+| The mandate a user commits | [`Mandate.sol#L23-L65`](https://github.com/0xHelico/helico/blob/0461ef2081c1e610583153f34548cbc5298a29de/contracts/src/Mandate.sol#L23-L65) |
+| Committing it, checked against the position's real pool | [`HelicoVault.sol#L309-L347`](https://github.com/0xHelico/helico/blob/0461ef2081c1e610583153f34548cbc5298a29de/contracts/src/HelicoVault.sol#L309-L347) |
+| The action the agent may propose | [`HelicoVault.sol#L556-L609`](https://github.com/0xHelico/helico/blob/0461ef2081c1e610583153f34548cbc5298a29de/contracts/src/HelicoVault.sol#L556-L609) |
+| Every range rule, including the one the price must satisfy | [`HelicoVault.sol#L862-L886`](https://github.com/0xHelico/helico/blob/0461ef2081c1e610583153f34548cbc5298a29de/contracts/src/HelicoVault.sol#L862-L886) |
+| The swap that makes an out-of-range position recoverable | [`HelicoVault.sol#L616-L632`](https://github.com/0xHelico/helico/blob/0461ef2081c1e610583153f34548cbc5298a29de/contracts/src/HelicoVault.sol#L616-L632) |
+| An agent that cannot send transactions: the signed authorisation | [`HelicoVault.sol#L454-L474`](https://github.com/0xHelico/helico/blob/0461ef2081c1e610583153f34548cbc5298a29de/contracts/src/HelicoVault.sol#L454-L474) |
+| The exit, which nothing can block | [`HelicoVault.sol#L357-L369`](https://github.com/0xHelico/helico/blob/0461ef2081c1e610583153f34548cbc5298a29de/contracts/src/HelicoVault.sol#L357-L369) |
 
 ### 1inch Aqua
 
@@ -115,7 +115,7 @@ released there by the Vault DON. Only the verdict crosses back out.
 | The mandate hash, tying the verdict to what the user signed | [`mandate.ts#L38-L50`](https://github.com/0xHelico/helico/blob/9b1e8194098425ddab6cdaabc95d6796c5de9fcf/packages/plugins/cre/src/mandate.ts#L38-L50) |
 
 | The verdict delivered to the vault | [`index.ts#L244-L265`](https://github.com/0xHelico/helico/blob/9b1e8194098425ddab6cdaabc95d6796c5de9fcf/packages/plugins/cre/src/index.ts#L244-L265) |
-| The vault receiving it | [`HelicoVault.sol#L485-L498`](https://github.com/0xHelico/helico/blob/9b1e8194098425ddab6cdaabc95d6796c5de9fcf/contracts/src/HelicoVault.sol#L485-L498) |
+| The vault receiving it | [`HelicoVault.sol#L504-L517`](https://github.com/0xHelico/helico/blob/0461ef2081c1e610583153f34548cbc5298a29de/contracts/src/HelicoVault.sol#L504-L517) |
 
 **Run it yourself:** `cp apps/cre/.env.example apps/cre/.env && cd apps/cre && ./rehearse.sh`.
 It forks Arbitrum One, deploys the vault onto the fork, gives it a position that has drifted
