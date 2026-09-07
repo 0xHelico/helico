@@ -95,6 +95,10 @@ func New(svc *blog.Service, opt Options) http.Handler {
 	mux.HandleFunc("DELETE /api/chats/{id}", api.requireSession(api.deleteChat))
 
 	mux.HandleFunc("POST /api/swap/intent", api.swapIntent)
+	// What the composer shows before anyone types: which model answers, and whether it can.
+	// The app asking rather than being told is what stops the two drifting apart — and an
+	// unconfigured key becomes something the page can say, rather than a 503 on send.
+	mux.HandleFunc("GET /api/swap/config", api.swapConfig)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { writeProblem(w, http.StatusNotFound, "") })
 
 	var h http.Handler = mux

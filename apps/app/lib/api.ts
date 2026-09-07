@@ -64,7 +64,12 @@ export type Challenge = {
   };
 };
 
+export type SwapConfig = { available: boolean; model: string };
+
 export const api = {
+  /** What answers, and whether it can. Shown beside the composer. */
+  swapConfig: () => call<SwapConfig>("/api/swap/config"),
+
   challenge: (address: string) =>
     call<Challenge>(
       `/api/session/nonce?address=${encodeURIComponent(address)}`,

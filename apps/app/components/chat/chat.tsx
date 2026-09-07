@@ -14,12 +14,14 @@ import {
   PromptInputTools,
 } from "@/components/ai-elements/prompt-input";
 import { Greeting } from "@/components/chat/greeting";
+import { SparklesIcon } from "@/components/chat/icons";
 import { PageHeader } from "@/components/chat/page-header";
 import { HISTORY_KEY } from "@/components/chat/sidebar-history";
 import { SuggestedActions } from "@/components/chat/suggested-actions";
+import { ThinkingMessage } from "@/components/chat/thinking-message";
 import { SwapCard } from "@/components/swap-card";
 import { useHelicoSession } from "@/hooks/use-helico-session";
-import { api } from "@/lib/api";
+import { api, type SwapConfig } from "@/lib/api";
 import type { Intent } from "@/lib/intent";
 import { cn } from "@/lib/utils";
 
@@ -40,6 +42,9 @@ export function Chat({ conversationId }: { conversationId?: string }) {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
+  // Which model answers, read from the backend rather than from this app's own environment —
+  // a name the two could disagree about is a name not worth showing.
+  const [swap, setSwap] = useState<SwapConfig | null>(null);
   // The conversation this page writes to. Created on the first message rather than on arrival,
   // so opening the app and leaving does not litter the sidebar.
   const active = useRef<string | undefined>(conversationId);
@@ -48,6 +53,17 @@ export function Chat({ conversationId }: { conversationId?: string }) {
   // question, because the answer has not been written yet — lands after the answer arrives and
   // wipes it off the screen.
   const hydrated = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    let live = true;
+    api
+      .swapConfig()
+      .then((c) => live && setSwap(c))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, []);
 
   useEffect(() => {
     active.current = conversationId;
@@ -199,6 +215,7 @@ export function Chat({ conversationId }: { conversationId?: string }) {
                   </MessageContent>
                 </Message>
               ))}
+              {busy ? <ThinkingMessage /> : null}
             </div>
           </div>
         </div>
@@ -220,16 +237,34 @@ export function Chat({ conversationId }: { conversationId?: string }) {
               <PromptInputTools>
                 {/* Where the template puts its model picker. Helico has one network and one
                     backend, so what belongs here is the fact that decides every quote. */}
-                <span className="flex items-center gap-1.5 pl-1 text-[12px] text-muted-foreground/60">
-                  <span
-                    className={cn(
-                      "size-1.5 rounded-full",
-                      session.isConnected
-                        ? "bg-emerald-500"
-                        : "bg-muted-foreground/40",
-                    )}
-                  />
-                  Arbitrum One
+                <span className="flex items-center gap-2 pl-1 text-[12px] text-muted-foreground/60">
+                  {swap ? (
+                    <span
+                      className={cn(
+                        "flex items-center gap-1.5",
+                        swap.available ? undefined : "text-destructive",
+                      )}
+                      title={
+                        swap.available
+                          ? "The model apps/be asks"
+                          : "No model is configured, so a sentence cannot be read yet"
+                      }
+                    >
+                      <SparklesIcon size={12} />
+                      {swap.available ? swap.model : "no model configured"}
+                    </span>
+                  ) : null}
+                  <span className="flex items-center gap-1.5">
+                    <span
+                      className={cn(
+                        "size-1.5 rounded-full",
+                        session.isConnected
+                          ? "bg-emerald-500"
+                          : "bg-muted-foreground/40",
+                      )}
+                    />
+                    Arbitrum One
+                  </span>
                 </span>
               </PromptInputTools>
               <PromptInputSubmit

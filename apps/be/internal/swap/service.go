@@ -17,6 +17,15 @@ func New(c *Client) *Service { return &Service{client: c} }
 // Configured reports whether the endpoint should serve at all.
 func (s *Service) Configured() bool { return s != nil && s.client.Configured() }
 
+// Model is the model this service actually asks. The app shows it beside the composer, and a
+// name it read from its own environment would be a name that can drift from the truth.
+func (s *Service) Model() string {
+	if s == nil || s.client == nil {
+		return ""
+	}
+	return s.client.Model
+}
+
 // Answer is what a caller gets back: a sentence for the person, and an intent when there is
 // one. Needs names what is still missing, so a form can highlight it rather than parse prose.
 type Answer struct {
