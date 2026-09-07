@@ -377,3 +377,65 @@ func TestAStateChangingRequestMustSayItIsJSON(t *testing.T) {
 		t.Fatalf("a refused request still created %d conversations", len(got.Conversations))
 	}
 }
+
+// The attributes are pinned because getting one wrong is silent: the sign-in succeeds, the
+// cookie comes back, and it simply never returns. SameSite was None here on the belief that
+// app.helico.site and api.helico.site were different sites — they are different origins but the
+// same site, and None made it a third-party cookie that browsers refuse to send back.
+func TestTheSessionCookieHasTheAttributesItNeeds(t *testing.T) {
+	srv := newChatServer(t)
+	alice := newWallet(t, keyAHex)
+	client := &http.Client{
+		Transport: srv.Client().Transport,
+		Jar:       newJar(t),
+		// Do not follow anything; the Set-Cookie on the sign-in response is what is being read.
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
+
+	res, err := client.Get(srv.URL + "/api/session/nonce?address=" + alice.addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var challenge struct {
+		Nonce    string `json:"nonce"`
+		IssuedAt int64  `json:"issuedAt"`
+	}
+	_ = json.NewDecoder(res.Body).Decode(&challenge)
+	res.Body.Close()
+
+	sig := alice.sign(t, digestFor(t, alice.addr, challenge.Nonce, challenge.IssuedAt))
+	body, _ := json.Marshal(map[string]any{
+		"wallet": alice.addr, "nonce": challenge.Nonce, "issuedAt": challenge.IssuedAt,
+		"signature": "0x" + hex.EncodeToString(sig),
+	})
+	out, err := client.Post(srv.URL+"/api/session", "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer out.Body.Close()
+
+	var cookie *http.Cookie
+	for _, c := range out.Cookies() {
+		if c.Name == SessionCookie {
+			cookie = c
+		}
+	}
+	if cookie == nil {
+		t.Fatal("signing in set no session cookie")
+	}
+	if cookie.SameSite != http.SameSiteLaxMode {
+		t.Errorf("SameSite is %v, want Lax — None makes it a third-party cookie off helico.site", cookie.SameSite)
+	}
+	if !cookie.HttpOnly {
+		t.Error("the cookie is readable from script")
+	}
+	if !cookie.Secure {
+		t.Error("the cookie would travel on a plain connection")
+	}
+	if cookie.Path != "/" {
+		t.Errorf("Path is %q, want /", cookie.Path)
+	}
+	if cookie.MaxAge <= 0 {
+		t.Errorf("MaxAge is %d, so it would not survive the browser closing", cookie.MaxAge)
+	}
+}
