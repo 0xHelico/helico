@@ -46,7 +46,7 @@ list is that it changes.
 |---|---|
 | `app.helico.site` (shot 0) | 200. The chat path answers: "swap 1000 USDC to WETH" returns the checked intent, same pair the fork test uses |
 | `helico.site`, `api.helico.site/healthz` | 200 |
-| Shot 3, the swap | **Recordable in full today.** The fork test runs against the Aqua 1inch actually deployed at `0x499943E7…`, so the spoken line about the real deployment is true in the fallback too. Deploying `HelicoMandateSwap` upgrades this shot; it does not unblock it |
+| Shot 3, the swap | **Recordable in full today.** The fork test runs against Aqua at `0x1111113C…` — the address 1inch confirmed in `#partner-1inch` and lists in their README. It was `0x499943E7…` until 8 September, taken from a README that turned out to be five months stale, so check this cell against the code before recording rather than trusting it |
 | Shot 3, at `-vv` | **Would have cost a take.** One `[PASS]` line, no balances. Use `-vvvv` |
 | Shot 4, the subgraph | Not deployed. Fall back as written |
 | Shot 5, the enclave | Runs. A recorded rehearsal with its numbers checked is in [`docs/evidence/2026-09-07-cre-rehearsal.md`](evidence/2026-09-07-cre-rehearsal.md) |
@@ -120,7 +120,7 @@ No logo animation, no title card. Under 20 seconds, as the guidance asks.
 
 Speak over the run. Cut the waiting, never speed it up.
 
-> Here is the whole path against the Aqua that 1inch actually deployed on Arbitrum One.
+> Here is the whole path against Aqua on Arbitrum One, at the address 1inch publishes.
 
 *Screen: the swap completing — the maker's wallet balances before and after, and the recipient's.*
 

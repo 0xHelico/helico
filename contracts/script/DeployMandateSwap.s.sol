@@ -26,17 +26,25 @@ import {HelicoMandateSwap} from "../src/HelicoMandateSwap.sol";
 contract DeployMandateSwap is Script {
     uint256 constant ARBITRUM_ONE = 42161;
 
-    /// @dev 1inch deploys Aqua at the same address on every chain it supports, Arbitrum One
-    ///      included. Verified before this was committed: the address has code, `rawBalances`
-    ///      answers `(0, 0)` for an unknown strategy, and `safeBalances` reverts with
-    ///      `SafeBalancesForTokenNotInActiveStrategy` — which is Aqua's behaviour and not
-    ///      merely something with bytecode at the right address.
+    /// @dev The address 1inch names as canonical, confirmed by them directly in `#partner-1inch`
+    ///      and published in their README: *"Only interact with these two contracts. Anything
+    ///      else is not Aqua."*
+    ///
+    ///      This was `0x499943E7…` until 8 September, taken from the README inside the `v1.0.0`
+    ///      tag we vendor. That tag is from March and its README is stale; `main` lists this one.
+    ///      Both addresses hold code and both answer `rawBalances` for an unknown strategy, so
+    ///      behaviour cannot tell them apart — which is why the check below is necessary and
+    ///      also why it was not sufficient.
+    ///
+    ///      What separates them: their bytecode differs (11,241 vs 12,505), and the stale one
+    ///      carries 1,289 events on Arbitrum while this one carries **none**. Activity was the
+    ///      misleading signal here. The partner's own word is the deciding one.
     ///
     ///      Note that `forge fmt` rewrites an address literal's EIP-55 checksum to match
     ///      whatever hex is there, so a mistyped address compiles cleanly with a valid
     ///      checksum. solc's protection is gone the moment the formatter runs. The fork test
     ///      is what actually holds this constant to the chain.
-    address public constant AQUA = 0x499943E74FB0cE105688beeE8Ef2ABec5D936d31;
+    address public constant AQUA = 0x1111113CCf1426A8E30e2bfF5E005d929bF6a90a;
 
     error WrongChain(uint256 actual);
     error AquaHasNoCode(address aqua);

@@ -11,21 +11,18 @@ dataSources:
     name: Aqua
     network: arbitrum-one
     source:
-      address: "0x499943E74FB0cE105688beeE8Ef2ABec5D936d31"
+      address: "0x1111113CCf1426A8E30e2bfF5E005d929bF6a90a"
       abi: Aqua
-      # The block of Aqua's first event on this chain, found by scanning `eth_getLogs` forward
-      # from 400,000,000.
+      # There is no history to index. Aqua at the canonical address has **zero events across
+      # the whole of Arbitrum** — verified by scanning from block 1 forward, with the same query
+      # run against the stale address first to prove it can find something (it returned 1,289).
+      # A control like that is not ceremony: an empty result from a broken query looks exactly
+      # like an empty chain, and that mistake cost us a day.
       #
-      # It was 431256499 until a review caught it, and the way that number was produced is worth
-      # keeping: a binary search on `eth_getCode`, with `2>/dev/null` on the call. The public RPC
-      # does not serve state that old — it *errors* rather than returning empty — and the
-      # redirect turned every one of those errors into an empty string, which the search read as
-      # "no code yet". So it did not find the deployment. It found the node's pruning boundary,
-      # 28 million blocks too late, sitting in a gap where Aqua happens to have no events at all.
-      #
-      # The cost of that would have been 75 events dropped, 5 of 43 mandates never created, both
-      # `Docked` events missed, and one of the two makers on this chain absent entirely.
-      startBlock: 403010640
+      # So this starts at the head as of 8 September. Indexing earlier would cost hundreds of
+      # millions of blocks to find nothing. It also means the first strategy this subgraph ever
+      # sees will most likely be ours.
+      startBlock: 502755018
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
