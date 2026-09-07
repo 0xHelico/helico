@@ -9,6 +9,12 @@ import { projectId, wagmiAdapter } from "@/config";
 
 const queryClient = new QueryClient();
 
+/** Where this copy of the app is actually being served from. */
+const origin =
+  typeof window === "undefined"
+    ? "https://app.helico.site"
+    : window.location.origin;
+
 createAppKit({
   adapters: [wagmiAdapter],
   projectId,
@@ -18,8 +24,10 @@ createAppKit({
     name: "Helico",
     description:
       "Your funds keep earning while prices move, under rules you set once.",
-    url: "https://app.helico.site",
-    icons: ["https://app.helico.site/brand/mark.webp"],
+    // WalletConnect warns when this does not match the page it is running on, and on a local
+    // run it never would. The deployed origin is the fallback, not the answer.
+    url: origin,
+    icons: [`${origin}/brand/mark.webp`],
   },
   features: { analytics: false, email: false, socials: false },
 });

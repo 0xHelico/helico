@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/0xHelico/helico/apps/be/internal/blog"
+	"github.com/0xHelico/helico/apps/be/internal/chat"
+	"github.com/0xHelico/helico/apps/be/internal/session"
 	"github.com/0xHelico/helico/apps/be/internal/swap"
 )
 
@@ -24,6 +26,17 @@ type Options struct {
 	CORSOrigins    []string
 	Logger         *slog.Logger
 	RequestTimeout time.Duration
+	// Chats is optional. Without it the conversation routes answer 503 rather than vanishing,
+	// so a caller is told the feature is off instead of guessing at a 404.
+	Chats *chat.Service
+	// SessionSecret signs the session cookie. Empty means a fresh random one, and every
+	// restart signs everyone out.
+	SessionSecret string
+	// SessionLife defaults to seven days, NonceTTL to two minutes.
+	SessionLife time.Duration
+	NonceTTL    time.Duration
+	// Now is the clock, for tests.
+	Now func() time.Time
 	// Swap answers the swap conversation. Nil, or unconfigured, means that route says so.
 	Swap *swap.Service
 	// SwapRatePerMin and SwapDailyMax bound what the paid model costs.
@@ -43,14 +56,49 @@ func New(svc *blog.Service, opt Options) http.Handler {
 	if opt.Logger == nil {
 		opt.Logger = slog.Default()
 	}
-	api := &api{svc: svc, opt: opt, limit: newLimiter(opt.SwapRatePerMin, opt.SwapDailyMax)}
+	if opt.Now == nil {
+		opt.Now = time.Now
+	}
+	cookies, err := session.NewCookies(opt.SessionSecret, opt.SessionLife)
+	if err != nil {
+		// crypto/rand failing is not a condition a server can serve through.
+		panic(err)
+	}
+	api := &api{
+		svc:     svc,
+		opt:     opt,
+		chats:   opt.Chats,
+		nonces:  session.NewNonces(opt.NonceTTL),
+		cookies: cookies,
+		now:     opt.Now,
+		limit:   newLimiter(opt.SwapRatePerMin, opt.SwapDailyMax),
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", api.health)
 	mux.HandleFunc("GET /api/posts", api.list)
 	mux.HandleFunc("GET /api/posts/{slug}", api.get)
 	mux.HandleFunc("PUT /api/posts/{slug}", api.requireAdmin(api.put))
 	mux.HandleFunc("DELETE /api/posts/{slug}", api.requireAdmin(api.delete))
+
+	// The wallet is the identity: prove it once, carry a cookie after that.
+	mux.HandleFunc("GET /api/session/nonce", api.nonce)
+	mux.HandleFunc("POST /api/session", api.signIn)
+	mux.HandleFunc("GET /api/session", api.whoami)
+	mux.HandleFunc("DELETE /api/session", api.signOut)
+
+	// Every one of these reads the owner from the cookie and from nowhere else.
+	mux.HandleFunc("GET /api/chats", api.requireSession(api.listChats))
+	mux.HandleFunc("POST /api/chats", api.requireSession(api.startChat))
+	mux.HandleFunc("DELETE /api/chats", api.requireSession(api.deleteChats))
+	mux.HandleFunc("GET /api/chats/{id}", api.requireSession(api.getChat))
+	mux.HandleFunc("POST /api/chats/{id}/messages", api.requireSession(api.appendMessage))
+	mux.HandleFunc("DELETE /api/chats/{id}", api.requireSession(api.deleteChat))
+
 	mux.HandleFunc("POST /api/swap/intent", api.swapIntent)
+	// What the composer shows before anyone types: which model answers, and whether it can.
+	// The app asking rather than being told is what stops the two drifting apart — and an
+	// unconfigured key becomes something the page can say, rather than a 503 on send.
+	mux.HandleFunc("GET /api/swap/config", api.swapConfig)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { writeProblem(w, http.StatusNotFound, "") })
 
 	var h http.Handler = mux
@@ -66,9 +114,13 @@ func New(svc *blog.Service, opt Options) http.Handler {
 }
 
 type api struct {
-	svc   *blog.Service
-	opt   Options
-	limit *limiter
+	svc     *blog.Service
+	opt     Options
+	chats   *chat.Service
+	nonces  *session.Nonces
+	cookies *session.Cookies
+	now     func() time.Time
+	limit   *limiter
 }
 
 // postView is the JSON shape of a post. Full includes the body; list items omit it.

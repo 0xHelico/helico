@@ -498,3 +498,44 @@ textarea:focus-visible {
 [data-testid="artifact"] {
   isolation: isolate;
 }
+
+/* The reference's hero motion: each element rises into place a beat after the one above it,
+   and a slow drift keeps the panel from reading as a still. Both respect reduced motion. */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1.1);
+  }
+  50% {
+    transform: translate3d(-3%, -2%, 0) scale(1.2);
+  }
+}
+
+.stagger {
+  opacity: 0;
+  animation: rise 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.drift {
+  animation: drift 24s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stagger,
+  .drift {
+    opacity: 1;
+    transform: none;
+    animation: none;
+  }
+}

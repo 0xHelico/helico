@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/0xHelico/helico/apps/be/internal/blog"
+	"github.com/0xHelico/helico/apps/be/internal/chat"
 	"github.com/0xHelico/helico/apps/be/internal/config"
 	"github.com/0xHelico/helico/apps/be/internal/content"
 	"github.com/0xHelico/helico/apps/be/internal/httpapi"
@@ -48,6 +49,10 @@ func run() error {
 	swapSvc := swap.New(swap.NewClient(cfg.LLMBaseURL, cfg.LLMKey, cfg.LLMModel, cfg.LLMTimeout))
 
 	svc := blog.NewService(db)
+	chats := chat.NewService(db)
+	if cfg.SessionSecret == "" {
+		log.Warn("BE_SESSION_SECRET is unset; the cookie key is random, so every restart signs everyone out")
+	}
 	if n, err := content.Seed(ctx, cfg.ContentDir, svc); err != nil {
 		return fmt.Errorf("seed: %w", err)
 	} else if n > 0 {
@@ -61,6 +66,8 @@ func run() error {
 			CORSOrigins:    cfg.CORSOrigins,
 			Logger:         log,
 			RequestTimeout: cfg.RequestTimeout,
+			Chats:          chats,
+			SessionSecret:  cfg.SessionSecret,
 			Swap:           swapSvc,
 			SwapRatePerMin: cfg.SwapRatePerMin,
 			SwapDailyMax:   cfg.SwapDailyMax,

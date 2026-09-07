@@ -8,7 +8,9 @@
       "!public",
       "!components/ui",
       "!components/ai-elements",
-      "!hooks"
+      "!hooks",
+      "!app/globals.css",
+      "!components/chat/icons.tsx"
     ]
   },
   "formatter": {

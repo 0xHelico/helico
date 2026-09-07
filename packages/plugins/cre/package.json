@@ -3,7 +3,9 @@
 	"version": "0.0.0",
 	"private": true,
 	"exports": {
-		".": "./src/index.ts"
+		".": "./src/index.ts",
+		"./abi": "./src/abi.ts",
+		"./mandate": "./src/mandate.ts"
 	},
 	"scripts": {
 		"typecheck": "tsc --noEmit",
@@ -12,7 +14,7 @@
 	},
 	"dependencies": {
 		"@chainlink/cre-sdk": "1.19.1",
-		"viem": "2.34.0",
+		"viem": "2.56.3",
 		"zod": "3.25.76"
 	},
 	"devDependencies": {

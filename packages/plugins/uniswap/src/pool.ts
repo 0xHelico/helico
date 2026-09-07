@@ -1,5 +1,13 @@
 import { nearestUsableTick as sdkNearestUsableTick, TickMath } from '@uniswap/v3-sdk'
-import { type Address, encodeAbiParameters, type Hex, keccak256, zeroAddress } from 'viem'
+import {
+	type Address,
+	BaseError,
+	ContractFunctionRevertedError,
+	encodeAbiParameters,
+	type Hex,
+	keccak256,
+	zeroAddress,
+} from 'viem'
 import { readContract } from 'viem/actions'
 import { stateViewAbi } from './abi/stateView'
 import { addresses } from './addresses'
@@ -79,6 +87,67 @@ export async function getPoolState(client: ChainClient, key: PoolKey): Promise<P
 		}),
 	])
 	return { poolId: id, sqrtPriceX96, tick, protocolFee, lpFee, liquidity }
+}
+
+/**
+ * The fee tiers and spacings the Uniswap interface creates pools at. v4 allows any pair of
+ * values, so this is a convention rather than a rule — a chain whose liquidity sits somewhere
+ * else is served by passing its own list to `bestPoolFor`.
+ */
+export const FEE_TIERS: readonly { fee: number; tickSpacing: number }[] = [
+	{ fee: 100, tickSpacing: 1 },
+	{ fee: 500, tickSpacing: 10 },
+	{ fee: 3000, tickSpacing: 60 },
+	{ fee: 10_000, tickSpacing: 200 },
+]
+
+export type FoundPool = { key: PoolKey; state: PoolState }
+
+/**
+ * The hook-less pool for a pair that holds the most liquidity, or `undefined` when none of the
+ * tiers has been initialised.
+ *
+ * A trade needs a pool before it needs anything else, and v4 has no registry to ask: a pool is
+ * whatever key someone initialised. `discover.ts` answers that by walking `Initialize` logs,
+ * which is right for a survey and far too slow to run while a person waits. This reads the few
+ * keys the interface actually creates, in one round of calls, and picks the deepest.
+ *
+ * Hook-less only, deliberately. A pool with a hook can charge a dynamic fee, refuse the swap,
+ * or move the price, and none of that can be shown to someone honestly from a quote alone.
+ */
+export async function bestPoolFor(
+	client: ChainClient,
+	currencyA: Address,
+	currencyB: Address,
+	tiers: readonly { fee: number; tickSpacing: number }[] = FEE_TIERS,
+): Promise<FoundPool | undefined> {
+	const keys = tiers.map(({ fee, tickSpacing }) =>
+		createPoolKey({ currencyA, currencyB, fee, tickSpacing }),
+	)
+	const found = await Promise.all(
+		keys.map(async (key) => {
+			// StateView answers zeros for a key nobody initialised, so the ordinary "no such pool"
+			// case is not an error at all. A revert still means this tier is not a candidate. A
+			// transport failure means we do not know, and saying "no pool" then is a lie that sends
+			// someone looking for liquidity that is there — so it propagates.
+			const state = await getPoolState(client, key).catch((error: unknown) => {
+				if (
+					error instanceof BaseError &&
+					error.walk((e) => e instanceof ContractFunctionRevertedError)
+				) {
+					return undefined
+				}
+				throw error
+			})
+			return state && state.sqrtPriceX96 > 0n && state.liquidity > 0n ? { key, state } : undefined
+		}),
+	)
+	return found
+		.filter((f): f is FoundPool => f !== undefined)
+		.reduce<FoundPool | undefined>(
+			(best, f) => (best && best.state.liquidity >= f.state.liquidity ? best : f),
+			undefined,
+		)
 }
 
 /** Rounds a tick to the pool's spacing, clamped to the protocol range. */

@@ -25,6 +25,9 @@ type Config struct {
 	RequestTimeout time.Duration
 	// ShutdownTimeout bounds the drain on SIGTERM.
 	ShutdownTimeout time.Duration
+	// SessionSecret signs the session cookie. Empty means a random one at boot, which signs
+	// everyone out on every restart — the process says so rather than leaving it a mystery.
+	SessionSecret string
 	// LLMBaseURL is any OpenAI-compatible endpoint.
 	LLMBaseURL string
 	// LLMKey enables the swap conversation. Empty means the route answers 503.
@@ -58,6 +61,7 @@ func FromEnv(lookup Lookup) (Config, error) {
 		ContentDir:      get("BE_CONTENT_DIR", "content"),
 		RequestTimeout:  10 * time.Second,
 		ShutdownTimeout: 10 * time.Second,
+		SessionSecret:   get("BE_SESSION_SECRET", ""),
 		LLMBaseURL:      get("BE_LLM_BASE_URL", "https://api.openai.com/v1"),
 		LLMKey:          get("BE_LLM_API_KEY", ""),
 		LLMModel:        get("BE_LLM_MODEL", "gpt-4o-mini"),
