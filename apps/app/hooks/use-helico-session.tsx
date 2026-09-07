@@ -21,6 +21,8 @@ type Session = {
   knows: boolean;
   /** Signed in, and as the wallet that is connected right now. */
   ready: boolean;
+  /** The address the cookie belongs to, which is not always the one now connected. */
+  signedInAs: string | null;
   signing: boolean;
   error: string | null;
   signIn: () => Promise<void>;
@@ -103,6 +105,7 @@ export function HelicoSessionProvider({ children }: { children: ReactNode }) {
       address,
       isConnected,
       knows: state !== "unknown",
+      signedInAs,
       // A cookie for a different wallet than the one now connected is worse than none: it
       // would show someone else's conversations.
       ready:

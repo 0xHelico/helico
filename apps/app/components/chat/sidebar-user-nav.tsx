@@ -1,5 +1,6 @@
 "use client";
 
+import { useAppKit } from "@reown/appkit/react";
 import { ChevronUp } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useCallback } from "react";
@@ -24,6 +25,7 @@ const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 export function SidebarUserNav({ address }: { address: string }) {
   const { setTheme, resolvedTheme } = useTheme();
   const { disconnect } = useDisconnect();
+  const { open } = useAppKit();
   const { signOut } = useHelicoSession();
   const handleThemeSelect = useCallback(() => {
     setTheme(resolvedTheme === "dark" ? "light" : "dark");
@@ -34,6 +36,14 @@ export function SidebarUserNav({ address }: { address: string }) {
     signOut();
     disconnect();
   }, [disconnect, signOut]);
+
+  // Connected as the wrong address is an ordinary mistake, and disconnecting to fix it is a
+  // sharper tool than it needs. The session goes too: the cookie belonged to the old address.
+  const handleSwitch = useCallback(async () => {
+    await signOut();
+    disconnect();
+    open({ view: "Connect" });
+  }, [disconnect, open, signOut]);
 
   return (
     <SidebarMenu>
@@ -73,6 +83,15 @@ export function SidebarUserNav({ address }: { address: string }) {
               {`Toggle ${resolvedTheme === "light" ? "dark" : "light"} mode`}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <button
+                className="w-full cursor-pointer text-[13px]"
+                onClick={handleSwitch}
+                type="button"
+              >
+                Switch wallet
+              </button>
+            </DropdownMenuItem>
             <DropdownMenuItem asChild data-testid="user-nav-item-auth">
               <button
                 className="w-full cursor-pointer text-[13px]"
