@@ -66,10 +66,10 @@ export function ConnectGate() {
           </div>
 
           <div className="stagger" style={{ animationDelay: "0.35s" }}>
-            <h1 className="font-medium text-4xl text-white tracking-tight">
+            <h1 className="font-medium text-4xl text-[#1a1a1a] tracking-tight dark:text-white">
               Your wallet is the account
             </h1>
-            <p className="mt-3 text-sm text-white/60 leading-relaxed">
+            <p className="mt-3 text-black/55 text-sm leading-relaxed dark:text-white/60">
               No email, no password, nothing to remember. Three steps, and
               nothing moves until you sign it.
             </p>
@@ -81,8 +81,8 @@ export function ConnectGate() {
                 className={cn(
                   "stagger flex items-center gap-3 rounded-xl px-4 py-3.5 font-medium text-sm",
                   i === current
-                    ? "border border-white bg-white text-black"
-                    : "bg-[#1a1a1a] text-white",
+                    ? "border border-[#1a1a1a] bg-[#1a1a1a] text-white dark:border-white dark:bg-white dark:text-black"
+                    : "bg-black/[0.07] text-[#1a1a1a] dark:bg-[#1a1a1a] dark:text-white",
                 )}
                 key={label}
                 style={{ animationDelay: `${0.5 + i * 0.15}s` }}
@@ -91,8 +91,8 @@ export function ConnectGate() {
                   className={cn(
                     "flex size-6 shrink-0 items-center justify-center rounded-full font-semibold text-xs",
                     i === current
-                      ? "bg-black text-white"
-                      : "bg-white/10 text-white/40",
+                      ? "bg-white text-[#1a1a1a] dark:bg-black dark:text-white"
+                      : "bg-black/10 text-black/40 dark:bg-white/10 dark:text-white/40",
                   )}
                 >
                   {i + 1}
