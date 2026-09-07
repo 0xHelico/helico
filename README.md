@@ -71,6 +71,10 @@ released there by the Vault DON. Only the verdict crosses back out.
 It forks Arbitrum One, deploys the vault onto the fork, gives it a position that has drifted
 out of range, and lets the workflow decide and deliver. A second run holds on the cooldown.
 
+**Or read a run that already happened:** [`docs/evidence/2026-09-07-cre-rehearsal.md`](docs/evidence/2026-09-07-cre-rehearsal.md)
+records the full transcript, and checks the numbers in it against the mandate — the new range
+against the width, the liquidity retained against the floor, the second run against the cooldown.
+
 > ⚠️ **What that run does not show.** The simulator is **not a TEE** — it says so itself while
 > running — and the `MockKeystoneForwarder` the CLI broadcasts through **verifies no DON
 > signatures**. So the run proves the delivery path and the vault's execution, not
