@@ -31,7 +31,11 @@ contract DeployMandateSwap is Script {
     ///      else is not Aqua."*
     ///
     ///      This was `0x499943E7…` until 8 September, taken from the README inside the `v1.0.0`
-    ///      tag we vendor. That tag is from March and its README is stale; `main` lists this one.
+    ///      tag we vendor. **That was our mistake, not a stale document.** The tag's commit is
+    ///      from 17 March and a tag is a snapshot, which is what a tag is for; `1inch/aqua` is
+    ///      actively maintained — last pushed 21 August — and its `main` README names this
+    ///      address correctly. We pinned a snapshot and then read its README as though it were
+    ///      current documentation. Pin the code, but read the addresses from `main` or the SDK.
     ///      Both addresses hold code and both answer `rawBalances` for an unknown strategy, so
     ///      behaviour cannot tell them apart — which is why the check below is necessary and
     ///      also why it was not sufficient.
