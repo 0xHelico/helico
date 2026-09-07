@@ -4,6 +4,7 @@ import { ChevronUp } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useCallback } from "react";
 import { useDisconnect } from "wagmi";
+import { GeneratedAvatar } from "@/components/generated-avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,22 +19,12 @@ import {
 } from "@/components/ui/sidebar";
 import { useHelicoSession } from "@/hooks/use-helico-session";
 
-/** A stable colour per address, so the disc is recognisably yours. */
-function addressToHue(address: string): number {
-  let hash = 0;
-  for (const char of address.toLowerCase()) {
-    hash = char.charCodeAt(0) + ((hash << 5) - hash);
-  }
-  return Math.abs(hash) % 360;
-}
-
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
 export function SidebarUserNav({ address }: { address: string }) {
   const { setTheme, resolvedTheme } = useTheme();
   const { disconnect } = useDisconnect();
   const { signOut } = useHelicoSession();
-  const hue = addressToHue(address);
   const handleThemeSelect = useCallback(() => {
     setTheme(resolvedTheme === "dark" ? "light" : "dark");
   }, [resolvedTheme, setTheme]);
@@ -54,11 +45,10 @@ export function SidebarUserNav({ address }: { address: string }) {
                 className="h-8 px-2 rounded-lg bg-transparent text-sidebar-foreground/70 transition-colors duration-150 hover:text-sidebar-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                 data-testid="user-nav-button"
               >
-                <div
-                  className="size-5 shrink-0 rounded-full ring-1 ring-sidebar-border/50"
-                  style={{
-                    background: `linear-gradient(135deg, oklch(0.55 0.13 ${hue}), oklch(0.4 0.09 ${hue + 40}))`,
-                  }}
+                <GeneratedAvatar
+                  className="ring-1 ring-sidebar-border/50"
+                  name={address}
+                  size={20}
                 />
                 <span
                   className="truncate font-mono text-[13px]"

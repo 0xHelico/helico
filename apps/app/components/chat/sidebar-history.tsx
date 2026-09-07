@@ -142,7 +142,8 @@ export function SidebarHistory({ signedIn }: { signedIn: boolean }) {
       <SidebarGroup className="group-data-[collapsible=icon]:hidden">
         <SidebarGroupContent>
           <div className="flex w-full flex-row items-center justify-center gap-2 px-2 text-[13px] text-sidebar-foreground/60">
-            Sign in with your wallet to keep conversations.
+            Connect a wallet to keep conversations. Asking and reading work
+            without one.
           </div>
         </SidebarGroupContent>
       </SidebarGroup>
