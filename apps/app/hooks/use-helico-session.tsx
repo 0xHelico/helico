@@ -7,6 +7,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { useAccount, useSignTypedData } from "wagmi";
@@ -40,8 +41,25 @@ export function HelicoSessionProvider({ children }: { children: ReactNode }) {
   const [signedInAs, setSignedInAs] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // What the cookie already says, which is the common case on a reload.
+  // Which address the cookie has already been read for, so it is read once per wallet.
+  const asked = useRef<string | null>(null);
+
+  // Only worth asking once a wallet is connected. Without one the answer changes nothing —
+  // `ready` needs the cookie to match the connected address — so asking would be a 401 on every
+  // cold load for information the page cannot use.
   useEffect(() => {
+    if (!address) {
+      asked.current = null;
+      setSignedInAs(null);
+      // Nothing to find out, rather than not yet found out: the gate can render immediately.
+      setState("signed-out");
+      return;
+    }
+    if (asked.current === address) {
+      return;
+    }
+    asked.current = address;
+    setState("unknown");
     let live = true;
     api
       .whoami()
@@ -53,13 +71,14 @@ export function HelicoSessionProvider({ children }: { children: ReactNode }) {
       })
       .catch(() => {
         if (live) {
+          setSignedInAs(null);
           setState("signed-out");
         }
       });
     return () => {
       live = false;
     };
-  }, []);
+  }, [address]);
 
   const signIn = useCallback(async () => {
     if (!address) {
