@@ -106,6 +106,20 @@ contract ForkHookedPoolTest is MainnetFork {
         vault.grantRole(role, agent);
     }
 
+    /// @dev Asks the hook, standing where the PoolManager stands, whether it would take a swap
+    ///      from a stranger right now. Behind a snapshot, because the question is a real call and
+    ///      it must not change what the test then measures.
+    function _hookRefusesASwap() internal returns (bool) {
+        uint256 snapshot = vm.snapshotState();
+        IPoolManager.SwapParams memory probe =
+            IPoolManager.SwapParams({zeroForOne: true, amountSpecified: -1e6, sqrtPriceLimitX96: 4295128740});
+        vm.prank(address(POOL_MANAGER));
+        (bool accepted,) = demoPool.hooks
+            .call(abi.encodeCall(IHookCallbacks.beforeSwap, (address(this), demoPool, probe, "")));
+        vm.revertToState(snapshot);
+        return !accepted;
+    }
+
     /// @dev The range the position starts in and the range it is moved to.
     ///
     ///      Three constraints hold at once, and they are the vault's, not this test's. Both
@@ -262,10 +276,16 @@ contract ForkHookedPoolTest is MainnetFork {
 
     /// @notice When the hook refuses the swap, the whole re-centre is undone.
     ///
-    /// @dev Angstrom opens its pool only inside its own auction bundle, so any other swap is
-    ///      refused. The vault does the burn first, so a naive implementation could leave the
-    ///      owner with a burnt position and no new one. It does not: the revert unwinds the
-    ///      unlock, and the position the owner started with is still theirs, still that size.
+    /// @dev The vault burns before it swaps, so a naive implementation could leave the owner with
+    ///      a burnt position and no new one. It does not: the revert unwinds the unlock, and the
+    ///      position the owner started with is still theirs, still that size.
+    ///
+    ///      **Angstrom's refusal is not constant, and the first version of this test assumed it
+    ///      was.** The pool is open inside Angstrom's own auction bundle and shut outside it, so
+    ///      a fork of `latest` lands in either state — this failed on one run and passed on the
+    ///      next against unchanged code. It now asks the hook which state this is and skips when
+    ///      the answer is "open". Skipping is the point: a run that could not reach the refusal
+    ///      has to say so rather than report green.
     function test_AHookRefusingTheSwapUndoesTheWholeRecentre() public {
         _fork();
         _setUpVault();
@@ -276,6 +296,11 @@ contract ForkHookedPoolTest is MainnetFork {
 
         vm.prank(owner);
         vault.setMandate(tokenId, _mandate());
+
+        if (!_hookRefusesASwap()) {
+            emit log("Angstrom's pool is open in this block, so the refusal cannot be exercised");
+            vm.skip(true);
+        }
 
         vm.prank(agent);
         vm.expectRevert(
