@@ -102,6 +102,16 @@
 			}
 		},
 		{
+			"includes": ["scripts/*.ts"],
+			"linter": {
+				"rules": {
+					"suspicious": {
+						"noConsole": "off"
+					}
+				}
+			}
+		},
+		{
 			"includes": ["apps/landing/src/components/canvas/TuiCanvas.tsx"],
 			"linter": {
 				"rules": {
