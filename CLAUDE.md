@@ -19,8 +19,74 @@ to put it in, and wrapping it in one would add a layer that proves nothing. The 
 where protocol knowledge lives, not about the directory: `contracts/` owns what is deployed,
 `packages/plugins/` owns what talks to what is deployed.
 
+A user's own account contract lives there too — see the next section for why it is per-owner
+rather than shared, and for the invariants that must hold whatever is built on top of it.
+
 The rules below come from ETHGlobal's official workshops and the event prize page, not
 from guesswork. The research notes behind them are kept outside this repository.
+
+## Contract architecture, and the invariants that must survive any change
+
+Decided 8 September, written down because two of these are one-way doors.
+
+**One account per owner.** A user's tokens live in a contract that is theirs, not in a shared
+one. That contract is the *maker* in Aqua's ledger, it holds its own lending receipts, and it
+unwinds its own position inside a swap. The shared-contract version is in git history; the
+reason it went is that pulling a maker's Aave position requires holding their receipt token,
+and there is no withdraw-on-behalf-of in Aave — so a shared contract would have needed an
+unlimited approval from every user, and one bug would have reached all of them at once.
+
+**The escape hatch is not upgradeable.** The owner may withdraw everything to themselves
+through a function that lives in the proxy, outside any implementation. Code may be replaced
+entirely; that path may not. This exists because the owner chose to let CRE upgrade accounts
+automatically, and that choice is only survivable if there is one door nobody can wall up.
+
+**Aqua's ledger is the only way this code moves someone's tokens.** Never take an ERC-20
+approval to a Helico contract for a user's assets — not for a token, and especially not for a
+lending receipt. An approval outlives the mandate, ignores `maxOut`, and survives `dock`. The
+ledger does none of those things: it is a number the owner shipped, it falls as it is spent,
+and docking destroys it. `ForkAquaHoldsATokens.t.sol` is the proof and should stay green.
+
+**The wallet is spent before any lending market.** A swap that does not need the yield layer
+must never be able to fail because of it.
+
+**Refusals are named, and the quote refuses what the swap refuses.** A lending market's own
+limits surface as arithmetic panics from inside it; a caller cannot read those. And a quote
+that answers for a swap that would revert sends an agent to build a transaction that cannot
+land — this contract's own docblock says so, so violating it is self-contradiction rather than
+a style question.
+
+**A maker with debt is refused, not attempted** — at the venue the swap actually draws on.
+A lending market blocks a borrower from withdrawing collateral, so one ordinary borrow would
+otherwise disable a mandate, and the failure would arrive as the market's error after the
+mandate looked fine. A borrowing maker can also be liquidated out of the position the mandate
+depends on. Read the debt from the venue being unwound: a market reports a position aggregated
+across its own reserves, never across other markets.
+
+**A venue is validated against the pool, never against itself.** A receipt token is an address
+the maker writes into their mandate, so anything it says about itself is something the maker
+could have made up — `POOL()` on a forged receipt simply returns the real pool. Ask the pool
+which receipt it issues (`getReserveAToken`). Without it, `withdraw` burns the receipt the
+*pool* recognises while every guard in `_cover` measures the one the *mandate* named, and the
+two need not be the same token.
+
+**A venue that cannot pay is skipped, not fatal.** Market liquidity is one of three conditions;
+the maker's position there and the mandate's remaining receipt budget are the other two.
+Checking only the first ends the search at a venue that cannot pay and strands a funded one
+further down the list.
+
+**Evidence has to be unsatisfiable if the thing is false.** Three times on 8 September a check
+passed that could not have failed: a NatSpec claim that the canonical Aqua carried no events,
+asserted without ever running `eth_getLogs`; a `subgraph.yaml` comment saying the same, which would
+have started the index 17 million blocks late and looked like an empty subgraph rather than a wrong
+one; and a test proving an account could hold ETH using `vm.deal`, which sets a balance without
+ever performing a transfer — the account could not in fact receive one. Before trusting a check,
+ask what it would look like if the claim were false. If the answer is "the same", it is not a check.
+Two people asserting the same unmeasured thing is not corroboration either.
+
+Each of these has a test in `contracts/test/MandateVenueUnwind.t.sol`, and each of them failed
+before that file existed. An invariant stated only in a comment is a wish: every one of these
+was written down in NatSpec before it was true in code, and the code contradicted all of them.
 
 ## Language — team convention, not an ETHGlobal rule
 

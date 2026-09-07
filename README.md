@@ -172,18 +172,23 @@ hard-coded.
 | Delivery before payment, and the check that makes it safe | [`HelicoMandateSwap.sol#L187-L202`](https://github.com/0xHelico/helico/blob/89054c6fe9fdb8c7cfe7b978e11f9b37a1e42c25/contracts/src/HelicoMandateSwap.sol#L187-L202) |
 | A quote anyone may ask for, under the same rules | [`HelicoMandateSwap.sol#L126-L134`](https://github.com/0xHelico/helico/blob/89054c6fe9fdb8c7cfe7b978e11f9b37a1e42c25/contracts/src/HelicoMandateSwap.sol#L126-L134) |
 
-**A correction, kept rather than quietly edited.** This section said Aqua on Arbitrum One was
-empty. It is not: **1,289 events, 43 strategies shipped by two makers**, between blocks
-403,010,640 and 453,182,946. The query behind the original claim asked for the last 10,000,000
-blocks — and the most recent Aqua event is 49 million blocks old, so it was looking past all of
-it. Absence of evidence read as evidence of absence.
+**Two corrections, kept rather than quietly edited, because the second overturns the first.**
 
-The same mistake put the subgraph's `startBlock` 28 million blocks too late. It came from a
-binary search on `eth_getCode` with `2>/dev/null` on the call: the public RPC *errors* on state
-that old rather than returning empty, and the redirect turned every error into an empty string
-the search read as "no code yet". It found the node's pruning boundary, not the deployment.
+This section once said Aqua on Arbitrum One was empty. That was wrong, and the reason was a
+query that asked for the last 10,000,000 blocks when the most recent event was 49 million blocks
+old — absence of evidence read as evidence of absence.
 
-Both are fixed, and the real history is what the subgraph indexes.
+Then the address itself turned out to be wrong. We had taken it from the README inside the
+`v1.0.0` tag we vendor, which is from March; 1inch's current README lists a different one and
+says *"Only interact with these two contracts. Anything else is not Aqua."* They confirmed it
+directly. So the 1,289 events are real, and they belong to a deployment 1inch does not call Aqua.
+
+At the canonical address — `0x1111113CCf1426A8E30e2bfF5E005d929bF6a90a` — there are **zero
+events across the whole of Arbitrum**. Verified by scanning from block 1 forward, with the same
+query run against the stale address first to prove it could find something. It returned 1,289.
+
+So the first strategy this subgraph indexes will most likely be ours. That is a weaker fact than
+the one we briefly believed, and it is the true one.
 
 ### Uniswap v4 — real, tested, and not a submitted track
 

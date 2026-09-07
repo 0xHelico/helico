@@ -46,7 +46,7 @@ list is that it changes.
 |---|---|
 | `app.helico.site` (shot 0) | 200. The chat path answers: "swap 1000 USDC to WETH" returns the checked intent, same pair the fork test uses |
 | `helico.site`, `api.helico.site/healthz` | 200 |
-| Shot 3, the swap | ⚠️ **Was wrong when written, and is mine.** I said the fork test runs against *"the Aqua 1inch actually deployed"*. It runs against `0x499943E7…`, which is a real Aqua with no event since block 451,737,844. The live one is `0x1111113ccf…` ([#165](https://github.com/0xHelico/helico/issues/165)). **Do not say "the Aqua 1inch deployed" on camera until the constant in `DeployMandateSwap.s.sol` moves and the fork test repins.** The mechanics of the shot are unchanged; the sentence over it is not true yet |
+| Shot 3, the swap | **Recordable in full.** The fork test and `DeployMandateSwap.s.sol` both pin Aqua at `0x1111113CCf…` — the address 1inch confirmed in `#partner-1inch`, exports from `@1inch/aqua-sdk`, and has in the deployed `AquaSwapVMRouter`'s bytecode. It was `0x499943E7…` until 8 September, from a README five months stale; that one is a real Aqua with no event since block 451,737,844 ([#165](https://github.com/0xHelico/helico/issues/165)). The sentence *"the Aqua 1inch deployed"* is true on camera now, and was not when this row was first written — check the cell against the constant before recording rather than trusting either |
 | Shot 3, at `-vv` | **Would have cost a take.** One `[PASS]` line, no balances. Use `-vvvv` |
 | Shot 4, the subgraph | Not deployed. Fall back as written |
 | Shot 5, the enclave | Runs. A recorded rehearsal with its numbers checked is in [`docs/evidence/2026-09-07-cre-rehearsal.md`](evidence/2026-09-07-cre-rehearsal.md) |
@@ -120,7 +120,7 @@ No logo animation, no title card. Under 20 seconds, as the guidance asks.
 
 Speak over the run. Cut the waiting, never speed it up.
 
-> Here is the whole path against the Aqua that 1inch actually deployed on Arbitrum One.
+> Here is the whole path against Aqua on Arbitrum One, at the address 1inch publishes.
 
 *Screen: the swap completing — the maker's wallet balances before and after, and the recipient's.*
 

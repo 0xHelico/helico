@@ -7,7 +7,7 @@ import {Aqua} from "@1inch/aqua/Aqua.sol";
 import {AquaApp} from "@1inch/aqua/AquaApp.sol";
 import {IAqua} from "@1inch/aqua/interfaces/IAqua.sol";
 
-import {HelicoMandateSwap, SwapMandate} from "../src/HelicoMandateSwap.sol";
+import {HelicoMandateSwap, SwapMandate, Venue} from "../src/HelicoMandateSwap.sol";
 import {
     FeeOnTransferToken,
     FreeloadingTaker,
@@ -495,7 +495,8 @@ contract HelicoMandateSwapTest is Test {
             maxOut1: NO_CEILING,
             expiry: EXPIRY,
             agent: address(taker),
-            salt: "fot"
+            salt: "fot",
+            venues: new Venue[](0)
         });
         address[] memory tokens = new address[](2);
         tokens[0] = address(fot);
@@ -553,7 +554,8 @@ contract HelicoMandateSwapTest is Test {
             maxOut1: maxOut1,
             expiry: EXPIRY,
             agent: agent,
-            salt: salt
+            salt: salt,
+            venues: new Venue[](0)
         });
     }
 
