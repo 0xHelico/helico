@@ -65,6 +65,24 @@ kontraknya kecuali dia sendiri yang menyuruh.**
 bersih-bersih — ini menghapus jalur produk yang lama, dan dilakukan hanya karena penggantinya
 sudah berdiri.
 
+### Urutannya, dan kenapa terbalik itu tidak jalan
+
+Ditulis setelah mencobanya terbalik dan mematahkan CI. **Aplikasi harus pindah lebih dulu.**
+
+`packages/plugins/uniswap` tidak bisa dihapus selama `apps/app` mengimpornya, dan `HelicoVault`
+tidak bisa dihapus selama aplikasi memanggilnya. Menghapus paketnya sendirian memecahkan
+`bun install --frozen-lockfile` — lockfile masih menyebut workspace itu — dan menghasilkan
+sembilan galat typecheck.
+
+Kesalahannya sendiri layak dicatat, karena bentuknya berulang: aku menyimpulkan paket itu tidak
+dipakai setelah `grep` di `apps/app/src` dan `apps/app/app`, padahal kodenya ada di
+`apps/app/components` dan `apps/app/lib`. Hasil kosong dari pencarian di tempat yang salah dibaca
+sebagai jawaban. Lihat catatan **"Evidence has to be unsatisfiable if the thing is false"** di
+`CLAUDE.md`.
+
+Frontend ranahnya rifky, situasinya ada di **#175**. Penghapusan menyusul setelah itu, bukan
+sebelum.
+
 ## Yang rencana ini tidak lakukan
 
 - **Tidak memberi CRE kuasa atas dana.** Kalau suatu hari ada tuntutan fitur yang butuh itu,
