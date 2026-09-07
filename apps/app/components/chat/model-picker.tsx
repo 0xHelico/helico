@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import type { SwapConfig } from "@/lib/api";
 import { modelChoices } from "@/lib/models";
 import { cn } from "@/lib/utils";
-import { SparklesIcon } from "./icons";
+import { ProviderLogo } from "./provider-logo";
 
 /**
  * The template's model selector, with one difference that matters: nothing here is a choice
@@ -27,6 +27,9 @@ export function ModelPicker({ config }: { config: SwapConfig }) {
   const active = config.available ? config.model : null;
   const handleSelect = useCallback(() => setOpen(false), []);
   const choices = modelChoices(active);
+  // Whose mark sits on the trigger. An endpoint configured for something this list does not know
+  // has no provider and therefore no logo, which is honest: we do not know whose model it is.
+  const activeProvider = choices.find((m) => m.available)?.provider ?? "";
   const byProvider = choices.reduce<Record<string, typeof choices>>(
     (acc, m) => {
       const group = acc[m.provider] ?? [];
@@ -50,7 +53,7 @@ export function ModelPicker({ config }: { config: SwapConfig }) {
           data-testid="model-selector"
           variant="ghost"
         >
-          <SparklesIcon size={13} />
+          <ProviderLogo provider={activeProvider} size={13} />
           <span className="truncate">{active ?? "no model configured"}</span>
         </Button>
       </ModelSelectorTrigger>
@@ -70,7 +73,13 @@ export function ModelPicker({ config }: { config: SwapConfig }) {
                   onSelect={handleSelect}
                   value={m.id}
                 >
-                  <span className={cn(!m.available && "opacity-50")}>
+                  <span
+                    className={cn(
+                      "flex items-center gap-2",
+                      !m.available && "opacity-50",
+                    )}
+                  >
+                    <ProviderLogo provider={m.provider} />
                     {m.name}
                   </span>
                   <span className="text-[11px] text-muted-foreground">

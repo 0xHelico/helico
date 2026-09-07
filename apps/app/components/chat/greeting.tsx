@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import Link from "next/link";
 
 export const Greeting = () => (
   <div className="flex flex-col items-center px-4" key="overview">
@@ -17,6 +18,22 @@ export const Greeting = () => (
       transition={{ delay: 0.5, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
     >
       Say it in a sentence. Nothing moves until you sign it.
+    </motion.div>
+    <motion.div
+      animate={{ opacity: 1, y: 0 }}
+      className="mt-2 text-center text-muted-foreground/60 text-xs"
+      initial={{ opacity: 0, y: 10 }}
+      transition={{ delay: 0.65, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+    >
+      Swaps happen here. To have a liquidity position kept near the market
+      price,{" "}
+      <Link
+        className="underline underline-offset-2 hover:text-muted-foreground"
+        href="/mandate"
+      >
+        set a mandate
+      </Link>
+      .
     </motion.div>
   </div>
 );
