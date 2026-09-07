@@ -880,6 +880,50 @@ Format: date · what was done · the AI's role · what a human verified.
   Both contracts are active, which is why activity cannot separate them and why the partner's own
   word was needed.
 
+### 2026-09-08 — a twelve-agent audit, the account architecture, and moving CRE off the old product
+
+- **Done:** `HelicoAccountFactory`, `HelicoAccountProxy`, `HelicoAccount` and `AccountAuth`; the
+  venue fixes the audit produced; the CRE workflow rewritten from re-centring liquidity to
+  managing idle capital; `rehearse-idle.sh`, which runs that end to end on a fork.
+- **AI's role, and it differed by task:**
+  - **Twelve independent Opus agents** ran the `solidity-auditor` skill from `pashov/skills`
+    (version 3) over `HelicoMandateSwap.sol` and `ILendingVenue.sol`. Nine single-specialty, three
+    hunting the seams between specialties. The instruction was the skill's own: attack the code,
+    and without concrete proof it is a lead rather than a finding.
+  - **The account contracts were written in this session**, from a plan committed before the code
+    (`docs/plans/2026-09-08-account-factory.md`, `2026-09-08-one-account-per-owner.md`).
+  - **The CRE rewrite and the multi-venue selection were delegated** to agents given a written
+    spec that fixed the design decisions in advance — one move per run because the account's
+    nonce is sequential, the deadband applied to a round trip rather than each leg — so the agent
+    implemented a design rather than inventing one.
+- **Plan:** `docs/plans/2026-09-08-cre-manages-idle-capital.md`, and the two above.
+- **Verified:** 159 local tests and the fork suite against live Arbitrum. `rehearse-idle.sh` exits
+  0: the factory deploys, an account opens at an address computed before it existed, 50,000 USDC
+  arrives from a whale on the fork, the enclave answers `SUPPLY 40000000000`, and the account ends
+  holding 39,999.999999 aUSDC against a 10,000 buffer. The agent's own balance is zero.
+
+**What the audit found, and what the audit could not.** Four defects, and every one of them was a
+rule already written in the file's own NatSpec that the code did not keep. They survived because
+every mandate in the test suite shipped `venues: new Venue[](0)` — the whole unwind path was
+reached by no test, so twenty-eight green tests said nothing about it.
+
+The step that turned a finding into a fact was not the twelve agents. It was removing the fix and
+watching what moved: with the pool binding gone, a swap that should have been refused **succeeded**
+and 90.66 of another party's receipt tokens left the contract. A test that passes with the fix in
+place has not been shown to catch anything.
+
+**Three corrections made by humans, recorded because they are the pattern.** @rifkyeasy found a
+NatSpec claim that ships and is checkable and false — that the canonical Aqua carried no events —
+and separately that `HelicoAccount` sat outside the storage-layout check while being the more
+dangerous of the two contracts to shift. @ghozzza found that we had described 1inch's `main` README
+as stale when the stale thing was our own choice to pin a March tag.
+
+All three are the same shape: a claim stated with more confidence than the measurement behind it.
+It appeared often enough in one day that the operational defaults are now in `CLAUDE.md`, and one
+of them — running Solidity's format check before push instead of only in CI — became a git hook,
+because a lesson written down was violated again within the hour and a hook does not need to be
+remembered.
+
 <!--
 Template for the next entry:
 
