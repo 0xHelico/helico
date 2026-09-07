@@ -36,9 +36,17 @@ contract DeployMandateSwap is Script {
     ///      behaviour cannot tell them apart — which is why the check below is necessary and
     ///      also why it was not sufficient.
     ///
-    ///      What separates them: their bytecode differs (11,241 vs 12,505), and the stale one
-    ///      carries 1,289 events on Arbitrum while this one carries **none**. Activity was the
-    ///      misleading signal here. The partner's own word is the deciding one.
+    ///      What separates them: their bytecode differs (11,241 vs 12,505), `main`'s README names
+    ///      this one, the vendored Aqua SDK exports it, and the deployed `AquaSwapVMRouter` carries it
+    ///      in its bytecode with no reference to the other.
+    ///
+    ///      Activity separates nothing, and the first version of this note said the opposite —
+    ///      that the stale address had 1,289 events while this one had none. The 1,289 is right;
+    ///      the rest was a measurement error. Measured 8 September, both are live: the stale one
+    ///      has been silent since block 451,737,844, and this one was still emitting hours ago.
+    ///      So a count of events picks the wrong contract, and a count of *recent* events picks
+    ///      the right one for a reason that is luck rather than evidence. The partner's own word
+    ///      is the deciding one, and a vendor constant is the only thing a maker cannot forge.
     ///
     ///      Note that `forge fmt` rewrites an address literal's EIP-55 checksum to match
     ///      whatever hex is there, so a mistyped address compiles cleanly with a valid

@@ -278,6 +278,13 @@ contract HelicoMandateSwap is AquaApp {
 
         // What this contract held before the pull. Everything below is measured against it,
         // because a receipt left here by any earlier call belongs to somebody else.
+        //
+        // This must stay a measurement. `require(heldNow == 0)` would read as the same check and
+        // would not be: a maker-chosen `pool` is arbitrary code, called while this contract holds
+        // receipts, so it can reenter. Walk that through and the accounting only closes because
+        // each frame measures its own starting point — the inner frame settles back to
+        // `before + outer`, and the outer then settles to `before`. Assume a zero and the inner
+        // frame refuses a balance that is legitimately there.
         uint256 beforePull = IERC20(receipt).balanceOf(address(this));
 
         AQUA.pull(mandate.maker, hash, receipt, deficit, address(this));

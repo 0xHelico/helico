@@ -27,40 +27,22 @@ import {HelicoAccountProxy} from "./HelicoAccountProxy.sol";
 ///      code that was announced. The owner may cancel during the delay, and may refuse automatic
 ///      upgrades permanently.
 contract HelicoAccount is UUPSUpgradeable {
-    /// @notice How long an announced upgrade waits before it may run.
-    uint256 public constant UPGRADE_DELAY = 2 days;
-    /// @notice How long it stays runnable after that, before it must be announced again.
-    uint256 public constant UPGRADE_GRACE = 7 days;
-
     /// @notice The key allowed to announce and run upgrades without the owner acting.
     /// @dev An immutable on the implementation, so changing it means shipping a new
     ///      implementation — which is itself subject to the delay, the grace period and the
     ///      owner's refusal. A mutable upgrader would be a way around all three.
     address public immutable UPGRADER;
 
-    struct ScheduledUpgrade {
-        uint64 readyAt;
-        bytes32 codehash;
-    }
-
-    /// @notice Announced upgrades, by implementation address.
-    mapping(address implementation => ScheduledUpgrade) public scheduledUpgrades;
-
     /// @notice Once true, only the owner may change this account's code. Never returns to false.
     bool public autoUpgradeRefused;
 
     error NotOwner(address caller);
     error NotOwnerOrUpgrader(address caller);
-    error UpgradeNotScheduled();
-    error UpgradeNotReady(uint256 nowTimestamp, uint256 readyAt);
-    error UpgradeExpired(uint256 nowTimestamp, uint256 expiredAt);
-    error ImplementationChanged(address implementation);
     error ImplementationHasNoCode(address implementation);
     error AutoUpgradeAlreadyRefused();
     error CallFailed(address target);
 
-    event UpgradeScheduled(address indexed implementation, uint64 readyAt, bytes32 codehash);
-    event UpgradeCancelled(address indexed implementation);
+    event Upgraded(address indexed implementation, address indexed by);
     event AutoUpgradeRefused();
     event Executed(address indexed target, uint256 value, bytes4 selector);
 
@@ -96,25 +78,6 @@ contract HelicoAccount is UUPSUpgradeable {
         emit Executed(target, value, bytes4(data));
     }
 
-    /// @notice Announce an upgrade. Runnable after `UPGRADE_DELAY`, expiring `UPGRADE_GRACE` later.
-    function scheduleUpgrade(address implementation) external {
-        _requireMayUpgrade();
-        if (implementation.code.length == 0) revert ImplementationHasNoCode(implementation);
-
-        uint64 readyAt = uint64(block.timestamp + UPGRADE_DELAY);
-        bytes32 codehash = implementation.codehash;
-        scheduledUpgrades[implementation] = ScheduledUpgrade({readyAt: readyAt, codehash: codehash});
-        emit UpgradeScheduled(implementation, readyAt, codehash);
-    }
-
-    /// @notice Withdraw an announced upgrade. The owner may always do this; it is the point of
-    ///         the delay.
-    function cancelUpgrade(address implementation) external {
-        _requireMayUpgrade();
-        delete scheduledUpgrades[implementation];
-        emit UpgradeCancelled(implementation);
-    }
-
     /// @notice Give up automatic upgrades for good. Only the owner, and only once.
     /// @dev One-way on purpose. A switch that can be flipped back is a switch whoever holds the
     ///      upgrade key can flip back.
@@ -133,19 +96,23 @@ contract HelicoAccount is UUPSUpgradeable {
         if (!upgraderMayAct) revert NotOwnerOrUpgrader(msg.sender);
     }
 
+    /// @dev An upgrade takes effect immediately. There is no announcement, no waiting period and
+    ///      no window in which the owner can cancel one.
+    ///
+    ///      **That is a deliberate trade made for the hackathon, not an omission.** `HelicoVault`
+    ///      does have the delay, and this contract had it too until it was taken out on purpose:
+    ///      during a five-day event the ability to fix a mistake within minutes is worth more than
+    ///      the ability to see one coming two days out. Judging happens over hours, and a
+    ///      two-day timelock would mean a defect found on the last day cannot be fixed at all.
+    ///
+    ///      What it costs, so nobody has to rediscover it: the owner cannot review or refuse a
+    ///      specific upgrade before it lands. The protections that remain are the two that do not
+    ///      depend on timing — `refuseAutoUpgrade`, which removes the upgrader for good, and the
+    ///      escape hatch in the proxy, which no implementation can reach. **Restoring the delay is
+    ///      the first thing to do before this is used with real money for real users.**
     function _authorizeUpgrade(address implementation) internal override {
         _requireMayUpgrade();
-
-        ScheduledUpgrade memory s = scheduledUpgrades[implementation];
-        if (s.readyAt == 0) revert UpgradeNotScheduled();
-        if (block.timestamp < s.readyAt) revert UpgradeNotReady(block.timestamp, s.readyAt);
-        uint256 expiredAt = uint256(s.readyAt) + UPGRADE_GRACE;
-        if (block.timestamp > expiredAt) revert UpgradeExpired(block.timestamp, expiredAt);
-        // The same address may hold different code than when it was announced: a contract can be
-        // destroyed and redeployed at one address. Pinning the hash makes the thing that runs the
-        // thing that was reviewed.
-        if (implementation.codehash != s.codehash) revert ImplementationChanged(implementation);
-
-        delete scheduledUpgrades[implementation];
+        if (implementation.code.length == 0) revert ImplementationHasNoCode(implementation);
+        emit Upgraded(implementation, msg.sender);
     }
 }

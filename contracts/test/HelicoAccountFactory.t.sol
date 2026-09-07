@@ -75,7 +75,12 @@ contract HelicoAccountFactoryTest is Test {
     function test_TokensSentBeforeTheAccountExistsAreStillTheOwners() public {
         address predicted = factory.accountFor(owner);
         token.mint(predicted, 500e18);
-        vm.deal(predicted, 1 ether);
+        // Sent, not conjured. `vm.deal` sets a balance without exercising the transfer, and the
+        // transfer is the half that can fail: an empty-calldata send lands on the proxy's
+        // `receive`, and without one it is delegated to an implementation with no fallback.
+        vm.deal(address(this), 1 ether);
+        (bool sent,) = predicted.call{value: 1 ether}("");
+        assertTrue(sent, "the address could be paid before it existed");
 
         factory.open(owner);
 
@@ -134,9 +139,6 @@ contract HelicoAccountFactoryTest is Test {
         HostileAccount hostile = new HostileAccount(upgrader, stranger);
 
         vm.prank(owner);
-        HelicoAccount(payable(account)).scheduleUpgrade(address(hostile));
-        vm.warp(block.timestamp + 2 days);
-        vm.prank(owner);
         HelicoAccount(payable(account)).upgradeToAndCall(address(hostile), "");
 
         // The hostile code is installed and running.
@@ -157,37 +159,16 @@ contract HelicoAccountFactoryTest is Test {
     // Upgrades: announced, delayed, cancellable, pinned, refusable
     // ------------------------------------------------------------------------------------
 
-    function test_AnUpgradeWaitsForTheDelay() public {
+    /// @dev No delay, on purpose, for the length of the hackathon. `_authorizeUpgrade`'s docblock
+    ///      says what that costs and that restoring it comes before real users.
+    function test_AnUpgradeTakesEffectImmediately() public {
         address account = factory.open(owner);
         SecondAccount next = new SecondAccount(upgrader);
 
         vm.prank(upgrader);
-        HelicoAccount(payable(account)).scheduleUpgrade(address(next));
-
-        vm.prank(upgrader);
-        vm.expectRevert();
         HelicoAccount(payable(account)).upgradeToAndCall(address(next), "");
 
-        vm.warp(block.timestamp + 2 days);
-        vm.prank(upgrader);
-        HelicoAccount(payable(account)).upgradeToAndCall(address(next), "");
         assertEq(SecondAccount(payable(account)).version(), 2);
-    }
-
-    function test_TheOwnerCanCancelDuringTheDelay() public {
-        address account = factory.open(owner);
-        SecondAccount next = new SecondAccount(upgrader);
-
-        vm.prank(upgrader);
-        HelicoAccount(payable(account)).scheduleUpgrade(address(next));
-
-        vm.prank(owner);
-        HelicoAccount(payable(account)).cancelUpgrade(address(next));
-
-        vm.warp(block.timestamp + 2 days);
-        vm.prank(upgrader);
-        vm.expectRevert(HelicoAccount.UpgradeNotScheduled.selector);
-        HelicoAccount(payable(account)).upgradeToAndCall(address(next), "");
     }
 
     function test_TheOwnerCanRefuseAutomaticUpgradesForGood() public {
@@ -199,12 +180,9 @@ contract HelicoAccountFactoryTest is Test {
 
         vm.prank(upgrader);
         vm.expectRevert(abi.encodeWithSelector(HelicoAccount.NotOwnerOrUpgrader.selector, upgrader));
-        HelicoAccount(payable(account)).scheduleUpgrade(address(next));
+        HelicoAccount(payable(account)).upgradeToAndCall(address(next), "");
 
         // The owner is not locked out of their own code.
-        vm.prank(owner);
-        HelicoAccount(payable(account)).scheduleUpgrade(address(next));
-        vm.warp(block.timestamp + 2 days);
         vm.prank(owner);
         HelicoAccount(payable(account)).upgradeToAndCall(address(next), "");
         assertEq(SecondAccount(payable(account)).version(), 2);
@@ -219,35 +197,22 @@ contract HelicoAccountFactoryTest is Test {
         vm.stopPrank();
     }
 
-    function test_AStrangerCanNeitherScheduleNorUpgrade() public {
+    function test_AStrangerCannotUpgrade() public {
         address account = factory.open(owner);
         SecondAccount next = new SecondAccount(upgrader);
 
         vm.prank(stranger);
         vm.expectRevert(abi.encodeWithSelector(HelicoAccount.NotOwnerOrUpgrader.selector, stranger));
-        HelicoAccount(payable(account)).scheduleUpgrade(address(next));
-    }
-
-    function test_AnUpgradeExpiresIfItIsNotRun() public {
-        address account = factory.open(owner);
-        SecondAccount next = new SecondAccount(upgrader);
-
-        vm.prank(upgrader);
-        HelicoAccount(payable(account)).scheduleUpgrade(address(next));
-
-        vm.warp(block.timestamp + 2 days + 7 days + 1);
-        vm.prank(upgrader);
-        vm.expectRevert();
         HelicoAccount(payable(account)).upgradeToAndCall(address(next), "");
     }
 
-    function test_AnEmptyImplementationCannotBeScheduled() public {
+    function test_AnEmptyImplementationCannotBeInstalled() public {
         address account = factory.open(owner);
         vm.prank(owner);
         vm.expectRevert(
             abi.encodeWithSelector(HelicoAccount.ImplementationHasNoCode.selector, address(0xDEAD))
         );
-        HelicoAccount(payable(account)).scheduleUpgrade(address(0xDEAD));
+        HelicoAccount(payable(account)).upgradeToAndCall(address(0xDEAD), "");
     }
 
     // ------------------------------------------------------------------------------------
@@ -267,5 +232,57 @@ contract HelicoAccountFactoryTest is Test {
         vm.prank(owner);
         HelicoAccount(payable(account)).execute(address(token), 0, transfer);
         assertEq(token.balanceOf(owner), 40e18);
+    }
+}
+
+/// @notice The flow the frontend actually needs: the user only ever sends one transaction.
+///
+/// @dev Named separately because it is a product claim, not a unit. If this file is green, the
+///      seamless path is real; if somebody changes `execute`'s caller check or makes `open`
+///      permissioned, this is what goes red.
+contract HelicoAccountSeamlessTest is Test {
+    HelicoAccount implementation;
+    HelicoAccountFactory factory;
+    TestToken token;
+
+    address user = address(0x115E2);
+    address relayer = address(0xFEE7A);
+
+    function setUp() public {
+        implementation = new HelicoAccount(address(0xC2E));
+        factory = new HelicoAccountFactory(address(implementation));
+        token = new TestToken("Token", "TKN");
+    }
+
+    function test_TheUserSendsOneTransactionAndNeverSeesTheAccountBeingCreated() public {
+        // The frontend knows the address the moment the wallet connects, before anything exists.
+        address account = factory.accountFor(user);
+        assertFalse(factory.isOpen(user));
+
+        // Our relayer opens it, on our gas, while the user is still typing. Opening grants the
+        // relayer nothing: the owner is fixed by the address itself.
+        vm.prank(relayer);
+        factory.open(user);
+        assertTrue(factory.isOpen(user));
+        assertEq(HelicoAccount(payable(account)).owner(), user, "the relayer did not become the owner");
+
+        // The user's first and only transaction is their actual command. No intermediary, so
+        // `msg.sender` is the user and `execute`'s check passes.
+        token.mint(account, 100e18);
+        vm.prank(user);
+        HelicoAccount(payable(account))
+            .execute(address(token), 0, abi.encodeWithSignature("transfer(address,uint256)", user, 100e18));
+
+        assertEq(token.balanceOf(user), 100e18);
+    }
+
+    function test_TheRelayerCannotActAsTheUserItOpenedFor() public {
+        address account = factory.open(user);
+        token.mint(account, 100e18);
+
+        vm.prank(relayer);
+        vm.expectRevert(abi.encodeWithSelector(HelicoAccount.NotOwner.selector, relayer));
+        HelicoAccount(payable(account))
+            .execute(address(token), 0, abi.encodeWithSignature("transfer(address,uint256)", relayer, 100e18));
     }
 }

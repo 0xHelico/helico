@@ -84,6 +84,13 @@ contract HelicoAccountProxy is Proxy {
         emit Escaped(OWNER, tokens.length);
     }
 
+    /// @notice Accept plain transfers.
+    /// @dev Without this, an empty-calldata send falls through to `fallback`, is delegated to an
+    ///      implementation that has no fallback of its own, and reverts. An account that cannot be
+    ///      paid is not an account — and `escape` sweeps native currency, so it has to be able to
+    ///      arrive in the first place.
+    receive() external payable {}
+
     function _implementation() internal view override returns (address) {
         return ERC1967Utils.getImplementation();
     }
