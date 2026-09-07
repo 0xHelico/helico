@@ -47,15 +47,15 @@ on-chain transaction behind it on Base Sepolia, listed in
 
 | What | Where |
 |---|---|
-| Universal Router `execute`, `V4_SWAP` command, router-level `SWEEP` | [`swap.ts#L100-L121`](https://github.com/0xHelico/helico/blob/9b1e8194098425ddab6cdaabc95d6796c5de9fcf/packages/plugins/uniswap/src/swap.ts#L100-L121) |
-| `SWAP_EXACT_IN_SINGLE` action and its settlement pair | [`swap.ts#L148-L170`](https://github.com/0xHelico/helico/blob/9b1e8194098425ddab6cdaabc95d6796c5de9fcf/packages/plugins/uniswap/src/swap.ts#L148-L170) |
-| `Quoter` read over `eth_call` | [`quote.ts#L17-L28`](https://github.com/0xHelico/helico/blob/9b1e8194098425ddab6cdaabc95d6796c5de9fcf/packages/plugins/uniswap/src/quote.ts#L17-L28) |
-| Pool state through `StateView` | [`pool.ts#L64-L82`](https://github.com/0xHelico/helico/blob/9b1e8194098425ddab6cdaabc95d6796c5de9fcf/packages/plugins/uniswap/src/pool.ts#L64-L82) |
-| `PoolId` derivation, matching v4's own | [`pool.ts#L39-L52`](https://github.com/0xHelico/helico/blob/9b1e8194098425ddab6cdaabc95d6796c5de9fcf/packages/plugins/uniswap/src/pool.ts#L39-L52) |
-| Addresses resolved from the official SDK | [`addresses.ts#L99-L107`](https://github.com/0xHelico/helico/blob/9b1e8194098425ddab6cdaabc95d6796c5de9fcf/packages/plugins/uniswap/src/addresses.ts#L99-L107) |
-| Permit2 approval | [`approval.ts#L93-L110`](https://github.com/0xHelico/helico/blob/9b1e8194098425ddab6cdaabc95d6796c5de9fcf/packages/plugins/uniswap/src/approval.ts#L93-L110) |
-| EIP-712 `PermitSingle` typed data | [`approval.ts#L134-L160`](https://github.com/0xHelico/helico/blob/9b1e8194098425ddab6cdaabc95d6796c5de9fcf/packages/plugins/uniswap/src/approval.ts#L134-L160) |
-| `PositionManager` mint | [`liquidity.ts#L93-L124`](https://github.com/0xHelico/helico/blob/9b1e8194098425ddab6cdaabc95d6796c5de9fcf/packages/plugins/uniswap/src/liquidity.ts#L93-L124) |
+| Universal Router `execute`, `V4_SWAP` command, router-level `SWEEP` | [`swap.ts#L100-L121`](https://github.com/0xHelico/helico/blob/e0a48fe25ef5d1361f4afba1d316bf509f83b354/packages/plugins/uniswap/src/swap.ts#L100-L121) |
+| `SWAP_EXACT_IN_SINGLE` action and its settlement pair | [`swap.ts#L148-L170`](https://github.com/0xHelico/helico/blob/e0a48fe25ef5d1361f4afba1d316bf509f83b354/packages/plugins/uniswap/src/swap.ts#L148-L170) |
+| `Quoter` read over `eth_call` | [`quote.ts#L17-L28`](https://github.com/0xHelico/helico/blob/e0a48fe25ef5d1361f4afba1d316bf509f83b354/packages/plugins/uniswap/src/quote.ts#L17-L28) |
+| Pool state through `StateView` | [`pool.ts#L72-L90`](https://github.com/0xHelico/helico/blob/e0a48fe25ef5d1361f4afba1d316bf509f83b354/packages/plugins/uniswap/src/pool.ts#L72-L90) |
+| `PoolId` derivation, matching v4's own | [`pool.ts#L47-L60`](https://github.com/0xHelico/helico/blob/e0a48fe25ef5d1361f4afba1d316bf509f83b354/packages/plugins/uniswap/src/pool.ts#L47-L60) |
+| Addresses resolved from the official SDK | [`addresses.ts#L99-L107`](https://github.com/0xHelico/helico/blob/e0a48fe25ef5d1361f4afba1d316bf509f83b354/packages/plugins/uniswap/src/addresses.ts#L99-L107) |
+| Permit2 approval | [`approval.ts#L93-L110`](https://github.com/0xHelico/helico/blob/e0a48fe25ef5d1361f4afba1d316bf509f83b354/packages/plugins/uniswap/src/approval.ts#L93-L110) |
+| EIP-712 `PermitSingle` typed data | [`approval.ts#L134-L160`](https://github.com/0xHelico/helico/blob/e0a48fe25ef5d1361f4afba1d316bf509f83b354/packages/plugins/uniswap/src/approval.ts#L134-L160) |
+| `PositionManager` mint | [`liquidity.ts#L93-L124`](https://github.com/0xHelico/helico/blob/e0a48fe25ef5d1361f4afba1d316bf509f83b354/packages/plugins/uniswap/src/liquidity.ts#L93-L124) |
 
 ### The vault
 
@@ -65,13 +65,13 @@ It is upgradeable behind a timelock, non-custodial, and every rejection path is 
 
 | What | Where |
 |---|---|
-| The mandate a user commits | [`Mandate.sol#L20-L62`](https://github.com/0xHelico/helico/blob/9b1e8194098425ddab6cdaabc95d6796c5de9fcf/contracts/src/Mandate.sol#L20-L62) |
-| Committing it, checked against the position's real pool | [`HelicoVault.sol#L290-L328`](https://github.com/0xHelico/helico/blob/9b1e8194098425ddab6cdaabc95d6796c5de9fcf/contracts/src/HelicoVault.sol#L290-L328) |
-| The action the agent may propose | [`HelicoVault.sol#L537-L590`](https://github.com/0xHelico/helico/blob/9b1e8194098425ddab6cdaabc95d6796c5de9fcf/contracts/src/HelicoVault.sol#L537-L590) |
-| Every range rule, including the one the price must satisfy | [`HelicoVault.sol#L843-L867`](https://github.com/0xHelico/helico/blob/9b1e8194098425ddab6cdaabc95d6796c5de9fcf/contracts/src/HelicoVault.sol#L843-L867) |
-| The swap that makes an out-of-range position recoverable | [`HelicoVault.sol#L597-L613`](https://github.com/0xHelico/helico/blob/9b1e8194098425ddab6cdaabc95d6796c5de9fcf/contracts/src/HelicoVault.sol#L597-L613) |
-| An agent that cannot send transactions: the signed authorisation | [`HelicoVault.sol#L435-L455`](https://github.com/0xHelico/helico/blob/9b1e8194098425ddab6cdaabc95d6796c5de9fcf/contracts/src/HelicoVault.sol#L435-L455) |
-| The exit, which nothing can block | [`HelicoVault.sol#L338-L350`](https://github.com/0xHelico/helico/blob/9b1e8194098425ddab6cdaabc95d6796c5de9fcf/contracts/src/HelicoVault.sol#L338-L350) |
+| The mandate a user commits | [`Mandate.sol#L20-L62`](https://github.com/0xHelico/helico/blob/e0a48fe25ef5d1361f4afba1d316bf509f83b354/contracts/src/Mandate.sol#L20-L62) |
+| Committing it, checked against the position's real pool | [`HelicoVault.sol#L290-L328`](https://github.com/0xHelico/helico/blob/e0a48fe25ef5d1361f4afba1d316bf509f83b354/contracts/src/HelicoVault.sol#L290-L328) |
+| The action the agent may propose | [`HelicoVault.sol#L537-L590`](https://github.com/0xHelico/helico/blob/e0a48fe25ef5d1361f4afba1d316bf509f83b354/contracts/src/HelicoVault.sol#L537-L590) |
+| Every range rule, including the one the price must satisfy | [`HelicoVault.sol#L843-L867`](https://github.com/0xHelico/helico/blob/e0a48fe25ef5d1361f4afba1d316bf509f83b354/contracts/src/HelicoVault.sol#L843-L867) |
+| The swap that makes an out-of-range position recoverable | [`HelicoVault.sol#L597-L613`](https://github.com/0xHelico/helico/blob/e0a48fe25ef5d1361f4afba1d316bf509f83b354/contracts/src/HelicoVault.sol#L597-L613) |
+| An agent that cannot send transactions: the signed authorisation | [`HelicoVault.sol#L435-L455`](https://github.com/0xHelico/helico/blob/e0a48fe25ef5d1361f4afba1d316bf509f83b354/contracts/src/HelicoVault.sol#L435-L455) |
+| The exit, which nothing can block | [`HelicoVault.sol#L338-L350`](https://github.com/0xHelico/helico/blob/e0a48fe25ef5d1361f4afba1d316bf509f83b354/contracts/src/HelicoVault.sol#L338-L350) |
 
 ### Chainlink CRE — Confidential Workflows
 
@@ -80,14 +80,14 @@ released there by the Vault DON. Only the verdict crosses back out.
 
 | What | Where |
 |---|---|
-| `handlerInTee` registration | [`index.ts#L268-L276`](https://github.com/0xHelico/helico/blob/9b1e8194098425ddab6cdaabc95d6796c5de9fcf/packages/plugins/cre/src/index.ts#L268-L276) |
-| The confidential handler itself | [`index.ts#L173-L234`](https://github.com/0xHelico/helico/blob/9b1e8194098425ddab6cdaabc95d6796c5de9fcf/packages/plugins/cre/src/index.ts#L173-L234) |
-| The re-centre decision, Helico's own logic | [`index.ts#L111-L170`](https://github.com/0xHelico/helico/blob/9b1e8194098425ddab6cdaabc95d6796c5de9fcf/packages/plugins/cre/src/index.ts#L111-L170) |
-| Chain reads made from inside the enclave | [`chain.ts#L20-L44`](https://github.com/0xHelico/helico/blob/9b1e8194098425ddab6cdaabc95d6796c5de9fcf/packages/plugins/cre/src/chain.ts#L20-L44) |
-| The mandate hash, tying the verdict to what the user signed | [`mandate.ts#L38-L50`](https://github.com/0xHelico/helico/blob/9b1e8194098425ddab6cdaabc95d6796c5de9fcf/packages/plugins/cre/src/mandate.ts#L38-L50) |
+| `handlerInTee` registration | [`index.ts#L268-L276`](https://github.com/0xHelico/helico/blob/e0a48fe25ef5d1361f4afba1d316bf509f83b354/packages/plugins/cre/src/index.ts#L268-L276) |
+| The confidential handler itself | [`index.ts#L173-L234`](https://github.com/0xHelico/helico/blob/e0a48fe25ef5d1361f4afba1d316bf509f83b354/packages/plugins/cre/src/index.ts#L173-L234) |
+| The re-centre decision, Helico's own logic | [`index.ts#L111-L170`](https://github.com/0xHelico/helico/blob/e0a48fe25ef5d1361f4afba1d316bf509f83b354/packages/plugins/cre/src/index.ts#L111-L170) |
+| Chain reads made from inside the enclave | [`chain.ts#L20-L44`](https://github.com/0xHelico/helico/blob/e0a48fe25ef5d1361f4afba1d316bf509f83b354/packages/plugins/cre/src/chain.ts#L20-L44) |
+| The mandate hash, tying the verdict to what the user signed | [`mandate.ts#L52-L64`](https://github.com/0xHelico/helico/blob/e0a48fe25ef5d1361f4afba1d316bf509f83b354/packages/plugins/cre/src/mandate.ts#L52-L64) |
 
-| The verdict delivered to the vault | [`index.ts#L244-L265`](https://github.com/0xHelico/helico/blob/9b1e8194098425ddab6cdaabc95d6796c5de9fcf/packages/plugins/cre/src/index.ts#L244-L265) |
-| The vault receiving it | [`HelicoVault.sol#L485-L498`](https://github.com/0xHelico/helico/blob/9b1e8194098425ddab6cdaabc95d6796c5de9fcf/contracts/src/HelicoVault.sol#L485-L498) |
+| The verdict delivered to the vault | [`index.ts#L244-L265`](https://github.com/0xHelico/helico/blob/e0a48fe25ef5d1361f4afba1d316bf509f83b354/packages/plugins/cre/src/index.ts#L244-L265) |
+| The vault receiving it | [`HelicoVault.sol#L485-L498`](https://github.com/0xHelico/helico/blob/e0a48fe25ef5d1361f4afba1d316bf509f83b354/contracts/src/HelicoVault.sol#L485-L498) |
 
 **Run it yourself:** `cp apps/cre/.env.example apps/cre/.env && cd apps/cre && ./rehearse.sh`.
 It forks Arbitrum One, deploys the vault onto the fork, gives it a position that has drifted
