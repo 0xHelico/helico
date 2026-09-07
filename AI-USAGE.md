@@ -747,6 +747,37 @@ Format: date · what was done · the AI's role · what a human verified.
   in integer arithmetic outside Solidity, because copying a passing run's output would assert
   only that the contract agrees with itself.
 
+### 2026-09-07 — The deploy script, the build that was killing the VPS, and three tracks
+
+- **Done:** `DeployMandateSwap.s.sol` and `ForkMandateSwap.t.sol`, the API image moved off the
+  VPS into Actions, `main` un-broken with a guard, and every document realigned to the three
+  tracks actually submitted — Chainlink, 1inch, The Graph.
+- **AI's role:** all of it, on the owner's decisions: move the builds to Actions, drop Uniswap
+  for The Graph, fix everything to match, close what can be closed.
+- **Plan:** `docs/deployment.md` for the build move; the demo script was rewritten rather than
+  planned separately.
+- **Verified:** the Aqua address the script will broadcast to was checked **on chain**, not read
+  off 1inch's README — code present, `rawBalances` answers `(0,0)` for an unshipped strategy,
+  `safeBalances` reverts with `SafeBalancesForTokenNotInActiveStrategy`. The API image was built
+  and *run*: `/healthz` returned ok and `/api/posts` returned content, the second one because
+  `.dockerignore` excludes `*.md` with an exception for `apps/be/content`, so a healthy container
+  serving an empty blog is a failure a health check reports as fine. Deploy dry run: 1,060,741
+  gas, 0.0000426 ETH.
+- **The near miss worth recording:** the Aqua address was typed by hand and one character was
+  wrong, and **it compiled**. `forge fmt` rewrites an address literal's EIP-55 checksum to match
+  whatever hex is present, so solc's mistyped-address check passes on a mistyped address. The
+  unit suite could not have caught it — nothing in it touches that constant. The fork suite now
+  does.
+- **A break nobody caused:** `main` stopped compiling after seven PRs merged. One branch moved the
+  tree to solc 0.8.30 for Aqua; another, cut before it, added a file still pinned to 0.8.28. Both
+  were green, and **no CI run on either branch could see the other**. Fixed in one line, with
+  `scripts/check-pragmas.py` added and verified in both directions against the real break, because
+  the category of failure matters more than the instance.
+- **What was corrected in someone else's analysis, and in my own:** the case against the 1inch
+  track said an Aqua app "requires their SwapVM contracts". It does not — `SwapVM` is not an
+  `AquaApp` and the string appears zero times in that repository. And a claim that #101 was still
+  failing was four hours older than its fix; I nearly repeated it as current.
+
 <!--
 Template for the next entry:
 

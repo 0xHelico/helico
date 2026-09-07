@@ -2,6 +2,12 @@
 
 Issue: #22. Target **3:30**, inside the 2–4 minute window. 720p or better.
 
+> **Rewritten 7 September**, when the three submitted tracks became **Chainlink, 1inch and The
+> Graph**. The previous script opened on *"A Uniswap v4 position only earns while the price is
+> inside its range"* and stayed there — a good script for a submission we are no longer making.
+> The v4 work is still in the repository and still tested; it is no longer what the video is
+> about. Kept in git history rather than deleted, so the change is legible.
+
 ## The rules that reject an upload
 
 | Rule | Consequence |
@@ -16,117 +22,138 @@ Issue: #22. Target **3:30**, inside the 2–4 minute window. 720p or better.
 Editing to cut waiting is allowed. Speeding up the footage is not. Where something takes two
 minutes, cut to the result — do not accelerate the clip.
 
-## What can honestly be shown
+## What each shot depends on
 
-Nothing is on a live network yet. Two versions of the same script, and the only difference is
-one shot:
+The script assumes work that is not all finished. Every shot that depends on something says so,
+and each has a fallback that is true today. **Record the fallback version first**: it is the one
+that exists, and #22 asks for a full-length take by **11 September** rather than the night before.
 
-- **If the vault is deployed by recording day** — shot 4 runs against Arbitrum One and the
-  Arbiscan transaction is on screen.
-- **If it is not** — shot 4 runs `apps/cre/rehearse.sh` against a fork, and the words "on a
-  fork of Arbitrum One" are spoken while it runs. That sentence is not a disclaimer to be
-  rushed; it is the reason the rest of the video is believable.
+| Shot | Needs | Fallback if it is not there |
+|---|---|---|
+| 3 — the swap | `HelicoMandateSwap` deployed to Arbitrum One | the fork test, `forge test --match-contract ForkMandateSwapTest -vv` |
+| 4 — the query | the subgraph deployed and indexing | skip the shot; give its 25 seconds to shot 5 |
+| 5 — the enclave | nothing, works today | — |
 
-Record the fork version first regardless. It is the version that exists today, and #22 says to
-have a full-length take two days early rather than the night before.
+A shot that has to fall back is not a weaker video. A shot that claims something untrue ends the
+submission.
 
 ## Shot list
 
-### 0:00–0:18 — What it is
+### 0:00–0:20 — What it is
 
-*Screen: the landing page hero.*
+*Screen: the app's front door, `app.helico.site`.*
 
-> A Uniswap v4 position only earns while the price is inside its range. When the price leaves,
-> it stops earning and starts holding one token.
+> An agent that trades for you has to be trusted with your money. This one does not.
 >
-> Helico moves it back. Not on trust: on rules you sign once, that the contract enforces.
+> You write the rules on chain. The contract refuses anything outside them. And your tokens
+> never leave your own wallet — not into a vault, not into an escrow, not for a moment.
 
-Under 20 seconds, as the guidance asks. No logo animation, no title card.
+No logo animation, no title card. Under 20 seconds, as the guidance asks.
 
-### 0:18–0:50 — The mandate
+### 0:20–0:55 — The mandate is the strategy — 1inch
 
-*Screen: the eight rule cards in the Enforcement section, then `Mandate.sol` in the editor.*
+*Screen: `contracts/src/HelicoMandateSwap.sol`, the `SwapMandate` struct.*
 
-> The mandate is seven numbers. Which pool. How wide a band. How much closer a move has to
-> get. How often. How much of your liquidity a move must keep. When it expires. A cap.
+> This is built on 1inch Aqua, where liquidity stays in the maker's wallet and the protocol only
+> keeps a ledger of what an app may spend.
 >
-> Each one is a line in the vault that refuses a move that breaks it. Those are the lines on
-> screen — not a diagram of them.
+> Aqua never reads these bytes. It files them under their hash, so every rule here is enforced
+> in this contract or nowhere. An expiry. One named agent. And a ceiling, per token, on how much
+> may leave.
 
-Scroll `_checkRange`. Do not read the code aloud; let it sit while the sentence lands.
+*Scroll to `_settle`, with `AQUA.pull` and `_safeCheckAquaPush` both visible.*
 
-### 0:50–1:30 — Where the decision happens
+> Payment is verified after delivery, in the same transaction. If the taker does not pay, the
+> delivery is undone with it.
+
+### 0:55–1:20 — The question the chain cannot answer — The Graph
+
+*Screen: `lib/aqua/src/Aqua.sol`, the balances mapping and the four events.*
+
+> Before the agent can act, it has to know what it is allowed to do. That turns out to be the
+> hard part.
+>
+> This mapping is private and four levels deep, so nothing can enumerate it. None of these events
+> index anything, so logs cannot be filtered by maker. And reading a balance needs a hash you
+> already have.
+
+*Screen: the subgraph query, and its result.*
+
+> So "which mandates does this wallet have, and what is left in each" has no on-chain answer at
+> all. The Graph is not making this faster. It is the only way to ask.
+
+> **Depends on:** the subgraph deployed and indexing. If it is not, cut this shot and say the
+> sentence about the mapping over shot 2 instead — the point is worth keeping even without the
+> query on screen.
+
+### 1:20–2:00 — Where the decision happens — Chainlink
 
 *Screen: `packages/plugins/cre/src/index.ts`, `cre.handlerInTee` visible.*
 
-> The decision runs inside a Chainlink CRE confidential workflow — in an enclave. Six of the
-> seven mandate fields are secrets released only in there, because they are your strategy.
+> The decision runs inside a Chainlink CRE confidential workflow — in an enclave. The mandate
+> thresholds are secrets released only in there, because they are your strategy, and now the
+> Graph query key is a second private input alongside them.
 >
-> What comes out is a verdict and the hash of the mandate it was decided against. The vault
-> refuses any verdict whose hash is not the one it stored. So the enclave can be wrong, and it
-> still cannot move you outside your own terms.
+> What comes out is a verdict and the hash of the mandate it was decided against. The contract
+> refuses any verdict whose hash is not the one it stored.
+>
+> So the enclave can be wrong and it still cannot move you outside your own terms.
 
-### 1:30–2:40 — Run it
+### 2:00–2:50 — Run it
 
-*Screen: terminal. `cd apps/cre && ./rehearse.sh`.*
+*Screen: terminal.*
 
 Speak over the run. Cut the waiting, never speed it up.
 
-> This forks Arbitrum One, deploys the vault, and mints a position that has drifted below the
-> market, so it holds one token and cannot fund a two-sided range.
+> Here is the whole path against the Aqua that 1inch actually deployed on Arbitrum One.
+
+*Screen: the swap completing — the maker's wallet balances before and after, and the recipient's.*
+
+> A thousand USDC in, and the WETH goes straight out of the maker's wallet to the recipient.
+> Aqua held nothing. The app held nothing. There was never a moment when anyone else had custody.
+
+*Screen: the same swap one wei over the ceiling, refused by name.*
+
+> Ask for more than the mandate allows and it is refused — with the number that was asked for and
+> the number that was permitted.
+
+### 2:50–3:15 — Why it is safe
+
+*Screen: `contracts/README.md`, the limitations section.*
+
+> A rogue agent can trade inside your terms and nothing else. It cannot exceed the ceiling, it
+> cannot act after the expiry, and it was never able to take custody in the first place.
 >
-> Now the workflow. It reads the pool from inside the enclave, decides to re-centre, and
-> writes the report through the Chainlink forwarder.
+> Docking the mandate ends it, needs nobody's permission, and nothing we run can block it.
 
-*Screen: `RECENTER 94520..94720 tx 0x…`, then the state read-back.*
-
-> The position moved. Ninety-three units of liquidity in, seventy-four out, and the vault holds
-> nothing afterwards.
->
-> And that number is why we check the position rather than the transaction. The forwarder calls
-> the vault inside a try — a re-centre that reverts still leaves a transaction marked
-> successful. We found a real bug that way.
-
-*Screen: second run printing `HOLD (cooldown)`.*
-
-> Run it again and the cooldown you signed refuses it.
-
-### 2:40–3:10 — Why it is safe
-
-*Screen: `contracts/README.md`, "What a rogue agent can do".*
-
-> Your position NFT never leaves your wallet. No path in the vault pays an agent. The swap can
-> only spend what the burn returned, and the only addresses in the plan are yours and the
-> pool's.
->
-> A rogue agent can move you inside your own terms, and nothing else. Withdraw the approval and
-> it stops — nothing we control can block that.
-
-### 3:10–3:30 — What is and is not done
+### 3:15–3:30 — What is and is not done
 
 *Screen: the README's caveat block.*
 
-> Nothing is on a live network yet. What you saw ran on a fork, through the simulator, which is
-> not a real enclave, and through a mock forwarder that verifies no signatures.
+> Every guard in this contract was deleted one at a time to check a test noticed. Eleven of
+> eleven did.
 >
-> Chainlink's own criteria accept a CLI simulation as evidence, and every number in this video
-> is in the repository with the command that reproduces it.
+> The enclave ran through the simulator, not a real TEE, and Chainlink's own criteria accept
+> that. Every number in this video is in the repository with the command that reproduces it.
 
 End on the repo URL. No outro music.
 
 ## Before recording
 
-- [ ] `bun install`, `cp apps/cre/.env.example apps/cre/.env` — the run must be warm, so the
-      first take is not spent on a dependency download
-- [ ] Run `rehearse.sh` once beforehand: it forks `latest`, so the tick and the numbers differ
-      every time and the spoken figures must match the take that ships
+- [ ] `bun install`, `cp apps/cre/.env.example apps/cre/.env` — the run must be warm, so the first
+      take is not spent on a dependency download
+- [ ] `ARBITRUM_RPC_URL` set, and the fork suite run once beforehand: it forks `latest`, so the
+      numbers differ every time and the spoken figures must match the take that ships
 - [ ] Terminal font large enough to read at 720p
 - [ ] Close anything with a wallet, a key, or a private repository in it
 - [ ] One rough full-length take by **11 September**, two days before the deadline
 
 ## What must not be said
 
-- "Deployed", "live", or "in production" — none of it is
-- "Audited" — twelve AI agents reviewed the vault, and that is not an audit
-- "Runs in a TEE" — it runs in the simulator, which announces that it is not a TEE
+- **"Deployed", "live", or "in production"** about anything that is not — check each one on the
+  day, because this list changes as things land
+- **"Audited"** — twelve AI agents reviewed the vault, and that is not an audit
+- **"Runs in a TEE"** — it runs in the simulator, which announces that it is not a TEE
+- **Anything about Uniswap being one of our tracks** — it is not, and the video should not imply
+  a fourth
 - Any figure not read off the take being recorded

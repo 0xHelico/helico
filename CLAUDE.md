@@ -140,20 +140,35 @@ costs one slot, not several.
 
 ### Partner requirements
 
-**Uniswap Foundation:**
-- [ ] A **`FEEDBACK.md`** file in the repository
-- [ ] The **Uniswap Developer Feedback Form** submitted, including a link to `FEEDBACK.md`
-      → https://developers.uniswap.org/hackathon-feedback
-- [ ] README points clearly at the relevant contracts and lines of code
+> **The three tracks are Chainlink, 1inch and The Graph** (decided 7 September, #125).
+> **Uniswap is not one of them.** `FEEDBACK.md` stays in the repository and the v4 code stays
+> tested, but the Uniswap Developer Feedback Form is no longer a submission requirement — #16 is
+> closed for that reason. Do not re-add it to a checklist without the track coming back first.
 
 **Chainlink:**
 - [ ] The workflow registers and uses **`handlerInTee`** (TypeScript) or **`cre.HandlerInTee`**
 - [ ] The Confidential Workflow performs a **meaningful part** of the application, not a token gesture
 
 **1inch:**
-- [ ] The Aqua app is custom, not a fork of `XYCSwap` — ours replaces the strategy struct with a
-      mandate and adds four refusals the example has none of
-- [ ] README points at the contract and what it enforces
+- [x] The Aqua app is custom, not a fork of `XYCSwap` — ours replaces the strategy struct with a
+      mandate and adds refusals the example has none of. Merged in #148
+- [x] README points at the contract and what it enforces
+
+**The Graph:**
+- [ ] **Two or more Graph products combined**, *or* meaningful work on a standardised schema
+      (they name Messari Standardized Subgraphs). Planned: a subgraph of our own plus the
+      Subgraph MCP server
+- [ ] **Live data consumed from a Graph provider** — Subgraph Studio for subgraphs, The Graph
+      Market for Substreams. A mocked dataset does not qualify
+- [ ] The Graph is **load-bearing**, not decorative. Ours is: Aqua's balances mapping is private
+      and four levels deep and no event parameter is `indexed`, so "which mandates does this
+      maker have?" has no on-chain answer at all
+- [ ] Demo video, 2–4 minutes, and open source with a clear README
+
+> ⚠️ Two Graph tracks exist and **both cost one slot**, because a sponsor with several tracks
+> still counts once: *Best AI Tooling or AI Use Case* and *Best Use of Composable or Standardized
+> Graph Products*. Qualifying for one does not automatically qualify for the other — the tracks
+> are binary.
 
 > ⚠️ **The scope of the Aqua track is not settled.** The prize text reads *"Create a custom Aqua
 > app that implements a sophisticated DeFi position"* (read off the prize page directly, not
