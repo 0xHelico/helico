@@ -4,7 +4,6 @@ import { ArrowUpIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSWRConfig } from "swr";
-import { Message, MessageContent } from "@/components/ai-elements/message";
 import {
   PromptInput,
   PromptInputFooter,
@@ -19,7 +18,9 @@ import { PageHeader } from "@/components/chat/page-header";
 import { HISTORY_KEY } from "@/components/chat/sidebar-history";
 import { SuggestedActions } from "@/components/chat/suggested-actions";
 import { ThinkingMessage } from "@/components/chat/thinking-message";
+import { Turn } from "@/components/chat/turn";
 import { SwapCard } from "@/components/swap-card";
+import { Button } from "@/components/ui/button";
 import { useHelicoSession } from "@/hooks/use-helico-session";
 import { api, type SwapConfig } from "@/lib/api";
 import type { Intent } from "@/lib/intent";
@@ -202,18 +203,12 @@ export function Chat({ conversationId }: { conversationId?: string }) {
           <div className="absolute inset-0 touch-pan-y overflow-y-auto">
             <div className="mx-auto flex min-h-full min-w-0 max-w-4xl flex-col gap-5 px-2 py-6 md:gap-7 md:px-4">
               {turns.map((turn) => (
-                <Message from={turn.from} key={turn.id}>
-                  <MessageContent
-                    className={
-                      turn.from === "user"
-                        ? "max-w-[80%] rounded-2xl bg-muted px-4 py-2"
-                        : undefined
-                    }
-                  >
-                    <p className="whitespace-pre-wrap">{turn.text}</p>
-                    {turn.intent ? <SwapCard intent={turn.intent} /> : null}
-                  </MessageContent>
-                </Message>
+                <Turn from={turn.from} key={turn.id}>
+                  <p className="whitespace-pre-wrap text-[13px] leading-[1.65]">
+                    {turn.text}
+                  </p>
+                  {turn.intent ? <SwapCard intent={turn.intent} /> : null}
+                </Turn>
               ))}
               {busy ? <ThinkingMessage /> : null}
             </div>
@@ -235,36 +230,41 @@ export function Chat({ conversationId }: { conversationId?: string }) {
             />
             <PromptInputFooter className="px-3 pb-3">
               <PromptInputTools>
-                {/* Where the template puts its model picker. Helico has one network and one
-                    backend, so what belongs here is the fact that decides every quote. */}
-                <span className="flex items-center gap-2 pl-1 text-[12px] text-muted-foreground/60">
-                  {swap ? (
-                    <span
-                      className={cn(
-                        "flex items-center gap-1.5",
-                        swap.available ? undefined : "text-destructive",
-                      )}
-                      title={
-                        swap.available
-                          ? "The model apps/be asks"
-                          : "No model is configured, so a sentence cannot be read yet"
-                      }
-                    >
-                      <SparklesIcon size={12} />
+                {/* The template's model chip, with its own classes. It is not a selector here:
+                    there is one model, and the backend names it. */}
+                {swap ? (
+                  <Button
+                    className={cn(
+                      "h-7 max-w-[200px] cursor-default justify-between gap-1.5 rounded-lg px-2 text-[12px] transition-colors",
+                      swap.available
+                        ? "text-muted-foreground hover:text-foreground"
+                        : "text-destructive",
+                    )}
+                    data-testid="model-name"
+                    title={
+                      swap.available
+                        ? "The model apps/be asks"
+                        : "No model is configured, so a sentence cannot be read yet"
+                    }
+                    type="button"
+                    variant="ghost"
+                  >
+                    <SparklesIcon size={13} />
+                    <span className="truncate">
                       {swap.available ? swap.model : "no model configured"}
                     </span>
-                  ) : null}
-                  <span className="flex items-center gap-1.5">
-                    <span
-                      className={cn(
-                        "size-1.5 rounded-full",
-                        session.isConnected
-                          ? "bg-emerald-500"
-                          : "bg-muted-foreground/40",
-                      )}
-                    />
-                    Arbitrum One
-                  </span>
+                  </Button>
+                ) : null}
+                <span className="flex h-7 items-center gap-1.5 px-1 text-[12px] text-muted-foreground">
+                  <span
+                    className={cn(
+                      "size-1.5 rounded-full",
+                      session.isConnected
+                        ? "bg-emerald-500"
+                        : "bg-muted-foreground/40",
+                    )}
+                  />
+                  Arbitrum One
                 </span>
               </PromptInputTools>
               <PromptInputSubmit
