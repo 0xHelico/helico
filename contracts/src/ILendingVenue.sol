@@ -22,6 +22,19 @@ interface ILendingVenue {
     ///      arithmetic panic from inside the market.
     function getVirtualUnderlyingBalance(address asset) external view returns (uint128);
 
+    /// @notice The receipt token this market issues for `asset`.
+    /// @dev The market is asked, never the receipt. A receipt is a contract the maker names in
+    ///      their mandate, so anything it says about itself is something the maker could have
+    ///      made up; the pool being withdrawn from is the only party in the call with no reason
+    ///      to lie about which receipt it burns. Asking the receipt instead — `POOL()` on an
+    ///      aToken — reads as the same check and is not one: a forged receipt simply returns the
+    ///      real pool's address and passes.
+    ///
+    ///      Verified against Aave v3 on Arbitrum: `getReserveAToken(USDC)` on
+    ///      `0x794a61358D6845594F94dc1DB02A252b5b4814aD` returns aUSDC
+    ///      `0x724dc807b04555b71ed48a6896b6F41593b8C637`.
+    function getReserveAToken(address asset) external view returns (address);
+
     /// @notice A user's aggregate position, used only to establish that they have no debt.
     /// @dev The app refuses to unwind for a maker who has borrowed. Aave blocks the withdrawal
     ///      of collateral for a borrower — a health check that only runs when a debt exists — so

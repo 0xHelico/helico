@@ -56,10 +56,28 @@ that answers for a swap that would revert sends an agent to build a transaction 
 land — this contract's own docblock says so, so violating it is self-contradiction rather than
 a style question.
 
-**A maker with debt is refused, not attempted.** A lending market blocks a borrower from
-withdrawing collateral, so one ordinary borrow would otherwise disable a mandate — and the
-failure would arrive as the market's error, after the mandate looked fine. A borrowing maker
-can also be liquidated out of the position the mandate depends on.
+**A maker with debt is refused, not attempted** — at the venue the swap actually draws on.
+A lending market blocks a borrower from withdrawing collateral, so one ordinary borrow would
+otherwise disable a mandate, and the failure would arrive as the market's error after the
+mandate looked fine. A borrowing maker can also be liquidated out of the position the mandate
+depends on. Read the debt from the venue being unwound: a market reports a position aggregated
+across its own reserves, never across other markets.
+
+**A venue is validated against the pool, never against itself.** A receipt token is an address
+the maker writes into their mandate, so anything it says about itself is something the maker
+could have made up — `POOL()` on a forged receipt simply returns the real pool. Ask the pool
+which receipt it issues (`getReserveAToken`). Without it, `withdraw` burns the receipt the
+*pool* recognises while every guard in `_cover` measures the one the *mandate* named, and the
+two need not be the same token.
+
+**A venue that cannot pay is skipped, not fatal.** Market liquidity is one of three conditions;
+the maker's position there and the mandate's remaining receipt budget are the other two.
+Checking only the first ends the search at a venue that cannot pay and strands a funded one
+further down the list.
+
+Each of these has a test in `contracts/test/MandateVenueUnwind.t.sol`, and each of them failed
+before that file existed. An invariant stated only in a comment is a wish: every one of these
+was written down in NatSpec before it was true in code, and the code contradicted all of them.
 
 ## Language — team convention, not an ETHGlobal rule
 
