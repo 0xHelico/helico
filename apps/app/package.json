@@ -12,6 +12,7 @@
     "fixture": "bun run e2e/fork-fixture.ts"
   },
   "dependencies": {
+    "@ai-sdk/react": "^4.0.96",
     "@helico/plugin-cre": "workspace:*",
     "@helico/plugin-uniswap": "workspace:*",
     "@radix-ui/react-use-controllable-state": "^1.2.6",
@@ -28,12 +29,15 @@
     "@x402/svm": "^2.25.0",
     "ai": "7.0.93",
     "class-variance-authority": "^0.7.1",
+    "classnames": "^2.5.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "date-fns": "^4.4.0",
+    "fast-deep-equal": "^3.1.3",
     "framer-motion": "^13.2.0",
     "lucide-react": "^1.41.0",
     "motion": "^13.2.0",
+    "nanoid": "^6.0.1",
     "next": "16.3.4",
     "next-themes": "^0.4.6",
     "radix-ui": "^1.6.7",
@@ -45,6 +49,7 @@
     "swr": "^2.5.1",
     "tailwind-merge": "^3.6.0",
     "use-stick-to-bottom": "^1.1.6",
+    "usehooks-ts": "^3.1.1",
     "viem": "^2.56.3",
     "wagmi": "^3.7.7",
     "zod": "^4.5.4"

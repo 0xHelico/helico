@@ -16,6 +16,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import { useHelicoSession } from "@/hooks/use-helico-session";
 
 /** A stable colour per address, so the disc is recognisably yours. */
 function addressToHue(address: string): number {
@@ -28,60 +29,64 @@ function addressToHue(address: string): number {
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
-export function SidebarUserNav({
-  address,
-  onSignOut,
-}: {
-  address: string;
-  onSignOut: () => void;
-}) {
+export function SidebarUserNav({ address }: { address: string }) {
   const { setTheme, resolvedTheme } = useTheme();
   const { disconnect } = useDisconnect();
-
+  const { signOut } = useHelicoSession();
+  const hue = addressToHue(address);
   const handleThemeSelect = useCallback(() => {
     setTheme(resolvedTheme === "dark" ? "light" : "dark");
   }, [resolvedTheme, setTheme]);
 
-  const handleDisconnect = useCallback(() => {
-    onSignOut();
+  // Disconnecting is both halves: the wallet, and the session cookie that proved it.
+  const handleAuthClick = useCallback(() => {
+    signOut();
     disconnect();
-  }, [disconnect, onSignOut]);
-
-  const hue = addressToHue(address);
+  }, [disconnect, signOut]);
 
   return (
     <SidebarMenu>
       <SidebarMenuItem>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <SidebarMenuButton className="h-8 rounded-lg bg-transparent px-2 text-sidebar-foreground/70 transition-colors duration-150 hover:text-sidebar-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground">
-              <div
-                className="size-5 shrink-0 rounded-full ring-1 ring-sidebar-border/50"
-                style={{
-                  background: `linear-gradient(135deg, oklch(0.55 0.13 ${hue}), oklch(0.4 0.09 ${hue + 40}))`,
-                }}
-              />
-              <span className="truncate font-mono text-[13px]">
-                {short(address)}
-              </span>
-              <ChevronUp className="ml-auto size-3.5 text-sidebar-foreground/50" />
-            </SidebarMenuButton>
+            {
+              <SidebarMenuButton
+                className="h-8 px-2 rounded-lg bg-transparent text-sidebar-foreground/70 transition-colors duration-150 hover:text-sidebar-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                data-testid="user-nav-button"
+              >
+                <div
+                  className="size-5 shrink-0 rounded-full ring-1 ring-sidebar-border/50"
+                  style={{
+                    background: `linear-gradient(135deg, oklch(0.55 0.13 ${hue}), oklch(0.4 0.09 ${hue + 40}))`,
+                  }}
+                />
+                <span
+                  className="truncate font-mono text-[13px]"
+                  data-testid="user-email"
+                >
+                  {short(address)}
+                </span>
+                <ChevronUp className="ml-auto size-3.5 text-sidebar-foreground/50" />
+              </SidebarMenuButton>
+            }
           </DropdownMenuTrigger>
           <DropdownMenuContent
-            className="w-(--radix-popper-anchor-width) rounded-lg border border-border/60 bg-card/95 shadow-lg backdrop-blur-xl"
+            className="w-(--radix-popper-anchor-width) rounded-lg border border-border/60 bg-card/95 backdrop-blur-xl shadow-[var(--shadow-float)]"
+            data-testid="user-nav-menu"
             side="top"
           >
             <DropdownMenuItem
               className="cursor-pointer text-[13px]"
+              data-testid="user-nav-item-theme"
               onSelect={handleThemeSelect}
             >
               {`Toggle ${resolvedTheme === "light" ? "dark" : "light"} mode`}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
+            <DropdownMenuItem asChild data-testid="user-nav-item-auth">
               <button
                 className="w-full cursor-pointer text-[13px]"
-                onClick={handleDisconnect}
+                onClick={handleAuthClick}
                 type="button"
               >
                 Disconnect wallet
