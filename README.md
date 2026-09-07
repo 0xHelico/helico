@@ -3,18 +3,26 @@
 Submission for [ETHOnline 2026](https://ethglobal.com/events/ethonline2026)
 (September 4–16, 2026).
 
-**Helico lets an agent act on your assets under rules you commit to on chain, so the agent
-never has to be trusted.** There are two of them, built on the same idea:
+**Giving an AI agent control over capital normally means surrendering custody.** You approve
+tokens, trust the agent not to misbehave, and hope you can revoke in time. Helico replaces that
+trust with limits the code enforces: the agent gets authority to act, and never gets your funds.
 
-- **A Uniswap v4 liquidity position, kept in range.** Which pool, how wide a band, how much may
-  move, how often, until when. `HelicoVault` holds the rules; the position NFT stays yours.
-- **A swap mandate on your own wallet, through 1inch Aqua.** How long it lives, which agent may
-  act, and how much may leave per swap. `HelicoMandateSwap` holds the rules; the tokens never
-  leave your wallet at all.
+Three pieces, and each one answers a different way that authority usually leaks.
 
-In both, the agent proposes and the contract refuses anything the mandate does not allow. The
-way out is never blocked: revoking the NFT approval ends the first, docking the strategy ends
-the second, and nothing the operator controls can stop either.
+- **Your own contract, at an address that exists before it does.** Every owner gets a separate
+  account, deployed with `CREATE2`, so it can be paid before they have ever sent a transaction.
+  The way out lives in the proxy rather than the implementation behind it, so no upgrade can
+  remove it — proven by installing a deliberately hostile implementation and showing the owner
+  still gets everything back.
+- **Trading through a 1inch Aqua mandate.** The tokens never leave the wallet at all. The app
+  holds a ledger entry, not money, and docking the mandate ends it immediately.
+- **A Chainlink CRE Confidential Workflow deciding where idle capital sits.** It weighs what is
+  earning in Aave against what must stay liquid to cover a swap, and moves the difference when
+  the gap is worth the gas. The authority it holds has no recipient parameter anywhere in the
+  call, so it can choose where money works and has no way to send it elsewhere.
+
+In all three, the agent proposes and the contract refuses anything outside the rules. The way
+out is never blocked.
 
 Nothing here is claimed before it is proven. Where something is not yet true, it is marked as
 not yet true rather than left to be assumed — see [Rules](#rules) for why that matters.
@@ -23,13 +31,15 @@ not yet true rather than left to be assumed — see [Rules](#rules) for why that
 
 | Directory | Contents |
 |---|---|
-| [`contracts/`](contracts/) | `HelicoVault`, `HelicoMandateSwap`, and their tests |
+| [`contracts/`](contracts/) | `HelicoAccountFactory`, `HelicoAccount`, `HelicoMandateSwap`, `HelicoVault`, and their tests |
+| [`packages/plugins/thegraph/`](packages/plugins/thegraph/) | The Graph queries, `@helico/plugin-thegraph` |
+| [`subgraph/`](subgraph/) | The subgraph indexing Aqua's mandates |
 | [`packages/plugins/uniswap/`](packages/plugins/uniswap/) | Uniswap v4 on-chain package, `@helico/plugin-uniswap` |
 | [`packages/plugins/cre/`](packages/plugins/cre/) | Chainlink CRE confidential workflow, `@helico/plugin-cre` |
 | [`packages/core/`](packages/core/) | Shared library, `@helico/core` |
 | [`apps/landing/`](apps/landing/) | Landing page and blog, Astro |
 | [`apps/be/`](apps/be/) | Blog API, Go and SQLite |
-| [`apps/cre/`](apps/cre/) | The runnable CRE project, and `rehearse.sh` |
+| [`apps/cre/`](apps/cre/) | The runnable CRE project, and `rehearse-idle.sh` |
 | [`docs/plans/`](docs/plans/) | Implementation plans, written before the code |
 
 The workflow's logic lives in `packages/plugins/cre` rather than in `apps/cre`, because every
@@ -53,42 +63,46 @@ kept below because the code is part of what this product does, not because it is
 
 ### Chainlink CRE — Confidential Workflows
 
-The decision about whether and where to re-centre runs **inside the enclave**, over thresholds
-released there by the Vault DON. Only the verdict crosses back out.
+The decision about how much capital should be earning and how much must stay liquid runs
+**inside the enclave**, over thresholds the Vault DON releases only there. The thresholds are
+the strategy, and they are the one thing a competitor would want; only the verdict crosses back
+out.
 
 | What | Where |
 |---|---|
-| `handlerInTee` registration | [`index.ts#L303-L311`](https://github.com/0xHelico/helico/blob/85fe235e1a2fab7521bd5f7020d8ac1bd2505f00/packages/plugins/cre/src/index.ts#L303-L311) |
-| The confidential handler itself | [`index.ts#L196-L269`](https://github.com/0xHelico/helico/blob/85fe235e1a2fab7521bd5f7020d8ac1bd2505f00/packages/plugins/cre/src/index.ts#L196-L269) |
-| The re-centre decision, Helico's own logic | [`index.ts#L134-L193`](https://github.com/0xHelico/helico/blob/85fe235e1a2fab7521bd5f7020d8ac1bd2505f00/packages/plugins/cre/src/index.ts#L134-L193) |
-| Chain reads made from inside the enclave | [`chain.ts#L20-L44`](https://github.com/0xHelico/helico/blob/89054c6fe9fdb8c7cfe7b978e11f9b37a1e42c25/packages/plugins/cre/src/chain.ts#L20-L44) |
-| The mandate hash, tying the verdict to what the user signed | [`mandate.ts#L52-L64`](https://github.com/0xHelico/helico/blob/89054c6fe9fdb8c7cfe7b978e11f9b37a1e42c25/packages/plugins/cre/src/mandate.ts#L52-L64) |
+| `handlerInTee` registration, and the confidential handler | [`packages/plugins/cre/src/index.ts`](packages/plugins/cre/src/index.ts) |
+| The decision itself — target split, then deadband | [`src/decision.ts`](packages/plugins/cre/src/decision.ts) |
+| The policy, and why it is secret rather than on chain | [`src/policy.ts`](packages/plugins/cre/src/policy.ts) |
+| Chain reads made from inside the enclave | [`src/chain.ts`](packages/plugins/cre/src/chain.ts) |
+| The EIP-712 statement the enclave signs | [`src/sign.ts`](packages/plugins/cre/src/sign.ts) |
+| The account that accepts it, and what it refuses | [`contracts/src/HelicoAccount.sol`](contracts/src/HelicoAccount.sol) |
 
-| The verdict delivered to the vault | [`index.ts#L279-L300`](https://github.com/0xHelico/helico/blob/85fe235e1a2fab7521bd5f7020d8ac1bd2505f00/packages/plugins/cre/src/index.ts#L279-L300) |
-| The vault receiving it | [`HelicoVault.sol#L504-L517`](https://github.com/0xHelico/helico/blob/89054c6fe9fdb8c7cfe7b978e11f9b37a1e42c25/contracts/src/HelicoVault.sol#L504-L517) |
+**Run it yourself:** `cp apps/cre/.env.example apps/cre/.env && cd apps/cre && ./rehearse-idle.sh`.
 
-**Run it yourself:** `cp apps/cre/.env.example apps/cre/.env && cd apps/cre && ./rehearse.sh`.
-It forks Arbitrum One, deploys the vault onto the fork, gives it a position that has drifted
-out of range, and lets the workflow decide and deliver. A second run holds on the cooldown.
+It forks Arbitrum One, deploys the account factory, opens an owner an account at an address
+predicted before it existed, funds it with real USDC taken from a whale on the fork, lets the
+workflow decide and sign, and carries the signed call to the chain. A recorded run: 50,000 USDC
+in, `SUPPLY 40000000000`, and the account ends holding 39,999.999999 aUSDC against a 10,000 USDC
+buffer — one unit short because Aave rounds against the supplier.
 
-**Or read a run that already happened:** [`docs/evidence/2026-09-07-cre-rehearsal.md`](docs/evidence/2026-09-07-cre-rehearsal.md)
-records the full transcript, and checks the numbers in it against the mandate — the new range
-against the width, the liquidity retained against the floor, the second run against the cooldown.
+The last thing it checks is the agent's own USDC balance, which is zero. A transaction that
+succeeds and moves nothing reads in a log exactly like one that worked, so the balances are the
+only thing worth believing.
 
 > ⚠️ **What that run does not show.** The simulator is **not a TEE** — it says so itself while
-> running — and the `MockKeystoneForwarder` the CLI broadcasts through **verifies no DON
-> signatures**. So the run proves the delivery path and the vault's execution, not
-> authorisation by a decentralised oracle network. It is also a fork, not a live network.
+> running, and names the enclave it would use in production (AWS Nitro, us-west-2). So the run
+> proves the workflow compiles for the CRE runtime, reads the chain, decides, signs, and that
+> the signed call lands and moves capital. It does not prove DON authorisation or attestation.
+> It is also a fork, not a live network.
 >
 > Chainlink's own qualification text accepts *"a Confidential Workflow simulation using the CRE
-> CLI **or** a live deployment"*, so this is evidence rather than a stand-in for it. A live
-> deployment additionally needs the Confidential Workflows beta, which is a Chainlink gate and
-> not a hackathon requirement.
->
-> ⚠️ **A transaction hash is not evidence on this path.** `KeystoneForwarder` calls the
-> receiver inside a `try`: a reverting `onReport` still leaves a transaction with `status 1`.
-> Only the position moving proves a re-centre, which is what `rehearse.sh` checks and how
-> [#78](https://github.com/0xHelico/helico/issues/78) was found.
+> CLI **or** a live deployment"*, so this is evidence rather than a stand-in for it.
+
+> ⚠️ **The model explains; it does not decide.** An LLM turns the verdict into a sentence the
+> owner can read, and the verdict is computed before it is called and never reads its answer
+> back. The reason that call needs an enclave at all is that a normal workflow asks every node
+> and takes a consensus — ten nodes asking a model the same question get ten different answers,
+> and free text has no median. Inside the enclave the call happens once.
 
 ### 1inch Aqua
 
@@ -183,12 +197,17 @@ Then the address itself turned out to be wrong. We had taken it from the README 
 says *"Only interact with these two contracts. Anything else is not Aqua."* They confirmed it
 directly. So the 1,289 events are real, and they belong to a deployment 1inch does not call Aqua.
 
-At the canonical address — `0x1111113CCf1426A8E30e2bfF5E005d929bF6a90a` — there are **zero
-events across the whole of Arbitrum**. Verified by scanning from block 1 forward, with the same
-query run against the stale address first to prove it could find something. It returned 1,289.
+The canonical address — `0x1111113CCf1426A8E30e2bfF5E005d929bF6a90a` — is **live and busier**.
+An earlier version of this paragraph said it carried no events at all, which was a measurement
+we asserted without running. Measured properly on 8 September: it answers `eth_getLogs` with
+events through the current head, while the stale address has been silent since block
+451,737,844.
 
-So the first strategy this subgraph indexes will most likely be ours. That is a weaker fact than
-the one we briefly believed, and it is the true one.
+So activity cannot tell the two apart, and that is the point worth keeping. Counting events
+picks the wrong contract; counting *recent* events picks the right one for a reason that is luck
+rather than evidence. What actually separates them is the vendor's own SDK constant and the
+deployed `AquaSwapVMRouter`, which carries this address in its bytecode and no reference to the
+other.
 
 ### Uniswap v4 — real, tested, and not a submitted track
 
