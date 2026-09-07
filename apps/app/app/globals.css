@@ -539,3 +539,23 @@ textarea:focus-visible {
     animation: none;
   }
 }
+
+/* The landing's two-tone glyphs, and the colour a live grant is switched to. Grey at rest,
+   the landing's lavender when the card under them is hovered — the same pair the site uses,
+   so the app and the site read as one product. */
+:root {
+  --glyph-1: #8d8a95;
+  --glyph-4: #b3b0ba;
+  --glyph-ink: #fff;
+  --helico-on: #695cff;
+}
+.dark {
+  --glyph-1: #b9b7c0;
+  --glyph-4: #55525b;
+  --glyph-ink: #fff;
+  --helico-on: #695cff;
+}
+.glyph-hover:hover {
+  --glyph-1: #b7abff;
+  --glyph-4: #695cff;
+}
