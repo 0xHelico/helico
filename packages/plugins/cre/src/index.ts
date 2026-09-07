@@ -18,6 +18,7 @@ import { type IdlePolicy, POLICY_SECRET_IDS, policyFromSecrets, policyHash } fro
 import { encodeIdleMove } from './relay'
 import { type Authorisation, encodeAuthorisation, type IdleMoveDomain, signIdleMove } from './sign'
 import { sizeIdleMove } from './sizing'
+import { eligibleVenues } from './venues'
 
 export * from './abi'
 export * from './ai'
@@ -28,6 +29,7 @@ export * from './policy'
 export * from './relay'
 export * from './sign'
 export * from './sizing'
+export * from './venues'
 
 // Lowercased so a checksummed value in config compares equal to keccak output, to what an
 // `eth_call` decodes to, and to what we encode.
@@ -67,8 +69,19 @@ export const configShape = {
 	nonceFunction: z.string().default('nonce'),
 	/** The `HelicoAccount` whose idle capital this workflow manages. */
 	account: hex(20),
-	/** The lending market. The account must already permit it; the enclave checks rather than assumes. */
-	pool: hex(20),
+	/**
+	 * The lending markets to choose between, in the owner's own order — which is what breaks a
+	 * tie between two paying the same. The account must already permit each of them; the enclave
+	 * reads the allowlist rather than assuming it, and a market it does not permit is skipped
+	 * rather than fatal.
+	 *
+	 * A list of one is the single-market configuration this workflow started as, and behaves
+	 * exactly as it did. Every entry has to be an Aave-family market that answers
+	 * `getReserveAToken`, `getVirtualUnderlyingBalance` and `getReserveData` for this asset:
+	 * one that cannot is not skipped, it fails the run, because a view missing a market's rate
+	 * would pick the best of the rest and call it the best.
+	 */
+	pools: z.array(hex(20)).min(1),
 	/** The ERC-20 being placed. */
 	asset: hex(20),
 	/**
@@ -125,6 +138,12 @@ export const configSchema = z
 	.refine((c) => c.delivery !== 'signature' || c.chainId !== undefined, {
 		message: 'signature delivery needs chainId',
 	})
+	// A market named twice is read twice and then compared against itself, which is a rate gap of
+	// zero dressed up as a choice. Refused here rather than deduplicated, because the two readings
+	// of a repeated address — a typo, or a market meant to count double — are not the same wish.
+	.refine((c) => new Set(c.pools).size === c.pools.length, {
+		message: 'pools must not repeat a market',
+	})
 export type Config = z.infer<typeof configSchema>
 
 const REPORT_ABI = [{ type: 'bool' }, { type: 'bytes32' }, idleMoveParamsAbi] as const
@@ -149,11 +168,10 @@ export type Outcome = { act: false; reason: string } | { act: true; params: Idle
 /**
  * Policy and sizing on top of the chain state. Pure.
  *
- * The four refusals at the top are the ones the account itself would enforce, checked here so a
- * run that cannot succeed ends as a hold with a reason rather than as a reverted transaction
- * with a selector. The receipt check is the exception: the account does not make it, and it is
- * the one that stops an amount denominated in one asset being spent out of a balance
- * denominated in another.
+ * The agent check is the only fatal one: an account that no longer names this enclave has nothing
+ * for it to decide. Everything else the account would enforce is per market and disqualifies that
+ * market alone — `eligibleVenues` takes them out of the list, and the run goes on with what is
+ * left, which is the rule `_venueFor` follows in the contract.
  */
 export function decide(
 	config: Config,
@@ -163,31 +181,40 @@ export function decide(
 ): Outcome {
 	if (state.agent.toLowerCase() !== config.agent)
 		return { act: false, reason: 'the account has not nominated this agent' }
-	if (!state.venuePermitted) return { act: false, reason: 'the owner has not permitted this venue' }
-	if (state.receipt === zeroAddress)
-		return { act: false, reason: 'the venue does not list this asset' }
-	if (state.receiptAsset.toLowerCase() !== config.asset)
-		return { act: false, reason: "the venue's receipt is for a different asset" }
 
-	const balances = {
-		idle: state.idle,
-		supplied: state.supplied,
-		supplyRateRay: state.supplyRateRay,
+	const { usable, skipped } = eligibleVenues(config.asset, state.venues)
+	// With nothing usable there is no decision to hold on, only a list of markets and the reason
+	// each was refused. A configuration naming one market keeps that market's own sentence, which
+	// is what an owner running a single-venue account needs to read; several markets get every
+	// address with its reason, because "the venue does not list this asset" answers nothing when
+	// there were three of them.
+	const [only] = skipped
+	if (usable.length === 0 && only) {
+		const each = skipped.map(({ pool, reason }) => `${pool} — ${reason}`).join('; ')
+		return {
+			act: false,
+			reason: skipped.length === 1 ? only.reason : `no venue is usable (${each})`,
+		}
 	}
-	const verdict = decideIdleMove({ policy, balances, now })
+
+	const verdict = decideIdleMove({ policy, balances: { idle: state.idle, venues: usable }, now })
 	if (!verdict.act) return verdict
 
 	const sizing = sizeIdleMove({
 		supply: verdict.supply,
 		amount: verdict.amount,
-		venueLiquidity: state.venueLiquidity,
+		venueLiquidity: verdict.venue.venueLiquidity,
 		maxMoveAmount: policy.maxMoveAmount,
 	})
+	// Kept as a guard on the signing boundary rather than as a live path: the market was chosen
+	// for being able to hand back at least the bar this move has to clear, so a zero should not
+	// reach here. Nothing signs a move for nothing if that ever stops being true.
 	if (sizing.amount === 0n)
 		return { act: false, reason: 'the venue cannot return anything right now' }
-	// The deadband again, on the number that will actually be sent. A withdrawal cut down to a
-	// few units because the market is drained is exactly the move the deadband exists to refuse,
-	// and it only becomes small here — after the target split, which knew nothing about it.
+	// The deadband again, on the number that will actually be sent — and for a migration that is
+	// the round-trip bar, not the ordinary one. A withdrawal cut down to a few units because the
+	// market is drained is exactly the move the deadband exists to refuse, and it only becomes
+	// small here, after the target split, which knew nothing about it.
 	if (sizing.amount < verdict.deadband)
 		return { act: false, reason: `${sizing.limitedBy} leaves a move inside the deadband` }
 
@@ -195,7 +222,7 @@ export function decide(
 		act: true,
 		params: {
 			account: config.account as Address,
-			pool: config.pool as Address,
+			pool: verdict.venue.pool,
 			asset: config.asset as Address,
 			amount: sizing.amount,
 			supply: verdict.supply,
@@ -226,37 +253,37 @@ export const onCronTrigger = async (runtime: TeeRuntime<Config>): Promise<string
 	if (config.policyHash !== ZERO_HASH && hash !== config.policyHash)
 		return 'HOLD (policy hash mismatch)'
 
-	// 3. Read the account and the market from inside the enclave.
+	// 3. Read the account and every market it may use, from inside the enclave.
 	const state = readAccountState(
 		runtime,
 		config.rpcUrl,
 		{
 			account: config.account as Address,
-			pool: config.pool as Address,
+			pools: config.pools as Address[],
 			asset: config.asset as Address,
 		},
 		{ withNonce: signs, nonceFunction: config.nonceFunction },
 	)
 
-	// 4. Decide where the capital should sit, and how much of the difference is worth moving.
+	// 4. Decide which market the capital should sit in, and how much of the difference is worth
+	//    moving. One move leaves per run, because the account's nonce is strictly sequential.
 	const outcome = decide(config, policy, state, now)
 
 	// 4b. Ask the model to say why, in the owner's words. Never load-bearing: a missing or
-	//     rejected answer changes nothing about what happens next.
+	//     rejected answer changes nothing about what happens next. It is handed every market the
+	//     decision was allowed to consider, so a hold about a rate gap has the rates in front of
+	//     it.
+	const { usable } = eligibleVenues(config.asset, state.venues)
 	const reason = config.aiUrl
 		? explain(
 				runtime,
 				config,
 				secrets,
 				describeForOwner(
-					{ pool: config.pool, asset: config.asset },
+					config.asset,
 					policy,
-					state,
-					targetSplit(policy, {
-						idle: state.idle,
-						supplied: state.supplied,
-						supplyRateRay: state.supplyRateRay,
-					}),
+					{ idle: state.idle, venues: usable },
+					targetSplit(policy, { idle: state.idle, venues: usable }),
 					outcome,
 				),
 			)
@@ -264,7 +291,11 @@ export const onCronTrigger = async (runtime: TeeRuntime<Config>): Promise<string
 	const because = reason ? ` — ${reason}` : ''
 
 	if (!outcome.act) return `HOLD (${outcome.reason})${because}`
-	const verb = outcome.params.supply ? 'SUPPLY' : 'WITHDRAW'
+	// The market is named in the line, not only in the report: with several to choose between,
+	// "SUPPLY 800000000" no longer says what happened.
+	const move = outcome.params.supply
+		? `SUPPLY ${outcome.params.amount} to ${outcome.params.pool}`
+		: `WITHDRAW ${outcome.params.amount} from ${outcome.params.pool}`
 
 	// 5. Cross back with the move only.
 	if (signs) {
@@ -289,10 +320,10 @@ export const onCronTrigger = async (runtime: TeeRuntime<Config>): Promise<string
 				hashingAlgo: 'keccak256',
 			})
 			.result()
-		return `${verb} ${outcome.params.amount} ${authorisationJson(auth, signature, signer)}${because}`
+		return `${move} ${authorisationJson(auth, signature, signer)}${because}`
 	}
 	const txHash = deliver(runtime.usingTheDons(), config, encodeReport(true, hash, outcome.params))
-	return `${verb} ${outcome.params.amount} tx ${txHash}${because}`
+	return `${move} tx ${txHash}${because}`
 }
 
 /**

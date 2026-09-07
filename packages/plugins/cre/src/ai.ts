@@ -188,6 +188,11 @@ export function explain(
  * can only be as wrong as the numbers it is handed, and everything here came from the chain or
  * from the policy the owner set.
  *
+ * Every market the decision was allowed to consider gets a line, whether or not it was chosen.
+ * A hold that comes down to a rate gap is only explicable next to the rates it was measured
+ * between, and a supply that skipped the market the account already uses reads as a mistake
+ * without the two numbers side by side.
+ *
  * The verdict is included because the model is explaining a decision already made, not making
  * one. Handing it the answer is what keeps it out of the loop that moves money.
  *
@@ -196,7 +201,7 @@ export function explain(
  * number that would then differ from the one in the report.
  */
 export function describeForOwner(
-	venue: { pool: string; asset: string },
+	asset: string,
 	policy: {
 		targetWorkingBps: number
 		minIdleAmount: bigint
@@ -204,21 +209,30 @@ export function describeForOwner(
 		minMoveBps: number
 		maxMoveAmount: bigint
 	},
-	state: { idle: bigint; supplied: bigint; venueLiquidity: bigint; supplyRateRay: bigint },
+	state: {
+		idle: bigint
+		venues: { pool: string; supplied: bigint; venueLiquidity: bigint; supplyRateRay: bigint }[]
+	},
 	split: { total: bigint; wantIdle: bigint; wantWorking: bigint; deadband: bigint },
 	outcome:
 		| { act: false; reason: string }
-		| { act: true; params: { amount: bigint; supply: boolean } },
+		| { act: true; params: { pool: string; amount: bigint; supply: boolean } },
 ): string {
+	const supplied = state.venues.reduce((sum, venue) => sum + venue.supplied, 0n)
 	const facts = [
-		`Lending market ${venue.pool}, asset ${venue.asset}, paying ${rayToPercent(state.supplyRateRay)} and able to pay out ${state.venueLiquidity} right now.`,
-		`The account holds ${state.idle} idle and has ${state.supplied} supplied, ${split.total} in total.`,
+		`Asset ${asset}, across ${state.venues.length} permitted lending market${state.venues.length === 1 ? '' : 's'}.`,
+		...state.venues.map(
+			(venue) =>
+				`Market ${venue.pool} pays ${rayToPercent(venue.supplyRateRay)}, holds ${venue.supplied} of this account's capital and is able to pay out ${venue.venueLiquidity} right now.`,
+		),
+		`The account holds ${state.idle} idle and has ${supplied} supplied, ${split.total} in total.`,
 		`Policy: ${policy.targetWorkingBps / 100}% of it should be working, never less than ${policy.minIdleAmount} left liquid, no move under ${policy.minMoveAmount} or under ${policy.minMoveBps / 100}% of the total, none over ${policy.maxMoveAmount}.`,
 		`That puts the target at ${split.wantWorking} working and ${split.wantIdle} idle, and makes the smallest move worth making ${split.deadband}.`,
+		`Moving capital from one market to another takes two runs and pays gas twice, so it has to clear twice that.`,
 	]
 	facts.push(
 		outcome.act
-			? `Decision: ${outcome.params.supply ? 'supply' : 'withdraw'} ${outcome.params.amount}. Explain to the owner why this happens now.`
+			? `Decision: ${outcome.params.supply ? `supply ${outcome.params.amount} to` : `withdraw ${outcome.params.amount} from`} ${outcome.params.pool}. Explain to the owner why this happens now.`
 			: `Decision: do nothing this run, because ${outcome.reason}. Explain to the owner why nothing happened.`,
 	)
 	return facts.join(' ')

@@ -81,10 +81,18 @@ echo "agent    $(cast call "$ACCOUNT" 'agent()(address)' --rpc-url "$RPC")"
 say "5/7  point the workflow at what we just built"
 # `aiUrl` is dropped: the rehearsal must not depend on a model endpoint being reachable, and the
 # model explains the verdict rather than deciding it.
+#
+# `pools` is a list, and the one this rehearsal uses has a single entry. That is not the whole of
+# what the workflow can do — it compares the rate at every permitted market and picks the best —
+# but Aave v3 is the only market on Arbitrum answering this interface for USDC that we found:
+# Radiant, the obvious second, is an Aave *v2* fork and reverts on `getReserveAToken(USDC)`.
+# Choosing between several is covered by the unit tests, not by this script. Anything added to
+# `pools` here must also be permitted with `permitVenue` in step 4, or the enclave will read it,
+# find it disallowed, and skip it.
 jq --arg a "$ACCOUNT" --arg r "$RPC" 'del(.aiUrl,.aiModel,.aiFallbackModel,.aiMaxTokens,.aiTimeoutSeconds)
 	| .account = $a | .rpcUrl = $r' workflow/config.staging.json > /tmp/helico-idle.$$ \
 	&& mv /tmp/helico-idle.$$ workflow/config.staging.json
-jq -c '{account, pool, asset, agent, delivery}' workflow/config.staging.json
+jq -c '{account, pools, asset, agent, delivery}' workflow/config.staging.json
 
 say "6/7  simulate — the enclave reads, decides and signs"
 cre workflow simulate ./workflow --target staging-settings --env .env \

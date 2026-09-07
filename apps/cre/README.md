@@ -9,9 +9,15 @@
 > `@helico/plugin-cre` is rewritten for that, and **`rehearse-idle.sh` runs the new path end to
 > end** — deploys the factory, opens an account at an address predicted before it exists, funds it
 > with real USDC taken from a whale on the fork, lets the enclave decide and sign, and carries the
-> signed call to the chain. A recorded run: 50,000 USDC in, `SUPPLY 40000000000`, and the account
-> ends holding 39,999.999999 aUSDC against a 10,000 USDC buffer. The agent's own balance is zero
-> at the end, which is the half worth checking.
+> signed call to the chain. A recorded run, 8 September: 50,000 USDC in,
+> `SUPPLY 40000000000 to 0x794a…14ad`, and the account ends holding 39,999.999999 aUSDC against a
+> 10,000 USDC buffer. The agent's own balance is zero at the end, which is the half worth checking.
+>
+> **`config.pools` is a list, and this script's has one entry.** The workflow compares the live
+> `currentLiquidityRate` at every market the owner permitted and moves capital to the best of
+> them; Aave v3 is the only market on Arbitrum we found answering that interface for USDC, so the
+> script exercises the choice with a list of one. Choosing between several, and the round-trip bar
+> a migration has to clear, are covered by the unit tests rather than by this script.
 >
 > `rehearse.sh` is the old one and still drives the vault path. Kept working rather than deleted,
 > because `Deploy.s.sol` still deploys the vault.
