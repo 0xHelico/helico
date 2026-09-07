@@ -19,7 +19,24 @@ export type GraphAuth = {
  * verified only that the gateway is up.
  */
 export function gateway(subgraph: Subgraph): string {
+	if (!subgraph.id) {
+		throw new Error(`${subgraph.name}: no published subgraph id`)
+	}
 	return `https://gateway.thegraph.com/api/subgraphs/id/${subgraph.id}`
+}
+
+/**
+ * Where to send the query, and whether it needs a key.
+ *
+ * A Studio deployment answers unauthenticated; a published one is behind the gateway and does
+ * not. Deciding that here rather than at each call site is what keeps `query()` from having to
+ * know which kind it was handed.
+ */
+export function endpoint(subgraph: Subgraph): { url: string; needsKey: boolean } {
+	if (subgraph.studioUrl) {
+		return { url: subgraph.studioUrl, needsKey: false }
+	}
+	return { url: gateway(subgraph), needsKey: true }
 }
 
 export type GraphResponse<T> = { data?: T; errors?: { message: string }[] }
@@ -42,15 +59,19 @@ export async function query<T>(
 	variables: Record<string, unknown> = {},
 	fetchImpl: typeof fetch = fetch,
 ): Promise<T> {
-	if (!auth.apiKey) {
+	const { url, needsKey } = endpoint(subgraph)
+	if (needsKey && !auth.apiKey) {
 		throw new Error(`No Graph API key for ${subgraph.name}`)
 	}
-	const res = await fetchImpl(gateway(subgraph), {
+	const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+	// Never send a key where one is not required. A Studio URL is not authenticated, and putting
+	// a gateway key on it would spend it somewhere it buys nothing.
+	if (needsKey) {
+		headers.Authorization = `Bearer ${auth.apiKey}`
+	}
+	const res = await fetchImpl(url, {
 		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json',
-			Authorization: `Bearer ${auth.apiKey}`,
-		},
+		headers,
 		body: JSON.stringify({ query: document, variables }),
 	})
 	if (!res.ok) {

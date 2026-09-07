@@ -10,5 +10,6 @@
  * Nothing here decides anything. It returns evidence; the enclave weighs it.
  */
 export * from './client'
+export * from './mandates'
 export * from './pool'
 export * from './types'

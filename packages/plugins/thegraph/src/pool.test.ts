@@ -78,8 +78,19 @@ describe('the gateway, and the errors it hides inside a 200', () => {
 		(async () => new Response(JSON.stringify(data), { status: 200 })) as unknown as typeof fetch
 
 	test('a subgraph id becomes a gateway URL', () => {
-		expect(gateway(UNISWAP_V4[42161])).toContain(UNISWAP_V4[42161].id)
-		expect(gateway(UNISWAP_V4[42161])).toStartWith('https://gateway.thegraph.com/')
+		const published = UNISWAP_V4[42161]
+		const id = published.id
+		if (!id) throw new Error('the v4 subgraph should carry a published id')
+		expect(gateway(published)).toContain(id)
+		expect(gateway(published)).toStartWith('https://gateway.thegraph.com/')
+	})
+
+	// A Studio subgraph has no published id, and building a gateway URL with `undefined` in it
+	// would fail at the gateway with a message about authorisation rather than about the id.
+	test('a subgraph with no published id is refused rather than half-built', () => {
+		expect(() => gateway({ name: 'studio only', chainId: 42161 })).toThrow(
+			/no published subgraph id/,
+		)
 	})
 
 	test('no key is refused here rather than at the gateway', async () => {
