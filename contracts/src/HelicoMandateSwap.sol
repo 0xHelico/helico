@@ -115,9 +115,10 @@ contract HelicoMandateSwap is AquaApp {
     }
 
     /// @notice What a swap would return right now, under the same rules the swap applies.
-    /// @dev Every check the swap makes is made here too, deliberately. A quote that answers for
-    ///      a mandate the swap would refuse is a quote that sends an agent to build a
-    ///      transaction that cannot land.
+    /// @dev Every rule the mandate carries is applied here too, deliberately: a quote that
+    ///      answers for a mandate the swap would refuse sends an agent to build a transaction
+    ///      that cannot land. The one exception is the agent gate, which is about the caller
+    ///      rather than the mandate -- see `_checkMandate`.
     /// @param mandate The mandate to quote against.
     /// @param zeroForOne True to sell `token0` for `token1`.
     /// @param amountIn The exact input amount.
@@ -165,6 +166,11 @@ contract HelicoMandateSwap is AquaApp {
         nonReentrantStrategy(mandate.maker, keccak256(abi.encode(mandate)))
         returns (uint256 amountOut)
     {
+        require(
+            mandate.agent == address(0) || msg.sender == mandate.agent,
+            UnauthorizedAgent(msg.sender, mandate.agent)
+        );
+
         bytes32 hash = keccak256(abi.encode(mandate));
 
         Sides memory s = _sides(mandate, hash, zeroForOne);
@@ -195,13 +201,14 @@ contract HelicoMandateSwap is AquaApp {
         _safeCheckAquaPush(mandate.maker, hash, s.tokenIn, s.balanceIn + amountIn);
     }
 
-    /// @dev Everything that must hold before a mandate may be quoted or traded, in one place so
-    ///      the quote and the swap cannot drift apart.
+    /// @dev Everything about the mandate itself that must hold before it may be quoted or
+    ///      traded, in one place so the quote and the swap cannot drift apart.
+    ///
+    ///      The agent gate is deliberately not here. It is a fact about the caller, not about
+    ///      the mandate: refusing to quote a price to anyone but the agent protects nothing --
+    ///      the numbers are readable from the ledger regardless -- and it would stop a router
+    ///      or an indexer from pricing a mandate it is perfectly entitled to see.
     function _checkMandate(SwapMandate calldata mandate) private view {
-        require(
-            mandate.agent == address(0) || msg.sender == mandate.agent,
-            UnauthorizedAgent(msg.sender, mandate.agent)
-        );
         require(block.timestamp < mandate.expiry, MandateExpired(block.timestamp, mandate.expiry));
         require(mandate.feeBps < BPS_BASE, InvalidFee(mandate.feeBps));
         require(mandate.token0 != mandate.token1, IdenticalTokens(mandate.token0));
