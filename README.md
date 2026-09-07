@@ -120,8 +120,8 @@ AI usage is logged in [`AI-USAGE.md`](AI-USAGE.md).
 
 Judges are asked to inspect the commit history, so this is better said here than discovered.
 
-Eleven of the 231 commits on `main` are **squashed merges**, made before squash and rebase
-merging were switched off in the repository settings:
+Eleven of the merges on `main` are **squashed merges**, made before squash and rebase merging
+were switched off in the repository settings:
 [#64](https://github.com/0xHelico/helico/pull/64),
 [#65](https://github.com/0xHelico/helico/pull/65),
 [#69](https://github.com/0xHelico/helico/pull/69),
@@ -135,6 +135,14 @@ merging were switched off in the repository settings:
 and [#67](https://github.com/0xHelico/helico/pull/67).
 
 Each appears on `main` as one commit rather than as the work that produced it — #67 was 19
-commits, #84 was 10. **Nothing is lost:** every head branch still exists and the full sequence
-is on the pull request itself, which is also where the review that shaped it lives. The other
-220 commits, and all 69 merges, are the work as it happened.
+commits, #84 was 10.
+
+**Nothing is lost.** The full sequence is on the pull request itself, which is also where the
+review that shaped it lives, and the original commits stay fetchable even where the branch has
+since been deleted — nine of these eleven have been:
+
+```
+git fetch origin refs/pull/67/head    # all 19, ending at 28498d6 docs(plans): plan the landing page
+```
+
+Every other merge on `main` is the work as it happened.
