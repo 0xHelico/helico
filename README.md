@@ -115,3 +115,26 @@ integration that does not genuinely work is a full disqualification**, not a ded
 
 The rules that bind coding sessions live in [`CLAUDE.md`](CLAUDE.md).
 AI usage is logged in [`AI-USAGE.md`](AI-USAGE.md).
+
+### Reading the history
+
+Judges are asked to inspect the commit history, so this is better said here than discovered.
+
+Eleven of the 231 commits on `main` are **squashed merges**, made before squash and rebase
+merging were switched off in the repository settings:
+[#64](https://github.com/0xHelico/helico/pull/64),
+[#65](https://github.com/0xHelico/helico/pull/65),
+[#69](https://github.com/0xHelico/helico/pull/69),
+[#70](https://github.com/0xHelico/helico/pull/70),
+[#72](https://github.com/0xHelico/helico/pull/72),
+[#75](https://github.com/0xHelico/helico/pull/75),
+[#77](https://github.com/0xHelico/helico/pull/77),
+[#84](https://github.com/0xHelico/helico/pull/84),
+[#98](https://github.com/0xHelico/helico/pull/98),
+[#102](https://github.com/0xHelico/helico/pull/102)
+and [#67](https://github.com/0xHelico/helico/pull/67).
+
+Each appears on `main` as one commit rather than as the work that produced it — #67 was 19
+commits, #84 was 10. **Nothing is lost:** every head branch still exists and the full sequence
+is on the pull request itself, which is also where the review that shaped it lives. The other
+220 commits, and all 69 merges, are the work as it happened.
