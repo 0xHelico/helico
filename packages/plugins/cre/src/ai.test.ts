@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { completionRequest, describeForOwner, usableAnswer } from './ai'
+import { completionHttpRequest, completionRequest, describeForOwner, usableAnswer } from './ai'
 
 /**
  * The guards, tested against what the router actually returned rather than against an idea of
@@ -156,5 +156,43 @@ describe('describeForOwner', () => {
 			1_788_000_600,
 		)
 		expect(prompt).toContain('Last move: never moved')
+	})
+})
+
+/**
+ * The request options, which had a bug that no test could see and the simulator reported as
+ * silence: `timeout` was `{ seconds: '30' }`, an object, where a `google.protobuf.Duration` in
+ * JSON is the string `'30s'`. The call threw before it left, `explain` caught it, and a report
+ * with no prose is exactly what the design says a missing answer looks like — so the whole
+ * system agreed nothing was wrong for a day.
+ *
+ * `completionRequest` was already split out so its body could be asserted without a runtime.
+ * The envelope needed the same treatment and did not have it.
+ */
+describe('completionHttpRequest', () => {
+	const config = {
+		aiUrl: 'https://router.example/v1/chat/completions',
+		aiModel: 'a',
+		aiFallbackModel: 'b',
+		aiMaxTokens: 1200,
+		aiTimeoutSeconds: 30,
+	}
+
+	test('the timeout is a Duration string, not an object', () => {
+		const req = completionHttpRequest(config, 'YmFzaWM=', 'sk-x', '{}')
+		expect(typeof req.timeout).toBe('string')
+		expect(req.timeout).toMatch(/^\d+s$/)
+		expect(req.timeout).toBe('30s')
+	})
+
+	test('the two auth layers are on separate headers', () => {
+		const req = completionHttpRequest(config, 'YmFzaWM=', 'sk-x', '{}')
+		expect(req.multiHeaders.Authorization.values).toEqual(['Basic YmFzaWM='])
+		expect(req.multiHeaders['x-api-key'].values).toEqual(['sk-x'])
+	})
+
+	test('the body is base64, because the capability wants bytes', () => {
+		const req = completionHttpRequest(config, 'YmFzaWM=', 'sk-x', '{"model":"a"}')
+		expect(atob(req.body)).toBe('{"model":"a"}')
 	})
 })

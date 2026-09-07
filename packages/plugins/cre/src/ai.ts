@@ -101,6 +101,45 @@ export function completionRequest(model: string, prompt: string, maxTokens: numb
 }
 
 /**
+ * The request the HTTP capability is handed, split out for the same reason as
+ * `completionRequest`: so a test can assert its shape without a runtime.
+ *
+ * `timeout` is a `google.protobuf.Duration`, and in JSON that is the **string** `"30s"` — not
+ * `{ seconds: "30" }`. The object form type-checks, because `DurationJson` is `string` and an
+ * object literal in that position is checked against the surrounding type rather than rejected,
+ * and then it is thrown away at run time with
+ * `cannot decode message google.protobuf.Duration from JSON: object`. The call never leaves the
+ * enclave, the catch below swallows it, and the report goes out without prose — which is exactly
+ * what the design says a missing answer should look like, so nothing anywhere said it was broken.
+ */
+export function completionHttpRequest(
+	config: AiConfig,
+	basic: string,
+	apiKey: string,
+	body: string,
+): {
+	url: string
+	method: string
+	body: string
+	multiHeaders: Record<string, { values: string[] }>
+	timeout: string
+} {
+	return {
+		url: config.aiUrl,
+		method: 'POST',
+		body: bytesToBase64(new TextEncoder().encode(body)),
+		multiHeaders: {
+			'Content-Type': { values: ['application/json'] },
+			// The two layers cannot share a header. nginx wants Basic; the application wants its
+			// own. Sending the key as a bearer token replaces the first and everything answers 401.
+			Authorization: { values: [`Basic ${basic}`] },
+			'x-api-key': { values: [apiKey] },
+		},
+		timeout: `${config.aiTimeoutSeconds}s`,
+	}
+}
+
+/**
  * Ask the model, once per configured name, and stop at the first usable answer.
  *
  * The two credentials cannot share a header: nginx wants `Authorization: Basic …` and the
@@ -128,20 +167,7 @@ export function explain(
 		try {
 			const body = completionRequest(model, prompt, config.aiMaxTokens)
 			const response = new cre.capabilities.HTTPClient()
-				.sendRequest(runtime, {
-					url: config.aiUrl,
-					method: 'POST',
-					body: bytesToBase64(new TextEncoder().encode(body)),
-					multiHeaders: {
-						'Content-Type': { values: ['application/json'] },
-						// The two layers cannot share a header. nginx wants Basic; the
-						// application wants its own. Sending the key as a bearer token
-						// replaces the first and every request answers 401.
-						Authorization: { values: [`Basic ${basic}`] },
-						'x-api-key': { values: [apiKey] },
-					},
-					timeout: { seconds: String(config.aiTimeoutSeconds) },
-				})
+				.sendRequest(runtime, completionHttpRequest(config, basic, apiKey, body))
 				.result()
 
 			if (!ok(response)) continue
