@@ -3,11 +3,18 @@
 Submission for [ETHOnline 2026](https://ethglobal.com/events/ethonline2026)
 (September 4–16, 2026).
 
-**Helico keeps a Uniswap v4 liquidity position in range, under rules its owner commits to on
-chain.** The owner writes a mandate — which pool, how wide a band, how much may move, how
-often, until when. An agent proposes a re-centre; the contract refuses anything the mandate
-does not allow. Revoking the NFT approval ends it, and nothing the operator controls can block
-that.
+**Helico lets an agent act on your assets under rules you commit to on chain, so the agent
+never has to be trusted.** There are two of them, built on the same idea:
+
+- **A Uniswap v4 liquidity position, kept in range.** Which pool, how wide a band, how much may
+  move, how often, until when. `HelicoVault` holds the rules; the position NFT stays yours.
+- **A swap mandate on your own wallet, through 1inch Aqua.** How long it lives, which agent may
+  act, and how much may leave per swap. `HelicoMandateSwap` holds the rules; the tokens never
+  leave your wallet at all.
+
+In both, the agent proposes and the contract refuses anything the mandate does not allow. The
+way out is never blocked: revoking the NFT approval ends the first, docking the strategy ends
+the second, and nothing the operator controls can stop either.
 
 Nothing here is claimed before it is proven. Where something is not yet true, it is marked as
 not yet true rather than left to be assumed — see [Rules](#rules) for why that matters.
@@ -16,7 +23,7 @@ not yet true rather than left to be assumed — see [Rules](#rules) for why that
 
 | Directory | Contents |
 |---|---|
-| [`contracts/`](contracts/) | `HelicoVault` and its tests |
+| [`contracts/`](contracts/) | `HelicoVault`, `HelicoMandateSwap`, and their tests |
 | [`packages/plugins/uniswap/`](packages/plugins/uniswap/) | Uniswap v4 on-chain package, `@helico/plugin-uniswap` |
 | [`packages/plugins/cre/`](packages/plugins/cre/) | Chainlink CRE confidential workflow, `@helico/plugin-cre` |
 | [`packages/core/`](packages/core/) | Shared library, `@helico/core` |
@@ -72,6 +79,27 @@ It is upgradeable behind a timelock, non-custodial, and every rejection path is 
 | The swap that makes an out-of-range position recoverable | [`HelicoVault.sol#L597-L613`](https://github.com/0xHelico/helico/blob/9b1e8194098425ddab6cdaabc95d6796c5de9fcf/contracts/src/HelicoVault.sol#L597-L613) |
 | An agent that cannot send transactions: the signed authorisation | [`HelicoVault.sol#L435-L455`](https://github.com/0xHelico/helico/blob/9b1e8194098425ddab6cdaabc95d6796c5de9fcf/contracts/src/HelicoVault.sol#L435-L455) |
 | The exit, which nothing can block | [`HelicoVault.sol#L338-L350`](https://github.com/0xHelico/helico/blob/9b1e8194098425ddab6cdaabc95d6796c5de9fcf/contracts/src/HelicoVault.sol#L338-L350) |
+
+### 1inch Aqua
+
+`HelicoMandateSwap` is an Aqua app in which the strategy **is** the mandate: an expiry, a named
+agent contract, and a per-token ceiling on what may leave the maker's wallet.
+
+Liquidity never moves into the app, or into Aqua. `pull` goes from the maker straight to the
+recipient and `push` from the taker straight to the maker, and a test asserts that Aqua and the
+app both hold zero either side of a swap.
+
+Aqua files a strategy under the hash of the bytes it is handed and never reads them, so every
+field is enforced in [`HelicoMandateSwap.sol`](contracts/src/HelicoMandateSwap.sol) or nowhere.
+28 tests cover it against a real `Aqua` deployed in `setUp` — nothing mocks Aqua or the app.
+Every guard was then cut out, one at a time, to check the suite notices: **11 of 11 mutations
+caught.** What that turned up, and the four limits it did not fix, are in
+[`contracts/README.md`](contracts/README.md#helicomandateswap).
+
+> Commit-pinned permalinks for this section arrive with the next pin refresh, not before. The
+> checker compares every pin against every referenced file, so adding a file that does not
+> exist in the currently pinned commit would fail the check for all the other rows. Pinning
+> them together is the only honest way to do it.
 
 ### Chainlink CRE — Confidential Workflows
 

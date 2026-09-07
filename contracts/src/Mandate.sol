@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.28;
+pragma solidity 0.8.30;
 
 /// @notice A Uniswap v4 pool, identified the way the protocol identifies it.
 /// @dev `poolId` in a mandate is `keccak256(abi.encode(PoolKey))`, which is also v4's canonical
