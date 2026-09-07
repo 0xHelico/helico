@@ -5,9 +5,10 @@ import {AquaApp} from "@1inch/aqua/AquaApp.sol";
 import {IAqua} from "@1inch/aqua/interfaces/IAqua.sol";
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import {IHelicoMandateSwapCallback} from "./IHelicoMandateSwapCallback.sol";
-import {ILendingVenue} from "./ILendingVenue.sol";
+import {ILendingVenue, IReceiptToken} from "./ILendingVenue.sol";
 
 /// @notice The rules a maker commits to when handing an agent the right to trade their wallet.
 ///
@@ -149,6 +150,15 @@ contract HelicoMandateSwap is AquaApp {
     error NoVenueCanCover(address token, uint256 needed);
     /// @notice The unwind returned less than the swap needs. The last line of defence.
     error UnwindFellShort(address token, uint256 held, uint256 needed);
+    /// @notice A receipt token does not belong to the asset it is listed against.
+    /// @dev Without this check the unwind spends an amount denominated in one token out of a
+    ///      budget denominated in another. Demonstrated in review: a 3,216 USDC swap consuming
+    ///      32 BTC of receipt, because both are the same integer in their own units.
+    error ReceiptIsNotFor(address receipt, address token);
+    /// @notice This contract finished a swap still holding someone's receipt token.
+    /// @dev Asserted rather than assumed. A receipt left here is claimable by the next swap
+    ///      that unwinds the same asset, whoever it belongs to.
+    error ReceiptRetained(address receipt, uint256 amount);
 
     /// @param aqua_ The Aqua deployment this app keeps its ledger in.
     constructor(IAqua aqua_) AquaApp(aqua_) {}
@@ -250,14 +260,38 @@ contract HelicoMandateSwap is AquaApp {
 
         (uint256 index, address receipt) = _venueFor(mandate, tokenOut, deficit);
 
+        // What this contract held before the pull. Everything below is measured against it,
+        // because a receipt left here by any earlier call belongs to somebody else.
+        uint256 beforePull = IERC20(receipt).balanceOf(address(this));
+
         AQUA.pull(mandate.maker, hash, receipt, deficit, address(this));
-        // Sweep rather than ask for `deficit`: burning an exact amount can require marginally
-        // more receipt than we hold, because a market rounds the burn against the withdrawer.
-        // Sweeping also guarantees this contract ends the call holding none.
-        ILendingVenue(mandate.venues[index].pool).withdraw(tokenOut, type(uint256).max, mandate.maker);
+
+        // A named amount, never `type(uint256).max`. A sweep burns whatever this contract holds
+        // rather than what this swap pulled, which lets a small mandate redeem a large position
+        // that arrived here some other way — demonstrated in review with a 2 USDC budget taking
+        // a 50,000 USDC position.
+        ILendingVenue(mandate.venues[index].pool).withdraw(tokenOut, deficit, mandate.maker);
+
+        // Any receipt the burn did not consume goes home. Rounding is the usual cause, and the
+        // amount is dust, but dust left here is dust the next caller can claim.
+        uint256 dust = IERC20(receipt).balanceOf(address(this)) - beforePull;
+        if (dust > 0) {
+            SafeERC20.safeTransfer(IERC20(receipt), mandate.maker, dust);
+        }
+        require(
+            IERC20(receipt).balanceOf(address(this)) == beforePull,
+            ReceiptRetained(receipt, IERC20(receipt).balanceOf(address(this)) - beforePull)
+        );
 
         uint256 nowHeld = IERC20(tokenOut).balanceOf(mandate.maker);
         require(nowHeld >= amountOut, UnwindFellShort(tokenOut, nowHeld, amountOut));
+    }
+
+    /// @dev A receipt token must name the asset it is for, and it must be the right one.
+    ///      A zero address means that side is simply not supplied at this venue.
+    function _requireReceiptFor(address receipt, address token) private view {
+        if (receipt == address(0)) return;
+        require(IReceiptToken(receipt).UNDERLYING_ASSET_ADDRESS() == token, ReceiptIsNotFor(receipt, token));
     }
 
     /// @dev The first permitted venue that can actually pay, and the receipt token for this side.
@@ -336,6 +370,11 @@ contract HelicoMandateSwap is AquaApp {
                 v.receipt1 != mandate.token0 && v.receipt1 != mandate.token1,
                 ReceiptAliasesReserve(v.receipt1)
             );
+            // The pairing is verified against the receipt itself rather than trusted from the
+            // mandate. Otherwise an amount computed in one token is spent out of a budget
+            // denominated in another, and the two are indistinguishable as integers.
+            _requireReceiptFor(v.receipt0, mandate.token0);
+            _requireReceiptFor(v.receipt1, mandate.token1);
         }
 
         // Debt is checked once, on the first venue, because a lending market reports a user's

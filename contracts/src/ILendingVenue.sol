@@ -40,3 +40,16 @@ interface ILendingVenue {
             uint256 healthFactor
         );
 }
+
+/// @notice The one thing a receipt token must be able to tell us about itself.
+///
+/// @dev Without this, a mandate can name a receipt token that belongs to a *different* asset,
+///      and the unwind spends an amount denominated in one token out of a budget denominated in
+///      another. An audit demonstrated the result: a 3,216 USDC swap consuming 32 BTC of
+///      receipt, because both are "3216440300" in their own units.
+///
+///      Aave's aToken exposes this. Any venue whose receipt cannot answer it is not one this
+///      app can safely unwind, and is refused rather than trusted.
+interface IReceiptToken {
+    function UNDERLYING_ASSET_ADDRESS() external view returns (address);
+}
