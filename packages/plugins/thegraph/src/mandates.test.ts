@@ -74,7 +74,7 @@ describe('reading a maker’s mandates', () => {
 	// empty list rather than an error — a maker with five mandates would read as a maker with none.
 	test('the maker address is lower-cased before it is sent', async () => {
 		const { calls, impl } = spy({ mandates: [] })
-		await makerMandates(AQUA, '0xF54EC0F6996b46b71B8d0c05F8430d2E8ed9413c', undefined, 100, impl)
+		await makerMandates(AQUA, '0xF54EC0F6996b46b71B8d0c05F8430d2E8ed9413c', undefined, impl)
 		const body = JSON.parse(calls[0]?.init.body as string)
 		expect(body.variables.maker).toBe('0xf54ec0f6996b46b71b8d0c05f8430d2e8ed9413c')
 	})
@@ -92,6 +92,34 @@ describe('reading a maker’s mandates', () => {
 		const [m] = toMandates({ mandates: [mandate()] })
 		expect(m?.strategy).toBe('0xbeef')
 		expect(m?.app).toBe('0x8fdd04dbf6111437b44bbca99c28882434e0958f')
+	})
+
+	test('one short page is one request', async () => {
+		const { calls, impl } = spy({ mandates: [mandate()] })
+		const res = await makerMandates(AQUA, '0xabc', undefined, impl)
+		expect(calls.length).toBe(1)
+		expect(res.mandates.length).toBe(1)
+	})
+
+	// The failure this replaces: `first = 100` returned a prefix and said nothing, so an agent
+	// sized a spend against a portfolio it could not see all of. Diagnosis is @ghozzza's, #161.
+	test('a full page is followed, and a prefix is never mistaken for the whole', async () => {
+		const full = {
+			mandates: Array.from({ length: 1000 }, (_, i) => mandate({ strategyHash: `0x${i}` })),
+		}
+		const calls: unknown[] = []
+		const impl = (async (_url: string, init: RequestInit) => {
+			calls.push(JSON.parse(init.body as string))
+			// Two full pages, then a short one.
+			const body = calls.length <= 2 ? full : { mandates: [mandate({ strategyHash: '0xlast' })] }
+			return new Response(JSON.stringify({ data: body }), { status: 200 })
+		}) as unknown as typeof fetch
+
+		const res = await makerMandates(AQUA, '0xabc', undefined, impl)
+		expect(calls.length).toBe(3)
+		expect(res.mandates.length).toBe(2001)
+		expect((calls[0] as { variables: { skip: number } }).variables.skip).toBe(0)
+		expect((calls[2] as { variables: { skip: number } }).variables.skip).toBe(2000)
 	})
 })
 

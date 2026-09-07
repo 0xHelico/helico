@@ -15,12 +15,13 @@ import type { MakerMandates, Mandate, Subgraph } from './types'
  * each app defines its own struct, so the caller decodes with the ABI it owns.
  */
 const MANDATES = `
-  query Mandates($maker: Bytes!, $first: Int!) {
+  query Mandates($maker: Bytes!, $first: Int!, $skip: Int!) {
     mandates(
       where: { maker: $maker }
       orderBy: shippedAtBlock
       orderDirection: desc
       first: $first
+      skip: $skip
     ) {
       strategyHash
       strategy
@@ -92,30 +93,47 @@ export function spendable(mandates: Mandate[]): Map<string, bigint> {
 	return total
 }
 
+/** The Graph caps a page at 1000, so this is the largest useful request. */
+const PAGE = 1000
+
 /**
  * Ask the subgraph what a maker is allowed to do.
  *
- * `maker` is lower-cased because the subgraph stores addresses as lower-case `Bytes` and a
- * checksummed address matches nothing — it returns an empty list rather than an error, which is
- * the worst shape a mistake can take: it looks like a maker with no mandates.
+ * Two ways to get a wrong answer here, and both look like a right one.
+ *
+ * `maker` is lower-cased because the subgraph stores addresses as lower-case `Bytes`. A
+ * checksummed address matches nothing and returns an **empty list rather than an error**, so a
+ * maker with fifty mandates reads as a maker with none.
+ *
+ * And every page is followed until one comes back short. A caller that silently receives a
+ * prefix decides what an agent may spend against a portfolio it cannot see all of, which is
+ * worse than failing — the diagnosis is @ghozzza's, in #161. This is also why the query is
+ * top-level `mandates(where:)` rather than `maker(id:) { mandates }`: a nested list caps at 100
+ * with no `pageInfo` and no cursor, so nothing in that response distinguishes "100 mandates"
+ * from "100 of 5000".
  */
 export async function makerMandates(
 	subgraph: Subgraph,
 	maker: string,
 	auth: GraphAuth = { apiKey: '' },
-	first = 100,
 	fetchImpl: typeof fetch = fetch,
 ): Promise<MakerMandates> {
-	const raw = await query<Raw>(
-		subgraph,
-		auth,
-		MANDATES,
-		{ maker: maker.toLowerCase(), first },
-		fetchImpl,
-	)
-	const mandates = toMandates(raw)
+	const id = maker.toLowerCase()
+	const mandates: Mandate[] = []
+	for (let skip = 0; ; skip += PAGE) {
+		const raw = await query<Raw>(
+			subgraph,
+			auth,
+			MANDATES,
+			{ maker: id, first: PAGE, skip },
+			fetchImpl,
+		)
+		const page = toMandates(raw)
+		mandates.push(...page)
+		if (page.length < PAGE) break
+	}
 	return {
-		maker: maker.toLowerCase(),
+		maker: id,
 		mandates,
 		active: mandates.filter((m) => m.active).length,
 		spendable: spendable(mandates),
