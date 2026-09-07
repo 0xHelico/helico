@@ -3,6 +3,8 @@ pragma solidity 0.8.30;
 
 import {Create2} from "@openzeppelin/contracts/utils/Create2.sol";
 
+import {AccountAuth} from "./AccountAuth.sol";
+
 import {HelicoAccountProxy} from "./HelicoAccountProxy.sol";
 
 /// @notice Opens one account per owner, at an address known before it exists.
@@ -55,6 +57,21 @@ contract HelicoAccountFactory {
 
         account = Create2.deploy(0, _salt(owner), _initCode(owner));
         emit AccountOpened(owner, account);
+    }
+
+    /// @notice The digest this owner would sign, answered before their account exists.
+    /// @dev The half of the seamless flow that cannot live on the account. A first-time user has
+    ///      no contract to ask, so the factory answers for the address the account *will* have —
+    ///      which is knowable, because it is a `CREATE2` address.
+    function executeDigest(
+        address owner,
+        address target,
+        uint256 value,
+        bytes calldata data,
+        uint256 nonce,
+        uint256 deadline
+    ) external view returns (bytes32) {
+        return AccountAuth.executeDigest(accountFor(owner), target, value, data, nonce, deadline);
     }
 
     function _salt(address owner) private pure returns (bytes32) {

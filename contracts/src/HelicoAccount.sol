@@ -2,6 +2,8 @@
 pragma solidity 0.8.30;
 
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {AccountAuth} from "./AccountAuth.sol";
 
 import {HelicoAccountProxy} from "./HelicoAccountProxy.sol";
 
@@ -41,10 +43,12 @@ contract HelicoAccount is UUPSUpgradeable {
     error ImplementationHasNoCode(address implementation);
     error AutoUpgradeAlreadyRefused();
     error CallFailed(address target);
+    error AuthorisationExpired(uint256 nowTimestamp, uint256 deadline);
 
     event Upgraded(address indexed implementation, address indexed by);
     event AutoUpgradeRefused();
     event Executed(address indexed target, uint256 value, bytes4 selector);
+    event SignaturesInvalidated(uint256 newNonce);
 
     /// @param upgrader The enclave key permitted to keep accounts patched. May be zero, which
     ///        means only the owner ever changes this account's code.
@@ -94,6 +98,82 @@ contract HelicoAccount is UUPSUpgradeable {
         if (msg.sender == owner()) return;
         bool upgraderMayAct = !autoUpgradeRefused && UPGRADER != address(0) && msg.sender == UPGRADER;
         if (!upgraderMayAct) revert NotOwnerOrUpgrader(msg.sender);
+    }
+
+    // ------------------------------------------------------------------------------------
+    // Acting on the owner's behalf
+    // ------------------------------------------------------------------------------------
+
+    /// @notice How many signed calls this account has already accepted.
+    /// @dev Sequential and single-use. The owner can also skip ahead with `invalidateSignatures`,
+    ///      which is how an authorisation that has not been used yet is taken back.
+    uint256 public nonce;
+
+    /// @notice The EIP-712 domain this account verifies against.
+    /// @dev Derived in `AccountAuth` so the factory can answer the same question for an account
+    ///      that does not exist yet. See that library for why the owner must be able to sign first.
+    function domainSeparator() public view returns (bytes32) {
+        return AccountAuth.domainSeparator(address(this));
+    }
+
+    /// @notice The digest the owner signs to authorise one call.
+    /// @dev Exposed so a frontend signs exactly what this contract will verify, rather than a
+    ///      reconstruction of it that can drift.
+    function executeDigest(address target, uint256 value, bytes calldata data, uint256 nonce_, uint256 deadline)
+        public
+        view
+        returns (bytes32)
+    {
+        return AccountAuth.executeDigest(address(this), target, value, data, nonce_, deadline);
+    }
+
+    /// @notice Do something as this account, authorised by the owner's signature rather than by
+    ///         the owner sending the transaction.
+    ///
+    /// @dev This is what makes the first-time flow one step. A new user's account can be opened
+    ///      for them by anyone — the owner is fixed by the address — and their first command can
+    ///      be carried by a relayer, so they sign once and never see either step.
+    ///
+    ///      The relayer gains nothing by carrying it. It cannot change the target, the value, the
+    ///      calldata or the deadline without invalidating the signature, and it cannot use the
+    ///      same one twice.
+    ///
+    ///      Not payable, deliberately. Value comes from the account's own balance, so there is no
+    ///      `msg.value` for a batching relayer to spend twice across several calls in one
+    ///      transaction — the mistake `HelicoVault`'s multicall docblock describes.
+    ///
+    ///      The owner must be an EOA: this recovers a key and does not consult ERC-1271. An
+    ///      owner that is itself a contract uses `execute` and sends its own transaction.
+    function executeWithSignature(
+        address target,
+        uint256 value,
+        bytes calldata data,
+        uint256 deadline,
+        bytes calldata signature
+    ) external returns (bytes memory result) {
+        if (block.timestamp > deadline) revert AuthorisationExpired(block.timestamp, deadline);
+
+        uint256 used = nonce;
+        address signer = ECDSA.recover(executeDigest(target, value, data, used, deadline), signature);
+        if (signer != owner()) revert NotOwner(signer);
+
+        // Spent before the call, not after: the target is arbitrary code and may reenter here.
+        nonce = used + 1;
+
+        bool ok;
+        (ok, result) = target.call{value: value}(data);
+        if (!ok) revert CallFailed(target);
+        emit Executed(target, value, bytes4(data));
+    }
+
+    /// @notice Take back every signature that has not been used yet.
+    /// @dev One step is enough because the nonce is sequential: every outstanding authorisation
+    ///      names the current one, and none of them names the next.
+    function invalidateSignatures() external {
+        if (msg.sender != owner()) revert NotOwner(msg.sender);
+        uint256 next = nonce + 1;
+        nonce = next;
+        emit SignaturesInvalidated(next);
     }
 
     /// @dev An upgrade takes effect immediately. There is no announcement, no waiting period and
