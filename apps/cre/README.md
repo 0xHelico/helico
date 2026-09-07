@@ -6,10 +6,19 @@
 > an account's idle capital should be earning in a lending market and moves it — see
 > [`docs/plans/2026-09-08-cre-manages-idle-capital.md`](../../docs/plans/2026-09-08-cre-manages-idle-capital.md).
 >
-> `@helico/plugin-cre` is rewritten for that and its tests pass. **`rehearse.sh` is not**: it
-> still deploys the vault and drives the LP path, so it rehearses the route being retired.
-> Rehearsing the new one needs a deployed `HelicoAccount`, a permitted Aave venue and USDC on the
-> fork — not written yet, and said here rather than left for someone to discover mid-demo.
+> `@helico/plugin-cre` is rewritten for that, and **`rehearse-idle.sh` runs the new path end to
+> end** — deploys the factory, opens an account at an address predicted before it exists, funds it
+> with real USDC taken from a whale on the fork, lets the enclave decide and sign, and carries the
+> signed call to the chain. A recorded run: 50,000 USDC in, `SUPPLY 40000000000`, and the account
+> ends holding 39,999.999999 aUSDC against a 10,000 USDC buffer. The agent's own balance is zero
+> at the end, which is the half worth checking.
+>
+> `rehearse.sh` is the old one and still drives the vault path. Kept working rather than deleted,
+> because `Deploy.s.sol` still deploys the vault.
+>
+> **If your `.env` predates 8 September it has the vault's `MANDATE_*` names and none of the
+> `IDLE_*` ones.** `rehearse-idle.sh` checks and names the whole missing list; the CRE CLI names
+> one variable at a time.
 >
 > The frontend still imports the retiring ABIs, which is why they are kept exported. That is
 > tracked in #175.
