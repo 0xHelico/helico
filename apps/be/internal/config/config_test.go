@@ -31,3 +31,30 @@ func TestFromEnvDefaultsAndOverrides(t *testing.T) {
 		t.Error("a bad duration must be an error")
 	}
 }
+
+func TestFromEnvRefusesAModelTimeoutThatCannotBeReached(t *testing.T) {
+	// The request timeout wraps the model call, so a longer model timeout is unreachable and the
+	// failure looks exactly like an unset key.
+	env := map[string]string{"BE_REQUEST_TIMEOUT": "5s", "BE_LLM_TIMEOUT": "20s"}
+	if _, err := FromEnv(func(k string) (string, bool) { v, ok := env[k]; return v, ok }); err == nil {
+		t.Fatal("want an error for a model timeout at or above the request timeout")
+	}
+	env["BE_LLM_TIMEOUT"] = "4s"
+	cfg, err := FromEnv(func(k string) (string, bool) { v, ok := env[k]; return v, ok })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.LLMTimeout >= cfg.RequestTimeout {
+		t.Fatalf("llm=%s request=%s", cfg.LLMTimeout, cfg.RequestTimeout)
+	}
+
+	// Shortening only the request timeout is not an error: the model timeout is fitted under it.
+	only := map[string]string{"BE_REQUEST_TIMEOUT": "3s"}
+	cfg, err = FromEnv(func(k string) (string, bool) { v, ok := only[k]; return v, ok })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.LLMTimeout != 2400*time.Millisecond {
+		t.Fatalf("llm timeout = %s, want it fitted under 3s", cfg.LLMTimeout)
+	}
+}
