@@ -81,7 +81,7 @@ export function MandateCard({ action }: { action: "status" | "revoke" }) {
     return (
       <Card>
         No vault address is set yet.{" "}
-        <Link className="underline underline-offset-2" href="/mandate">
+        <Link className="underline underline-offset-2" href="/">
           Set one on the mandate page
         </Link>
         , and this can answer.
@@ -112,7 +112,7 @@ export function MandateCard({ action }: { action: "status" | "revoke" }) {
     return (
       <Card>
         No mandate is active on this wallet, so the agent may do nothing.{" "}
-        <Link className="underline underline-offset-2" href="/mandate">
+        <Link className="underline underline-offset-2" href="/">
           Set one
         </Link>
         .

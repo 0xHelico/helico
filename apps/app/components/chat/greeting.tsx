@@ -29,7 +29,7 @@ export const Greeting = () => (
       price,{" "}
       <Link
         className="underline underline-offset-2 hover:text-muted-foreground"
-        href="/mandate"
+        href="/"
       >
         set a mandate
       </Link>

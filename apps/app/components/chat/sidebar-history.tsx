@@ -110,7 +110,7 @@ export function SidebarHistory() {
     setShowDeleteDialog(false);
 
     if (isCurrentChat) {
-      router.replace("/");
+      router.replace("/chat");
     }
 
     mutate((chatHistories) => {
