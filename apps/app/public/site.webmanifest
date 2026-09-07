@@ -1,0 +1,25 @@
+{
+	"name": "Helico",
+	"short_name": "Helico",
+	"description": "Mandate-enforced liquidity management: a Chainlink CRE enclave decides, a vault on Uniswap v4 enforces.",
+	"icons": [
+		{
+			"src": "/icon-192.webp",
+			"sizes": "192x192",
+			"type": "image/webp"
+		},
+		{
+			"src": "/icon-512.webp",
+			"sizes": "512x512",
+			"type": "image/webp"
+		},
+		{
+			"src": "/apple-touch-icon.png",
+			"sizes": "180x180",
+			"type": "image/png"
+		}
+	],
+	"theme_color": "#ffffff",
+	"background_color": "#ffffff",
+	"display": "standalone"
+}
