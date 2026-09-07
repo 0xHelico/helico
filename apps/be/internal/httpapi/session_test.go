@@ -331,3 +331,49 @@ func TestAConversationSurvivesAndComesBackInOrder(t *testing.T) {
 		t.Fatalf("intent %s", got.Messages[1].Intent)
 	}
 }
+
+// A cross-site form post is a simple request: no preflight, and the browser attaches the
+// SameSite=None cookie anyway. CORS blocks reading the reply, not the sending — so the only
+// thing standing between a signed-in sidebar and another site writing to it is this check.
+//
+//	<form action="https://api.helico.site/api/chats" method="POST" enctype="text/plain">
+func TestAStateChangingRequestMustSayItIsJSON(t *testing.T) {
+	srv := newChatServer(t)
+	alice := newWallet(t, keyAHex)
+	client := alice.signIn(t, srv)
+
+	for _, ct := range []string{
+		"text/plain",
+		"application/x-www-form-urlencoded",
+		"multipart/form-data",
+		"",
+	} {
+		req, _ := http.NewRequest(http.MethodPost, srv.URL+"/api/chats",
+			bytes.NewReader([]byte(`{"message":"from somewhere else"}=`)))
+		if ct != "" {
+			req.Header.Set("Content-Type", ct)
+		}
+		res, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != http.StatusUnsupportedMediaType {
+			t.Fatalf("content-type %q: %d, want 415", ct, res.StatusCode)
+		}
+	}
+
+	// And nothing was written by any of them.
+	list, err := client.Get(srv.URL + "/api/chats")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Conversations []map[string]any `json:"conversations"`
+	}
+	_ = json.NewDecoder(list.Body).Decode(&got)
+	list.Body.Close()
+	if len(got.Conversations) != 0 {
+		t.Fatalf("a refused request still created %d conversations", len(got.Conversations))
+	}
+}

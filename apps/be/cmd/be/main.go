@@ -1,5 +1,6 @@
-// Command be serves Helico's blog: posts in SQLite, seeded from Markdown files, over a small
-// JSON API. Configuration is BE_* environment variables; see internal/config.
+// Command be serves Helico's AI side and its blog: posts in SQLite, seeded from Markdown
+// files, and a swap conversation that turns a sentence into a checked intent. Configuration is
+// BE_* environment variables; see internal/config.
 package main
 
 import (
@@ -19,6 +20,7 @@ import (
 	"github.com/0xHelico/helico/apps/be/internal/content"
 	"github.com/0xHelico/helico/apps/be/internal/httpapi"
 	"github.com/0xHelico/helico/apps/be/internal/store"
+	"github.com/0xHelico/helico/apps/be/internal/swap"
 )
 
 func main() {
@@ -44,6 +46,8 @@ func run() error {
 	}
 	defer db.Close()
 
+	swapSvc := swap.New(swap.NewClient(cfg.LLMBaseURL, cfg.LLMKey, cfg.LLMModel, cfg.LLMTimeout))
+
 	svc := blog.NewService(db)
 	chats := chat.NewService(db)
 	if cfg.SessionSecret == "" {
@@ -64,6 +68,9 @@ func run() error {
 			RequestTimeout: cfg.RequestTimeout,
 			Chats:          chats,
 			SessionSecret:  cfg.SessionSecret,
+			Swap:           swapSvc,
+			SwapRatePerMin: cfg.SwapRatePerMin,
+			SwapDailyMax:   cfg.SwapDailyMax,
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
@@ -73,7 +80,7 @@ func run() error {
 
 	errc := make(chan error, 1)
 	go func() {
-		log.Info("listening", "addr", cfg.Addr, "db", cfg.DBPath, "writes", cfg.AdminToken != "")
+		log.Info("listening", "addr", cfg.Addr, "db", cfg.DBPath, "writes", cfg.AdminToken != "", "swap", swapSvc.Configured())
 		errc <- srv.ListenAndServe()
 	}()
 

@@ -143,12 +143,33 @@ func (a *api) address(r *http.Request) (string, bool) {
 
 // requireSession refuses anything without one. Chat routes read the address from here and from
 // nowhere else — never from the body, never from a query parameter.
+//
+// It also refuses a state-changing request that does not say it is JSON. The cookie is
+// SameSite=None, which it has to be — app.helico.site and api.helico.site are different sites —
+// and that means the browser attaches it to requests another site makes. CORS blocks reading the
+// reply, not the sending. A form post of text/plain is a *simple* request: no preflight, cookie
+// attached, and `json.Decoder` will happily read a valid JSON prefix and ignore the trailing `=`.
+//
+// Demanding application/json is what makes the request non-simple, so the browser has to ask
+// first and the origin allow-list gets to refuse. One `if`, and the cross-site write is gone.
+//
+// POST only, because POST is the only state-changing method that can be simple. DELETE already
+// forces a preflight by being DELETE, so demanding a content-type on a request with no body
+// would buy nothing and would surprise anyone holding curl.
 func (a *api) requireSession(next func(http.ResponseWriter, *http.Request, string)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		wallet, ok := a.address(r)
 		if !ok {
 			writeProblem(w, http.StatusUnauthorized, "connect a wallet and sign in first")
 			return
+		}
+		// After the session, not before: the attack this stops is a request that already
+		// carries the cookie, and a caller without one deserves to be told that first.
+		if r.Method == http.MethodPost {
+			if ct := r.Header.Get("Content-Type"); !strings.HasPrefix(strings.ToLower(ct), "application/json") {
+				writeProblem(w, http.StatusUnsupportedMediaType, "send application/json")
+				return
+			}
 		}
 		next(w, r, wallet)
 	}
