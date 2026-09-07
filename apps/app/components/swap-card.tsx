@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { explorerTx, SLIPPAGE_BPS } from "@/lib/chain";
 import type { Intent } from "@/lib/intent";
+import { shortfall } from "@/lib/vault";
 
 /**
  * The words for each transaction. The plugin returns what a step is; what a person reads about
@@ -85,10 +86,7 @@ export function SwapCard({ intent }: { intent: Intent }) {
   });
 
   const amountIn = BigInt(intent.amountInWei);
-  const short =
-    balance.data !== undefined && balance.data < amountIn
-      ? amountIn - balance.data
-      : null;
+  const short = shortfall(balance.data, amountIn);
 
   const run = useMutation({
     mutationFn: async () => {
