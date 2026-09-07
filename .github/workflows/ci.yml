@@ -10,6 +10,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The README's code links are pinned to commits, and `check-readme-links.py` compares
+          # each pin against the working tree. A shallow clone does not have those commits, and
+          # the script says so rather than passing: `cannot compare against … — fetch it`.
+          fetch-depth: 0
       # The backend's vet and tests run through the same Turborepo tasks as everything else.
       - uses: actions/setup-go@v5
         with:
