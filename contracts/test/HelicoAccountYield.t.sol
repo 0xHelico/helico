@@ -93,9 +93,8 @@ contract HelicoAccountYieldTest is Test {
     function test_TheAgentCannotMakeAGeneralCall() public {
         vm.prank(agent);
         vm.expectRevert(abi.encodeWithSelector(HelicoAccount.NotOwner.selector, agent));
-        HelicoAccount(payable(account)).execute(
-            address(token), 0, abi.encodeWithSignature("transfer(address,uint256)", agent, FUNDED)
-        );
+        HelicoAccount(payable(account))
+            .execute(address(token), 0, abi.encodeWithSignature("transfer(address,uint256)", agent, FUNDED));
         assertEq(token.balanceOf(agent), 0);
     }
 

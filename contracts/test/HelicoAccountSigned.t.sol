@@ -135,9 +135,8 @@ contract HelicoAccountSignedTest is Test {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(strangerKey, digest);
 
         vm.expectRevert(abi.encodeWithSelector(HelicoAccount.NotOwner.selector, stranger));
-        HelicoAccount(payable(account)).executeWithSignature(
-            address(token), 0, data, deadline, abi.encodePacked(r, s, v)
-        );
+        HelicoAccount(payable(account))
+            .executeWithSignature(address(token), 0, data, deadline, abi.encodePacked(r, s, v));
     }
 
     function test_AnExpiredAuthorisationIsRefusedBeforeRecovery() public {
@@ -221,11 +220,14 @@ contract HelicoAccountSignedTest is Test {
 
     // ------------------------------------------------------------------------------------
 
-    function _sign(address account, address target, uint256 value, bytes memory data, uint256 n, uint256 deadline)
-        private
-        view
-        returns (bytes memory)
-    {
+    function _sign(
+        address account,
+        address target,
+        uint256 value,
+        bytes memory data,
+        uint256 n,
+        uint256 deadline
+    ) private view returns (bytes memory) {
         bytes32 digest = HelicoAccount(payable(account)).executeDigest(target, value, data, n, deadline);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, digest);
         return abi.encodePacked(r, s, v);

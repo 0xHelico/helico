@@ -37,7 +37,9 @@ library AccountAuth {
         uint256 nonce,
         uint256 deadline
     ) internal view returns (bytes32) {
-        bytes32 structHash = keccak256(abi.encode(EXECUTE_TYPEHASH, target, value, keccak256(data), nonce, deadline));
+        bytes32 structHash = keccak256(
+            abi.encode(EXECUTE_TYPEHASH, target, value, keccak256(data), nonce, deadline)
+        );
         return MessageHashUtils.toTypedDataHash(domainSeparator(account), structHash);
     }
 }

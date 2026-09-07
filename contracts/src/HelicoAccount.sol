@@ -150,11 +150,13 @@ contract HelicoAccount is UUPSUpgradeable {
     /// @notice The digest the owner signs to authorise one call.
     /// @dev Exposed so a frontend signs exactly what this contract will verify, rather than a
     ///      reconstruction of it that can drift.
-    function executeDigest(address target, uint256 value, bytes calldata data, uint256 nonce_, uint256 deadline)
-        public
-        view
-        returns (bytes32)
-    {
+    function executeDigest(
+        address target,
+        uint256 value,
+        bytes calldata data,
+        uint256 nonce_,
+        uint256 deadline
+    ) public view returns (bytes32) {
         return AccountAuth.executeDigest(address(this), target, value, data, nonce_, deadline);
     }
 
@@ -182,7 +184,9 @@ contract HelicoAccount is UUPSUpgradeable {
         uint256 deadline,
         bytes calldata signature
     ) external returns (bytes memory result) {
-        if (block.timestamp > deadline) revert AuthorisationExpired(block.timestamp, deadline);
+        if (block.timestamp > deadline) {
+            revert AuthorisationExpired(block.timestamp, deadline);
+        }
 
         uint256 used = nonce;
         address signer = ECDSA.recover(executeDigest(target, value, data, used, deadline), signature);
