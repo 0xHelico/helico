@@ -22,11 +22,6 @@ interface ILendingVenue {
     ///      arithmetic panic from inside the market.
     function getVirtualUnderlyingBalance(address asset) external view returns (uint128);
 
-    /// @notice Deposit `amount` of `asset` and credit the position to `onBehalfOf`.
-    /// @dev Aave's own signature, referral code included, because it is the market being called.
-    ///      The app only ever passes its own address as `onBehalfOf` — see `HelicoAccount`.
-    function supply(address asset, uint256 amount, address onBehalfOf, uint16 referralCode) external;
-
     /// @notice The receipt token this market issues for `asset`.
     /// @dev The market is asked, never the receipt. A receipt is a contract the maker names in
     ///      their mandate, so anything it says about itself is something the maker could have
