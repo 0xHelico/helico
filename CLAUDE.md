@@ -19,8 +19,47 @@ to put it in, and wrapping it in one would add a layer that proves nothing. The 
 where protocol knowledge lives, not about the directory: `contracts/` owns what is deployed,
 `packages/plugins/` owns what talks to what is deployed.
 
+A user's own account contract lives there too — see the next section for why it is per-owner
+rather than shared, and for the invariants that must hold whatever is built on top of it.
+
 The rules below come from ETHGlobal's official workshops and the event prize page, not
 from guesswork. The research notes behind them are kept outside this repository.
+
+## Contract architecture, and the invariants that must survive any change
+
+Decided 8 September, written down because two of these are one-way doors.
+
+**One account per owner.** A user's tokens live in a contract that is theirs, not in a shared
+one. That contract is the *maker* in Aqua's ledger, it holds its own lending receipts, and it
+unwinds its own position inside a swap. The shared-contract version is in git history; the
+reason it went is that pulling a maker's Aave position requires holding their receipt token,
+and there is no withdraw-on-behalf-of in Aave — so a shared contract would have needed an
+unlimited approval from every user, and one bug would have reached all of them at once.
+
+**The escape hatch is not upgradeable.** The owner may withdraw everything to themselves
+through a function that lives in the proxy, outside any implementation. Code may be replaced
+entirely; that path may not. This exists because the owner chose to let CRE upgrade accounts
+automatically, and that choice is only survivable if there is one door nobody can wall up.
+
+**Aqua's ledger is the only way this code moves someone's tokens.** Never take an ERC-20
+approval to a Helico contract for a user's assets — not for a token, and especially not for a
+lending receipt. An approval outlives the mandate, ignores `maxOut`, and survives `dock`. The
+ledger does none of those things: it is a number the owner shipped, it falls as it is spent,
+and docking destroys it. `ForkAquaHoldsATokens.t.sol` is the proof and should stay green.
+
+**The wallet is spent before any lending market.** A swap that does not need the yield layer
+must never be able to fail because of it.
+
+**Refusals are named, and the quote refuses what the swap refuses.** A lending market's own
+limits surface as arithmetic panics from inside it; a caller cannot read those. And a quote
+that answers for a swap that would revert sends an agent to build a transaction that cannot
+land — this contract's own docblock says so, so violating it is self-contradiction rather than
+a style question.
+
+**A maker with debt is refused, not attempted.** A lending market blocks a borrower from
+withdrawing collateral, so one ordinary borrow would otherwise disable a mandate — and the
+failure would arrive as the market's error, after the mandate looked fine. A borrowing maker
+can also be liquidated out of the position the mandate depends on.
 
 ## Language — team convention, not an ETHGlobal rule
 
