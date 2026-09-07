@@ -13,10 +13,19 @@ dataSources:
     source:
       address: "0x499943E74FB0cE105688beeE8Ef2ABec5D936d31"
       abi: Aqua
-      # The block Aqua first has code at, found by binary searching `eth_getCode` rather than
-      # taken from a block explorer. Indexing from 0 would cost 431 million blocks to reach the
-      # same first event.
-      startBlock: 431256499
+      # The block of Aqua's first event on this chain, found by scanning `eth_getLogs` forward
+      # from 400,000,000.
+      #
+      # It was 431256499 until a review caught it, and the way that number was produced is worth
+      # keeping: a binary search on `eth_getCode`, with `2>/dev/null` on the call. The public RPC
+      # does not serve state that old — it *errors* rather than returning empty — and the
+      # redirect turned every one of those errors into an empty string, which the search read as
+      # "no code yet". So it did not find the deployment. It found the node's pruning boundary,
+      # 28 million blocks too late, sitting in a gap where Aqua happens to have no events at all.
+      #
+      # The cost of that would have been 75 events dropped, 5 of 43 mandates never created, both
+      # `Docked` events missed, and one of the two makers on this chain absent entirely.
+      startBlock: 403010640
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9

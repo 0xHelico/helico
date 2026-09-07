@@ -42,7 +42,14 @@ type Mandate @entity(immutable: false) {
   strategyHash: Bytes!
   "The bytes the maker shipped, verbatim."
   strategy: Bytes!
-  "False once docked. Docking is permanent for this hash — it can never be re-shipped."
+  """
+  True while at least one token under this mandate is still spendable.
+
+  Derived from the ledger rather than from the `Docked` event, because the event is not proof
+  of anything: `dock` with an empty token array emits it and revokes nothing, and a mandate
+  shipped with disjoint token sets can be docked one subset at a time. Aqua's unit of
+  revocation is (maker, app, hash, token) — see `Balance.tokensCount` for the per-token truth.
+  """
   active: Boolean!
   balances: [Balance!]! @derivedFrom(field: "mandate")
   movements: [Movement!]! @derivedFrom(field: "mandate")
@@ -62,6 +69,16 @@ type Balance @entity(immutable: false) {
   token: Bytes!
   "Current spendable amount, as Aqua's ledger holds it."
   amount: BigInt!
+  """
+  Aqua's own three-state sentinel, and the only honest answer to "can this token still be
+  spent?": 0 never shipped, 1–254 active and equal to the token count of the ship that created
+  it, 255 docked.
+
+  Without this the schema models Aqua's key correctly and its state machine incorrectly — a
+  balance would still read as spendable after the maker revoked it, because `dock` zeroes the
+  ledger on chain and emits no per-token event to say so.
+  """
+  tokensCount: Int!
   "Everything ever pulled out, cumulative."
   totalPulled: BigInt!
   "Everything ever pushed in, cumulative — including the initial ship."
