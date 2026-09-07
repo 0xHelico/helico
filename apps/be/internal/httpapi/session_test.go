@@ -439,3 +439,92 @@ func TestTheSessionCookieHasTheAttributesItNeeds(t *testing.T) {
 		t.Errorf("MaxAge is %d, so it would not survive the browser closing", cookie.MaxAge)
 	}
 }
+
+// The login CSRF from #133, confirmed against production before it was fixed: a sign-in body sent
+// as text/plain is a *simple* request, so no preflight happens and the origin allow-list never
+// gets a say. The attacker signs a nonce for their own wallet — entirely legitimate — and posts it
+// from a page the victim opens. The victim is then signed in as the attacker, and everything they
+// type next is written into the attacker's session.
+//
+// The signature here is valid and the wallet is real. The content type is the only thing wrong,
+// which is what makes this a test of the guard rather than of the verifier.
+func TestSignInRefusesABodyThatDoesNotSayItIsJSON(t *testing.T) {
+	srv := newChatServer(t)
+	attacker := newWallet(t, keyAHex)
+	client := srv.Client()
+
+	nonceOf := func() (string, int64) {
+		t.Helper()
+		res, err := client.Get(srv.URL + "/api/session/nonce?address=" + attacker.addr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		var challenge struct {
+			Nonce    string `json:"nonce"`
+			IssuedAt int64  `json:"issuedAt"`
+		}
+		if err := json.NewDecoder(res.Body).Decode(&challenge); err != nil {
+			t.Fatal(err)
+		}
+		return challenge.Nonce, challenge.IssuedAt
+	}
+	bodyFor := func(nonce string, issuedAt int64) []byte {
+		t.Helper()
+		sig := attacker.sign(t, digestFor(t, attacker.addr, nonce, issuedAt))
+		b, _ := json.Marshal(map[string]any{
+			"wallet": attacker.addr, "nonce": nonce, "issuedAt": issuedAt,
+			"signature": "0x" + hex.EncodeToString(sig),
+		})
+		return b
+	}
+
+	for _, contentType := range []string{"text/plain", "application/x-www-form-urlencoded", "multipart/form-data", ""} {
+		name := contentType
+		if name == "" {
+			name = "no content type at all"
+		}
+		t.Run(name, func(t *testing.T) {
+			nonce, issuedAt := nonceOf()
+			req, err := http.NewRequest(http.MethodPost, srv.URL+"/api/session", bytes.NewReader(bodyFor(nonce, issuedAt)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if contentType != "" {
+				req.Header.Set("Content-Type", contentType)
+			}
+			res, err := client.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer res.Body.Close()
+
+			if res.StatusCode != http.StatusUnsupportedMediaType {
+				t.Fatalf("status = %d, want 415", res.StatusCode)
+			}
+			// The status matters less than this: a browser that is refused must not be holding a
+			// session afterwards.
+			if cookies := res.Cookies(); len(cookies) != 0 {
+				t.Fatalf("a refused sign-in set %d cookie(s)", len(cookies))
+			}
+		})
+	}
+
+	// And the same body, changing nothing but the content type, still works — otherwise this test
+	// would pass just as well against a sign-in route that was broken outright.
+	t.Run("application/json is still accepted", func(t *testing.T) {
+		nonce, issuedAt := nonceOf()
+		res, err := client.Post(srv.URL+"/api/session", "application/json", bytes.NewReader(bodyFor(nonce, issuedAt)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		if res.StatusCode != http.StatusOK {
+			msg, _ := io.ReadAll(res.Body)
+			t.Fatalf("status = %d, want 200: %s", res.StatusCode, msg)
+		}
+		if len(res.Cookies()) == 0 {
+			t.Fatal("an accepted sign-in set no cookie")
+		}
+	})
+}

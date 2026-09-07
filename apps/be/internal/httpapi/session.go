@@ -40,8 +40,40 @@ func (a *api) nonce(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// refusedNonJSON refuses a state-changing request that does not say it is JSON, and reports
+// whether it did. Demanding application/json is what makes a request non-simple: the browser
+// must preflight, and the origin allow-list gets to refuse before anything is written or set.
+//
+// Both writing routes need it, and for different reasons. requireSession guards a request that
+// already carries the cookie. signIn guards the request that *creates* one, which is the
+// heavier of the two: an attacker fetches a nonce for their own wallet, signs it with their own
+// key — both legitimate — and posts it from a page the victim opens. The victim is then signed
+// in as the attacker, and everything they type afterwards is stored in the attacker's session.
+//
+// SameSite does not cover that one. A cross-site POST response may still store its cookie; what
+// SameSite decides is whether the cookie is *sent* later, and by the victim's next visit to the
+// app the request is same-site and it is sent. So this check, not the cookie policy, is what
+// closes it.
+//
+// POST only, because POST is the only state-changing method that can be simple. DELETE already
+// forces a preflight by being DELETE, so demanding a content-type on a request with no body
+// would buy nothing and would surprise anyone holding curl.
+func refusedNonJSON(w http.ResponseWriter, r *http.Request) bool {
+	if r.Method != http.MethodPost {
+		return false
+	}
+	if ct := r.Header.Get("Content-Type"); strings.HasPrefix(strings.ToLower(ct), "application/json") {
+		return false
+	}
+	writeProblem(w, http.StatusUnsupportedMediaType, "send application/json")
+	return true
+}
+
 // signIn verifies the signature, spends the nonce, and sets the cookie.
 func (a *api) signIn(w http.ResponseWriter, r *http.Request) {
+	if refusedNonJSON(w, r) {
+		return
+	}
 	var body struct {
 		Wallet    string `json:"wallet"`
 		Nonce     string `json:"nonce"`
@@ -175,11 +207,8 @@ func (a *api) requireSession(next func(http.ResponseWriter, *http.Request, strin
 		}
 		// After the session, not before: the attack this stops is a request that already
 		// carries the cookie, and a caller without one deserves to be told that first.
-		if r.Method == http.MethodPost {
-			if ct := r.Header.Get("Content-Type"); !strings.HasPrefix(strings.ToLower(ct), "application/json") {
-				writeProblem(w, http.StatusUnsupportedMediaType, "send application/json")
-				return
-			}
+		if refusedNonJSON(w, r) {
+			return
 		}
 		next(w, r, wallet)
 	}
