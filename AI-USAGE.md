@@ -18,6 +18,12 @@ proven to work**.
 | Claude Code | Fable 5.1 | Monorepo tooling — bun workspaces (started on pnpm), Turborepo, Biome, Husky, `packages/` scaffold |
 | Claude Code | Fable 5.1 | Landing page starter (`apps/landing`), its plan and README |
 
+> **`packages/plugins/uniswap` was removed on 8 September.** Uniswap stopped being a submitted
+> track when the three became Chainlink, 1inch and The Graph (#125), and nothing imported the
+> plugin. The rows below are left as written: this file records what AI was used for and when,
+> so deleting the entries because the code is gone would misreport the work that happened.
+
+
 ## Log
 
 Format: date · what was done · the AI's role · what a human verified.
