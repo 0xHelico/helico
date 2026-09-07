@@ -113,9 +113,19 @@ caught.** What that turned up, and the four limits it did not fix, are in
 
 ### The Graph
 
-> ⚠️ **Built, not deployed.** The subgraph is in [`subgraph/`](subgraph/) with 8 passing tests.
-> It has not been deployed to Subgraph Studio yet, and nothing queries it, so no part of the
-> product depends on it today. This paragraph changes when that does.
+> **Deployed to Subgraph Studio and answering live queries**, as of 7 September. The subgraph is
+> in [`subgraph/`](subgraph/); `@helico/plugin-thegraph` queries it; one command shows what comes
+> back:
+>
+> ```sh
+> bun scripts/check-subgraph.ts
+> ```
+>
+> ⚠️ **It is still indexing.** Aqua's first event is at block 403,010,640 and Arbitrum One's head
+> is past 502,700,000; the subgraph was at 421,065,750 when this was written — roughly 18% of the
+> range, and answering every query happily with that partial view. A syncing subgraph does not say
+> so in its results, so treat any count read from it today as a floor, not a total. `_meta` is what
+> tells the truth, and the check script prints it first for that reason.
 
 Aqua cannot answer the question an agent has to ask first.
 
@@ -137,9 +147,25 @@ an agent deciding what it is permitted to do for a wallet that just connected, t
 performance problem — it is the problem. An indexer is the only answer, which is what makes this
 load-bearing rather than decorative.
 
-Planned: a subgraph over Aqua on Arbitrum One filtered to our app, consumed by the enclave as a
-second private input alongside the mandate thresholds, and the Subgraph MCP server so the agent
-discovers the schema rather than having it hard-coded.
+The subgraph answers exactly that, and `makerMandates` in `@helico/plugin-thegraph` is the call
+that asks. Against the live endpoint today, for the one maker with mandates on this chain:
+
+```
+maker     0xf54ec0f6996b46b71b8d0c05f8430d2e8ed9413c
+mandates  5, of which 3 still active
+
+still spendable, summed across active mandates:
+  0x912ce59144191c1204e64559fe8253a0e49e6548  26123108069692542503
+  0xaf88d065e77c8cc2239327c5edb3a432268e5831  2401625
+```
+
+Not our wallet and not our app — that is the point. It is the real Aqua on Arbitrum One, read
+through the same code path the product uses, and the two docked mandates come back marked docked
+with their ledgers zeroed, which is the distinction the schema exists to preserve.
+
+Still planned: the enclave consuming this as a second private input alongside the mandate
+thresholds, and the Subgraph MCP server so the agent discovers the schema rather than having it
+hard-coded.
 
 | What | Where |
 |---|---|

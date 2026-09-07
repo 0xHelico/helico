@@ -1,6 +1,11 @@
 import type { Subgraph } from './types'
 
-/** What a caller must supply to reach the network. Never logged, never defaulted. */
+/**
+ * What a caller must supply to reach the network. Never logged.
+ *
+ * A Studio subgraph takes no key, so an empty one is not an error there. A gateway subgraph with
+ * an empty key still is.
+ */
 export type GraphAuth = {
 	/** A Graph Network gateway key. In the enclave this arrives as a secret, not from an env. */
 	apiKey: string
@@ -20,6 +25,17 @@ export type GraphAuth = {
  */
 export function gateway(subgraph: Subgraph): string {
 	return `https://gateway.thegraph.com/api/subgraphs/id/${subgraph.id}`
+}
+
+/**
+ * Where a subgraph actually is: its Studio URL when it has one, the gateway otherwise.
+ *
+ * A subgraph deployed to Studio has no network id to route by, and a published one has no URL.
+ * Which of the two a `Subgraph` carries is therefore also the answer to whether a key is needed,
+ * which is why `query` asks this rather than being told twice.
+ */
+export function endpoint(subgraph: Subgraph): string {
+	return subgraph.url ?? gateway(subgraph)
 }
 
 export type GraphResponse<T> = { data?: T; errors?: { message: string }[] }
@@ -42,14 +58,20 @@ export async function query<T>(
 	variables: Record<string, unknown> = {},
 	fetchImpl: typeof fetch = fetch,
 ): Promise<T> {
-	if (!auth.apiKey) {
+	// Studio takes no key, and demanding one would refuse a request that would have worked. The
+	// gateway takes nothing else, and a request without one is refused there with a message about
+	// authorisation rather than about the key — so it is worth refusing here, where the message can
+	// say which subgraph.
+	const url = endpoint(subgraph)
+	const viaGateway = subgraph.url === undefined
+	if (viaGateway && !auth.apiKey) {
 		throw new Error(`No Graph API key for ${subgraph.name}`)
 	}
-	const res = await fetchImpl(gateway(subgraph), {
+	const res = await fetchImpl(url, {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
-			Authorization: `Bearer ${auth.apiKey}`,
+			...(viaGateway ? { Authorization: `Bearer ${auth.apiKey}` } : {}),
 		},
 		body: JSON.stringify({ query: document, variables }),
 	})

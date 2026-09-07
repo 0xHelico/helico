@@ -1,6 +1,7 @@
 {
 	"$schema": "https://turbo.build/schema.json",
 	"globalDependencies": ["tsconfig.base.json", "bun.lock"],
+	"globalPassThroughEnv": ["GRAPH_STUDIO_URL"],
 	"tasks": {
 		"build": {
 			"dependsOn": ["^build"],
