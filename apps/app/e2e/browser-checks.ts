@@ -195,28 +195,39 @@ const browser = await chromium.launch();
     /limits it works inside/.test(text),
   );
   check(
-    "and lists what may be asked for",
-    /What it may be asked for/.test(text),
+    "it lists the authority on offer",
+    /What it may be allowed to do/.test(text),
   );
-  check("saying which are answered today", /you can ask for this/.test(text));
-  check("and which are not", /not wired yet/.test(text));
+  check("the limits themselves", /The limits you set/.test(text));
+  check("and the sentences it answers", /What you can ask it/.test(text));
+  check("and which capabilities are not wired", /not wired yet/.test(text));
   check(
     "the composer is not on it",
     (await page.getByPlaceholder(/Ask anything/i).count()) === 0,
   );
 
-  // A capability nobody has wired must be inert, not merely styled as inert — the one mistake
-  // here costs the submission rather than a mark.
-  const locked = page.locator("li", { hasText: "not wired yet" }).first();
+  // A grant nobody has wired must be genuinely unmovable rather than merely dimmed. At most one
+  // switch on this page is operable — the real one — and it is only operable when a vault and a
+  // wallet are both present, so "none" is also correct here.
+  const switches = page.getByRole("switch");
+  const total = await switches.count();
+  let operable = 0;
+  for (let i = 0; i < total; i++) {
+    if (await switches.nth(i).isEnabled()) {
+      operable++;
+    }
+  }
+  check("more than one capability is shown", total > 1, `${total} switches`);
   check(
-    "an unwired capability is not a link",
-    (await locked.locator("a").count()) === 0,
+    "and at most one of them can be operated",
+    operable <= 1,
+    `${operable} operable`,
   );
 
-  await page.getByRole("link", { name: /say it in a sentence/i }).click();
+  await page.getByRole("link", { name: /Swap/ }).first().click();
   await page.waitForTimeout(2000);
   check(
-    "and the conversation is one click away",
+    "an ask opens the conversation",
     (await page.getByPlaceholder(/Ask anything/i).count()) > 0,
   );
   check("which lives at /chat", new URL(page.url()).pathname === "/chat");
