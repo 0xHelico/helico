@@ -77,6 +77,11 @@ deploys the vault.
 
 ## ⚠️ A transaction hash is not evidence here
 
+This section is about **forwarder delivery**, which `rehearse.sh` uses and the idle-capital
+workflow does not — it signs instead. The rule generalises anyway, and `rehearse-idle.sh` applies
+it for a different reason: it checks the account's balances rather than the transaction, because a
+call that succeeds and moves nothing is indistinguishable from one that worked.
+
 `KeystoneForwarder` calls the receiver inside a `try`. **If `onReport` reverts, the forwarder
 swallows it and the transaction still succeeds.** So the workflow prints
 `RECENTER … tx 0x…`, the receipt says `status 1`, and nothing moved.
@@ -97,7 +102,7 @@ That check is what found [#78](https://github.com/0xHelico/helico/issues/78).
 | | |
 |---|---|
 | `project.yaml` | RPC per target. `staging-settings` is the local fork; `production-settings` is Arbitrum One |
-| `secrets.yaml` | Vault DON secret ids. Six of the mandate's seven fields, plus the agent key |
+| `secrets.yaml` | Vault DON secret ids. The idle-capital policy, the agent key, and the model's two auth layers |
 | `workflow/workflow.yaml` | Workflow name and artefact paths per target |
 | `workflow/main.ts` | The entry point. Four lines around `@helico/plugin-cre` |
 | `workflow/config.staging.json` | Public config for the fork. Rewritten by `rehearse.sh` |
