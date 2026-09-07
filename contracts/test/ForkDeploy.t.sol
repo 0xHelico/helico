@@ -76,6 +76,31 @@ contract ForkDeployTest is ArbitrumFork {
     }
 
     /// @notice A mainnet script that runs anywhere is one that eventually runs somewhere else.
+    /// @notice The implementation behind the proxy cannot be initialised by anyone.
+    ///
+    /// @dev `HelicoVault`'s constructor calls `_disableInitializers()`, and until now nothing
+    ///      failed if that line were deleted. It is one line guarding a real property: an
+    ///      uninitialised UUPS implementation can be initialised by whoever reaches it first,
+    ///      and `initialize` hands out `DEFAULT_ADMIN_ROLE` — on the implementation, which is
+    ///      then an admin holding the upgrade authority the proxy delegates into.
+    ///
+    ///      The proxy's own protection was already deliberate and is documented on `Deploy`:
+    ///      the initialise call is passed into the `ERC1967Proxy` constructor, so the window
+    ///      never exists. This covers the other half, which had the comment but no test.
+    function test_TheImplementationCannotBeInitialised() public {
+        HelicoVault implementation = new HelicoVault();
+
+        // OpenZeppelin's `InvalidInitialization()`. Asserted as the specific error rather than
+        // any revert, so a constructor that reverted for some unrelated reason would not pass.
+        vm.expectRevert(bytes4(0xf92ee8a9));
+        implementation.initialize(address(this), address(this), address(this), address(this));
+
+        assertFalse(
+            implementation.hasRole(implementation.DEFAULT_ADMIN_ROLE(), address(this)),
+            "and nobody walked away holding the admin role"
+        );
+    }
+
     function test_RefusesToRunOnAnotherChain() public {
         _fork();
         script = new Deploy();
