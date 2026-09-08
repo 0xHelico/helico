@@ -1,9 +1,7 @@
 "use client";
 
 import { useAppKit } from "@reown/appkit/react";
-import { MoonIcon, SunIcon } from "lucide-react";
 import Image from "next/image";
-import { useTheme } from "next-themes";
 import { useAccount, useDisconnect } from "wagmi";
 import { Aurora } from "@/components/chat/aurora";
 import { ExampleExchange } from "@/components/chat/example-exchange";
@@ -33,7 +31,6 @@ export function ConnectGate() {
   const { disconnect } = useDisconnect();
   const { address, isConnected } = useAccount();
   const session = useHelicoSession();
-  const { resolvedTheme, setTheme } = useTheme();
 
   const current = isConnected ? 1 : 0;
 
@@ -106,21 +103,6 @@ export function ConnectGate() {
       </section>
 
       <section className="relative flex flex-1 flex-col items-center justify-center overflow-y-auto px-4 py-12 sm:px-12 lg:px-16 xl:px-24">
-        {/* The only theme control before the gate; the rest live in the sidebar behind it. */}
-        <Button
-          aria-label="Toggle theme"
-          className="absolute top-4 right-4"
-          onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-          size="icon"
-          variant="ghost"
-        >
-          {resolvedTheme === "dark" ? (
-            <SunIcon className="size-4" />
-          ) : (
-            <MoonIcon className="size-4" />
-          )}
-        </Button>
-
         <div className="w-full max-w-lg space-y-8">
           <div className="stagger" style={{ animationDelay: "0.2s" }}>
             <h2 className="font-medium text-3xl tracking-tight">
