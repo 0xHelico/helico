@@ -51,11 +51,15 @@ out.
 
 | What | Where |
 |---|---|
-| `handlerInTee`, and the confidential handler | [`plugins/cre/src/index.ts`](packages/plugins/cre/src/index.ts) |
-| The decision — target split, then deadband | [`src/decision.ts`](packages/plugins/cre/src/decision.ts) |
-| The policy, and why it is secret rather than on chain | [`src/policy.ts`](packages/plugins/cre/src/policy.ts) |
-| Chain reads from inside the enclave | [`src/chain.ts`](packages/plugins/cre/src/chain.ts) |
-| The EIP-712 statement the enclave signs | [`src/sign.ts`](packages/plugins/cre/src/sign.ts) |
+| `handlerInTee`, the registration the prize asks for | [`index.ts#L649-L657`](https://github.com/0xHelico/helico/blob/f6f2fc6695e030d8a6918a863470299fcb8dd179/packages/plugins/cre/src/index.ts#L649-L657) |
+| The enclave callback, every step of a run | [`index.ts#L470-L596`](https://github.com/0xHelico/helico/blob/f6f2fc6695e030d8a6918a863470299fcb8dd179/packages/plugins/cre/src/index.ts#L470-L596) |
+| One account read and judged | [`index.ts#L344-L384`](https://github.com/0xHelico/helico/blob/f6f2fc6695e030d8a6918a863470299fcb8dd179/packages/plugins/cre/src/index.ts#L344-L384) |
+| The split, the deadband, and the market chosen | [`decision.ts#L152-L193`](https://github.com/0xHelico/helico/blob/f6f2fc6695e030d8a6918a863470299fcb8dd179/packages/plugins/cre/src/decision.ts#L152-L193) |
+| The policy, released only into the enclave | [`policy.ts#L146-L157`](https://github.com/0xHelico/helico/blob/f6f2fc6695e030d8a6918a863470299fcb8dd179/packages/plugins/cre/src/policy.ts#L146-L157) |
+| Its hash, which the enclave recomputes before touching the chain | [`policy.ts#L79-L91`](https://github.com/0xHelico/helico/blob/f6f2fc6695e030d8a6918a863470299fcb8dd179/packages/plugins/cre/src/policy.ts#L79-L91) |
+| The EIP-712 statement it signs | [`sign.ts#L76-L86`](https://github.com/0xHelico/helico/blob/f6f2fc6695e030d8a6918a863470299fcb8dd179/packages/plugins/cre/src/sign.ts#L76-L86) |
+| The buffer sized from live Aqua mandates | [`subgraph.ts#L431-L449`](https://github.com/0xHelico/helico/blob/f6f2fc6695e030d8a6918a863470299fcb8dd179/packages/plugins/cre/src/subgraph.ts#L431-L449) |
+| Which may only raise the owner's floor, never lower it | [`subgraph.ts#L463-L466`](https://github.com/0xHelico/helico/blob/f6f2fc6695e030d8a6918a863470299fcb8dd179/packages/plugins/cre/src/subgraph.ts#L463-L466) |
 | The account that accepts it, and what it refuses | [`HelicoAccount.sol`](contracts/src/HelicoAccount.sol) |
 
 **Run it:** `cp apps/cre/.env.example apps/cre/.env && cd apps/cre && ./rehearse-idle.sh`
@@ -187,6 +191,16 @@ deployment 1inch does not call Aqua. The canonical one is
 `0x1111113CCf1426A8E30e2bfF5E005d929bF6a90a`, confirmed by their SDK constant and by the deployed
 router's own bytecode — not by event counts, which pick the wrong contract, or by recent event
 counts, which pick the right one by luck.
+
+
+| What | Where |
+|---|---|
+| The question the chain cannot answer, asked and paged to the end | [`mandates.ts#L115-L141`](https://github.com/0xHelico/helico/blob/f6f2fc6695e030d8a6918a863470299fcb8dd179/packages/plugins/thegraph/src/mandates.ts#L115-L141) |
+| A docked mandate kept distinct from an empty one | [`mandates.ts#L62-L81`](https://github.com/0xHelico/helico/blob/f6f2fc6695e030d8a6918a863470299fcb8dd179/packages/plugins/thegraph/src/mandates.ts#L62-L81) |
+| What is still spendable, summed across live mandates | [`mandates.ts#L84-L94`](https://github.com/0xHelico/helico/blob/f6f2fc6695e030d8a6918a863470299fcb8dd179/packages/plugins/thegraph/src/mandates.ts#L84-L94) |
+| Studio without a key, the gateway with one | [`client.ts#L59-L95`](https://github.com/0xHelico/helico/blob/f6f2fc6695e030d8a6918a863470299fcb8dd179/packages/plugins/thegraph/src/client.ts#L59-L95) |
+| The accounts the enclave discovers from the index | [`subgraph.ts#L191-L205`](https://github.com/0xHelico/helico/blob/f6f2fc6695e030d8a6918a863470299fcb8dd179/packages/plugins/cre/src/subgraph.ts#L191-L205) |
+| The subgraph itself | [`subgraph/`](subgraph/) |
 
 ### Uniswap v4 — real, tested, not a submitted track
 
