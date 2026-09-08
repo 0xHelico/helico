@@ -6,21 +6,46 @@ stop a deploy halfway and are cheapest to answer while nothing is at stake.
 Order matters for one reason: **CRE has nothing to read until an account exists.**
 `config.production.json` names an account, and the workflow's first act is to read its state.
 
-## Answer these first
+## The keys, and what they cost
 
-- [ ] **Which wallet holds the gas?** The deploy scripts document `--account helico-deployer`, and
-      `cast wallet list` does not show one. Whatever the keystore is actually called, the same name
-      has to go in every command below.
-- [ ] **What address does CRE sign with in production?** In the rehearsal the agent is anvil's
-      second account, released as `SECRET_AGENT_KEY`. In production that key lives in the Vault DON
-      and never leaves the enclave — so it has to be generated, stored as a DON secret, and its
-      **address** written into `config.production.json` as `agent`. The account is then told to
-      trust that address. Nothing else in the deploy can be done twice as cheaply as this one, so
-      settle it first.
-- [ ] **Who is `ACCOUNT_UPGRADER`?** Defaults to zero, which means only owners can ever change
-      their own account's code. Setting it hands that power to a key. Ghoza decided CRE may
-      upgrade automatically ([`2026-09-08-one-account-per-owner.md`](plans/2026-09-08-one-account-per-owner.md));
-      if that still holds, this is the same enclave address as `agent`.
+Both live in the source-of-truth `.env`, which is gitignored and untracked. Read as text, never
+sourced, and passed to `cast` as `--private-key "$(…)"` at the moment of use — no keystore, no
+password to remember.
+
+| | address | holds |
+|---|---|---|
+| `DEPLOYER_PRIVATE_KEY` | `0x6DCd7485aB17e0CBD0723b8435a35bb8d029439E` | 0.0149 ETH |
+| `AGENT_PRIVATE_KEY` | `0x84C3891a9693c891877aC474a90d17d29075fcAf` | 0.0100 ETH |
+
+Both were at nonce 0 — never used. The agent was funded from the deployer in
+[`0xa9282b81…`](https://arbiscan.io/tx/0xa9282b810f04668d2bbea6718344cbf6f7ec88b629c5d5c75cecc079dd5f665c),
+block 502,878,733.
+
+### Why the agent needs gas at all
+
+Easy to miss, because it sounds like a key that only signs.
+
+`supplyIdle` and `withdrawIdle` check `msg.sender == agent`, so **the agent address sends its own
+transactions**. The EIP-712 statement the enclave produces is the enclave attesting to what it
+decided; it is not what authorises the call.
+
+That is a real constraint on the design, not a detail: making these moves relayable would need a
+signature-accepting variant of `supplyIdle`, the way `executeWithSignature` works for the owner.
+Not today's work, but better known now than discovered when the agent's wallet empties.
+
+At 0.02 gwei — Arbitrum's price while this was written — each move costs on the order of
+0.00005 ETH, so the agent's balance covers hundreds of them.
+
+## Still to answer
+
+- [ ] **Is `AGENT_PRIVATE_KEY` also `ACCOUNT_UPGRADER`?** Ghoza's note says it is. That means one
+      key both moves idle capital and can replace an account's code, and upgrades are immediate
+      because the delay was removed for the hackathon. It is a deliberate concentration and worth
+      re-confirming out loud before it is baked into a deployment — the escape hatch is what
+      remains if it is ever wrong, and it is in the proxy where no upgrade reaches it.
+- [ ] **The production agent key must be the DON's, eventually.** For the hackathon this key is on
+      a laptop, which is not what "the key never leaves the enclave" means. Fine for a demo; say so
+      rather than implying otherwise.
 
 ## Preconditions
 
@@ -33,9 +58,10 @@ Order matters for one reason: **CRE has nothing to read until an account exists.
 
 ```bash
 cd contracts
-ACCOUNT_UPGRADER=<enclave address, or omit for none> \
+KEY=$(python3 -c "import re,pathlib;print(re.search(r'^DEPLOYER_PRIVATE_KEY=(.*)$',pathlib.Path('<source-of-truth>/.env').read_text(),re.M).group(1).strip())")
+ACCOUNT_UPGRADER=0x84C3891a9693c891877aC474a90d17d29075fcAf \
 forge script script/DeployAccountFactory.s.sol:DeployAccountFactory \
-  --rpc-url $ARBITRUM_RPC_URL --broadcast --account <keystore>
+  --rpc-url $ARBITRUM_RPC_URL --broadcast --private-key "$KEY"
 ```
 
 The script refuses any chain that is not 42161, and after broadcasting it checks two things
@@ -49,7 +75,7 @@ those two lines has already verified itself.
 
 ```bash
 cast call  $FACTORY 'accountFor(address)(address)' $OWNER --rpc-url $ARBITRUM_RPC_URL
-cast send  $FACTORY 'open(address)' $OWNER --rpc-url $ARBITRUM_RPC_URL --account <keystore>
+cast send  $FACTORY 'open(address)' $OWNER --rpc-url $ARBITRUM_RPC_URL --private-key "$KEY"
 ```
 
 The address printed by the first command must equal the one the second produces. That is the
@@ -59,9 +85,9 @@ Then, **as the owner**:
 
 ```bash
 cast send $ACCOUNT 'permitVenue(address,bool)' 0x794a61358D6845594F94dc1DB02A252b5b4814aD true \
-  --rpc-url $ARBITRUM_RPC_URL --account <owner keystore>
+  --rpc-url $ARBITRUM_RPC_URL --private-key "$OWNER_KEY"
 cast send $ACCOUNT 'setAgent(address)' $AGENT \
-  --rpc-url $ARBITRUM_RPC_URL --account <owner keystore>
+  --rpc-url $ARBITRUM_RPC_URL --private-key "$OWNER_KEY"
 ```
 
 **Verify before moving on**, because the workflow refuses to act if either is wrong:
@@ -78,7 +104,7 @@ cast call $ACCOUNT 'permittedVenue(address)(bool)' 0x794a61358D6845594F94dc1DB02
 | Field | Value |
 |---|---|
 | `account` | from step 2 |
-| `agent` | the enclave's address, the same one `setAgent` was given |
+| `agent` | `0x84C3891a9693c891877aC474a90d17d29075fcAf`, the same address `setAgent` was given |
 | `pools` | `["0x794a61358D6845594F94dc1DB02A252b5b4814aD"]` |
 | `asset` | USDC, already correct |
 | `reportReceiver` | leave zero — `delivery` is `signature`, and `deliver` refuses to write to an address with no code |
