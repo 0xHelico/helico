@@ -199,7 +199,29 @@ export function decide(
 	if (state.agent.toLowerCase() !== config.agent)
 		return { act: false, reason: 'the account has not nominated this agent' }
 
-	const { usable, skipped } = eligibleVenues(config.asset, state.venues)
+	const { usable, skipped, evacuate } = eligibleVenues(config.asset, state.venues)
+
+	// An evacuation outranks everything below it. The owner revoked a market this account is
+	// sitting in, and that is an instruction rather than one more input to the split — holding
+	// beside the money would leave it exactly where the owner said they did not want it.
+	//
+	// Sizing and the deadband are skipped on purpose. Both exist to suppress moves that are not
+	// worth their gas; this move was asked for, and a position too small to clear the deadband is
+	// the one most worth finishing rather than leaving behind.
+	const [leaving] = evacuate
+	if (leaving)
+		return {
+			act: true,
+			params: {
+				account: config.account as Address,
+				pool: leaving.pool,
+				asset: config.asset as Address,
+				amount: leaving.amount,
+				supply: false,
+				deadline: BigInt(now + config.deadlineSeconds),
+			},
+		}
+
 	// With nothing usable there is no decision to hold on, only a list of markets and the reason
 	// each was refused. A configuration naming one market keeps that market's own sentence, which
 	// is what an owner running a single-venue account needs to read; several markets get every
