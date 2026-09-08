@@ -106,14 +106,18 @@ export const configShape = {
 	/**
 	 * The Vault DON namespace the secrets live in.
 	 *
-	 * `SecretRequest` carries an id **and a namespace**, and omitting the second sends the empty
-	 * string — which is not where `cre secrets create` writes. Every node then looks for a secret
-	 * that is not there and answers with an error, and enough of those become
-	 * `relay quorum unreachable: 0 signed responses`, which reads like the DON is down rather
-	 * than like a request for the wrong shelf. That message cost two deploys to see through.
+	 * `main` is the CLI's default, what `cre secrets list` reports against every identifier we
+	 * hold, and what an omitted namespace resolves to — so naming it changes nothing today. It is
+	 * here to be nameable, not because it was the bug.
 	 *
-	 * `main` is the CLI's default and what `cre secrets list` reports against every identifier
-	 * we hold.
+	 * **It was written as the bug, and that was wrong.** `SecretRequest` carries a namespace and
+	 * ours was empty, which looked like the cause of `relay quorum unreachable` — a message that
+	 * reads like the DON is down. Chainlink's own skill reference settles it: the field is
+	 * optional and defaults to `main`. The actual cause was the workflow declaring access to
+	 * eight of the eleven secrets it asks for; see `apps/cre/secrets.yaml`.
+	 *
+	 * Kept rather than reverted because a namespace nobody names is how a workflow ends up
+	 * reading someone else's, the day a second namespace exists.
 	 */
 	secretsNamespace: z.string().default('main'),
 	/**
