@@ -88,6 +88,11 @@ jobs:
         run: python3 scripts/check-no-payable.py
       - name: Storage layout is upgrade-safe
         run: python3 scripts/check-storage-layout.py
+      # The manifest and the upload files are edited separately and must add up. Drift either way
+      # is invisible until a deployed run fails at secret retrieval, with a message that reads
+      # like a DON outage. Raised by @rifkyeasy reviewing #232.
+      - name: Check the CRE secrets manifest against its uploads
+        run: python3 scripts/check-cre-secrets.py
       - name: Test
         working-directory: contracts
         # ARBITRUM_RPC_URL is deliberately unset here, so the fork suite reports SKIP rather
