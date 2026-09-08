@@ -422,24 +422,19 @@ function holdLine(judged: Judged[], fleet: string): string {
 }
 
 /**
- * The most secret ids one request may carry.
+ * Every secret the run needs, asked for one at a time.
  *
- * `cre secrets create` states this limit out loud — *"cannot have more than 10 items in a single
- * payload"* — and the retrieval side does not: it answers a batch of eleven with
- * `relay quorum unreachable: 0 signed responses, need 4`, which reads like the DON is down.
+ * **Not `getSecrets`, and that is the whole point.** The batch form is what every production run
+ * failed on: `batch secret retrieval failed for 11 request(s)` — then `for 10`, after chunking
+ * changed the count and nothing else. Chainlink's own reference for Confidential Workflows shows
+ * the singular form at the point of use and says *"nothing declared upfront"*; the batch form
+ * appears only in the non-TEE examples. `SecretsProvider` exposes both, so the type system does
+ * not choose for you.
  *
- * The first production run failed exactly that way, on exactly eleven requests: seven policy
- * values, the agent key, and three model-router credentials. Nothing in a simulator reaches it,
- * because a simulated run reads secrets from the environment and never asks a DON at all.
- */
-const MAX_SECRETS_PER_REQUEST = 10
-
-/**
- * Every secret the run needs, asked for in requests the relay will answer.
- *
- * Chunked rather than capped: the list grows with configuration — turning the model on adds
- * three — so a limit that silently drops the tail would take the agent key with it on some
- * configurations and not others.
+ * The diagnostic gain stands even if the enclave turns out to accept batches. A batch that fails
+ * names the count and not the secret, so eleven ids fail as one opaque event; one at a time, the
+ * failure names the id, and `AGENT_KEY` failing is a different sentence from `AI_API_KEY` failing.
+ * That distinction cost three wrong hypotheses to not have.
  */
 function readSecrets(
 	runtime: TeeRuntime<Config>,
@@ -447,9 +442,8 @@ function readSecrets(
 	namespace: string,
 ): Record<string, { value: string }> {
 	const all: Record<string, { value: string }> = {}
-	for (let i = 0; i < ids.length; i += MAX_SECRETS_PER_REQUEST) {
-		const batch = ids.slice(i, i + MAX_SECRETS_PER_REQUEST)
-		Object.assign(all, runtime.getSecrets(batch.map((id) => ({ id, namespace }))).result())
+	for (const id of ids) {
+		all[id] = runtime.getSecret({ id, namespace }).result()
 	}
 	return all
 }

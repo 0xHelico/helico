@@ -132,6 +132,18 @@ export function fakeRuntime(input: {
 	}
 	const runtime = {
 		...don,
+		/** The singular form, which is what a TEE handler uses. */
+		getSecret: (request: { id: string; namespace?: string }) => {
+			secretRequests.push(request.id)
+			secretBatches.push([{ ...request }])
+			return {
+				result: () => ({
+					id: request.id,
+					namespace: request.namespace ?? 'main',
+					value: input.secrets[request.id] ?? '',
+				}),
+			}
+		},
 		getSecrets: (requests: { id: string }[]) => {
 			secretRequests.push(...requests.map((r) => r.id))
 			// The boundaries too, not only the ids. A flat list cannot tell one request for
