@@ -5,7 +5,9 @@
 # verdict back, so unlike the template it genuinely needs an RPC.
 #
 # `staging-settings` points at a LOCAL FORK of Arbitrum One. That is the target
-# you can run today: the vault is not on a live network yet, and the workflow
+# you can run today. NOTE: this describes the retiring Uniswap v4 path; the
+# workflow now manages idle capital in a lending market. The vault is not on a
+# live network, and the workflow
 # has nothing to read without one. `rehearse.sh` starts the fork, deploys the
 # vault onto it, and gives the position something to be out of range about.
 #

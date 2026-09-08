@@ -10,25 +10,27 @@ import {
 } from '@chainlink/cre-sdk'
 import { type Address, encodeAbiParameters, type Hex, zeroAddress } from 'viem'
 import { z } from 'zod'
-import { type RecenterParams, recenterParamsAbi } from './abi'
+import { type IdleMoveParams, idleMoveParamsAbi } from './abi'
 import { AI_SECRET_IDS, describeForOwner, explain } from './ai'
-import { type ChainState, poolIdOf, readChainState } from './chain'
-import { decideRecentre, type Verdict } from './decision'
-import { MANDATE_SECRET_IDS, type Mandate, mandateFromSecrets, mandateHash } from './mandate'
-import { type Authorisation, encodeAuthorisation, type RecentreDomain, signRecentre } from './sign'
-import { sizeRecentre } from './sizing'
+import { type AccountState, readAccountState } from './chain'
+import { decideIdleMove, targetSplit } from './decision'
+import { type IdlePolicy, POLICY_SECRET_IDS, policyFromSecrets, policyHash } from './policy'
+import { encodeIdleMove } from './relay'
+import { type Authorisation, encodeAuthorisation, type IdleMoveDomain, signIdleMove } from './sign'
+import { sizeIdleMove } from './sizing'
 
 export * from './abi'
 export * from './ai'
 export * from './chain'
 export * from './decision'
 export * from './mandate'
-export * from './math'
+export * from './policy'
 export * from './relay'
 export * from './sign'
 export * from './sizing'
 
-// Lowercased so a checksummed value in config compares equal to keccak output and to what we encode.
+// Lowercased so a checksummed value in config compares equal to keccak output, to what an
+// `eth_call` decodes to, and to what we encode.
 const hex = (bytes: number) =>
 	z
 		.string()
@@ -36,49 +38,67 @@ const hex = (bytes: number) =>
 		.transform((v) => v.toLowerCase())
 
 // ─── Public config ───────────────────────────────────────────
-// Everything here is visible to node operators. The mandate's thresholds come from secrets;
-// the position, its range, and the cooldown are read from the vault, which is the source of truth.
+// Everything here is visible to node operators. The account, the market and the asset have to
+// be: they are on chain and anyone can read them. What is not here is the policy — how much
+// should be working, how much must stay liquid, how large a difference is worth moving — which
+// comes from secrets released only into the enclave.
 // No `.url()`: zod backs it with `new URL()`, which the WASM runtime does not provide.
 export const configShape = {
 	schedule: z.string(),
-	/** JSON-RPC endpoint the enclave reads through; any chain with a v4 StateView. */
+	/** JSON-RPC endpoint the enclave reads through. */
 	rpcUrl: z.string().regex(/^https?:\/\/\S+$/),
 	/**
-	 * How the verdict reaches the vault. `forwarder`: `EVMClient.writeReport` on `chainSelectorName`,
-	 * for chains with a CRE forwarder. `signature`: the enclave signs an EIP-712 authorisation with
-	 * the agent key from the Vault DON and hands it out for anyone to relay; works on any chain.
+	 * How the verdict leaves the enclave. `forwarder`: `EVMClient.writeReport` on
+	 * `chainSelectorName`, for chains with a CRE forwarder. `signature`: the enclave signs an
+	 * EIP-712 statement with the agent key from the Vault DON and hands it out, with the calldata,
+	 * for anyone to carry; works on any chain.
 	 */
 	delivery: z.enum(['forwarder', 'signature']),
-	/** CRE chain selector name the report is written on, e.g. `robinhood-testnet`; forwarder delivery only. */
+	/** CRE chain selector name the report is written on; forwarder delivery only. */
 	chainSelectorName: z.string().min(1).optional(),
 	/** The chain id in the EIP-712 domain; signature delivery only. */
 	chainId: z.number().int().positive().optional(),
-	/** EIP-712 domain name and version the vault uses; signature delivery only. */
-	domainName: z.string().default('HelicoVault'),
+	/** The account's EIP-712 domain, as `AccountAuth` builds it; signature delivery only. */
+	domainName: z.string().default('HelicoAccount'),
 	domainVersion: z.string().default('1'),
 	/** Vault DON secret id holding the agent's private key; signature delivery only. */
 	agentKeySecretId: z.string().default('AGENT_KEY'),
-	/** The vault's nonce getter; signature delivery only. */
-	noncesFunction: z.string().default('nonces'),
-	vault: hex(20),
-	positionManager: hex(20),
-	stateView: hex(20),
-	/** The address that committed the mandate; the report acts on their position only. */
-	owner: hex(20),
-	poolId: hex(32),
-	/** `keccak256(abi.encode(mandate))` as committed in the vault. */
-	mandateHash: hex(32),
+	/** The account's nonce getter. Takes no argument, unlike the vault's `nonces(address)`. */
+	nonceFunction: z.string().default('nonce'),
+	/** The `HelicoAccount` whose idle capital this workflow manages. */
+	account: hex(20),
+	/** The lending market. The account must already permit it; the enclave checks rather than assumes. */
+	pool: hex(20),
+	/** The ERC-20 being placed. */
+	asset: hex(20),
+	/**
+	 * The address the owner nominated as the agent. The enclave holds the key behind it and stops
+	 * when the account no longer names it, so a revocation shows up as a hold on the next run
+	 * instead of as a transaction that reverts.
+	 */
+	agent: hex(20),
+	/**
+	 * Where a DON report is written; forwarder delivery only, and zero until one is deployed.
+	 *
+	 * It is not the account. `HelicoAccount` does not implement `IReceiver` — it has no
+	 * `onReport` — so a report cannot be written to it, and pointing this at the account would
+	 * produce a write that reverts rather than a move.
+	 */
+	reportReceiver: hex(20),
+	/**
+	 * `keccak256(abi.encode(policy))` as the owner published it, or zero for "not committed".
+	 * Nothing on chain holds this; see `policy.ts` for what the check does and does not prove.
+	 */
+	policyHash: hex(32),
 	gasLimit: z.string().regex(/^\d+$/),
-	/** Enclave policy, not mandate: slippage on the burn, the swap, and the mint. */
-	slippageBps: z.number().int().min(0).max(5000),
-	/** Enclave policy: refuse to route a re-centre through a pool whose LP fee is above this, in pips. */
-	maxPoolFeePips: z.number().int().min(0).max(1_000_000),
+	/** How long the enclave's statement about a move stays current. */
 	deadlineSeconds: z.number().int().positive(),
 
 	// ─── The enclave's explanation ───────────────────────────────
-	// A model turns the verdict into a sentence the position's owner can read. It decides
-	// nothing: `decide` has already chosen and the vault re-checks every rule on chain, so a
-	// confused model produces a confusing sentence and cannot move a position.
+	// A model turns the verdict into a sentence the account's owner can read. It decides
+	// nothing: `decide` has already chosen and the account enforces the shape of the call
+	// whatever the model says, so a confused model produces a confusing sentence and cannot
+	// move anyone's capital.
 	//
 	// It can only run here. A non-confidential workflow calls an endpoint from every node and
 	// takes a consensus; ten nodes asking a model the same question get ten different answers,
@@ -107,86 +127,78 @@ export const configSchema = z
 	})
 export type Config = z.infer<typeof configSchema>
 
-const REPORT_ABI = [{ type: 'bool' }, { type: 'bytes32' }, recenterParamsAbi] as const
+const REPORT_ABI = [{ type: 'bool' }, { type: 'bytes32' }, idleMoveParamsAbi] as const
 
-const noParams: RecenterParams = {
-	owner: zeroAddress,
-	tickLower: 0,
-	tickUpper: 0,
-	liquidityToMint: 0n,
-	amount0Min: 0n,
-	amount1Min: 0n,
-	amount0Max: 0n,
-	amount1Max: 0n,
-	zeroForOne: false,
-	amountIn: 0n,
-	minAmountOut: 0n,
+const ZERO_HASH = `0x${'0'.repeat(64)}` as const
+
+const noParams: IdleMoveParams = {
+	account: zeroAddress,
+	pool: zeroAddress,
+	asset: zeroAddress,
+	amount: 0n,
+	supply: false,
 	deadline: 0n,
 }
 
-/** `abi.encode(bool act, bytes32 mandateHash, RecenterParams p)`: the vault decodes its own struct. */
-export const encodeReport = (act: boolean, hash: Hex, p: RecenterParams = noParams): Hex =>
+/** `abi.encode(bool act, bytes32 policyHash, IdleMoveParams p)`. */
+export const encodeReport = (act: boolean, hash: Hex, p: IdleMoveParams = noParams): Hex =>
 	encodeAbiParameters(REPORT_ABI, [act, hash, p])
 
-export type Outcome = { act: false; reason: string } | { act: true; params: RecenterParams }
+export type Outcome = { act: false; reason: string } | { act: true; params: IdleMoveParams }
 
-/** Policy and sizing on top of the chain state. Pure. */
-export function decide(config: Config, mandate: Mandate, state: ChainState, now: number): Outcome {
-	if (!state.active) return { act: false, reason: 'mandate revoked' }
-	if (poolIdOf(state.poolKey) !== config.poolId)
-		return { act: false, reason: 'position is not in the mandated pool' }
-	// A re-centre swaps through the position's own pool; on a launch pool at 20% that costs more
-	// than it recovers, and no mandate field can express that judgement.
-	if (state.lpFee > config.maxPoolFeePips)
-		return { act: false, reason: 'pool fee above the enclave ceiling' }
+/**
+ * Policy and sizing on top of the chain state. Pure.
+ *
+ * The four refusals at the top are the ones the account itself would enforce, checked here so a
+ * run that cannot succeed ends as a hold with a reason rather than as a reverted transaction
+ * with a selector. The receipt check is the exception: the account does not make it, and it is
+ * the one that stops an amount denominated in one asset being spent out of a balance
+ * denominated in another.
+ */
+export function decide(
+	config: Config,
+	policy: IdlePolicy,
+	state: AccountState,
+	now: number,
+): Outcome {
+	if (state.agent.toLowerCase() !== config.agent)
+		return { act: false, reason: 'the account has not nominated this agent' }
+	if (!state.venuePermitted) return { act: false, reason: 'the owner has not permitted this venue' }
+	if (state.receipt === zeroAddress)
+		return { act: false, reason: 'the venue does not list this asset' }
+	if (state.receiptAsset.toLowerCase() !== config.asset)
+		return { act: false, reason: "the venue's receipt is for a different asset" }
 
-	const verdict: Verdict = decideRecentre({
-		tick: state.tick,
-		tickSpacing: state.poolKey.tickSpacing,
-		position: {
-			tickLower: state.tickLower,
-			tickUpper: state.tickUpper,
-			lastActionAt: state.lastActionAt,
-		},
-		mandate,
-		now,
-	})
-	if (!verdict.act) return verdict
-	if (state.liquidity === 0n) return { act: false, reason: 'vault would reject: NothingToMove' }
-	if (state.liquidity > mandate.maxLiquidity)
-		return { act: false, reason: 'vault would reject: LiquidityTooLarge' }
-
-	const sizing = sizeRecentre({
-		liquidity: state.liquidity,
-		sqrtPriceX96: state.sqrtPriceX96,
-		current: { tickLower: state.tickLower, tickUpper: state.tickUpper },
-		proposed: verdict,
-		poolLiquidity: state.poolLiquidity,
-		feePips: state.lpFee,
-		slippageBps: config.slippageBps,
-	})
-	// Never a zero mint, whatever the floor says: a mandate with minRetainedBps = 0 would let
-	// 0 < 0 pass and turn a re-centre into a withdrawal.
-	if (sizing.liquidityToMint === 0n)
-		return { act: false, reason: 'vault would reject: NothingToMint' }
-	// The mandate's floor, applied before the vault has to revert LiquidityNotRetained.
-	if (sizing.liquidityToMint * 10_000n < state.liquidity * BigInt(mandate.minRetainedBps)) {
-		return { act: false, reason: "below the mandate's retention floor" }
+	const balances = {
+		idle: state.idle,
+		supplied: state.supplied,
+		supplyRateRay: state.supplyRateRay,
 	}
+	const verdict = decideIdleMove({ policy, balances, now })
+	if (!verdict.act) return verdict
+
+	const sizing = sizeIdleMove({
+		supply: verdict.supply,
+		amount: verdict.amount,
+		venueLiquidity: state.venueLiquidity,
+		maxMoveAmount: policy.maxMoveAmount,
+	})
+	if (sizing.amount === 0n)
+		return { act: false, reason: 'the venue cannot return anything right now' }
+	// The deadband again, on the number that will actually be sent. A withdrawal cut down to a
+	// few units because the market is drained is exactly the move the deadband exists to refuse,
+	// and it only becomes small here — after the target split, which knew nothing about it.
+	if (sizing.amount < verdict.deadband)
+		return { act: false, reason: `${sizing.limitedBy} leaves a move inside the deadband` }
+
 	return {
 		act: true,
 		params: {
-			owner: config.owner as Address,
-			tickLower: verdict.tickLower,
-			tickUpper: verdict.tickUpper,
-			liquidityToMint: sizing.liquidityToMint,
-			amount0Min: sizing.amount0Min,
-			amount1Min: sizing.amount1Min,
-			amount0Max: sizing.amount0Max,
-			amount1Max: sizing.amount1Max,
-			zeroForOne: sizing.zeroForOne,
-			amountIn: sizing.amountIn,
-			minAmountOut: sizing.minAmountOut,
+			account: config.account as Address,
+			pool: config.pool as Address,
+			asset: config.asset as Address,
+			amount: sizing.amount,
+			supply: verdict.supply,
 			deadline: BigInt(now + config.deadlineSeconds),
 		},
 	}
@@ -197,62 +209,77 @@ export const onCronTrigger = async (runtime: TeeRuntime<Config>): Promise<string
 	const config = runtime.config
 	const signs = config.delivery === 'signature'
 
-	// 1. The mandate's thresholds, and in signature mode the agent key, released by the Vault DON
-	//    into this enclave only. The key is used here and never crosses out.
+	// 1. The policy, and in signature mode the agent key, released by the Vault DON into this
+	//    enclave only. The key is used here and never crosses out.
 	const ids = [
-		...Object.values(MANDATE_SECRET_IDS),
+		...Object.values(POLICY_SECRET_IDS),
 		...(signs ? [config.agentKeySecretId] : []),
 		...(config.aiUrl ? Object.values(AI_SECRET_IDS) : []),
 	]
 	const secrets = runtime.getSecrets(ids.map((id) => ({ id }))).result()
-	const mandate = mandateFromSecrets(config.poolId as Hex, secrets)
-	const hash = mandateHash(mandate)
+	const policy = policyFromSecrets(secrets)
+	const hash = policyHash(policy)
 	const now = Math.floor(runtime.now().getTime() / 1000)
 
-	// 2. Refuse thresholds the user did not sign before touching the chain.
-	if (hash !== config.mandateHash) return 'HOLD (mandate hash mismatch)'
+	// 2. Refuse thresholds the owner did not publish, before touching the chain. A zero hash in
+	//    config means they published none, and then there is nothing to disagree with.
+	if (config.policyHash !== ZERO_HASH && hash !== config.policyHash)
+		return 'HOLD (policy hash mismatch)'
 
-	// 3. Read the account, the pool, and the position from inside the enclave.
-	const state = readChainState(
+	// 3. Read the account and the market from inside the enclave.
+	const state = readAccountState(
 		runtime,
 		config.rpcUrl,
 		{
-			vault: config.vault as Address,
-			positionManager: config.positionManager as Address,
-			stateView: config.stateView as Address,
+			account: config.account as Address,
+			pool: config.pool as Address,
+			asset: config.asset as Address,
 		},
-		config.owner as Address,
-		config.poolId as Hex,
-		{ withNonce: signs, noncesFunction: config.noncesFunction },
+		{ withNonce: signs, nonceFunction: config.nonceFunction },
 	)
 
-	// 4. Decide, then size the swap and the mint the burn will fund.
-	const outcome = decide(config, mandate, state, now)
+	// 4. Decide where the capital should sit, and how much of the difference is worth moving.
+	const outcome = decide(config, policy, state, now)
 
 	// 4b. Ask the model to say why, in the owner's words. Never load-bearing: a missing or
 	//     rejected answer changes nothing about what happens next.
 	const reason = config.aiUrl
-		? explain(runtime, config, secrets, describeForOwner(config, mandate, state, outcome, now))
+		? explain(
+				runtime,
+				config,
+				secrets,
+				describeForOwner(
+					{ pool: config.pool, asset: config.asset },
+					policy,
+					state,
+					targetSplit(policy, {
+						idle: state.idle,
+						supplied: state.supplied,
+						supplyRateRay: state.supplyRateRay,
+					}),
+					outcome,
+				),
+			)
 		: undefined
 	const because = reason ? ` — ${reason}` : ''
 
 	if (!outcome.act) return `HOLD (${outcome.reason})${because}`
-	const { tickLower, tickUpper } = outcome.params
+	const verb = outcome.params.supply ? 'SUPPLY' : 'WITHDRAW'
 
-	// 5. Cross back with the verdict only.
+	// 5. Cross back with the move only.
 	if (signs) {
 		const key = secrets[config.agentKeySecretId]?.value as Hex | undefined
 		if (!key) throw new Error(`Secret ${config.agentKeySecretId} is missing`)
-		if (state.nonce === undefined) throw new Error('The vault did not answer the nonce read')
-		const auth: Authorisation = { params: outcome.params, mandateHash: hash, nonce: state.nonce }
-		const domain: RecentreDomain = {
+		if (state.nonce === undefined) throw new Error('The account did not answer the nonce read')
+		const auth: Authorisation = { params: outcome.params, policyHash: hash, nonce: state.nonce }
+		const domain: IdleMoveDomain = {
 			name: config.domainName,
 			version: config.domainVersion,
 			chainId: config.chainId as number,
-			verifyingContract: config.vault as Address,
+			verifyingContract: config.account as Address,
 		}
-		const { signature, signer } = await signRecentre(key, domain, auth)
-		// The authorisation is public by design once relayed; it is what the DON attests to.
+		const { signature, signer } = await signIdleMove(key, domain, auth)
+		// The statement is public by design once relayed; it is what the DON attests to.
 		runtime
 			.usingTheDons()
 			.report({
@@ -262,21 +289,36 @@ export const onCronTrigger = async (runtime: TeeRuntime<Config>): Promise<string
 				hashingAlgo: 'keccak256',
 			})
 			.result()
-		return `RECENTER ${tickLower}..${tickUpper} ${authorisationJson(auth, signature, signer)}${because}`
+		return `${verb} ${outcome.params.amount} ${authorisationJson(auth, signature, signer)}${because}`
 	}
 	const txHash = deliver(runtime.usingTheDons(), config, encodeReport(true, hash, outcome.params))
-	return `RECENTER ${tickLower}..${tickUpper} tx ${txHash}${because}`
+	return `${verb} ${outcome.params.amount} tx ${txHash}${because}`
 }
 
-/** The signed authorisation as the simulator prints it, for a relayer to pick up. */
+/**
+ * The signed statement as the simulator prints it, with the call it is about, so a relayer has
+ * nothing left to work out.
+ */
 export const authorisationJson = (auth: Authorisation, signature: Hex, signer: Address): string =>
 	JSON.stringify(
-		{ params: auth.params, mandateHash: auth.mandateHash, nonce: auth.nonce, signature, signer },
+		{
+			params: auth.params,
+			policyHash: auth.policyHash,
+			nonce: auth.nonce,
+			signature,
+			signer,
+			call: encodeIdleMove(auth.params),
+		},
 		(_, v) => (typeof v === 'bigint' ? v.toString() : v),
 	)
 
-/** Signs `payload` as a DON report and writes it to the vault. Returns the transaction hash. */
+/** Signs `payload` as a DON report and writes it to the receiver. Returns the transaction hash. */
 export function deliver(don: Runtime<Config>, config: Config, payload: Hex): Hex {
+	// Refused rather than written into the void: `writeReport` to an address with no code
+	// succeeds as a transaction and moves nothing, which reads in a log exactly like a move.
+	if (config.reportReceiver === zeroAddress) {
+		throw new Error('No report receiver is deployed; use signature delivery')
+	}
 	const report = don
 		.report({
 			encodedPayload: hexToBase64(payload),
@@ -291,7 +333,11 @@ export function deliver(don: Runtime<Config>, config: Config, payload: Hex): Hex
 	})
 	if (!network) throw new Error(`Unknown chain selector name ${config.chainSelectorName}`)
 	const written = new EVMClient(network.chainSelector.selector)
-		.writeReport(don, { receiver: config.vault, report, gasConfig: { gasLimit: config.gasLimit } })
+		.writeReport(don, {
+			receiver: config.reportReceiver,
+			report,
+			gasConfig: { gasLimit: config.gasLimit },
+		})
 		.result()
 	if (written.txStatus !== TxStatus.SUCCESS) {
 		throw new Error(`writeReport failed: ${written.errorMessage || TxStatus[written.txStatus]}`)
