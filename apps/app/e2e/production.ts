@@ -28,7 +28,11 @@ const check = (name: string, ok: boolean, detail = "") => {
 const headers = async (url: string) => {
   const res = await fetch(url, { redirect: "manual" });
   const out = new Map<string, string>();
-  res.headers.forEach((v, k) => out.set(k.toLowerCase(), v));
+  // A braced body: `out.set` returns the Map, and an arrow returning it from forEach is what
+  // `useIterableCallbackReturn` refuses.
+  res.headers.forEach((v, k) => {
+    out.set(k.toLowerCase(), v);
+  });
   return { status: res.status, headers: out };
 };
 
