@@ -3,6 +3,7 @@ pragma solidity 0.8.30;
 
 import {Test} from "forge-std/Test.sol";
 
+import {Call} from "../src/AccountAuth.sol";
 import {HelicoAccount} from "../src/HelicoAccount.sol";
 import {HelicoAccountFactory} from "../src/HelicoAccountFactory.sol";
 import {TestToken} from "./MandateTakers.sol";
@@ -231,5 +232,119 @@ contract HelicoAccountSignedTest is Test {
         bytes32 digest = HelicoAccount(payable(account)).executeDigest(target, value, data, n, deadline);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, digest);
         return abi.encodePacked(r, s, v);
+    }
+}
+
+/// @notice The batch, and what a relayer cannot do with one.
+contract HelicoAccountBatchTest is Test {
+    HelicoAccount implementation;
+    HelicoAccountFactory factory;
+    TestToken token;
+
+    address owner;
+    uint256 ownerKey;
+    address stranger;
+    uint256 strangerKey;
+    address payee = address(0xBEEF);
+    address account;
+
+    function setUp() public {
+        vm.warp(1_000_000);
+        (owner, ownerKey) = makeAddrAndKey("batch-owner");
+        (stranger, strangerKey) = makeAddrAndKey("batch-stranger");
+        implementation = new HelicoAccount(address(0));
+        factory = new HelicoAccountFactory(address(implementation));
+        token = new TestToken("Token", "TKN");
+        account = factory.open(owner);
+        token.mint(account, 100e18);
+    }
+
+    function _pair() private view returns (Call[] memory calls) {
+        calls = new Call[](2);
+        calls[0] = Call(address(token), 0, abi.encodeWithSignature("transfer(address,uint256)", payee, 10e18));
+        calls[1] = Call(address(token), 0, abi.encodeWithSignature("approve(address,uint256)", payee, 5e18));
+    }
+
+    function _sign(Call[] memory calls, uint256 n, uint256 deadline) private view returns (bytes memory) {
+        bytes32 digest = HelicoAccount(payable(account)).batchDigest(calls, n, deadline);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, digest);
+        return abi.encodePacked(r, s, v);
+    }
+
+    function test_OneSignatureCarriesEveryCall() public {
+        Call[] memory calls = _pair();
+        uint256 deadline = block.timestamp + 1 hours;
+
+        vm.prank(stranger); // a relayer
+        HelicoAccount(payable(account)).executeBatchWithSignature(calls, deadline, _sign(calls, 0, deadline));
+
+        assertEq(token.balanceOf(payee), 10e18, "the first call ran");
+        assertEq(token.allowance(account, payee), 5e18, "and so did the second");
+        assertEq(HelicoAccount(payable(account)).nonce(), 1, "one signature spent, not two");
+    }
+
+    /// @dev A half-landed batch is the failure this exists to prevent: a mandate shipped without
+    ///      the approvals it needs looks funded and fails at the first swap.
+    function test_ABatchIsAllOrNothing() public {
+        Call[] memory calls = new Call[](2);
+        calls[0] = Call(address(token), 0, abi.encodeWithSignature("transfer(address,uint256)", payee, 10e18));
+        calls[1] =
+            Call(address(token), 0, abi.encodeWithSignature("transfer(address,uint256)", payee, 1_000e18));
+
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(HelicoAccount.CallFailed.selector, address(token)));
+        HelicoAccount(payable(account)).executeBatch(calls);
+
+        assertEq(token.balanceOf(payee), 0, "the call that could have landed did not");
+    }
+
+    function test_ABatchSignatureCannotBeUsedTwice() public {
+        Call[] memory calls = _pair();
+        uint256 deadline = block.timestamp + 1 hours;
+        bytes memory sig = _sign(calls, 0, deadline);
+
+        HelicoAccount(payable(account)).executeBatchWithSignature(calls, deadline, sig);
+        vm.expectRevert();
+        HelicoAccount(payable(account)).executeBatchWithSignature(calls, deadline, sig);
+
+        assertEq(token.balanceOf(payee), 10e18, "paid once");
+    }
+
+    /// @dev The digest commits to every call, so a relayer cannot append, drop or edit one.
+    function test_ARelayerCannotChangeTheBatch() public {
+        Call[] memory signed = _pair();
+        uint256 deadline = block.timestamp + 1 hours;
+        bytes memory sig = _sign(signed, 0, deadline);
+
+        Call[] memory tampered = new Call[](3);
+        tampered[0] = signed[0];
+        tampered[1] = signed[1];
+        tampered[2] =
+            Call(address(token), 0, abi.encodeWithSignature("transfer(address,uint256)", stranger, 90e18));
+
+        vm.expectRevert();
+        HelicoAccount(payable(account)).executeBatchWithSignature(tampered, deadline, sig);
+        assertEq(token.balanceOf(stranger), 0);
+    }
+
+    function test_AStrangerCannotBatch() public {
+        vm.prank(stranger);
+        vm.expectRevert(abi.encodeWithSelector(HelicoAccount.NotOwner.selector, stranger));
+        HelicoAccount(payable(account)).executeBatch(_pair());
+    }
+
+    function test_ABatchIsNotPayableSoValueCannotBeCountedTwice() public {
+        // `executeBatch` has no `payable`, so the compiler refuses value at the call site. The
+        // value each call carries comes from the account's own balance, which cannot be reused.
+        vm.deal(account, 3 ether);
+        Call[] memory calls = new Call[](2);
+        calls[0] = Call(payee, 1 ether, "");
+        calls[1] = Call(payee, 1 ether, "");
+
+        vm.prank(owner);
+        HelicoAccount(payable(account)).executeBatch(calls);
+
+        assertEq(payee.balance, 2 ether, "two ether left the account for two calls of one");
+        assertEq(account.balance, 1 ether);
     }
 }

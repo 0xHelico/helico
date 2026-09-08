@@ -125,29 +125,73 @@ caught.** What that turned up, and the four limits it did not fix, are in
 > exist in the currently pinned commit would fail the check for all the other rows. Pinning
 > them together is the only honest way to do it.
 
+#### One wallet, three positions, no deposit
+
+Aqua is an allowance ledger rather than a vault, and the consequence is easy to state and easier
+to disbelieve: **opening a position moves no tokens at all.** `ship` writes an entry; the tokens
+are only touched when a fill happens, straight from the maker to the recipient.
+
+So one wallet's balance can back several positions at once.
+[`@helico/plugin-1inch`](packages/plugins/1inch/) builds them, priced by 1inch's deployed SwapVM
+rather than by arithmetic of ours, and one command shows it on a fork of Arbitrum One:
+
+```sh
+anvil --fork-url https://arb1.arbitrum.io/rpc --port 8549 --silent &
+bun scripts/check-aqua.ts
+```
+
+```
+ship $2,800–3,200   3 Aqua events, 0 token transfers
+ship $2,900–3,100   3 Aqua events, 0 token transfers
+ship $1,000–9,000   3 Aqua events, 0 token transfers
+
+wallet after    10000000000000000000 WETH   20000000000 USDC
+moved           0 WETH   0 USDC
+committed       30000000000000000000 WETH against 10000000000000000000 held  —  300%
+
+  $2,800–3,200   1,000 USDC -> 0.337011 WETH   @ $2967.26
+  $2,900–3,100   1,000 USDC -> 0.334501 WETH   @ $2989.53
+  $1,000–9,000   1,000 USDC -> 0.386875 WETH   @ $2584.81
+```
+
+Three concentrated ranges on the same ten ETH and twenty thousand USDC. **On a pool this is three
+positions and the capital split three ways**; here it is three ledger writes and the wallet is as
+full afterwards as it was before. The price spread across them is the concentration effect — the
+same money quoted tighter fills better.
+
+300% committed is not leverage. `pull` ends in `safeTransferFrom` from the maker's own wallet, so
+whichever strategy fills first gets the tokens and the rest revert. It is a number an agent has to
+watch rather than a position it can hold, which is exactly the job the enclave and the subgraph do
+here: nothing on chain can list a maker's strategies, and after a fill the ones left over quote
+prices the wallet can no longer honour.
+
+> The pricing is 1inch's on purpose. `concentrate` is one of thirteen instructions their SDK
+> ships, and `xyc-swap` — the one `HelicoMandateSwap` implements by hand — is the baseline their
+> own example is named after. The three ways this integration can be wrong *without reverting*
+> are in [the plugin's README](packages/plugins/1inch/README.md), each with a test.
+
 ### The Graph
 
-> **Deployed to Subgraph Studio, indexing the Aqua 1inch uses.** The subgraph is in
-> [`subgraph/`](subgraph/); `@helico/plugin-thegraph` queries it, and so does the CRE workflow;
-> one command shows what comes back, and prints `_meta` first:
+> **Deployed to Subgraph Studio, indexing the live Aqua, and caught up.** The subgraph is in
+> [`subgraph/`](subgraph/); `@helico/plugin-thegraph` queries it, and so does the CRE workflow
+> when it is given the endpoint; one command shows what comes back, and prints `_meta` first:
 >
 > ```sh
 > bun scripts/check-subgraph.ts
 > ```
 >
-> It holds 47 makers and mandates spanning blocks 485,793,304 to 502,288,683, with
-> `hasIndexingErrors: false`.
+> It holds **47 makers and 158 mandates**, from block 485,793,304 to 502,288,683.
 >
-> ⚠️ **It served the wrong contract for a day, and nothing looked wrong.** The manifest was
-> corrected on 7 September, but `bun run deploy` targeted `helico-aqua-arbitrum-one` while
-> everything queries `helico-arbitrum-one` — both exist in Studio, so every deploy succeeded and
-> landed on the one nobody reads. The endpoint answered, `hasIndexingErrors` was false, and
-> `_meta` tracked the chain head throughout.
+> Two mistakes got it here, and the check that catches both is one query. It indexed
+> `0x499943E7…` until 7 September — a real Aqua, with real events, silent since block
+> 451,737,844 ([#165](https://github.com/0xHelico/helico/issues/165)). Then the corrected
+> manifest deployed to a Studio slug nobody queries, so the fix reached no one
+> ([#183](https://github.com/0xHelico/helico/pull/183)). Both times the endpoint answered,
+> `hasIndexingErrors` was false, and `_meta` tracked the chain head.
 >
-> The check that catches it is one comparison: **the oldest entity an endpoint serves cannot
-> predate the first log of the contract it indexes.** It was serving mandates from block
-> 403,010,640 against a first log at 485,505,646. It now serves 485,793,304, which is the
-> canonical Aqua's first `Shipped`. See [#181](https://github.com/0xHelico/helico/issues/181).
+> **The oldest entity an endpoint serves cannot predate the first log of the contract it
+> indexes.** Oldest mandate 485,793,304 against a first log at 485,505,646 — that is what
+> separates "this endpoint is up" from "this endpoint read the contract we meant".
 
 Aqua cannot answer the question an agent has to ask first.
 
@@ -170,13 +214,22 @@ performance problem — it is the problem. An indexer is the only answer, which 
 load-bearing rather than decorative.
 
 The subgraph answers exactly that, and `makerMandates` in `@helico/plugin-thegraph` is the call
-that asks. The client works end to end — a maker's mandates, their per-token ledgers, and docked
-ones correctly marked docked rather than merely empty.
+that asks. Against the live endpoint, for the busiest maker on this chain:
 
-**No figures are quoted here yet, deliberately.** The ones that were are real and come from the
-superseded contract above, which makes them a five-month-old snapshot of a deployment nobody
-uses. They go back once the subgraph is redeployed against `0x1111113ccf…` and the numbers are
-read off that.
+```
+maker     0xef9f7f4006fe95afede04f6916e72556a957ebbc
+mandates  48, of which 11 still active
+
+still spendable, summed across active mandates:
+  0xda10009c…  99786406005223823281      0xaf88d065…  127320132
+  0x3ed03e95…  350031126307346128835     0x82af4944…  44591582476515318
+  0xfd086bc7…  80614207
+```
+
+Not our wallet and not our app — that is the point. **Forty-eight strategies under one address,
+five tokens, and no way on chain to learn that any of them exist.** The docked ones come back
+marked docked rather than merely empty, which is Aqua's own three-state sentinel and the
+distinction the schema exists to preserve.
 
 Still planned: the enclave consuming this as a second private input alongside the mandate
 thresholds, and the Subgraph MCP server so the agent discovers the schema rather than having it
