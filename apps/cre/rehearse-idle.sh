@@ -34,13 +34,13 @@ for tool in anvil cast forge cre jq; do
 	command -v "$tool" >/dev/null || { echo "missing $tool"; exit 1; }
 done
 [ -f .env ] || { echo "no .env — cp .env.example .env first"; exit 1; }
-# An .env from before this workflow existed has the vault's MANDATE_* names and none of these,
-# and the CLI's complaint about it names one variable at a time. Checked here so the answer is
-# the whole list at once.
-MISSING=$(comm -23 \
-	<(grep -oE '^SECRET_IDLE_[A-Z_]+|^SECRET_AGENT_KEY' .env.example | sort -u) \
-	<(grep -oE '^SECRET_IDLE_[A-Z_]+|^SECRET_AGENT_KEY' .env | sort -u))
-[ -z "$MISSING" ] || { echo "your .env predates this workflow. Missing:"; echo "$MISSING"; exit 1; }
+# The workflow asks the Vault DON for ONE secret, HELICO_VAULT, holding every value as JSON —
+# the DON answers one retrieval per execution. So the rehearsal has to build that item too, and
+# building it is the same act as checking for it: the packer names any SECRET_* that is absent,
+# which an .env predating this workflow will have plenty of. Doing both here rather than checking
+# one list and packing another is deliberate — those two lists drifting is exactly the bug that
+# put an Anvil key into a production upload.
+python3 "$ROOT/scripts/pack-cre-vault.py" .env
 FORK_URL=${ARBITRUM_RPC_URL:-https://arb1.arbitrum.io/rpc}
 
 say() { printf '\n\033[1m== %s\033[0m\n' "$1"; }
@@ -86,8 +86,11 @@ say "5/7  point the workflow at what we just built"
 # it would silently undo any unrelated edit in it -- which is a trap, not a cleanup.
 cp workflow/config.staging.json /tmp/helico-staging-backup.$$
 restore_config() { cp /tmp/helico-staging-backup.$$ workflow/config.staging.json 2>/dev/null || true; }
-# `aiUrl` is dropped: the rehearsal must not depend on a model endpoint being reachable, and the
-# model explains the verdict rather than deciding it.
+# The model explains the verdict; it never decides it. So the rehearsal runs *with* the model when
+# this .env carries real router credentials, and without it when it does not. Someone cloning the
+# repository has the placeholders from .env.example, and a rehearsal that dies on an unreachable
+# endpoint would tell them nothing about the part they came to check — while dropping the model
+# for everyone would leave our own longest path never exercised here.
 #
 # `pools` is a list, and the one this rehearsal uses has a single entry. That is not the whole of
 # what the workflow can do — it compares the rate at every permitted market and picks the best —
@@ -96,10 +99,28 @@ restore_config() { cp /tmp/helico-staging-backup.$$ workflow/config.staging.json
 # Choosing between several is covered by the unit tests, not by this script. Anything added to
 # `pools` here must also be permitted with `permitVenue` in step 4, or the enclave will read it,
 # find it disallowed, and skip it.
-jq --arg a "$ACCOUNT" --arg r "$RPC" 'del(.aiUrl,.aiModel,.aiFallbackModel,.aiMaxTokens,.aiTimeoutSeconds)
-	| .account = $a | .rpcUrl = $r' workflow/config.staging.json > /tmp/helico-idle.$$ \
+# Set, and not the placeholder from .env.example. Written in shell rather than reaching for
+# python, because a nested heredoc inside a command substitution is how this line broke once.
+ai_set() {
+	local v
+	v=$(grep -m1 -oE "^$1=.*" .env | cut -d= -f2- | tr -d "\"' ")
+	[ -n "$v" ] && [ "$v" != "replace-me" ] && [ "$v" != "sk-replace-me" ]
+}
+if ai_set SECRET_AI_API_KEY && ai_set SECRET_AI_USERNAME && ai_set SECRET_AI_PASSWORD; then
+	AI_READY=yes
+else
+	AI_READY=no
+fi
+if [ "$AI_READY" = yes ]; then
+	echo "model on:  $(jq -r .aiModel workflow/config.staging.json), falling back to $(jq -r .aiFallbackModel workflow/config.staging.json)"
+	FILTER='.account = $a | .rpcUrl = $r'
+else
+	echo "model off: .env has placeholder router credentials, so the verdict goes unexplained"
+	FILTER='del(.aiUrl,.aiModel,.aiFallbackModel,.aiMaxTokens,.aiTimeoutSeconds) | .account = $a | .rpcUrl = $r'
+fi
+jq --arg a "$ACCOUNT" --arg r "$RPC" "$FILTER" workflow/config.staging.json > /tmp/helico-idle.$$ \
 	&& mv /tmp/helico-idle.$$ workflow/config.staging.json
-jq -c '{account, pools, asset, agent, delivery}' workflow/config.staging.json
+jq -c '{account, pools, asset, agent, delivery, aiModel}' workflow/config.staging.json
 
 say "6/7  simulate — the enclave reads, decides and signs"
 cre workflow simulate ./workflow --target staging-settings --env .env \
