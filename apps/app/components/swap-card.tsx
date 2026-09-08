@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { explorerTx, SLIPPAGE_BPS } from "@/lib/chain";
 import type { Intent } from "@/lib/intent";
-import { shortfall } from "@/lib/vault";
+import { shortfall } from "@/lib/intent";
 
 /**
  * The words for each transaction. The plugin returns what a step is; what a person reads about

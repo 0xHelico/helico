@@ -1,182 +1,205 @@
 "use client";
 
-import { fromContractMandate } from "@helico/plugin-cre/mandate";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
-import { useMemo } from "react";
+import type { Address } from "viem";
 import {
   useAccount,
   usePublicClient,
-  useReadContracts,
+  useReadContract,
   useWriteContract,
 } from "wagmi";
-import { Button } from "@/components/ui/button";
-import { configuredVault, vaultAbi } from "@/lib/vault";
 
-const CHAIN_ID = 42161;
+import { Button } from "@/components/ui/button";
+import { CHAIN_ID, totals, useAccountState } from "@/hooks/use-account-state";
+import {
+  AAVE_V3_POOL,
+  accountReadAbi,
+  accountWriteAbi,
+  hasAgent,
+} from "@/lib/account";
+import { amount, readMandates, token } from "@/lib/mandates";
+
+const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
+const ZERO = "0x0000000000000000000000000000000000000000" as Address;
 
 /**
- * What the conversation can reach besides a swap.
+ * What the conversation can answer besides a swap.
  *
- * Both of these already existed on the mandate page and are proven against a real vault; this
- * reads and writes exactly the same functions rather than a second implementation of them. That
- * is the bar for a sentence being answerable at all — the chat reaches what the app already
- * does, and nothing it does not.
+ * It used to read `HelicoVault`, and with no vault deployed it answered *"No vault address is set
+ * yet — set one on the mandate page"*, pointing at a form that page no longer has. A dead end at
+ * the end of a question the front page invites you to ask.
  *
- * `status` reads. `revoke` reads first and then offers the button, because ending a mandate that
- * is not there is a transaction that reverts and charges for the news.
+ * Both answers now come from what is actually deployed. **Status** is the account's own state plus
+ * the mandates only an indexer can list — which is exactly what "what am I allowed to spend?"
+ * means. **Revoke** removes the agent, which is what revoking authority is now: `setAgent(0)` is
+ * owner-only, takes effect immediately, and can only ever remove.
  */
 export function MandateCard({ action }: { action: "status" | "revoke" }) {
   const { address, isConnected, chainId } = useAccount();
-  const vaultAddress = useMemo(() => configuredVault(), []);
-  const publicClient = usePublicClient({ chainId: CHAIN_ID });
+  const client = usePublicClient({ chainId: CHAIN_ID });
+  const { data, refetch } = useAccountState();
   const { writeContractAsync } = useWriteContract();
 
-  const state = useReadContracts({
-    contracts: [
-      {
-        address: vaultAddress ?? undefined,
-        abi: vaultAbi,
-        chainId: CHAIN_ID,
-        functionName: "isActive",
-        args: address ? [address] : undefined,
-      },
-      {
-        address: vaultAddress ?? undefined,
-        abi: vaultAbi,
-        chainId: CHAIN_ID,
-        functionName: "positionOf",
-        args: address ? [address] : undefined,
-      },
-      {
-        address: vaultAddress ?? undefined,
-        abi: vaultAbi,
-        chainId: CHAIN_ID,
-        functionName: "mandateOf",
-        args: address ? [address] : undefined,
-      },
-    ],
-    query: {
-      enabled: Boolean(vaultAddress && address && chainId === CHAIN_ID),
-    },
+  const account =
+    data && data.kind === "open" ? (data.address as Address) : undefined;
+
+  const venue = useReadContract({
+    abi: accountReadAbi,
+    address: account,
+    chainId: CHAIN_ID,
+    functionName: "permittedVenue",
+    args: [AAVE_V3_POOL],
+    query: { enabled: Boolean(account) },
+  });
+
+  const mandates = useQuery({
+    enabled: Boolean(address),
+    queryKey: ["mandates", address],
+    queryFn: () => readMandates(address as string),
   });
 
   const revoke = useMutation({
     mutationFn: async () => {
-      if (!vaultAddress) {
-        throw new Error("No vault address");
-      }
+      if (!account) throw new Error("No account is open");
       const hash = await writeContractAsync({
-        address: vaultAddress,
-        abi: vaultAbi,
-        functionName: "revoke",
+        abi: accountWriteAbi,
+        address: account,
+        chainId: CHAIN_ID,
+        functionName: "setAgent",
+        args: [ZERO],
       });
-      await publicClient?.waitForTransactionReceipt({ hash });
-      await state.refetch();
+      await client?.waitForTransactionReceipt({ hash });
+      await refetch();
     },
   });
 
-  if (!vaultAddress) {
-    return (
-      <Card>
-        No vault address is set yet.{" "}
-        <Link className="underline underline-offset-2" href="/">
-          Set one on the mandate page
-        </Link>
-        , and this can answer.
-      </Card>
-    );
-  }
   if (!(isConnected && address)) {
-    return <Card>Connect a wallet and this reads your position.</Card>;
+    return <Note>Connect a wallet and this reads your account.</Note>;
   }
   if (chainId !== CHAIN_ID) {
-    return <Card>Switch to Arbitrum One to read your position.</Card>;
+    return <Note>Switch to Arbitrum One to read your account.</Note>;
   }
-  if (state.isPending) {
+  if (!data) {
     return (
-      <Card>
+      <Note>
         <span className="flex items-center gap-2">
-          <Loader2 className="size-3 animate-spin" /> Reading the vault…
+          <Loader2 className="size-3 animate-spin" /> Reading your account…
         </span>
-      </Card>
+      </Note>
     );
   }
-  if (state.error) {
-    return <Card>{state.error.message.split("\n")[0]}</Card>;
-  }
-
-  const [active, tokenId, raw] = state.data ?? [];
-  if (!(active?.result && raw?.result)) {
+  if (data.kind === "unconfigured") {
     return (
-      <Card>
-        No mandate is active on this wallet, so the agent may do nothing.{" "}
+      <Note>No account factory is deployed, so there is nothing to read.</Note>
+    );
+  }
+  if (data.kind === "unopened") {
+    return (
+      <Note>
+        Your account is not open yet.{" "}
         <Link className="underline underline-offset-2" href="/">
-          Set one
+          Open it
         </Link>
-        .
-      </Card>
+        , and this can answer.
+      </Note>
     );
   }
 
-  const mandate = fromContractMandate(raw.result);
-  const expires = new Date(mandate.expiry * 1000);
+  const held = totals(data);
+  const nominated = hasAgent(data);
+  const live = mandates.data?.rows.filter((m) => m.active) ?? [];
+  const spendable = [...(mandates.data?.spendable ?? new Map())].filter(
+    ([, value]) => value > 0n,
+  );
 
   return (
     <div className="mt-3 rounded-xl border p-4">
       <p className="font-medium text-sm">
-        Position #{((tokenId?.result as bigint) ?? 0n).toString()} is under
-        mandate.
+        {short(data.address)} · {nominated ? "agent nominated" : "no agent"}
       </p>
+
       <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-muted-foreground text-xs">
-        <dt>Range width</dt>
-        <dd>{mandate.rangeWidthTicks} ticks, exactly</dd>
-        <dt>Must improve by</dt>
+        <dt>Who may move it</dt>
+        <dd>{nominated ? short(data.agent as string) : "nobody but you"}</dd>
+        <dt>Where it may go</dt>
+        <dd>{venue.data === true ? "Aave v3" : "nowhere yet"}</dd>
+        <dt>Holding</dt>
         <dd>
-          {mandate.minImprovementBps / 100}% of the gap, or it may not act
+          {held
+            ? `${amount(held.idle, 6)} USDC liquid, ${amount(held.working, 6)} working`
+            : "nothing yet"}
         </dd>
-        <dt>Wait between actions</dt>
-        <dd>{Math.round(mandate.cooldownSeconds / 60)} minutes</dd>
-        <dt>Must keep</dt>
-        <dd>{mandate.minRetainedBps / 100}% of the position invested</dd>
-        <dt>Ends</dt>
-        <dd>{expires.toISOString().slice(0, 16).replace("T", " ")} UTC</dd>
+        <dt>Aqua mandates</dt>
+        <dd>
+          {mandates.isPending
+            ? "reading the index…"
+            : mandates.error
+              ? "the index did not answer"
+              : `${live.length} live`}
+        </dd>
       </dl>
+
+      {spendable.length > 0 ? (
+        <>
+          <p className="mt-3 text-muted-foreground text-xs">
+            Still spendable through those mandates:
+          </p>
+          <ul className="tabular mt-1 font-mono text-[11.5px] text-muted-foreground">
+            {spendable.map(([address_, value]) => {
+              const t = token(address_ as string);
+              return (
+                <li key={address_ as string}>
+                  {amount(value as bigint, t.decimals)} {t.symbol}
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      ) : null}
 
       {action === "revoke" ? (
         <div className="mt-4 border-t pt-3">
-          <p className="text-muted-foreground text-xs">
-            Revoking needs nobody's permission and works while the contract is
-            paused, while the agent is gone, and while an upgrade is pending.
-          </p>
-          {revoke.isSuccess ? (
-            <p className="mt-3 text-xs">
-              Revoked. The agent may do nothing on this position now.
-            </p>
+          {nominated ? (
+            <>
+              <p className="text-muted-foreground text-xs">
+                Removing the agent needs nobody's permission and takes effect at
+                once.
+              </p>
+              {revoke.isSuccess ? (
+                <p className="mt-3 text-xs">
+                  Removed. Nothing moves without you now.
+                </p>
+              ) : (
+                <Button
+                  className="mt-3"
+                  disabled={revoke.isPending}
+                  onClick={() => revoke.mutate()}
+                  size="sm"
+                  variant="destructive"
+                >
+                  {revoke.isPending ? "Removing…" : "Remove the agent"}
+                </Button>
+              )}
+              {revoke.error ? (
+                <p className="mt-2 text-destructive text-xs">
+                  {revoke.error.message.split("\n")[0]}
+                </p>
+              ) : null}
+            </>
           ) : (
-            <Button
-              className="mt-3"
-              disabled={revoke.isPending}
-              onClick={() => revoke.mutate()}
-              size="sm"
-              variant="destructive"
-            >
-              {revoke.isPending ? "Revoking…" : "End the mandate"}
-            </Button>
-          )}
-          {revoke.error ? (
-            <p className="mt-2 text-destructive text-xs">
-              {revoke.error.message.split("\n")[0]}
+            <p className="text-muted-foreground text-xs">
+              Nobody is nominated, so there is nothing to revoke.
             </p>
-          ) : null}
+          )}
         </div>
       ) : null}
     </div>
   );
 }
 
-function Card({ children }: { children: React.ReactNode }) {
+function Note({ children }: { children: React.ReactNode }) {
   return (
     <div className="mt-3 rounded-xl border p-4 text-muted-foreground text-xs">
       {children}
