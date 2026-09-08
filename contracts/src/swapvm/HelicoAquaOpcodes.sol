@@ -21,7 +21,13 @@ import {XYCSwap} from "@1inch/swap-vm/instructions/XYCSwap.sol";
 import {AquaYieldCover} from "./AquaYieldCover.sol";
 
 /// @title HelicoAquaOpcodes
-/// @notice Degensoft's Aqua instruction set, plus `_aquaYieldCoverXD` at opcode 35.
+/// @notice Degensoft's Aqua instruction set, plus `_aquaYieldCoverXD` at the opcode
+///         `AQUA_YIELD_COVER_OPCODE` names.
+///
+/// @dev The number is deliberately not repeated here. It said 35 until @rifkyeasy caught it —
+///      nine lines above the constant that said 34, in the file whose whole subject is that an
+///      opcode is its position minus one. A number written twice is a number that drifts, and
+///      this is the one a consumer copies out and builds a program around.
 ///
 /// @dev Appended rather than inserted, which is the rule the published table states in its own
 ///      comment: *"New instructions should be added at the end to maintain backward
