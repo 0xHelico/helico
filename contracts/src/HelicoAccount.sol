@@ -256,7 +256,16 @@ contract HelicoAccount is UUPSUpgradeable {
     ///      in is an agent that cannot correct itself.
     function withdrawIdle(address pool, address asset, uint256 amount) external {
         _requireOwnerOrAgent();
-        if (!permittedVenue[pool]) revert VenueNotPermitted(pool);
+        // The allowlist bounds where the *agent* may send this account's money. Withdrawing sends
+        // it nowhere but back here, so the owner is not bound by it — otherwise revoking a venue
+        // would disable the one call that exists to bring capital home from it, which is the wrong
+        // way round for a safety control to fail.
+        //
+        // The agent stays bound, and deliberately. Dropping the check for it too would let a
+        // compromised agent make this account call any address with this selector, and "an agent
+        // can only churn capital between venues the owner allowlisted" is the property that makes
+        // a compromised agent harmless. The owner already has that reach through `execute`.
+        if (msg.sender != owner() && !permittedVenue[pool]) revert VenueNotPermitted(pool);
 
         ILendingVenue(pool).withdraw(asset, amount, address(this));
 

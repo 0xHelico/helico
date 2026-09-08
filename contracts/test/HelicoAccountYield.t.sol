@@ -153,8 +153,37 @@ contract HelicoAccountYieldTest is Test {
         vm.expectRevert(abi.encodeWithSelector(HelicoAccount.VenueNotPermitted.selector, address(pool)));
         HelicoAccount(payable(account)).supplyIdle(address(pool), address(token), 100e18);
 
-        // The owner can always reach their own money: re-permit, or use the escape hatch, which
-        // never depended on the allowlist in the first place.
+        // What the name of this test promises: the call that exists to bring capital home still
+        // works for the owner after the venue is revoked. Revoking is how an owner says they want
+        // out, so it must not be what stops them getting out.
+        vm.prank(owner);
+        HelicoAccount(payable(account)).withdrawIdle(address(pool), address(token), 600e18);
+        assertEq(token.balanceOf(account), 1000e18, "all of it came home");
+        assertEq(receipt.balanceOf(account), 0, "and the position is closed");
+    }
+
+    function test_TheAgentStaysBoundedByTheAllowlistOnTheWayBackToo() public {
+        vm.prank(agent);
+        HelicoAccount(payable(account)).supplyIdle(address(pool), address(token), 600e18);
+
+        vm.prank(owner);
+        HelicoAccount(payable(account)).permitVenue(address(pool), false);
+
+        // Not a convenience gap. `withdrawIdle` reaches an arbitrary address with a fixed
+        // selector, and the agent is only harmless because the set of addresses it can reach is
+        // the owner's.
+        vm.prank(agent);
+        vm.expectRevert(abi.encodeWithSelector(HelicoAccount.VenueNotPermitted.selector, address(pool)));
+        HelicoAccount(payable(account)).withdrawIdle(address(pool), address(token), 600e18);
+    }
+
+    function test_TheEscapeHatchStillMovesThePositionItself() public {
+        vm.prank(agent);
+        HelicoAccount(payable(account)).supplyIdle(address(pool), address(token), 600e18);
+
+        vm.prank(owner);
+        HelicoAccount(payable(account)).permitVenue(address(pool), false);
+
         address[] memory tokens = new address[](1);
         tokens[0] = address(receipt);
         vm.prank(owner);
