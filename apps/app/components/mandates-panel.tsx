@@ -80,9 +80,8 @@ export function MandatesPanel() {
     if (!maker) {
       return (
         <Empty>
-          Connect a wallet, or paste any address. Nothing here is ours — it is
-          read from a subgraph over the Aqua 1inch deployed, and it answers for
-          every maker on the chain.
+          Connect a wallet, or paste any address — this answers for every maker
+          on the chain, not just ours.
         </Empty>
       );
     }
@@ -100,9 +99,7 @@ export function MandatesPanel() {
     if (data.rows.length === 0) {
       return (
         <Empty>
-          No mandates for {short(maker)}. That is an answer rather than a
-          failure, and it is one only an indexer can give — the chain cannot
-          list them either way.
+          No mandates for {short(maker)} — an answer, not a failure.
         </Empty>
       );
     }
@@ -173,10 +170,8 @@ export function MandatesPanel() {
   return (
     <Card className="mt-4">
       <SectionTitle>What this wallet may spend</SectionTitle>
-      <p className="mt-1.5 text-[12.5px] text-soft leading-relaxed">
-        Aqua keeps its balances in a private mapping four levels deep and
-        indexes no event parameter. There is no on-chain way to ask this — not a
-        slow one, none.
+      <p className="mt-1.5 text-[12.5px] text-soft">
+        There is no on-chain way to ask this. An indexer is the only answer.
       </p>
       <Input
         aria-label="Look up another address"

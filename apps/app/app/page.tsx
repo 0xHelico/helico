@@ -29,10 +29,9 @@ export default function Page() {
               An agent, and the limits it works inside
             </h1>
             <p className="mt-3 text-[14px] text-soft leading-relaxed">
-              It decides inside a confidential enclave and can never send your
-              money anywhere but back to you. The worst a wrong decision costs
-              you is an action, never your funds, and you can end it without
-              asking anyone.
+              It decides inside a confidential enclave, and every call it can
+              make ends at your own account. A wrong decision costs a
+              transaction, never your funds.
             </p>
           </header>
 
@@ -43,8 +42,7 @@ export default function Page() {
               What it may be allowed to do
             </h2>
             <p className="mt-1.5 text-[12.5px] text-soft">
-              Authority it holds over time. One is wired to a contract; the rest
-              are the direction, and their switches do not move.
+              One is wired to a contract. The rest are the direction.
             </p>
             <Grants />
           </section>
@@ -54,8 +52,8 @@ export default function Page() {
               The limits you set
             </h2>
             <p className="mt-1.5 text-[12.5px] text-soft">
-              Committed on chain, enforced by the account, revocable by you
-              alone.
+              Owner-only and on chain. Together they are the whole of the
+              agent's reach.
             </p>
             <AccountControls />
           </section>

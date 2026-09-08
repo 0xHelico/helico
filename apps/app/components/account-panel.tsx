@@ -85,13 +85,11 @@ export function AccountPanel() {
 
   if (!factory) {
     return note(
-      "No account factory is deployed yet, so there is nothing to read. Saying so beats showing a figure that is not there.",
+      "No account factory is deployed yet, so there is nothing to read.",
     );
   }
   if (!isConnected) {
-    return note(
-      "Connect a wallet to see its account address — an answer before it is a contract.",
-    );
+    return note("Connect a wallet to see its account address.");
   }
   if (error) {
     return note(`The chain did not answer: ${error.message.split("\n")[0]}`);
@@ -146,9 +144,9 @@ export function AccountPanel() {
       <p className="mt-4 text-[11px] text-faint leading-relaxed">
         {opened
           ? hasAgent(data)
-            ? "The agent may move capital between markets you allow-listed. Neither call it can make takes a recipient, so it cannot send anything anywhere but here."
-            : "Nobody is nominated, so nothing here moves without you. The workflow running in the enclave watches the one account named in its configuration — opening this one does not add it."
-          : "This address is what CREATE2 says it will be. Tokens sent to it now are still yours when it exists."}
+            ? "Both calls the agent can make end here. It has no way to send anything anywhere else."
+            : "Nobody is nominated, so nothing here moves without you."
+          : "This address is what CREATE2 says it will be. Tokens sent now are yours when it exists."}
       </p>
 
       {opened ? null : (
@@ -162,7 +160,7 @@ export function AccountPanel() {
           </Button>
           <span className="text-[11px] text-faint">
             {chainId === CHAIN_ID
-              ? "One transaction, from your wallet. It grants nothing and takes nothing."
+              ? "One transaction. It grants nothing and takes nothing."
               : "Switch to Arbitrum One to open it."}
           </span>
         </div>
