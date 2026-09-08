@@ -6,20 +6,28 @@ stop a deploy halfway and are cheapest to answer while nothing is at stake.
 Order matters for one reason: **CRE has nothing to read until an account exists.**
 `config.production.json` names an account, and the workflow's first act is to read its state.
 
-## The keys, and what they cost
+## Four keys, four roles, split by blast radius
 
-Both live in the source-of-truth `.env`, which is gitignored and untracked. Read as text, never
-sourced, and passed to `cast` as `--private-key "$(…)"` at the moment of use — no keystore, no
-password to remember.
+All in the source-of-truth `.env`, which is gitignored and untracked. Read as text, never sourced,
+and passed to `cast` as `--private-key "$(…)"` at the moment of use — no keystore, no password.
 
-| | address | holds |
-|---|---|---|
-| `DEPLOYER_PRIVATE_KEY` | `0x6DCd7485aB17e0CBD0723b8435a35bb8d029439E` | 0.0149 ETH |
-| `AGENT_PRIVATE_KEY` | `0x84C3891a9693c891877aC474a90d17d29075fcAf` | 0.0100 ETH |
+| Role | Address | Holds | If this key leaks |
+|---|---|---|---|
+| `DEPLOYER_PRIVATE_KEY` | `0x6DCd7485aB17e0CBD0723b8435a35bb8d029439E` | 0.0079 | Deploys contracts and spends its gas. Nearly idle once the deploy is done |
+| `AGENT_PRIVATE_KEY` | `0x84C3891a9693c891877aC474a90d17d29075fcAf` | 0.0100 | Moves capital between the account and permitted markets. **Cannot take it** — neither call has a recipient parameter |
+| `RELAYER_PRIVATE_KEY` | `0x96575074e509DAB29D56D83060c2438730aC582E` | 0.0050 | Opens accounts, which grants nothing, and carries calls the owner already signed. Almost no damage |
+| `UPGRADE_PRIVATE_KEY` | `0xaeE1F9d2c23730CA04Dd478830c2acc495536E9C` | 0.0020 | **Replaces an account's code, immediately.** The largest power in the system |
 
-Both were at nonce 0 — never used. The agent was funded from the deployer in
-[`0xa9282b81…`](https://arbiscan.io/tx/0xa9282b810f04668d2bbea6718344cbf6f7ec88b629c5d5c75cecc079dd5f665c),
-block 502,878,733.
+The split is by exposure against power. The relayer is the most exposed key — it lives in the
+backend and is touched on every user request — and it is deliberately the one that can do least.
+The upgrader can do the most and should be touched least; it holds a small balance only so an
+emergency fix is not blocked on funding one.
+
+**The agent and the upgrader were one key until this split.** That combination meant the key that
+moves money could also rewrite the limit that stops it moving money anywhere else — and since the
+upgrade delay was removed for the hackathon, immediately. Separating them costs one wallet.
+
+Funded from the deployer: `0xa9282b81…` (agent), `0x77a6b0e6…` (relayer), `0x172eebbe…` (upgrader).
 
 ### Why the agent needs gas at all
 
@@ -29,23 +37,19 @@ Easy to miss, because it sounds like a key that only signs.
 transactions**. The EIP-712 statement the enclave produces is the enclave attesting to what it
 decided; it is not what authorises the call.
 
-That is a real constraint on the design, not a detail: making these moves relayable would need a
-signature-accepting variant of `supplyIdle`, the way `executeWithSignature` works for the owner.
-Not today's work, but better known now than discovered when the agent's wallet empties.
-
-At 0.02 gwei — Arbitrum's price while this was written — each move costs on the order of
-0.00005 ETH, so the agent's balance covers hundreds of them.
+That is a constraint on the design rather than a detail: making these moves relayable would need a
+signature-accepting variant of `supplyIdle`, the way `executeWithSignature` works for the owner —
+a contract change, not something the backend can absorb. At 0.02 gwei each move costs on the order
+of 0.00005 ETH, so the agent's balance covers hundreds.
 
 ## Still to answer
 
-- [ ] **Is `AGENT_PRIVATE_KEY` also `ACCOUNT_UPGRADER`?** Ghoza's note says it is. That means one
-      key both moves idle capital and can replace an account's code, and upgrades are immediate
-      because the delay was removed for the hackathon. It is a deliberate concentration and worth
-      re-confirming out loud before it is baked into a deployment — the escape hatch is what
-      remains if it is ever wrong, and it is in the proxy where no upgrade reaches it.
-- [ ] **The production agent key must be the DON's, eventually.** For the hackathon this key is on
-      a laptop, which is not what "the key never leaves the enclave" means. Fine for a demo; say so
-      rather than implying otherwise.
+- [ ] **The production agent key must eventually be the DON's.** For the hackathon it is a key on
+      a laptop, which is not what "the key never leaves the enclave" means. Fine for a demo, and
+      worth saying rather than implying otherwise — the video's do-not-say list already carries it.
+- [ ] **Who runs the relayer, and where its key lives.** Nothing calls `factory.open` yet:
+      `grep -rn "open(" apps/be apps/app` finds nothing. The wallet exists and is funded; the code
+      that uses it does not, and it belongs with the frontend work in #175.
 
 ## Preconditions
 
@@ -59,7 +63,7 @@ At 0.02 gwei — Arbitrum's price while this was written — each move costs on 
 ```bash
 cd contracts
 KEY=$(python3 -c "import re,pathlib;print(re.search(r'^DEPLOYER_PRIVATE_KEY=(.*)$',pathlib.Path('<source-of-truth>/.env').read_text(),re.M).group(1).strip())")
-ACCOUNT_UPGRADER=0x84C3891a9693c891877aC474a90d17d29075fcAf \
+ACCOUNT_UPGRADER=0xaeE1F9d2c23730CA04Dd478830c2acc495536E9C \
 forge script script/DeployAccountFactory.s.sol:DeployAccountFactory \
   --rpc-url $ARBITRUM_RPC_URL --broadcast --private-key "$KEY"
 ```
