@@ -18,6 +18,15 @@ and passed to `cast` as `--private-key "$(…)"` at the moment of use — no key
 | `RELAYER_PRIVATE_KEY` | `0x96575074e509DAB29D56D83060c2438730aC582E` | 0.0050 | Opens accounts, which grants nothing, and carries calls the owner already signed. Almost no damage |
 | `UPGRADE_PRIVATE_KEY` | `0xaeE1F9d2c23730CA04Dd478830c2acc495536E9C` | 0.0020 | **Replaces an account's code, immediately.** The largest power in the system |
 
+**None of the four is ever used for testing.** Ghoza's rule, 8 September, and it is narrower
+than it sounds: not "be careful with them", but *do not reach for them at all* when something
+needs a wallet. A fork run uses anvil's well-known accounts; a browser check generates a key and
+throws it away; a script that wants a signer makes one. The four above exist to hold mainnet
+authority, and every use that is not that widens their exposure for nothing.
+
+The reason to write it down rather than assume it: a test that needs "a funded wallet on
+Arbitrum" is exactly the moment a real key looks convenient, and the agent key is funded.
+
 The split is by exposure against power. The relayer is the most exposed key — it lives in the
 backend and is touched on every user request — and it is deliberately the one that can do least.
 The upgrader can do the most and should be touched least; it holds a small balance only so an
