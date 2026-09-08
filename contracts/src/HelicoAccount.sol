@@ -7,7 +7,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import {ILendingVenue} from "./ILendingVenue.sol";
-import {AccountAuth} from "./AccountAuth.sol";
+import {AccountAuth, Call} from "./AccountAuth.sol";
 
 import {HelicoAccountProxy} from "./HelicoAccountProxy.sol";
 
@@ -267,6 +267,66 @@ contract HelicoAccount is UUPSUpgradeable {
         if (msg.sender == owner()) return;
         address nominated = agent;
         if (nominated == address(0) || msg.sender != nominated) revert NotOwnerOrAgent(msg.sender);
+    }
+
+    /// @notice Do several things as this account, in one transaction.
+    ///
+    /// @dev Setting a mandate up is not one call. The account has to approve Aqua for each token
+    ///      it will trade and for each lending receipt, ship the strategy, and then it can start
+    ///      earning — six or seven steps that are useless individually and are one intention.
+    ///      Asking an owner to sign each of them separately is not a security property, it is a
+    ///      worse product with the same guarantees.
+    ///
+    ///      **Not payable, and that is the whole safety argument.** `msg.value` is visible in
+    ///      full to every call in a batch, so a payable batch lets one ETH be spent by each of
+    ///      them — the mistake `HelicoVault`'s multicall docblock describes. Here the value each
+    ///      call carries comes from the account's own balance, which cannot be counted twice.
+    ///
+    ///      Atomic on purpose: a batch that half-lands leaves a mandate shipped without the
+    ///      approvals it needs, which looks funded and fails at the first swap.
+    ///
+    ///      Nothing about the authority changes. Every call is still made by the account, and a
+    ///      batch can reach exactly what a sequence of `execute` calls could.
+    function executeBatch(Call[] calldata calls) external returns (bytes[] memory results) {
+        if (msg.sender != owner()) revert NotOwner(msg.sender);
+        return _runBatch(calls);
+    }
+
+    /// @notice The digest the owner signs to authorise a batch.
+    function batchDigest(Call[] calldata calls, uint256 nonce_, uint256 deadline)
+        public
+        view
+        returns (bytes32)
+    {
+        return AccountAuth.batchDigest(address(this), calls, nonce_, deadline);
+    }
+
+    /// @notice A whole setup, authorised by one signature and carried by anyone.
+    /// @dev This is what makes the first-time flow a single step: a relayer opens the account,
+    ///      approves, ships and supplies, and the owner has signed once and sent nothing.
+    function executeBatchWithSignature(Call[] calldata calls, uint256 deadline, bytes calldata signature)
+        external
+        returns (bytes[] memory results)
+    {
+        if (block.timestamp > deadline) revert AuthorisationExpired(block.timestamp, deadline);
+
+        uint256 used = nonce;
+        address signer = ECDSA.recover(batchDigest(calls, used, deadline), signature);
+        if (signer != owner()) revert NotOwner(signer);
+
+        // Spent before the calls, not after: a target is arbitrary code and may reenter here.
+        nonce = used + 1;
+        return _runBatch(calls);
+    }
+
+    function _runBatch(Call[] calldata calls) private returns (bytes[] memory results) {
+        results = new bytes[](calls.length);
+        for (uint256 i = 0; i < calls.length; i++) {
+            (bool ok, bytes memory result) = calls[i].target.call{value: calls[i].value}(calls[i].data);
+            if (!ok) revert CallFailed(calls[i].target);
+            results[i] = result;
+            emit Executed(calls[i].target, calls[i].value, bytes4(calls[i].data));
+        }
     }
 
     /// @dev An upgrade takes effect immediately. There is no announcement, no waiting period and
