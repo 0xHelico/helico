@@ -163,6 +163,81 @@ const open = async (url: string): Promise<{ page: Page; text: string }> => {
   );
 }
 
+// ── Behind the gate, only when asked ──────────────────────────────────────────
+//
+// Everything above is what an anonymous visitor sees, which stops at the sign-in gate — so the
+// account panel, and with it whether the deployed build resolves a factory at all, was never
+// checked. That gap matters: `NEXT_PUBLIC_ACCOUNT_FACTORY` set to an **empty string** is a
+// documented way to render the not-deployed path, and `?? DEPLOYED` does not catch it, so one
+// blank value in the deployment turns the panel off and every check above still passes.
+//
+// Opt-in because it signs in, which writes a session row exactly as any visitor does.
+//
+//     PROBE_WALLET=1 bun run --filter @helico/app prod
+if (process.env.PROBE_WALLET) {
+  const { privateKeyToAccount, generatePrivateKey } = await import(
+    "viem/accounts"
+  );
+  const { toHex } = await import("viem");
+  const { arbitrum } = await import("viem/chains");
+  const owner = privateKeyToAccount(generatePrivateKey());
+  const page = await ctx.newPage();
+  await page.exposeFunction("__personalSign", async (m: `0x${string}`) =>
+    owner.signMessage({ message: { raw: m } }),
+  );
+  await page.exposeFunction("__signTypedData", async (j: string) =>
+    owner.signTypedData(JSON.parse(j)),
+  );
+  await page.addInitScript(`
+(() => {
+  const provider = { isMetaMask: true, on(){return this}, removeListener(){return this},
+    async request({ method, params = [] }) {
+      if (method === 'eth_requestAccounts' || method === 'eth_accounts') return [${JSON.stringify(owner.address)}];
+      if (method === 'eth_chainId') return ${JSON.stringify(toHex(arbitrum.id))};
+      if (method === 'wallet_switchEthereumChain') return null;
+      if (method === 'personal_sign') return window.__personalSign(params[0]);
+      if (method === 'eth_signTypedData_v4' || method === 'eth_signTypedData')
+        return window.__signTypedData(typeof params[1] === 'string' ? params[1] : JSON.stringify(params[1]));
+      throw new Error('read-only: ' + method);
+    } };
+  window.ethereum = provider;
+  const detail = Object.freeze({ info: { uuid: '11111111-2222-3333-4444-555555555555', name: 'Probe',
+    icon: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciLz4=',
+    rdns: 'site.helico.probe' }, provider });
+  const a = () => window.dispatchEvent(new CustomEvent('eip6963:announceProvider', { detail }));
+  window.addEventListener('eip6963:requestProvider', a); a();
+})()`);
+  await page.goto(`${APP}/`, {
+    waitUntil: "domcontentloaded",
+    timeout: 45_000,
+  });
+  await page
+    .getByRole("button", { name: /verify wallet/i })
+    .click({ timeout: 30_000 });
+  await page.waitForTimeout(4000);
+  await page.goto(`${APP}/portfolio`, {
+    waitUntil: "domcontentloaded",
+    timeout: 45_000,
+  });
+  await page.waitForTimeout(9000);
+  const behind = (await page.locator("body").innerText()).replace(/\s+/g, " ");
+  check(
+    "signing in works against the deployed backend",
+    /Your account/i.test(behind),
+  );
+  check(
+    "and the deployed build resolves a factory",
+    !/No account factory is deployed/i.test(behind),
+  );
+  // A CREATE2 address for a wallet that has never transacted: only a real `accountFor` produces
+  // one, so this is the factory answering rather than a default rendering.
+  check(
+    "which names an account before it exists",
+    /0x[0-9a-fA-F]{4}…[0-9a-fA-F]{4} · not opened yet/.test(behind),
+    behind.match(/0x[0-9a-fA-F]{4}…[0-9a-fA-F]{4} · not opened yet/)?.[0] ?? "",
+  );
+}
+
 check("no page threw anywhere", errors.length === 0, errors[0] ?? "");
 
 await browser.close();
