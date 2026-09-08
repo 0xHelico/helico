@@ -77,26 +77,32 @@ export const GRANTS: Grant[] = [
   },
 ];
 
-/** Sentences that are answered today. Each one happens once, and you sign it. */
+/**
+ * Sentences that are answered today. Each one happens once, and you sign it.
+ *
+ * The third is the only one a panel cannot do better. A table can show that nothing moved; only
+ * a sentence can say *why* nothing moved, and "180 dollars does not cover its own gas" is the
+ * answer people actually want.
+ */
 export const ASKS: Ask[] = [
   {
-    name: "Swap",
+    name: "Read the split",
     glyph: "percent",
-    say: "Swap half an ETH into USDC",
-    detail:
-      "Priced against what your wallet holds. Nothing moves until you sign.",
+    say: "How much is working and how much is liquid?",
+    detail: "What is earning, what is spendable, and at what rate.",
   },
   {
-    name: "Read your position",
+    name: "Read your mandates",
     glyph: "document",
-    say: "What is my position doing?",
-    detail: "The range, the limits in force, and when it last acted.",
+    say: "What am I allowed to spend?",
+    detail:
+      "Answered from the subgraph, because the chain cannot list them at all.",
   },
   {
-    name: "End the mandate",
+    name: "Ask why it held",
     glyph: "scales",
-    say: "Revoke my mandate",
+    say: "Why did you not move anything?",
     detail:
-      "Works while the contract is paused, while the agent is gone, and while an upgrade is pending.",
+      "The deadband, in words: a move has to beat its own gas and matter against the size of the account.",
   },
 ];
