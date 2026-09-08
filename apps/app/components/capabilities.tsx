@@ -3,20 +3,13 @@
 import { useMutation } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
-import { useMemo } from "react";
-import {
-  useAccount,
-  usePublicClient,
-  useReadContract,
-  useWriteContract,
-} from "wagmi";
+import { useAccount, usePublicClient, useWriteContract } from "wagmi";
 import { Glyph } from "@/components/glyph";
 import { Switch } from "@/components/ui/switch";
+import { CHAIN_ID, useAccountState } from "@/hooks/use-account-state";
+import { accountWriteAbi, hasAgent } from "@/lib/account";
 import { ASKS, GRANTS } from "@/lib/capabilities";
 import { cn } from "@/lib/utils";
-import { configuredVault, vaultAbi } from "@/lib/vault";
-
-const CHAIN_ID = 42161;
 
 /**
  * What the agent may be allowed to do.
@@ -31,40 +24,40 @@ const CHAIN_ID = 42161;
  * is in the markup and not in a sentence somebody has to read.
  */
 export function Grants() {
-  const { address, isConnected, chainId } = useAccount();
-  const vault = useMemo(() => configuredVault(), []);
+  const { isConnected, chainId } = useAccount();
   const publicClient = usePublicClient({ chainId: CHAIN_ID });
   const { writeContractAsync } = useWriteContract();
-
-  const isActive = useReadContract({
-    abi: vaultAbi,
-    address: vault ?? undefined,
-    chainId: CHAIN_ID,
-    functionName: "isActive",
-    args: address ? [address] : undefined,
-    query: { enabled: Boolean(vault && address && chainId === CHAIN_ID) },
-  });
+  // The account, not the vault. This read `isActive` on a `HelicoVault` that is not deployed to
+  // Arbitrum One and will not be, so the switch was permanently disabled behind a contract that
+  // does not exist. Authority now means the same thing here as it means on chain: an agent is
+  // nominated, and `_requireOwnerOrAgent` admits it.
+  const { data, refetch } = useAccountState();
+  const account =
+    data && data.kind === "open" ? (data.address as `0x${string}`) : undefined;
 
   const revoke = useMutation({
     mutationFn: async () => {
-      if (!vault) {
-        throw new Error("No vault address");
-      }
+      if (!account) throw new Error("No account is open");
       const hash = await writeContractAsync({
-        abi: vaultAbi,
-        address: vault,
-        functionName: "revoke",
+        abi: accountWriteAbi,
+        address: account,
+        chainId: CHAIN_ID,
+        functionName: "setAgent",
+        args: ["0x0000000000000000000000000000000000000000"],
       });
       await publicClient?.waitForTransactionReceipt({ hash });
-      await isActive.refetch();
+      await refetch();
     },
   });
 
-  const active = Boolean(isActive.data);
-  const canToggle = Boolean(vault && isConnected && chainId === CHAIN_ID);
+  const active = data ? hasAgent(data) : false;
+  const canToggle = Boolean(account && isConnected && chainId === CHAIN_ID);
 
   return (
-    <ul className="mt-4 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+    <ul
+      className="mt-4 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3"
+      data-testid="grants"
+    >
       {GRANTS.map((g) => {
         // Keyed off the flag, not the position. This read `i === 0` until the list was
         // reordered, at which point the switch would have followed the order rather than the
