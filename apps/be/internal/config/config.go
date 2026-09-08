@@ -47,6 +47,14 @@ type Config struct {
 type Lookup func(key string) (string, bool)
 
 // FromEnv builds a Config from BE_* variables, filling defaults for the rest.
+// devOrigins is what a local run needs: the dapp on Next's dev port and on the port its browser
+// checks serve a production build from, and the landing site on Astro's two.
+//
+// The dapp's :3000 was missing for as long as this list existed, so a local page could not even
+// read the session endpoint — the browser refused the response before the cookie was ever the
+// question. :3100 is here so `bun run e2e` reaches a local backend without being told to.
+const devOrigins = "http://localhost:3000,http://localhost:3100,http://localhost:4321,http://localhost:4322"
+
 func FromEnv(lookup Lookup) (Config, error) {
 	get := func(key, def string) string {
 		if v, ok := lookup(key); ok && strings.TrimSpace(v) != "" {
@@ -69,7 +77,7 @@ func FromEnv(lookup Lookup) (Config, error) {
 		SwapRatePerMin:  6,
 		SwapDailyMax:    500,
 	}
-	for _, o := range strings.Split(get("BE_CORS_ORIGINS", "http://localhost:4321,http://localhost:4322"), ",") {
+	for _, o := range strings.Split(get("BE_CORS_ORIGINS", devOrigins), ",") {
 		if o = strings.TrimSpace(o); o != "" {
 			cfg.CORSOrigins = append(cfg.CORSOrigins, o)
 		}

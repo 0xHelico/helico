@@ -1,6 +1,7 @@
 package config
 
 import (
+	"slices"
 	"testing"
 	"time"
 )
@@ -12,8 +13,13 @@ func TestFromEnvDefaultsAndOverrides(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Addr != ":8787" || cfg.DBPath != "data/helico.db" || cfg.AdminToken != "" || len(cfg.CORSOrigins) != 2 || cfg.RequestTimeout != 10*time.Second {
+	if cfg.Addr != ":8787" || cfg.DBPath != "data/helico.db" || cfg.AdminToken != "" || len(cfg.CORSOrigins) != 4 || cfg.RequestTimeout != 10*time.Second {
 		t.Errorf("defaults: %+v", cfg)
+	}
+	// Named rather than counted. The dapp's own port was missing from this list for as long as
+	// the list existed, and a length check is exactly what does not notice that.
+	if !slices.Contains(cfg.CORSOrigins, "http://localhost:3000") {
+		t.Errorf("a local dapp cannot call the API: %v", cfg.CORSOrigins)
 	}
 	env["BE_ADDR"] = "127.0.0.1:9000"
 	env["BE_CORS_ORIGINS"] = "https://helico.example, https://staging.helico.example ,"
