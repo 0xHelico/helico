@@ -18,6 +18,7 @@ import (
 	"github.com/0xHelico/helico/apps/be/internal/chat"
 	"github.com/0xHelico/helico/apps/be/internal/config"
 	"github.com/0xHelico/helico/apps/be/internal/content"
+	"github.com/0xHelico/helico/apps/be/internal/graph"
 	"github.com/0xHelico/helico/apps/be/internal/httpapi"
 	"github.com/0xHelico/helico/apps/be/internal/store"
 	"github.com/0xHelico/helico/apps/be/internal/swap"
@@ -48,6 +49,10 @@ func run() error {
 
 	swapSvc := swap.New(swap.NewClient(cfg.LLMBaseURL, cfg.LLMKey, cfg.LLMModel, cfg.LLMTimeout))
 
+	// Only the two the app sends. The list is here rather than in the cache so that adding a
+	// query to the frontend is a visible change to what this process will forward.
+	subgraph := graph.New(cfg.SubgraphURL, cfg.GraphTTL, []string{"Mandates", "Movements"}, 10*time.Second)
+
 	svc := blog.NewService(db)
 	chats := chat.NewService(db)
 	if cfg.SessionSecret == "" {
@@ -62,15 +67,17 @@ func run() error {
 	srv := &http.Server{
 		Addr: cfg.Addr,
 		Handler: httpapi.New(svc, httpapi.Options{
-			AdminToken:     cfg.AdminToken,
-			CORSOrigins:    cfg.CORSOrigins,
-			Logger:         log,
-			RequestTimeout: cfg.RequestTimeout,
-			Chats:          chats,
-			SessionSecret:  cfg.SessionSecret,
-			Swap:           swapSvc,
-			SwapRatePerMin: cfg.SwapRatePerMin,
-			SwapDailyMax:   cfg.SwapDailyMax,
+			AdminToken:      cfg.AdminToken,
+			CORSOrigins:     cfg.CORSOrigins,
+			Logger:          log,
+			RequestTimeout:  cfg.RequestTimeout,
+			Chats:           chats,
+			SessionSecret:   cfg.SessionSecret,
+			Swap:            swapSvc,
+			SwapRatePerMin:  cfg.SwapRatePerMin,
+			SwapDailyMax:    cfg.SwapDailyMax,
+			Graph:           subgraph,
+			GraphRatePerMin: cfg.GraphRatePerMin,
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
