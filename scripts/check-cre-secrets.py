@@ -1,73 +1,81 @@
 #!/usr/bin/env python3
-"""The upload files must add up to the manifest, exactly.
+"""The ids that get packed must be exactly the ids that get read.
 
-`apps/cre/secrets.yaml` is the manifest: `workflow.yaml` names it, and it declares every secret
-the workflow may ask for. It is never uploaded, because `cre secrets create` refuses more than ten
-items in one payload and there are eleven — the upload runs from the `secrets-upload-*.yaml`
-subsets instead.
+`apps/cre/secrets.yaml` declares one secret, `HELICO_VAULT`, holding a JSON document of every
+value the workflow needs — see that file for the three measurements that forced one item. The
+split-upload check this script used to perform went with the subset files.
 
-Two files that must agree and are edited separately will stop agreeing. Both directions cost
-something real, and neither is visible until a deployed run fails:
+What replaced it is the same shape of bug one level down. The packing list lives in
+`scripts/pack-cre-vault.py`; the reading list lives in the workflow source, spread across
+`POLICY_SECRET_IDS`, `AI_SECRET_IDS` and the `agentKeySecretId` default. Two lists, edited
+separately, and neither side fails until a deployed run does:
 
-  - in the manifest, not uploaded  →  the DON has no such secret, and the workflow that declared
-    it fails at retrieval with `relay quorum unreachable`, which reads like an outage
-  - uploaded, not in the manifest  →  a secret sits in the Vault DON that nothing may ask for
+  - packed, never read   ->  a value sits in the enclave that nothing asks for
+  - read, never packed   ->  `HELICO_VAULT has no <ID>`, on the DON, after a paid deploy
 
-Raised by @rifkyeasy reviewing #232, and it is the same shape as the bug that made it necessary:
-the CLI states one limit, the other side states nothing, and the only defence is a check on the
-shape rather than on the result.
+Raised by @rifkyeasy reviewing #232 against the split-upload version, and the reasoning carries
+over unchanged: the CLI states one limit, the other side states nothing, and the only defence is
+a check on the shape rather than on the result.
 """
 
 import re
 import sys
 from pathlib import Path
 
-CRE = Path(__file__).resolve().parent.parent / "apps" / "cre"
-MANIFEST = CRE / "secrets.yaml"
-UPLOADS = sorted(CRE.glob("secrets-upload-*.yaml"))
+ROOT = Path(__file__).resolve().parent.parent
+MANIFEST = ROOT / "apps" / "cre" / "secrets.yaml"
+PACKER = ROOT / "scripts" / "pack-cre-vault.py"
+SRC = ROOT / "packages" / "plugins" / "cre" / "src"
 
 # `NAME:` at four spaces, which is how every entry under `secretsNames:` is written.
 ENTRY = re.compile(r"^    ([A-Z][A-Z0-9_]*):$", re.M)
+# `key: 'ID',` inside a SECRET_IDS table.
+TABLE_ID = re.compile(r"^\t\w+: '([A-Z][A-Z0-9_]*)',$", re.M)
+PACKED_ID = re.compile(r'^    "([A-Z][A-Z0-9_]*)",$', re.M)
 
 
-def names(path: Path) -> set[str]:
-    return set(ENTRY.findall(path.read_text()))
+def table(path: Path, name: str) -> set[str]:
+    text = path.read_text()
+    start = text.index(f"export const {name} = {{")
+    return set(TABLE_ID.findall(text[start : text.index("} as const", start)]))
 
 
 def main() -> int:
-    if not MANIFEST.exists():
-        print(f"missing manifest: {MANIFEST}")
+    for path in (MANIFEST, PACKER):
+        if not path.exists():
+            print(f"missing: {path}")
+            return 1
+
+    declared = set(ENTRY.findall(MANIFEST.read_text()))
+    if declared != {"HELICO_VAULT"}:
+        print(f"manifest declares {sorted(declared)}; the DON serves one retrieval, so expected")
+        print("exactly HELICO_VAULT — see apps/cre/secrets.yaml")
         return 1
-    if not UPLOADS:
-        print("no secrets-upload-*.yaml found; the manifest is never uploaded on its own")
+
+    packed = set(PACKED_ID.findall(PACKER.read_text()))
+    if not packed:
+        print(f"no ids found in {PACKER}; the IDS list moved or changed shape")
         return 1
 
-    manifest = names(MANIFEST)
-    uploaded: dict[str, Path] = {}
-    duplicated = []
-    for path in UPLOADS:
-        for name in names(path):
-            if name in uploaded:
-                duplicated.append((name, uploaded[name].name, path.name))
-            uploaded[name] = path
-
-    missing = sorted(manifest - set(uploaded))
-    extra = sorted(set(uploaded) - manifest)
-    # The limit the split exists for. A file that has grown past it uploads nothing at all.
-    oversized = [(p.name, len(names(p))) for p in UPLOADS if len(names(p)) > 10]
-
-    for name in missing:
-        print(f"declared but never uploaded: {name}")
-    for name in extra:
-        print(f"uploaded but not declared:   {name} (in {uploaded[name].name})")
-    for name, a, b in duplicated:
-        print(f"uploaded twice:              {name} (in {a} and {b})")
-    for name, count in oversized:
-        print(f"over the ten-item payload limit: {name} has {count}")
-
-    if missing or extra or duplicated or oversized:
+    index = (SRC / "index.ts").read_text()
+    agent_key = re.search(r"agentKeySecretId: z\.string\(\)\.default\('([A-Z_]+)'\)", index)
+    if not agent_key:
+        print("could not find the agentKeySecretId default in index.ts")
         return 1
-    print(f"cre secrets: {len(manifest)} declared, all uploaded exactly once")
+
+    read = table(SRC / "policy.ts", "POLICY_SECRET_IDS") | table(SRC / "ai.ts", "AI_SECRET_IDS")
+    read.add(agent_key.group(1))
+
+    if packed != read:
+        # Named, both directions. A count would say "one side has more" and stop there.
+        for missing in sorted(read - packed):
+            print(f"read but never packed: {missing} — a deployed run fails with 'has no {missing}'")
+        for extra in sorted(packed - read):
+            print(f"packed but never read: {extra}")
+        return 1
+
+    print(f"{len(read)} ids, packed and read: {', '.join(sorted(read))}")
+    print("manifest declares HELICO_VAULT, and nothing else")
     return 0
 
 
