@@ -6,6 +6,14 @@ tags: ["vault", "mandate", "solidity"]
 published_at: 2026-09-06T09:42:00Z
 ---
 
+> **Written before 8 September, and kept as a record.** Helico's agent no longer keeps a Uniswap
+> v4 position in range: it decides how much of an account's idle stablecoin should be earning in a
+> lending market the owner allow-listed, and swaps against a [1inch Aqua](https://1inch.io)
+> mandate. The `HelicoVault` described below was never deployed and has since been deleted. The
+> reasoning here is still the reasoning — a mandate the contract enforces, an enclave that decides,
+> and a way out nobody can block — and the contract it lands on is now `HelicoAccount`, live on
+> Arbitrum One. Nothing in this post is edited; only this note is added.
+
 The mandate is a small struct: seven fields, committed with `keccak256(abi.encode(mandate))` when you set it. The vault does not store your intentions in prose; it stores numbers it can check. Below, each field, what it protects, and where the vault refuses.
 
 Line references are pinned at commit `154bcab`, the revision they were read from, so they stay true when the file moves on.
