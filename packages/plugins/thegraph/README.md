@@ -38,7 +38,7 @@ answer.spendable         // token → total still spendable across the live ones
 | [`client.ts`](src/client.ts) | `query`, and `endpoint` — Studio takes no key, the gateway takes only a key |
 | [`types.ts`](src/types.ts) | `HELICO_AQUA` and `UNISWAP_V4`, the subgraphs this package knows |
 
-The subgraph itself is in [`subgraph/`](../../subgraph/). `bun scripts/check-subgraph.ts` shows
+The subgraph itself is in [`subgraph/`](../../../subgraph/). `bun scripts/check-subgraph.ts` shows
 what the live endpoint returns.
 
 ## Three things this package is careful about
