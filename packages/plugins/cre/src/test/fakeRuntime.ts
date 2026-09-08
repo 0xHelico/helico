@@ -38,6 +38,8 @@ export function fakeRuntime(input: {
 	 */
 	graphStatus?: number
 	graphBody?: string
+	/** What the same endpoint answers for the accounts query. */
+	graphAccountsBody?: string
 	/** Thrown from inside `sendRequest`, the way an unreachable host or an oversized body is. */
 	graphThrows?: boolean
 }) {
@@ -46,6 +48,16 @@ export function fakeRuntime(input: {
 	const writes: WriteReportCall[] = []
 	const reports: string[] = []
 	const secretRequests: string[] = []
+
+	/**
+	 * Two different questions go to one endpoint, so the fake dispatches on the query the way the
+	 * endpoint itself would. One body for both would let a test that means to describe balances
+	 * silently describe accounts too, and the account list decides which owners get an agent.
+	 */
+	const graphAnswer = (query: string): string =>
+		query.includes('accounts(')
+			? (input.graphAccountsBody ?? '{"data":{"accounts":[]}}')
+			: (input.graphBody ?? '{"data":{"balances":[]}}')
 
 	const answer = ({ to, data }: RpcCall): Hex => {
 		const handler = input.handlers[slice(data, 0, 4)]
@@ -66,12 +78,13 @@ export function fakeRuntime(input: {
 			const p = payload as { url: string; body: Uint8Array | string }
 			const raw = typeof p.body === 'string' ? Buffer.from(p.body, 'base64') : Buffer.from(p.body)
 			if (input.config.subgraphUrl && p.url === input.config.subgraphUrl) {
-				graphRequests.push(JSON.parse(raw.toString()))
+				const sent = JSON.parse(raw.toString()) as { query: string }
+				graphRequests.push(sent as never)
 				if (input.graphThrows) throw new Error('the subgraph did not answer')
 				return {
 					result: () => ({
 						statusCode: input.graphStatus ?? 200,
-						body: new TextEncoder().encode(input.graphBody ?? '{"data":{"balances":[]}}'),
+						body: new TextEncoder().encode(graphAnswer(sent.query)),
 					}),
 				}
 			}

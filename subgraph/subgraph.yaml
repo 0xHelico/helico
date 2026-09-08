@@ -62,3 +62,28 @@ dataSources:
           handler: handlePulled
         - event: Pushed(address,address,bytes32,address,uint256)
           handler: handlePushed
+
+  - kind: ethereum/contract
+    name: HelicoAccountFactory
+    network: arbitrum-one
+    source:
+      # Ours, deployed 8 September 2026 — see docs/deployments.md for the transaction.
+      address: "0x01cc7d9fe8da79b61bcc5d3f7e3f0433dce7e081"
+      abi: HelicoAccountFactory
+      # The factory's own deployment block. There is nothing before it, so this is exact rather
+      # than a safe underestimate, and it saves 17 million blocks of scanning against the Aqua
+      # start above.
+      startBlock: 502979401
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/factory.ts
+      entities:
+        - Account
+      abis:
+        - name: HelicoAccountFactory
+          file: ./abis/HelicoAccountFactory.json
+      eventHandlers:
+        - event: AccountOpened(indexed address,address)
+          handler: handleAccountOpened

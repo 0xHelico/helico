@@ -74,6 +74,211 @@ export type SubgraphConfig = {
 export const MAX_BALANCE_ROWS = 1000
 
 /**
+ * The most accounts one request may ask for.
+ *
+ * A row is `{"id":"0x…","owner":"0x…"}` — 90 bytes with both addresses — so a thousand is 90 kB,
+ * inside the same `ConfHTTP resp=500kb` the balance query is sized against. The Graph caps a page
+ * at a thousand regardless of what is asked, so this is also the largest request that means
+ * anything.
+ *
+ * Ordered oldest first, so a page that does not hold everything holds the accounts that have
+ * existed longest — the ones most likely to hold capital. `complete: false` carries the
+ * difference into the run log rather than hiding it.
+ */
+export const MAX_ACCOUNT_ROWS = 1000
+
+/** Config's way of saying it names no anchor. Not imported from viem: this file is pure. */
+const ZERO_ADDRESS = `0x${'0'.repeat(40)}`
+
+/**
+ * Every account the factory has opened.
+ *
+ * The enclave managed exactly one account until this existed: the address written into
+ * `config.production.json` by hand. `open` is permissionless, so anyone may create an account at
+ * any time, and nothing enumerated the ones we did not create — an account a stranger opened sat
+ * there with no agent looking at it.
+ *
+ * `AccountOpened` indexes the owner, so this is recoverable from `eth_getLogs` alone. It is asked
+ * of the index instead because the workflow already queries this endpoint for mandate demand, and
+ * a log scan from the factory's deployment block grows without bound while this stays one request.
+ */
+export const MANAGED_ACCOUNTS = `
+  query Accounts($first: Int!) {
+    accounts(orderBy: openedAtBlock, orderDirection: asc, first: $first) {
+      id
+      owner
+    }
+  }
+`
+
+/** The accounts this run will consider, or why the list is only what config named. */
+export type ManagedAccounts =
+	| { known: false; reason: string }
+	| {
+			known: true
+			/** Account addresses, lower-cased, oldest first. */
+			accounts: string[]
+			/** False when the page came back full, so there are accounts this run cannot see. */
+			complete: boolean
+	  }
+
+type AccountsBody = {
+	data?: { accounts?: { id: string; owner: string }[] }
+	errors?: { message?: string }[]
+}
+
+/** The request, split out so a test can assert its shape without a runtime. */
+export function accountsHttpRequest(config: SubgraphConfig): {
+	url: string
+	method: string
+	body: string
+	multiHeaders: Record<string, { values: string[] }>
+	timeout: string
+} {
+	const body = JSON.stringify({
+		query: MANAGED_ACCOUNTS,
+		variables: { first: MAX_ACCOUNT_ROWS },
+	})
+	return {
+		url: config.subgraphUrl,
+		method: 'POST',
+		body: bytesToBase64(new TextEncoder().encode(body)),
+		multiHeaders: { 'Content-Type': { values: ['application/json'] } },
+		timeout: `${config.subgraphTimeoutSeconds}s`,
+	}
+}
+
+/**
+ * The list, and every way a 200 can fail to be one. Pure.
+ *
+ * A row without a usable `id` fails the whole read rather than being skipped, for the reason
+ * `demandFromResponse` gives: a partial list is indistinguishable from a smaller one, and this
+ * list decides which owners get an agent this run.
+ */
+export function accountsFromResponse(raw: string): ManagedAccounts {
+	let body: AccountsBody
+	try {
+		body = JSON.parse(raw) as AccountsBody
+	} catch {
+		return { known: false, reason: 'answered something that is not JSON' }
+	}
+	if (body.errors?.length) {
+		return {
+			known: false,
+			reason: `answered ${body.errors.map((e) => e.message ?? 'an error').join('; ')}`,
+		}
+	}
+	const rows = body.data?.accounts
+	if (!rows) return { known: false, reason: 'answered a 200 with no accounts' }
+
+	const accounts: string[] = []
+	for (const row of rows) {
+		if (typeof row.id !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(row.id)) {
+			return { known: false, reason: 'answered an account that is not an address' }
+		}
+		accounts.push(row.id.toLowerCase())
+	}
+	return { known: true, accounts, complete: rows.length < MAX_ACCOUNT_ROWS }
+}
+
+/**
+ * Ask the index which accounts exist. Never throws.
+ *
+ * Every failure becomes `known: false`, and the caller falls back to the account config names.
+ * That fallback is why an index being down cannot stop the demo account being managed: the run
+ * degrades to what it did before this existed rather than to nothing.
+ */
+export function readManagedAccounts(
+	runtime: TeeRuntime<unknown>,
+	config: SubgraphConfig,
+): ManagedAccounts {
+	if (!config.subgraphUrl) return { known: false, reason: 'is not configured' }
+	try {
+		const response = new cre.capabilities.HTTPClient()
+			.sendRequest(runtime, accountsHttpRequest(config))
+			.result()
+		if (!ok(response)) return { known: false, reason: `answered HTTP ${response.statusCode}` }
+		return accountsFromResponse(text(response))
+	} catch {
+		return { known: false, reason: 'could not be reached' }
+	}
+}
+
+/**
+ * The accounts this run manages: everything the index knows, plus the one config names.
+ *
+ * The union and not the index alone, for two reasons that both matter on the first run after a
+ * deploy. The index lags the chain by a few blocks, so an account opened a moment ago is real and
+ * absent. And `subgraphUrl` may be empty, which is a supported configuration — the workflow ran
+ * that way before any of this.
+ *
+ * Lower-cased and de-duplicated, because the same account reaching this from both sources with
+ * different capitalisation would be read twice and signed for twice.
+ */
+export function accountsToManage(
+	configured: string,
+	discovered: ManagedAccounts,
+	limit: number,
+): string[] {
+	const anchor = configured.toLowerCase()
+	// The zero address means no anchor was set, which is the ordinary configuration: the index
+	// sees every account the factory opened, so naming one here is not how an account gets
+	// managed. Including it would have the run read state for an address with no code, decide
+	// about nothing, and count it in the fleet — three lies for the price of a default.
+	//
+	// The anchor is added **before** the limit is applied, which is its second job and the
+	// reason to set one at all: `open` is permissionless, so anyone may create accounts faster
+	// than a run can read them, and without this the account a demo depends on could be pushed
+	// out of its own run by strangers. Raised by @rifkyeasy in review of #212.
+	const anchored = anchor !== ZERO_ADDRESS
+	const seen = new Set<string>(anchored ? [anchor] : [])
+	const all = anchored ? [anchor] : []
+	if (discovered.known) {
+		for (const account of discovered.accounts) {
+			if (all.length >= limit) break
+			if (seen.has(account)) continue
+			seen.add(account)
+			all.push(account)
+		}
+	}
+	return all
+}
+
+/** One line for the run log saying how many accounts were considered, and where the list came from. */
+export function accountsNote(
+	managed: string[],
+	discovered: ManagedAccounts,
+	configured: string,
+): string {
+	const plural = managed.length === 1 ? '' : 's'
+	// Whether config named an anchor is read from config, not inferred from how many accounts
+	// came back. The inference is wrong in the case that matters most — an anchor the index also
+	// returned makes the two lists the same length, and the note would then say the anchor was
+	// not set on exactly the runs where it was doing its job.
+	const anchored = configured.toLowerCase() !== ZERO_ADDRESS
+	if (!discovered.known) {
+		const source = anchored ? 'config only' : 'nothing to manage'
+		return `${managed.length} account${plural}: ${source}, the subgraph ${discovered.reason}`
+	}
+	const page = discovered.complete ? '' : '; a full page, so there are more'
+	const from = anchored
+		? `${discovered.accounts.length} indexed plus the one in config`
+		: `${discovered.accounts.length} indexed`
+	// What a limit left out is said, never silently dropped: a run that manages 25 of 200
+	// accounts and reports 25 is indistinguishable from a run where 25 is all there is.
+	//
+	// Counted as a set difference and not `indexed + anchor - managed`, because that arithmetic
+	// reports de-duplication as truncation — an anchor the index also returned would be counted
+	// twice on the way in and once on the way out, and the note would claim an account was
+	// dropped on exactly the runs where nothing was.
+	const reachable = new Set(discovered.accounts.map((a) => a.toLowerCase()))
+	if (anchored) reachable.add(configured.toLowerCase())
+	const capped = reachable.size - managed.length
+	const over = capped > 0 ? `, ${capped} beyond this run's limit` : ''
+	return `${managed.length} account${plural}: ${from}${over}${page}`
+}
+
+/**
  * What the maker's live mandates could still spend of one token.
  *
  * A top-level `balances` query and not `mandates { balances }`, for the reason

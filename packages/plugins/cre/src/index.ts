@@ -18,7 +18,14 @@ import { type IdlePolicy, POLICY_SECRET_IDS, policyFromSecrets, policyHash } fro
 import { encodeIdleMove } from './relay'
 import { type Authorisation, encodeAuthorisation, type IdleMoveDomain, signIdleMove } from './sign'
 import { sizeIdleMove } from './sizing'
-import { bufferNote, readMandateDemand, withMandateBuffer } from './subgraph'
+import {
+	accountsNote,
+	accountsToManage,
+	bufferNote,
+	readManagedAccounts,
+	readMandateDemand,
+	withMandateBuffer,
+} from './subgraph'
 import { eligibleVenues } from './venues'
 
 export * from './abi'
@@ -69,8 +76,33 @@ export const configShape = {
 	agentKeySecretId: z.string().default('AGENT_KEY'),
 	/** The account's nonce getter. Takes no argument, unlike the vault's `nonces(address)`. */
 	nonceFunction: z.string().default('nonce'),
-	/** The `HelicoAccount` whose idle capital this workflow manages. */
-	account: hex(20),
+	/**
+	 * One `HelicoAccount` to manage regardless of what the index says, or the zero address.
+	 *
+	 * **Optional, and the zero address is the ordinary setting.** The accounts this run manages
+	 * come from the subgraph, which sees every account the factory has ever opened — so naming one
+	 * here is not how an account gets managed, it is how an account gets managed *even when the
+	 * index cannot answer*.
+	 *
+	 * Worth setting for exactly one account: the one a demo depends on, where a subgraph outage
+	 * turning into "the agent did nothing" is worse than the staleness of an address written by
+	 * hand. Everywhere else, leave it zero and let the index do its job — an account opened a
+	 * minute ago is then managed without anybody editing a file.
+	 */
+	account: hex(20).default(zeroAddress),
+	/**
+	 * The most accounts one run will read, decide about and rank.
+	 *
+	 * `evaluate` costs several `eth_call`s and one confidential HTTP request per account, and
+	 * `open` is permissionless — so without a bound, anyone can grow what a cron tick has to do
+	 * before it signs anything. That is not a way to take funds, it is a way to crowd an account
+	 * out of its own run, which is why the anchor above is added before this limit is applied.
+	 *
+	 * Twenty-five because it is comfortably more than this will hold during judging and
+	 * comfortably less than a run can time out on. Raise it when a run demonstrably finishes with
+	 * room, not before.
+	 */
+	maxAccountsPerRun: z.number().int().positive().max(1000).default(25),
 	/**
 	 * The lending markets to choose between, in the owner's own order — which is what breaks a
 	 * tie between two paying the same. The account must already permit each of them; the enclave
@@ -270,6 +302,108 @@ export function decide(
 	}
 }
 
+/** One account, read and judged. The fields the acting branch needs, and nothing else. */
+type Judged = {
+	account: string
+	state: AccountState
+	effective: IdlePolicy
+	demand: ReturnType<typeof readMandateDemand>
+	outcome: Outcome
+	/** The buffer note for this account, already bracketed, or empty when no index is configured. */
+	buffer: string
+}
+
+/**
+ * Read one account and decide for it.
+ *
+ * Split out of `onCronTrigger` when the workflow stopped managing a single address. Everything
+ * here was inline and per-account already; the only thing that changed is that it is now called
+ * once per account rather than once.
+ *
+ * The mandate-demand read is per account and not shared, because the buffer it raises is a
+ * property of *that* account's mandates. Sharing one number across a fleet would hold capital
+ * liquid in accounts that owe nothing, and free capital in the one that does.
+ */
+function evaluate(
+	runtime: TeeRuntime<Config>,
+	config: Config,
+	policy: IdlePolicy,
+	account: string,
+	now: number,
+	signs: boolean,
+): Judged {
+	const state = readAccountState(
+		runtime,
+		config.rpcUrl,
+		{
+			account: account as Address,
+			pools: config.pools as Address[],
+			asset: config.asset as Address,
+		},
+		{ withNonce: signs, nonceFunction: config.nonceFunction },
+	)
+
+	// Ask The Graph what this account's live Aqua mandates could still spend of the asset, and
+	// raise the liquid buffer to it. The account is the maker in Aqua's ledger, a swap against one
+	// of its mandates is served out of the wallet first, and that question has no on-chain answer
+	// — so the index is the only place the number exists. An index that is down, empty or behind
+	// never turns the decision into a wrong one: it can only fail to raise a floor, and the run
+	// falls back to the owner's own `minIdleAmount`. See `subgraph.ts` for what each of those does
+	// to the next swap.
+	const demand = readMandateDemand(runtime, config, account, config.asset)
+	// Never hashed: the policy hash commits to the secrets the owner published, and this is not
+	// those secrets.
+	const effective = withMandateBuffer(policy, demand)
+	const buffer = config.subgraphUrl ? ` [${bufferNote(policy, demand)}]` : ''
+
+	return {
+		account,
+		state,
+		effective,
+		demand,
+		outcome: decide({ ...config, account }, effective, state, now),
+		buffer,
+	}
+}
+
+/**
+ * The account whose move is worth the most, or nothing when every account is holding.
+ *
+ * Ranked by amount and not by rate gap, because the amount is the number the single report this
+ * run may emit will carry. Two accounts asking for the same amount keep the order they arrived
+ * in, which is oldest-first from the index — a tie broken arbitrarily would have the fleet
+ * migrate on noise between runs.
+ */
+function largestMove(judged: Judged[]): Judged | undefined {
+	let best: Judged | undefined
+	for (const candidate of judged) {
+		if (!candidate.outcome.act) continue
+		if (!best?.outcome.act) {
+			best = candidate
+			continue
+		}
+		if (candidate.outcome.params.amount > best.outcome.params.amount) best = candidate
+	}
+	return best
+}
+
+/**
+ * What the run says when nothing moved.
+ *
+ * The first account's reason and not a summary of all of them: with one account it is the line
+ * this workflow has always returned, and with several the others are counted rather than listed,
+ * because a run log that grows with the fleet stops being readable exactly when the fleet is
+ * worth reading about.
+ */
+function holdLine(judged: Judged[], fleet: string): string {
+	const first = judged[0]
+	if (!first) return `HOLD (no account to manage)${fleet}`
+	const others = judged.length - 1
+	const rest = others > 0 ? `, and ${others} other${others === 1 ? '' : 's'} holding` : ''
+	const reason = first.outcome.act ? 'nothing' : first.outcome.reason
+	return `HOLD (${reason})${rest}${fleet}${first.buffer}`
+}
+
 // ─── TEE cron callback ───────────────────────────────────────
 export const onCronTrigger = async (runtime: TeeRuntime<Config>): Promise<string> => {
 	const config = runtime.config
@@ -292,34 +426,40 @@ export const onCronTrigger = async (runtime: TeeRuntime<Config>): Promise<string
 	if (config.policyHash !== ZERO_HASH && hash !== config.policyHash)
 		return 'HOLD (policy hash mismatch)'
 
-	// 3. Read the account and every market it may use, from inside the enclave.
-	const state = readAccountState(
-		runtime,
-		config.rpcUrl,
-		{
-			account: config.account as Address,
-			pools: config.pools as Address[],
-			asset: config.asset as Address,
-		},
-		{ withNonce: signs, nonceFunction: config.nonceFunction },
-	)
+	// 3. Every account the factory has opened, not only the one config names.
+	//
+	//    `open` is permissionless, so anyone may create an account at any moment, and until this
+	//    existed the enclave managed exactly one address — written into `config.production.json`
+	//    by hand. An account somebody else opened sat there with no agent looking at it, which is
+	//    worse than not offering the feature: the panel showing it implied otherwise.
+	//
+	//    The union with config's account, rather than the index alone, is what keeps the demo
+	//    account managed on the first run after a deploy — the index lags the chain by a few
+	//    blocks, and `subgraphUrl` may be empty, which is still a supported configuration.
+	const discovered = readManagedAccounts(runtime, config)
+	const managed = accountsToManage(config.account, discovered, config.maxAccountsPerRun)
+	const fleet = config.subgraphUrl ? ` [${accountsNote(managed, discovered, config.account)}]` : ''
 
-	// 3b. Ask The Graph what this account's live Aqua mandates could still spend of the asset, and
-	//     raise the liquid buffer to it. The account is the maker in Aqua's ledger, a swap against
-	//     one of its mandates is served out of the wallet first, and that question has no
-	//     on-chain answer — so the index is the only place the number exists. An index that is
-	//     down, empty or behind never turns the decision into a wrong one: it can only fail to
-	//     raise a floor, and the run falls back to the owner's own `minIdleAmount`. See
-	//     `subgraph.ts` for what each of those does to the next swap.
-	const demand = readMandateDemand(runtime, config, config.account, config.asset)
-	// Never hashed: `hash` above commits to the secrets the owner published, and this is not
-	// those secrets.
-	const effective = withMandateBuffer(policy, demand)
-	const buffer = config.subgraphUrl ? ` [${bufferNote(policy, demand)}]` : ''
+	// 4. Decide for each of them, and act on one.
+	//
+	//    **One move leaves per run, and that was already true.** The account's nonce is strictly
+	//    sequential, so a second signed call for the same account in one run would be invalid the
+	//    moment the first landed. Across accounts the constraint is different and the answer is
+	//    the same, deliberately: it has not been established that a run may emit more than one
+	//    report, and the way to find out is a rehearsal rather than a guess in production. So
+	//    every account is read and judged, the largest move is the one signed, and the rest are
+	//    named in the line so a hold is never mistaken for not having looked.
+	const judged = managed.map((account) => evaluate(runtime, config, policy, account, now, signs))
+	const acting = largestMove(judged)
 
-	// 4. Decide which market the capital should sit in, and how much of the difference is worth
-	//    moving. One move leaves per run, because the account's nonce is strictly sequential.
-	const outcome = decide(config, effective, state, now)
+	if (!acting) return holdLine(judged, fleet)
+
+	const { state, effective, demand, outcome, buffer } = acting
+	// Narrows `outcome` for everything below. `largestMove` only ever returns an acting one, so
+	// this is a type boundary rather than a runtime possibility.
+	if (!outcome.act) return holdLine(judged, fleet)
+	const others = judged.length - 1
+	const rest = others > 0 ? ` (${others} other account${others === 1 ? '' : 's'} held)` : ''
 
 	// 4b. Ask the model to say why, in the owner's words. Never load-bearing: a missing or
 	//     rejected answer changes nothing about what happens next. It is handed every market the
@@ -346,7 +486,6 @@ export const onCronTrigger = async (runtime: TeeRuntime<Config>): Promise<string
 		: undefined
 	const because = reason ? ` — ${reason}` : ''
 
-	if (!outcome.act) return `HOLD (${outcome.reason})${buffer}${because}`
 	// The market is named in the line, not only in the report: with several to choose between,
 	// "SUPPLY 800000000" no longer says what happened.
 	const move = outcome.params.supply
@@ -363,7 +502,16 @@ export const onCronTrigger = async (runtime: TeeRuntime<Config>): Promise<string
 			name: config.domainName,
 			version: config.domainVersion,
 			chainId: config.chainId as number,
-			verifyingContract: config.account as Address,
+			// **The account that acts, not the one config names.** `HelicoAccount.domainSeparator`
+			// is built from `address(this)`, so a statement signed under any other address
+			// recovers to something that is not the agent and the account refuses it. Since
+			// `account` now defaults to the zero address, using it here would sign every
+			// ordinary run against `0x0000…0000` and no signature would ever be usable.
+			//
+			// Caught by @rifkyeasy in review. The test that had covered signing agreed with the
+			// bug rather than measuring it: it built its expected domain from the same
+			// `config.account` expression the code used, so both were wrong together.
+			verifyingContract: acting.account as Address,
 		}
 		const { signature, signer } = await signIdleMove(key, domain, auth)
 		// The statement is public by design once relayed; it is what the DON attests to.
@@ -379,10 +527,10 @@ export const onCronTrigger = async (runtime: TeeRuntime<Config>): Promise<string
 		// The buffer note goes before the statement, never after: `rehearse-idle.sh` reads the
 		// JSON out of this line with a greedy match to the last `}`, and prose behind it would be
 		// swallowed into what it tries to parse.
-		return `${move}${buffer} ${authorisationJson(auth, signature, signer)}${because}`
+		return `${move}${rest}${fleet}${buffer} ${authorisationJson(auth, signature, signer)}${because}`
 	}
 	const txHash = deliver(runtime.usingTheDons(), config, encodeReport(true, hash, outcome.params))
-	return `${move}${buffer} tx ${txHash}${because}`
+	return `${move}${rest}${fleet}${buffer} tx ${txHash}${because}`
 }
 
 /**
