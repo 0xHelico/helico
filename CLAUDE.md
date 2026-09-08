@@ -338,8 +338,22 @@ costs one slot, not several.
 > example is named after. So the position our app implements is the example's position; what is
 > custom is the mandate around it. That is precisely what "quite general" describes.
 >
-> What would answer it is tracked in the Aqua-position issue. Deciding whether to act is
-> @ghozzza's call — it is their contract, and it is six days out from the deadline.
+> **Acted on, 9 September.** `HelicoOracleBoard` was built and it changes what the paragraph above
+> describes. `HelicoMandateSwap` prices as a constant product, so the price *is* the ratio of the
+> two sides and a maker holding only one token has no price at all — which is the maker this
+> product is built for. The board quotes that maker from a Chainlink feed and bends both sides
+> **down** as base inventory accumulates, so inventory is pushed home by the price rather than by
+> anyone watching. `oracle-price-adjuster` in the list above adjusts a price; it does not know who
+> holds what, and the skew is the part no published instruction has.
+>
+> Six fork tests hold it against the live ETH/USD feed and real USDC, including a stale feed
+> refusing the fill and the cap refusing rather than merely discouraging.
+>
+> **This still does not say the track qualifies, and no checklist line here claims it.** 1inch
+> declined to bless a design and called it general; whether an oracle-priced board with an
+> inventory brake is less general is their judgement, not ours. What changed is that the sentence
+> "the position our app implements is the example's position" is no longer true, and this file
+> should not go on saying it.
 
 ### Finalist track (optional)
 

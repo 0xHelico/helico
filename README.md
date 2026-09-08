@@ -122,6 +122,54 @@ subgraph is here. Pricing comes from 1inch's deployed SwapVM, not from arithmeti
 [the plugin's README](packages/plugins/1inch/README.md) lists the three ways this can be wrong
 *without reverting*, each with a test.
 
+#### A second app, because the first one cannot quote a one-sided maker
+
+`HelicoMandateSwap` prices as a constant product, and that is a real limit rather than a
+stylistic one: **the price *is* the ratio of the two sides**, so a maker holding only USDC has no
+price at all. Which is exactly the maker this product is built for — their USDC is earning in a
+lending market, and a fill is settled out of it mid-swap.
+
+`HelicoOracleBoard` quotes that maker from a Chainlink feed, and brakes itself on Aqua's own
+ledger:
+
+```
+bid = mid × (BPS − spread − skew) / BPS
+ask = mid × (BPS + spread − skew) / BPS
+```
+
+Both sides shift **down** as base inventory accumulates, so selling into the board gets steadily
+worse and buying the inventory back gets steadily better. Inventory is pushed home by the price
+rather than by anyone watching — the behaviour a constant product gets for free, rebuilt on top of
+a feed that knows nothing about who holds what.
+
+Measured against the live ETH/USD feed on Arbitrum One, read from the chain rather than assumed:
+
+```
+chainlink ETH/USD  2483.504394
+bid                2476.053880    empty inventory, the feed less 0.30%
+ask                2490.954907
+bid, half full     2451.218836    bent by half the skew
+```
+
+| What | Where |
+|---|---|
+| The board a maker ships, field by field | [`HelicoOracleBoard.sol#L83-L95`](https://github.com/0xHelico/helico/blob/0052b8a7fccad523132017fffb911367e51e0607/contracts/src/HelicoOracleBoard.sol#L83-L95) |
+| Both sides, from the feed and the inventory | [`#L121-L126`](https://github.com/0xHelico/helico/blob/0052b8a7fccad523132017fffb911367e51e0607/contracts/src/HelicoOracleBoard.sol#L121-L126) |
+| The skew that bends them, and why it is one-way | [`#L210-L216`](https://github.com/0xHelico/helico/blob/0052b8a7fccad523132017fffb911367e51e0607/contracts/src/HelicoOracleBoard.sol#L210-L216) |
+| The feed read, with staleness refused rather than tolerated | [`#L194-L206`](https://github.com/0xHelico/helico/blob/0052b8a7fccad523132017fffb911367e51e0607/contracts/src/HelicoOracleBoard.sol#L194-L206) |
+| The fill, and what it settles out of | [`#L144-L161`](https://github.com/0xHelico/helico/blob/0052b8a7fccad523132017fffb911367e51e0607/contracts/src/HelicoOracleBoard.sol#L144-L161) |
+| The budget a fill may not exceed | [`#L222-L245`](https://github.com/0xHelico/helico/blob/0052b8a7fccad523132017fffb911367e51e0607/contracts/src/HelicoOracleBoard.sol#L222-L245) |
+
+Six fork tests hold it to that, against the real feed and real USDC:
+`ForkOracleBoard.t.sol` — a one-sided maker quoting the live market, the quote bending as
+inventory accumulates, the cap **refusing** rather than merely discouraging, the inventory bought
+back, a **stale feed refusing the fill**, and the spread being what the maker actually earns.
+
+`FixedPriceBoard` in `contracts/test/` is the step between the two, kept as a test fixture rather
+than shipped: it proves a one-sided maker *can* provide liquidity on Aqua, and then proves why a
+fixed price is not enough — the price does not move no matter how much is taken, so a moving
+market converts the whole position at yesterday's number.
+
 **Powered by SwapVM — © Degensoft Ltd 2025.** [`contracts/src/swapvm/`](contracts/src/swapvm/) is
 a redeployment of Degensoft's `AquaSwapVMRouter` with one instruction added. Their VM, transfer
 phase, Aqua accounting and every published instruction are unchanged; the addition is opcode 34,
