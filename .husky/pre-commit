@@ -1,1 +1,15 @@
 bunx biome check --staged --no-errors-on-unmatched
+
+# Solidity checks that CI runs and this hook did not, which is how a `forge fmt` I ran with its
+# output piped to /dev/null went unnoticed until CI failed. A formatter that rewrote files and
+# one with nothing to do look identical through /dev/null; they do not look identical here.
+#
+# Only the instant checks. `check-storage-layout.py` needs a build and stays in CI.
+if git diff --cached --name-only --diff-filter=ACM | grep -q '\.sol$'; then
+	(cd contracts && forge fmt --check) || {
+		echo "" >&2
+		echo "Solidity formatting. Run: cd contracts && forge fmt" >&2
+		exit 1
+	}
+	python3 scripts/check-pragmas.py || exit 1
+fi
