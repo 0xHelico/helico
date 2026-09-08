@@ -44,6 +44,16 @@ They are written to fail for the right reason. Three of them unplug our own subg
 assert the page still answers, because a fallback nobody exercises is a fallback nobody has, and
 one fails on any Content-Security-Policy violation the browser reports.
 
+And what is actually deployed, the way a judge meets it — read-only, no wallet, safe any time:
+
+```bash
+bun run --filter @helico/app prod
+```
+
+It opens helico.site, the blog and app.helico.site in a real browser, reads the headers the
+browser does not show, and asks the deployed subgraph cache for a hit and for a refusal. Worth
+running before recording anything.
+
 And the whole account flow, through the interface, on a fork of Arbitrum One:
 
 ```bash

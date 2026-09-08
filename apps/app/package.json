@@ -12,7 +12,8 @@
     "fixture": "bun run e2e/fork-fixture.ts",
     "test": "bun test",
     "e2e": "bun run e2e/browser-checks.ts",
-    "e2e:account": "bun run e2e/fork-account.ts"
+    "e2e:account": "bun run e2e/fork-account.ts",
+    "prod": "bun run e2e/production.ts"
   },
   "dependencies": {
     "@ai-sdk/react": "^4.0.96",
