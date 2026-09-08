@@ -158,11 +158,16 @@ the one thing a deployment record must not do.
 What is true, from `cre execution list`:
 
 ```
+13:50:02 UTC   SUCCESS
 13:45:02 UTC   SUCCESS    ← first run of the one-item binary
 13:40:01 UTC   FAILURE
 13:35:02 UTC   FAILURE
 13:30:02 UTC   FAILURE
 ```
+
+Two in a row, which is what makes it a fix rather than a coincidence — the failures were
+deterministic across two runs of one binary, so a single success would have proved as little as
+a single failure did.
 
 So: it reaches its logic and holds, because no account has been opened on mainnet and there is
 nothing to manage. The moment somebody opens one and calls `setAgent`, the enclave picks it up —
