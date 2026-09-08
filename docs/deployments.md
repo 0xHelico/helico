@@ -52,13 +52,69 @@ that merely compiles to the same thing.
 Verification needs `ETHERSCAN_API_KEY` in the source-of-truth `.env`. One key serves every chain
 on Etherscan's v2 API, so `--chain-id 42161` is all that points it at Arbiscan.
 
+## 8 September 2026 — the SwapVM router
+
+| Contract | Address | Answers | Source |
+|---|---|---|---|
+| `HelicoAquaSwapVMRouter` | [`0xb8c9f14d46bf387a6d70d796df30f11a0eb8c3be`](https://arbiscan.io/address/0xb8c9f14d46bf387a6d70d796df30f11a0eb8c3be) | `AQUA()` → `0x1111113CCf…`, `AQUA_YIELD_COVER_OPCODE()` → `34` | verified |
+
+```
+tx 0x074ad590cc29214e2a12667f538f8a0fb1d1cb87d39b4a4e878340abfa943ab7
+block 502,984,884   gas 4,186,682   cost 0.0000839 ETH
+constructor(aqua, weth, rescuer, "Helico SwapVM", "1")
+rescuer 0x6DCd7485aB17e0CBD0723b8435a35bb8d029439E
+```
+
+The EIP-712 domain reads back as `"Helico SwapVM"` version `"1"`, which is how you tell this
+router apart from 1inch's `"1inch SwapVM v1.0"` / `"1.0.2"` at
+`0x111111338c5091E8440b67B168bAe16a668AC0De`. **Ship strategies carrying opcode 34 to the address
+above, not to that one** — see the runbook for what happens if you do not, and the fork test that
+measures it.
+
+### Verifying it took six attempts, and the sixth is the one to remember
+
+Every submission came back `Compiled contract deployment bytecode does NOT match`, while the
+other three verified first time with the same compiler and key. The settings were not the
+problem — they were copied from the artifact's own metadata and still failed.
+
+**Sourcify named it.** Its rejection carries an error code the Etherscan API does not:
+
+```
+extra_file_input_bug
+It seems your contract's metadata hashes match but not the bytecodes.
+Use the original full standard JSON input file that has all files including
+those not needed by this contract.
+```
+
+The metadata hash matching while the bytecode does not is the whole diagnosis. **solc's IR
+pipeline produces different bytecode depending on which files are in the compilation unit**, even
+when the extra files contribute nothing to the contract. Foundry compiles the whole project — 155
+sources here — while `forge verify-contract --show-standard-json-input` submits the dependency
+closure, 64. Same settings, same solc, 50 bytes of difference.
+
+The fix is to submit what was actually compiled. `out-swapvm/build-info/*.json` carries
+`source_id_to_path` for the real unit; rebuilding the standard JSON from all 155 and compiling it
+locally reproduced the deployed creation bytecode **exactly**, and Arbiscan then accepted it on
+the first try.
+
+This only bites contracts built with `via_ir`, which is why the other three never met it.
+
+### The deployment was faithful, and that was checked before any of this
+
+Worth keeping separate from the verification story, because it is what made it safe to keep
+trying rather than assume a bad deploy:
+
+- the creation bytecode in the deploy transaction **starts with the local artifact's exactly**,
+  and the tail is the constructor arguments byte for byte;
+- the runtime differs by ~377 bytes against **16 declared immutable slots** — 512 bytes of
+  placeholder the constructor fills;
+- a clean `FOUNDRY_PROFILE=swapvm forge build` from `main` reproduces the deployed creation
+  bytecode, checked by deleting `out-swapvm` and rebuilding.
+
 ### Deliberately not deployed
 
 - **`HelicoVault` and the Uniswap v4 path.** CRE no longer drives it. See
   [#175](https://github.com/0xHelico/helico/issues/175).
-- **The SwapVM router.** [#195](https://github.com/0xHelico/helico/pull/195) is still in review,
-  and it is not on `main` to deploy. When it lands it needs `SWAPVM_RESCUER` decided first —
-  unset means tokens stranded in the router stay stranded.
 
 ### Not done yet
 
