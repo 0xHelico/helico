@@ -43,7 +43,7 @@ not yet true rather than left to be assumed — see [Rules](#rules) for why that
 | [`docs/plans/`](docs/plans/) | Implementation plans, written before the code |
 
 The workflow's logic lives in `packages/plugins/cre` rather than in `apps/cre`, because every
-partner integration here is a reusable package — and because that is what lets 165 unit tests
+partner integration here is a reusable package — and because that is what lets 208 unit tests
 cover the enclave's decision without the CRE CLI in the loop. `apps/cre` is what the CLI
 compiles and simulates.
 

@@ -49,7 +49,7 @@ list is that it changes.
 | Shot 3, the swap | **Recordable in full.** The fork test and `DeployMandateSwap.s.sol` both pin Aqua at `0x1111113CCf…` — the address 1inch confirmed in `#partner-1inch`, exports from `@1inch/aqua-sdk`, and has in the deployed `AquaSwapVMRouter`'s bytecode. It was `0x499943E7…` until 8 September, taken from the README inside the `v1.0.0` tag we vendor — a March snapshot, which is what a tag is; 1inch's `main` README names the right one. That address is a real Aqua with no event since block 451,737,844 ([#165](https://github.com/0xHelico/helico/issues/165)). The sentence *"the Aqua 1inch deployed"* is true on camera now, and was not when this row was first written — check the cell against the constant before recording rather than trusting either |
 | Shot 3, at `-vv` | **Would have cost a take.** One `[PASS]` line, no balances. Use `-vvvv` |
 | Shot 4, the subgraph | **Recordable.** Deployed and synced 8 September, serving the Aqua 1inch uses: 47 makers, mandates from block 485,793,304. It spent a day pointed at the retired deployment and looked healthy the whole time ([#181](https://github.com/0xHelico/helico/issues/181)), so re-run `bun scripts/check-subgraph.ts` on the day and read the numbers off that run |
-| Shot 5, the enclave | Runs. A recorded rehearsal with its numbers checked is in [`docs/evidence/2026-09-07-cre-rehearsal.md`](evidence/2026-09-07-cre-rehearsal.md) |
+| Shot 5, the enclave | Runs. A recorded rehearsal with its numbers checked against the policy is in [`docs/evidence/2026-09-08-idle-capital-rehearsal.md`](evidence/2026-09-08-idle-capital-rehearsal.md). The 7 September file records the vault path the workflow no longer drives |
 | "Deployed", "live", "in production" | Still says nothing that is deployed except Aqua itself, which is 1inch's |
 
 ## Shot list
@@ -224,8 +224,11 @@ End on the repo URL. No outro music.
 - **"The AI decides where your money goes"** — it does not. A model turns the verdict into a
   sentence the owner can read, and the verdict is computed before it is called and never reads its
   answer back. Say *"the enclave decides, and a model explains it"*
-- **"It finds the best yield across protocols"** — not yet. Today it holds a target share against
-  a liquid buffer at one market, with a threshold so it does not churn. `0xHelico/helico#179`
+- **"It finds the best yield across protocols"** — half true, so say the half that is. It *does*
+  compare live rates across the markets the owner permitted and move to the best when the gap
+  clears a round-trip bar. Those markets are Aave-family only; Compound and Morpho need an
+  adapter and are blocked on a receipt-conversion assumption. Say *"across the markets you
+  permitted"*, not *"across protocols"*. `0xHelico/helico#179`
 - **"The Graph tells the agent what to work on"** — no. What is true, and sayable: *the workflow
   asks The Graph how much the maker's mandates could demand, and sizes the liquid buffer to it.*
   It still reads the account's own balances over RPC. The distinction is small and a judge who
