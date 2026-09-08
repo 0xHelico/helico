@@ -6,7 +6,7 @@
   "scripts": {
     "codegen": "graph codegen",
     "build": "graph build",
-    "deploy": "graph deploy helico-aqua-arbitrum-one",
+    "deploy": "graph deploy helico-arbitrum-one",
     "test": "graph test"
   },
   "dependencies": {
