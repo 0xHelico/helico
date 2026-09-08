@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { isIntent, isTurnAction } from "./intent";
+import { isIntent, isTurnAction, shortfall } from "./intent";
 
 // One field on a message holds two different things, and the chat picks a card from it. Getting
 // this wrong renders a swap card for a revoke, which offers a transaction nobody asked for.
@@ -46,5 +46,18 @@ describe("telling a stored turn's two shapes apart", () => {
     for (const action of ["drain", "withdraw", "transfer", "swap"]) {
       expect(isTurnAction({ action })).toBe(false);
     }
+  });
+});
+
+describe("shortfall", () => {
+  test("is null while the balance is unknown, so nothing is refused on missing data", () => {
+    expect(shortfall(undefined, 5n)).toBeNull();
+  });
+  test("is null when the balance covers it, exactly included", () => {
+    expect(shortfall(5n, 5n)).toBeNull();
+    expect(shortfall(6n, 5n)).toBeNull();
+  });
+  test("is the difference when it does not", () => {
+    expect(shortfall(2n, 5n)).toBe(3n);
   });
 });

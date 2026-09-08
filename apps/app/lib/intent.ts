@@ -43,3 +43,17 @@ export function isTurnAction(value: unknown): value is TurnAction {
   const { action } = value as { action: unknown };
   return action === "status" || action === "revoke";
 }
+
+/**
+ * How much the wallet is short of the amount it is trying to swap, or null when it can cover it.
+ *
+ * Its own function because it decides whether a transaction is offered at all, and a swap sent
+ * short does not fail politely: it reverts, and the person pays the gas to find out.
+ */
+export function shortfall(
+  balance: bigint | undefined,
+  amountIn: bigint,
+): bigint | null {
+  if (balance === undefined) return null;
+  return balance < amountIn ? amountIn - balance : null;
+}
