@@ -148,10 +148,10 @@ export function AppSidebar({ address }: { address: `0x${string}` }) {
                   <SidebarMenuButton
                     className="rounded-lg text-sidebar-foreground/40 transition-colors duration-150 hover:bg-destructive/10 hover:text-destructive"
                     onClick={handleShowDeleteAllDialog}
-                    tooltip="Delete All Chats"
+                    tooltip="Clear chat history"
                   >
                     <TrashIcon className="size-4" />
-                    <span className="text-[13px]">Delete all</span>
+                    <span className="text-[13px]">Clear chat</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               </SidebarMenu>
@@ -173,7 +173,7 @@ export function AppSidebar({ address }: { address: `0x${string}` }) {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete all chats?</AlertDialogTitle>
+            <AlertDialogTitle>Clear every chat?</AlertDialogTitle>
             <AlertDialogDescription>
               This action cannot be undone. This will permanently delete all
               your chats and remove them from our servers.
@@ -182,7 +182,7 @@ export function AppSidebar({ address }: { address: `0x${string}` }) {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeleteAll}>
-              Delete All
+              Clear chats
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
