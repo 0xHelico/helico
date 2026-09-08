@@ -5,12 +5,16 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -51,7 +55,13 @@ func run() error {
 	svc := blog.NewService(db)
 	chats := chat.NewService(db)
 	if cfg.SessionSecret == "" {
-		log.Warn("BE_SESSION_SECRET is unset; the cookie key is random, so every restart signs everyone out")
+		key, path, err := rememberedSecret(cfg.DBPath)
+		if err != nil {
+			log.Warn("BE_SESSION_SECRET is unset and no key could be kept; every restart will sign everyone out", "err", err)
+		} else {
+			log.Warn("BE_SESSION_SECRET is unset; using the key kept beside the database", "path", path)
+			cfg.SessionSecret = key
+		}
 	}
 	if n, err := content.Seed(ctx, cfg.ContentDir, svc); err != nil {
 		return fmt.Errorf("seed: %w", err)
@@ -96,4 +106,37 @@ func run() error {
 	}
 	log.Info("stopped")
 	return nil
+}
+
+// rememberedSecret keeps a local run signed in across restarts.
+//
+// An unset BE_SESSION_SECRET means a key generated at boot, so every `go run` invalidated every
+// cookie — which reads as "the session does not work" rather than "the key changed", and cost a
+// day of looking at the wrong end of it. This writes one beside the database, readable only by
+// its owner, and reuses it.
+//
+// It is not a fallback for a deployment. Every environment we run sets the variable, and one that
+// forgets to still gets the warning above — it just gets a working session while it is forgotten,
+// instead of an unusable one.
+func rememberedSecret(dbPath string) (string, string, error) {
+	dir := filepath.Dir(dbPath)
+	path := filepath.Join(dir, ".session-key")
+	if b, err := os.ReadFile(path); err == nil {
+		if key := strings.TrimSpace(string(b)); len(key) >= 32 {
+			return key, path, nil
+		}
+	}
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return "", path, err
+	}
+	key := hex.EncodeToString(raw)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", path, err
+	}
+	// 0600: it signs every session this process issues.
+	if err := os.WriteFile(path, []byte(key), 0o600); err != nil {
+		return "", path, err
+	}
+	return key, path, nil
 }
