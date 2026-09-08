@@ -1,13 +1,37 @@
 @import "tailwindcss";
-@import "katex/dist/katex.min.css";
-
-@source "../../../node_modules/streamdown/dist/index.js";
-
-@custom-variant dark (&:is(.dark, .dark *));
 
 @plugin "tailwindcss-animate";
-@plugin "@tailwindcss/typography";
 
+/*
+ * Light only.
+ *
+ * The dark half went with the chat. It was two full token sets, a `.dark` variant on every
+ * component, and a `prefers-color-scheme` block — and nothing in this app is read at night by
+ * somebody who chose it. One palette is one palette to check: the numbers below were measured
+ * for contrast rather than picked, and a second set would have doubled that work for a theme
+ * nobody asked for.
+ */
+@theme {
+  /* Type. `tabular-nums` matters more than the family: a column of figures that shifts as it
+     updates is a column nobody can compare down. */
+  --color-ink: #16181a;
+  --color-body: #3f4447;
+  --color-soft: #676c70;
+  --color-faint: #6f747a;
+  --color-line: #e9e9e7;
+  --color-shade: #f5f5f3;
+
+  /* State. Reserved: never a series colour, and never used without a word beside them. */
+  --color-pos: #007a4b;
+  --color-neg: #d53f3f;
+
+  /* Helico's own. `on` is the accent and the one series colour a chart may use — validated
+     against this surface for lightness, chroma and 3:1 contrast rather than chosen by eye. */
+  --color-on: #695cff;
+  --color-on-soft: #f0eeff;
+}
+
+/* shadcn's vocabulary, mapped onto the above so the primitives that survived keep working. */
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -17,8 +41,6 @@
   --color-foreground: var(--foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
@@ -31,531 +53,138 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
 }
 
 :root {
-  --radius: 0.625rem;
-  --background: oklch(0.985 0 0);
-  --foreground: oklch(0.12 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.12 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.12 0 0);
-  --primary: oklch(0.12 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.965 0 0);
-  --secondary-foreground: oklch(0.38 0 0);
-  --muted: oklch(0.94 0 0);
-  --muted-foreground: oklch(0.58 0 0);
-  --accent: oklch(0.965 0 0);
-  --accent-foreground: oklch(0.12 0 0);
-  --destructive: oklch(0.55 0.15 25);
-  --border: oklch(0.9 0 0);
-  --input: oklch(0.9 0 0);
-  --ring: oklch(0.5 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.97 0 0);
-  --sidebar-foreground: oklch(0.38 0 0);
-  --sidebar-primary: oklch(0.12 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.12 0 0 / 0.06);
-  --sidebar-accent-foreground: oklch(0.12 0 0);
-  --sidebar-border: oklch(0.88 0 0);
-  --sidebar-ring: oklch(0.5 0 0);
+  --radius: 0.75rem;
+  --background: #ffffff;
+  --foreground: #16181a;
+  --card: #ffffff;
+  --card-foreground: #16181a;
+  --primary: #16181a;
+  --primary-foreground: #ffffff;
+  --secondary: #f5f5f3;
+  --secondary-foreground: #16181a;
+  --muted: #f5f5f3;
+  --muted-foreground: #676c70;
+  --accent: #f5f5f3;
+  --accent-foreground: #16181a;
+  --destructive: #d53f3f;
+  --border: #e9e9e7;
+  --input: #e9e9e7;
+  --ring: #695cff;
 
-  --shadow-card: 0 1px 3px oklch(0 0 0 / 0.05), 0 1px 1px oklch(0 0 0 / 0.03);
-  --shadow-float:
-    0 8px 24px -6px oklch(0 0 0 / 0.1), 0 2px 8px -2px oklch(0 0 0 / 0.04);
-  --shadow-composer: 0 1px 2px oklch(0 0 0 / 0.04);
-  --shadow-composer-focus:
-    0 0 0 1px oklch(0 0 0 / 0.06), 0 2px 8px -2px oklch(0 0 0 / 0.06);
-  --shadow-inset: inset 0 1px 1px oklch(0 0 0 / 0.03);
-  --shadow-glow: 0 0 20px oklch(0 0 0 / 0.08);
+  --helico-on: #695cff;
 
-  --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
-  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
-  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.dark {
-  --background: oklch(0.195 0 0);
-  --foreground: oklch(0.94 0 0);
-  --card: oklch(0.225 0 0);
-  --card-foreground: oklch(0.94 0 0);
-  --popover: oklch(0.225 0 0);
-  --popover-foreground: oklch(0.94 0 0);
-  --primary: oklch(0.94 0 0);
-  --primary-foreground: oklch(0.195 0 0);
-  --secondary: oklch(0.26 0 0);
-  --secondary-foreground: oklch(0.75 0 0);
-  --muted: oklch(0.165 0 0);
-  --muted-foreground: oklch(0.6 0 0);
-  --accent: oklch(0.26 0 0);
-  --accent-foreground: oklch(0.94 0 0);
-  --destructive: oklch(0.7 0.15 25);
-  --border: oklch(0.27 0 0);
-  --input: oklch(0.27 0 0);
-  --ring: oklch(0.45 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.175 0 0);
-  --sidebar-foreground: oklch(0.78 0 0);
-  --sidebar-primary: oklch(0.94 0 0);
-  --sidebar-primary-foreground: oklch(0.195 0 0);
-  --sidebar-accent: oklch(0.94 0 0 / 0.06);
-  --sidebar-accent-foreground: oklch(0.94 0 0);
-  --sidebar-border: oklch(0.25 0 0);
-  --sidebar-ring: oklch(0.45 0 0);
-
-  --shadow-card:
-    inset 0 1px 0 oklch(1 0 0 / 0.04), 0 1px 2px oklch(0 0 0 / 0.2),
-    0 0.5px 1px oklch(0 0 0 / 0.15);
-  --shadow-float:
-    0 0 0 1px oklch(1 0 0 / 0.06), 0 16px 48px -6px oklch(0 0 0 / 0.35),
-    0 6px 12px -2px oklch(0 0 0 / 0.2);
-  --shadow-composer:
-    0 1px 3px oklch(0 0 0 / 0.2), inset 0 1px 0 oklch(1 0 0 / 0.03);
-  --shadow-composer-focus:
-    0 0 0 1px oklch(1 0 0 / 0.1), 0 4px 16px -4px oklch(0 0 0 / 0.3),
-    inset 0 1px 0 oklch(1 0 0 / 0.04);
+  /* The two-tone glyphs, ported from the landing's nav. */
+  --glyph-1: #b6b3be;
+  --glyph-4: #6f747a;
+  --glyph-ink: #16181a;
 }
 
 @layer base {
   * {
-    @apply border-border ring-0;
+    @apply border-border outline-ring/50;
   }
+
   body {
-    font-feature-settings: "ss01", "ss02", "cv01";
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    text-rendering: optimizeLegibility;
-    @apply bg-background text-foreground;
+    background: #fff;
+    color: var(--color-body);
+    @apply antialiased;
+  }
+
+  /* Tailwind v4's preflight leaves buttons at `cursor: default`. */
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
   }
 }
 
-@layer base {
-  *,
-  ::after,
-  ::before,
-  ::backdrop,
-  ::file-selector-button {
-    border-color: var(--border);
+/*
+ * One page container. The header and every section use it, so the page edges line up instead of
+ * each block choosing its own inset.
+ */
+.container-page {
+  margin-inline: auto;
+  width: 100%;
+  max-width: 64rem;
+  padding-inline: 1.25rem;
+}
+@media (min-width: 768px) {
+  .container-page {
+    padding-inline: 2rem;
   }
 }
 
-@layer base {
-  body {
-    position: relative;
-    overflow-x: hidden;
-  }
-
-  html {
-    overflow-x: hidden;
-  }
-
-  h1,
-  h2,
-  h3,
-  h4,
-  h5,
-  h6 {
-    line-height: 1.2;
-    letter-spacing: -0.025em;
-  }
-
-  p {
-    line-height: 1.6;
-  }
+/* Figures that do not shuffle sideways as they update. */
+.tabular {
+  font-variant-numeric: tabular-nums;
 }
 
-button:focus-visible,
-select:focus-visible,
-[role="button"]:focus-visible,
-input:focus-visible,
-textarea:focus-visible {
-  outline: none;
-}
-
-@utility text-balance {
-  text-wrap: balance;
-}
-
-@utility -webkit-overflow-scrolling-touch {
-  -webkit-overflow-scrolling: touch;
-}
-
-@utility touch-pan-y {
-  touch-action: pan-y;
-}
-
-@utility overscroll-behavior-contain {
-  overscroll-behavior: contain;
-}
-
-@utility no-scrollbar {
-  -ms-overflow-style: none;
+.no-scrollbar {
   scrollbar-width: none;
-  &::-webkit-scrollbar {
-    display: none;
-  }
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
-@layer utilities {
-  :root {
-    --foreground-rgb: 0, 0, 0;
-    --background-start-rgb: 214, 219, 220;
-    --background-end-rgb: 255, 255, 255;
-  }
-
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --foreground-rgb: 255, 255, 255;
-      --background-start-rgb: 0, 0, 0;
-      --background-end-rgb: 0, 0, 0;
-    }
-  }
+/* The glyphs pick up the accent on hover; the two tones move together. */
+.glyph-hover:hover {
+  --glyph-1: #b7abff;
+  --glyph-4: #695cff;
 }
 
-.skeleton {
-  * {
-    pointer-events: none !important;
+/*
+ * The chart draws itself once, left to right, then the area under it fades in. `pathLength="1"`
+ * normalises the dash so the same rule works whatever the data's length.
+ */
+@keyframes chart-draw {
+  from {
+    stroke-dashoffset: 1;
   }
-
-  *[class^="text-"] {
-    color: transparent;
-    @apply rounded-md bg-foreground/20 select-none animate-pulse;
-  }
-
-  .skeleton-bg {
-    @apply bg-foreground/10;
-  }
-
-  .skeleton-div {
-    @apply bg-foreground/20 animate-pulse;
+  to {
+    stroke-dashoffset: 0;
   }
 }
-
-@keyframes fade-up {
+@keyframes chart-fade {
   from {
     opacity: 0;
-    transform: translateY(6px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
   }
+}
+.chart-line {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: chart-draw 900ms cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
+}
+.chart-area {
+  opacity: 0;
+  animation: chart-fade 600ms ease-out 350ms forwards;
 }
 
 @keyframes fade-in {
   from {
     opacity: 0;
+    transform: translateY(4px);
   }
   to {
     opacity: 1;
+    transform: none;
   }
 }
-
-@keyframes shimmer {
-  0% {
-    background-position: -200% 0;
-  }
-  100% {
-    background-position: 200% 0;
-  }
-}
-
-@keyframes dot-pulse {
-  0%,
-  60%,
-  100% {
-    opacity: 0.3;
-    transform: translateY(0);
-  }
-  30% {
-    opacity: 1;
-    transform: translateY(-3px);
-  }
-}
-
-@keyframes message-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes thinking-dot {
-  0%,
-  60%,
-  100% {
-    opacity: 0.3;
-    transform: translateY(0);
-  }
-  30% {
-    opacity: 1;
-    transform: translateY(-3px);
-  }
-}
-
-@keyframes glow-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 oklch(0.55 0.12 250 / 0%);
-  }
-  50% {
-    box-shadow: 0 0 0 3px oklch(0.55 0.12 250 / 8%);
-  }
-}
-
-@keyframes subtle-lift {
-  from {
-    transform: translateY(0);
-    box-shadow: var(--shadow-card);
-  }
-  to {
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-float);
-  }
-}
-
-@utility fade-up {
-  animation: fade-up 0.25s var(--ease-spring) both;
-}
-
 @utility fade-in {
-  animation: fade-in 0.2s ease both;
-}
-
-@utility shimmer {
-  background: linear-gradient(
-    90deg,
-    transparent,
-    oklch(1 0 0 / 0.04),
-    transparent
-  );
-  background-size: 200% 100%;
-  animation: shimmer 2s linear infinite;
-}
-
-@utility dot-pulse {
-  animation: dot-pulse 1.4s ease-in-out infinite;
-}
-
-@utility message-fade-in {
-  animation: message-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-@utility thinking-dot {
-  animation: thinking-dot 1.4s ease-in-out infinite;
-}
-
-@utility composer-glow {
-  animation: glow-pulse 2s ease-in-out infinite;
-}
-
-.ProseMirror {
-  outline: none;
-}
-
-.cm-editor {
-  font-family:
-    "SF Mono", "Cascadia Code", "Fira Code", "JetBrains Mono", ui-monospace,
-    monospace !important;
-  @apply bg-transparent! outline-hidden! text-[13px]! leading-[1.6]!;
-}
-
-.cm-gutters {
-  @apply bg-transparent! border-r-0! outline-hidden!;
-}
-
-.cm-gutter.cm-lineNumbers {
-  @apply min-w-[3rem] text-muted-foreground/40 text-[11px]!;
-}
-
-.cm-scroller {
-  @apply overflow-auto!;
-}
-
-.ͼo.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground,
-.ͼo.cm-selectionBackground,
-.ͼo.cm-content::selection {
-  background: oklch(0.55 0.12 250 / 0.15) !important;
-}
-
-.dark
-  .ͼo.cm-focused
-  > .cm-scroller
-  > .cm-selectionLayer
-  .cm-selectionBackground,
-.dark .ͼo.cm-selectionBackground,
-.dark .ͼo.cm-content::selection {
-  background: oklch(0.55 0.12 250 / 0.2) !important;
-}
-
-.cm-activeLine {
-  @apply bg-muted/50! rounded-sm!;
-}
-
-.cm-activeLineGutter {
-  @apply bg-transparent!;
-}
-
-.cm-activeLineGutter .cm-gutterElement {
-  color: var(--foreground) !important;
-  opacity: 0.7;
-}
-
-.cm-gutter.cm-lineNumbers .cm-gutterElement {
-  padding-right: 12px !important;
-}
-
-.cm-foldGutter {
-  @apply min-w-3;
-}
-
-.cm-cursor {
-  border-left-color: oklch(0.55 0.12 250) !important;
-  border-left-width: 2px !important;
-}
-
-.cm-matchingBracket {
-  outline: 1px solid oklch(0.55 0.12 250 / 0.3);
-  background: oklch(0.55 0.12 250 / 0.12) !important;
-  border-radius: 2px;
-}
-
-.suggestion-highlight {
-  -webkit-user-select: none;
-  user-select: none;
-  @apply cursor-pointer rounded-sm bg-blue-200 transition-colors hover:bg-blue-300 dark:bg-blue-500/40 dark:text-blue-50 dark:hover:bg-blue-400/50;
-}
-
-@layer base {
-  * {
-    scrollbar-color: oklch(0 0 0 / 0.12) transparent;
-    scrollbar-width: thin;
-  }
-
-  .dark * {
-    scrollbar-color: oklch(1 0 0 / 0.1) transparent;
-  }
-
-  *::-webkit-scrollbar {
-    width: 4px;
-    height: 4px;
-  }
-
-  *::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  *::-webkit-scrollbar-thumb {
-    background: oklch(0 0 0 / 0.12);
-    border-radius: 9999px;
-  }
-
-  *::-webkit-scrollbar-thumb:hover {
-    background: oklch(0 0 0 / 0.25);
-  }
-
-  .dark *::-webkit-scrollbar-thumb {
-    background: oklch(1 0 0 / 0.1);
-  }
-
-  .dark *::-webkit-scrollbar-thumb:hover {
-    background: oklch(1 0 0 / 0.2);
-  }
-
-  *::-webkit-scrollbar-corner {
-    background: transparent;
-  }
-}
-
-[data-testid="artifact"] {
-  isolation: isolate;
-}
-
-/* The reference's hero motion: each element rises into place a beat after the one above it,
-   and a slow drift keeps the panel from reading as a still. Both respect reduced motion. */
-@keyframes rise {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes drift {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1.1);
-  }
-  50% {
-    transform: translate3d(-3%, -2%, 0) scale(1.2);
-  }
-}
-
-.stagger {
-  opacity: 0;
-  animation: rise 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-}
-
-.drift {
-  animation: drift 24s ease-in-out infinite;
+  animation: fade-in 260ms ease-out both;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .stagger,
-  .drift {
+  .chart-line,
+  .chart-area,
+  .fade-in {
+    animation: none;
+    stroke-dashoffset: 0;
     opacity: 1;
     transform: none;
-    animation: none;
   }
-}
-
-/* The landing's two-tone glyphs, and the colour a live grant is switched to. Grey at rest,
-   the landing's lavender when the card under them is hovered — the same pair the site uses,
-   so the app and the site read as one product. */
-:root {
-  --glyph-1: #8d8a95;
-  --glyph-4: #b3b0ba;
-  --glyph-ink: #fff;
-  --helico-on: #695cff;
-}
-.dark {
-  --glyph-1: #b9b7c0;
-  --glyph-4: #55525b;
-  --glyph-ink: #fff;
-  --helico-on: #695cff;
-}
-.glyph-hover:hover {
-  --glyph-1: #b7abff;
-  --glyph-4: #695cff;
 }

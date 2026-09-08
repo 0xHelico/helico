@@ -44,13 +44,6 @@ export default function Page() {
           </section>
 
           <section className="mt-12" id="account">
-            <h2 className="font-semibold text-lg tracking-tight">
-              Where your capital sits
-            </h2>
-            <p className="mt-1.5 text-muted-foreground text-sm">
-              An account that is yours alone. Its address is known before it
-              exists, and nothing here can send your money anywhere else.
-            </p>
             <AccountPanel />
             <MandatesPanel />
           </section>

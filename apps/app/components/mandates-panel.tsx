@@ -5,32 +5,52 @@ import { useState } from "react";
 import { isAddress } from "viem";
 import { useAccount } from "wagmi";
 
-import { Glyph } from "@/components/glyph";
+import {
+  Card,
+  Empty,
+  ErrorState,
+  Loading,
+  SectionTitle,
+} from "@/components/kit";
+import { byDay, Sparkline } from "@/components/sparkline";
 import { Input } from "@/components/ui/input";
-import { amount, type MandateView, readMandates, token } from "@/lib/mandates";
+import {
+  amount,
+  type MandateView,
+  readMandates,
+  readMovements,
+  token,
+} from "@/lib/mandates";
 
 /** A maker with 48 live mandates on Arbitrum One. Not ours, which is the point. */
 const EXAMPLE = "0xef9f7f4006fe95afede04f6916e72556a957ebbc";
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
-function Shell({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="mt-4 rounded-2xl border border-dashed p-4">
-      <p className="text-muted-foreground text-xs leading-relaxed">
-        {children}
-      </p>
-    </div>
-  );
-}
+/**
+ * What is left, per token, as one line.
+ *
+ * A token the app cannot name shows its raw integer — twenty digits wide for an 18-decimal one,
+ * which is why the cell truncates and keeps the whole value in a title. Truncated with the
+ * number still reachable is honest; scaling it by a guessed 18 would not be.
+ */
+const spendable = (m: {
+  balances: { token: string; amount: bigint; spendable: boolean }[];
+}) =>
+  m.balances
+    .filter((b) => b.spendable)
+    .map((b) => {
+      const t = token(b.token);
+      return `${amount(b.amount, t.decimals)} ${t.symbol}`;
+    })
+    .join(" · ");
 
 /**
  * Every mandate a wallet has, and what is left in each.
  *
- * This is the panel that could not exist without an indexer. Aqua's `_balances` is private and
- * four levels deep, `rawBalances` needs a hash you already hold, and no event parameter is
- * indexed — so "which mandates does this wallet have" has no on-chain answer at all. Not a slow
- * one. None.
+ * The panel that could not exist without an indexer. Aqua's `_balances` is private and four
+ * levels deep, `rawBalances` needs a hash you already hold, and no event parameter is indexed —
+ * so "which mandates does this wallet have" has no on-chain answer at all. Not a slow one. None.
  *
  * It takes a typed address as well as the connected wallet, because the claim is true of any
  * wallet and reads better when the reader picks one.
@@ -40,62 +60,63 @@ export function MandatesPanel() {
   const [typed, setTyped] = useState("");
   const maker = isAddress(typed) ? typed : (address ?? "");
 
-  const { data, error, isPending, refetch } = useQuery<MandateView>({
+  const mandates = useQuery<MandateView>({
     enabled: Boolean(maker),
     queryKey: ["mandates", maker],
     queryFn: () => readMandates(maker),
   });
 
-  const field = (
-    <Input
-      aria-label="Look up another address"
-      className="mt-3 h-8 font-mono text-xs"
-      onChange={(e) => setTyped(e.target.value.trim())}
-      placeholder={`Any address — try ${short(EXAMPLE)}`}
-      value={typed}
-    />
-  );
+  // Its own query, and allowed to fail on its own: the table is the answer and the chart is
+  // context, so a chart that will not load must not take the table down with it.
+  const moves = useQuery({
+    enabled: Boolean(maker),
+    queryKey: ["movements", maker],
+    queryFn: () => readMovements(maker),
+  });
 
   const body = () => {
     if (!maker) {
       return (
-        <Shell>
-          Connect a wallet, or paste any address. Nothing here is ours: it is
-          read from a subgraph over the Aqua 1inch deployed, and it works for
+        <Empty>
+          Connect a wallet, or paste any address. Nothing here is ours — it is
+          read from a subgraph over the Aqua 1inch deployed, and it answers for
           every maker on the chain.
-        </Shell>
+        </Empty>
       );
     }
-    if (isPending) return <Shell>Reading the subgraph…</Shell>;
-    if (error) {
+    if (mandates.isPending) return <Loading className="mt-4 h-40" />;
+    if (mandates.error) {
       return (
-        <Shell>
-          The subgraph did not answer: {error.message.split("\n")[0]}.{" "}
-          <button
-            className="underline underline-offset-2"
-            onClick={() => refetch()}
-            type="button"
-          >
-            Try again
-          </button>
-        </Shell>
+        <ErrorState
+          detail={mandates.error.message.split("\n")[0]}
+          onRetry={() => mandates.refetch()}
+          what="the mandates"
+        />
       );
     }
+    const data = mandates.data;
     if (data.rows.length === 0) {
       return (
-        <Shell>
-          No mandates for {short(maker)}. That is an answer, not a failure — and
-          it is one only an indexer can give, because the chain cannot list them
-          either way.
-        </Shell>
+        <Empty>
+          No mandates for {short(maker)}. That is an answer rather than a
+          failure, and it is one only an indexer can give — the chain cannot
+          list them either way.
+        </Empty>
       );
     }
     return (
       <>
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[520px] text-left text-xs">
+        {moves.data && moves.data.timestamps.length > 0 ? (
+          <Sparkline
+            days={byDay(moves.data.timestamps)}
+            label={`Movements per day${moves.data.capped ? ", first 1,000" : ""}`}
+          />
+        ) : null}
+
+        <div className="mt-5 overflow-x-auto">
+          <table className="w-full min-w-[560px] text-left text-[12.5px]">
             <thead>
-              <tr className="border-b text-muted-foreground">
+              <tr className="border-line border-b text-[11.5px] text-soft">
                 <th className="py-2 pr-4 font-medium">Mandate</th>
                 <th className="py-2 pr-4 font-medium">App</th>
                 <th className="py-2 pr-4 font-medium">Spendable</th>
@@ -103,31 +124,25 @@ export function MandatesPanel() {
                 <th className="py-2 font-medium">State</th>
               </tr>
             </thead>
-            <tbody className="divide-y">
+            <tbody className="divide-line divide-y">
               {data.rows.map((m) => (
                 <tr key={m.strategyHash}>
-                  <td className="py-2 pr-4 font-mono">
+                  <td className="tabular py-2.5 pr-4 font-mono text-body">
                     {short(m.strategyHash)}
                   </td>
-                  <td className="py-2 pr-4 font-mono">{short(m.app)}</td>
-                  <td className="py-2 pr-4 font-mono">
-                    {m.balances
-                      .filter((b) => b.spendable)
-                      .map((b) => {
-                        const t = token(b.token);
-                        return `${amount(b.amount, t.decimals)} ${t.symbol}`;
-                      })
-                      .join(" · ") || "—"}
+                  <td className="tabular py-2.5 pr-4 font-mono text-body">
+                    {short(m.app)}
                   </td>
-                  <td className="py-2 pr-4 font-mono">{m.movements}</td>
-                  <td className="py-2">
-                    <span
-                      className={
-                        m.active
-                          ? "text-[var(--helico-on)]"
-                          : "text-muted-foreground/60"
-                      }
-                    >
+                  <td className="tabular max-w-[16rem] truncate py-2.5 pr-4 font-mono text-ink">
+                    <span title={spendable(m) || undefined}>
+                      {spendable(m) || "—"}
+                    </span>
+                  </td>
+                  <td className="tabular py-2.5 pr-4 font-mono text-body">
+                    {m.movements}
+                  </td>
+                  <td className="py-2.5">
+                    <span className={m.active ? "text-pos" : "text-faint"}>
                       {m.active ? "live" : "docked"}
                     </span>
                   </td>
@@ -136,7 +151,7 @@ export function MandatesPanel() {
             </tbody>
           </table>
         </div>
-        <p className="mt-3.5 text-[10.5px] text-muted-foreground/70 leading-relaxed">
+        <p className="mt-4 text-[11px] text-faint leading-relaxed">
           {data.rows.length} mandate{data.rows.length === 1 ? "" : "s"},{" "}
           {data.active} still live. A docked one reports zero because docking
           zeroes the ledger, so the state comes from Aqua&rsquo;s own sentinel
@@ -147,24 +162,21 @@ export function MandatesPanel() {
   };
 
   return (
-    <div className="mt-5 rounded-2xl border bg-card p-4">
-      <div className="flex items-start gap-4">
-        <span className="mt-0.5 shrink-0">
-          <Glyph name="document" size={34} />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="font-medium text-[13.5px] leading-none">
-            What this wallet may spend
-          </p>
-          <p className="mt-2 text-muted-foreground text-xs leading-relaxed">
-            Aqua keeps its balances in a private mapping four levels deep and
-            indexes no event parameter. There is no on-chain way to ask this —
-            not a slow one, none.
-          </p>
-          {field}
-        </div>
-      </div>
+    <Card className="mt-4">
+      <SectionTitle>What this wallet may spend</SectionTitle>
+      <p className="mt-1.5 text-[12.5px] text-soft leading-relaxed">
+        Aqua keeps its balances in a private mapping four levels deep and
+        indexes no event parameter. There is no on-chain way to ask this — not a
+        slow one, none.
+      </p>
+      <Input
+        aria-label="Look up another address"
+        className="mt-3 h-9 border-line font-mono text-[12px]"
+        onChange={(e) => setTyped(e.target.value.trim())}
+        placeholder={`Any address — try ${short(EXAMPLE)}`}
+        value={typed}
+      />
       {body()}
-    </div>
+    </Card>
   );
 }

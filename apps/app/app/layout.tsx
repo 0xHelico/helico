@@ -3,7 +3,6 @@ import { Inter } from "next/font/google";
 import { headers } from "next/headers";
 import type { ReactNode } from "react";
 import { Toaster } from "sonner";
-import { ThemeProvider } from "@/components/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppKitProvider } from "@/context";
 import "./globals.css";
@@ -62,25 +61,18 @@ export default async function RootLayout({
   const cookies = (await headers()).get("cookie");
 
   return (
-    <html className={inter.variable} lang="en" suppressHydrationWarning>
+    <html className={inter.variable} lang="en">
       <body className="antialiased">
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          disableTransitionOnChange
-          enableSystem
-        >
-          {/*
+        {/*
             No gate. Everything this page shows is public: a mandate ledger anyone can read and
             an account address anyone can derive. Asking a visitor to sign before showing them
             public data was a habit from when the app was a conversation that had to be kept to
             one address.
           */}
-          <AppKitProvider cookies={cookies}>
-            <TooltipProvider>{children}</TooltipProvider>
-          </AppKitProvider>
-          <Toaster position="top-center" />
-        </ThemeProvider>
+        <AppKitProvider cookies={cookies}>
+          <TooltipProvider>{children}</TooltipProvider>
+        </AppKitProvider>
+        <Toaster position="top-center" />
       </body>
     </html>
   );
