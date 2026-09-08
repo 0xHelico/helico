@@ -206,11 +206,13 @@ const browser = await chromium.launch();
     "and it links to the page that has it",
     (await page.getByRole("link", { name: /View full portfolio/ }).count()) > 0,
   );
-  // A dash, not $0.00. Zero is a measurement — it says an account was read and found empty —
-  // and there is no account to read.
+  // The factory is deployed now, so this is a measurement rather than an absence: a total, read
+  // from an account the chain can name before anyone opens it. The not-deployed path is still
+  // rendered and still reachable by clearing the override — it is just no longer what a visitor
+  // sees.
   check(
-    "and says there is nothing to total rather than totalling nothing",
-    /account factory deployed yet/.test(text),
+    "the summary totals an account rather than saying it cannot",
+    /In your account/.test(text) && !/deployed yet/.test(text),
   );
   // The panel that could not exist without an indexer. It renders for a wallet-less visitor too,
   // because the claim is about any address rather than about theirs.
@@ -273,9 +275,22 @@ const browser = await chromium.launch();
   await page
     .getByRole("heading", { name: /Welcome|Portfolio/ })
     .waitFor({ timeout: 30_000 });
+  // The account is read from the chain, so the page renders before it can answer. Waiting for
+  // the answer rather than for the page is the difference between checking what it shows and
+  // checking that it started.
+  await page
+    .getByText(/not opened yet|open$/)
+    .first()
+    .waitFor({ timeout: 30_000 });
   const text = (await page.locator("body").innerText()).trim();
   check("the portfolio page loads", /In your account/.test(text));
   check("your account is on it", /Your account/.test(text));
+  // The claim the whole account design rests on, checked against the deployed factory: an
+  // address for an account that does not exist yet, and the page saying which of the two it is.
+  check(
+    "with an address the factory names before the account exists",
+    /not opened yet/.test(text) && /0x[0-9a-fA-F]{4}…[0-9a-fA-F]{4}/.test(text),
+  );
   check(
     "and the mandates nobody can list",
     /What this wallet may spend/.test(text),

@@ -20,14 +20,25 @@ const balanceOfAbi = parseAbi([
 ]);
 
 /**
+ * `HelicoAccountFactory` on Arbitrum One, deployed 8 September.
+ *
+ * A default in code rather than a required environment variable, for the same reason as the
+ * subgraph's URL: a deployed address is public, and a judge who clones this repository should
+ * get a working page without being told to configure one. `NEXT_PUBLIC_ACCOUNT_FACTORY`
+ * overrides it — set it to an empty string to exercise the not-deployed path, which is still
+ * reachable and still rendered.
+ */
+const DEPLOYED = "0x01CC7d9FE8da79B61bcc5d3f7e3f0433DCE7E081";
+
+/**
  * The account factory, or null.
  *
- * Nothing is deployed yet, so null is the ordinary case rather than an error, and every caller
- * has to handle it. That is deliberate: a panel that renders a spinner forever while no contract
- * exists is indistinguishable from one that is broken.
+ * Null is no longer the ordinary case, and the code that handles it stays anyway. A chain the
+ * app has no factory for is a real state — another network, an override cleared — and a panel
+ * that spins forever in it is indistinguishable from one that is broken.
  */
 export function configuredFactory(): Address | null {
-  const fromEnv = process.env.NEXT_PUBLIC_ACCOUNT_FACTORY;
+  const fromEnv = process.env.NEXT_PUBLIC_ACCOUNT_FACTORY ?? DEPLOYED;
   return fromEnv && isAddress(fromEnv) ? getAddress(fromEnv) : null;
 }
 
