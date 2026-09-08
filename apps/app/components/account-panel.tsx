@@ -72,7 +72,7 @@ export function AccountPanel() {
 
   const note = (text: string) => (
     <Card className="mt-4">
-      <SectionTitle>Where your capital sits</SectionTitle>
+      <SectionTitle>Your account</SectionTitle>
       <div className="mt-3">
         <NotDeployed>{text}</NotDeployed>
       </div>
@@ -81,12 +81,12 @@ export function AccountPanel() {
 
   if (!factory) {
     return note(
-      "No account factory is deployed yet, so there is nothing to read. This says so rather than showing a figure, because a screen that invents one is worse than a screen that is empty.",
+      "No account factory is deployed yet, so there is nothing to read. Saying so beats showing a figure that is not there.",
     );
   }
   if (!isConnected) {
     return note(
-      "Connect a wallet and this will show its account address — which exists as an answer before it exists as a contract.",
+      "Connect a wallet to see its account address — an answer before it is a contract.",
     );
   }
   if (error) {
@@ -95,7 +95,7 @@ export function AccountPanel() {
   if (!data || data.kind === "unconfigured") {
     return (
       <Card className="mt-4">
-        <SectionTitle>Where your capital sits</SectionTitle>
+        <SectionTitle>Your account</SectionTitle>
         <Loading className="mt-3 h-28" />
       </Card>
     );
@@ -103,24 +103,25 @@ export function AccountPanel() {
 
   const bps = workingBps(data);
   const opened = data.kind === "open";
-  const total = data.idle + data.working;
 
   return (
     <Card className="mt-4">
-      <SectionTitle>Where your capital sits</SectionTitle>
+      <SectionTitle>Your account</SectionTitle>
 
-      <div className="tabular mt-3 font-medium text-[32px] text-ink tracking-tight">
-        {usdc(total)} <span className="text-[16px] text-soft">USDC</span>
-      </div>
       <div className="tabular mt-1 font-mono text-[11.5px] text-faint">
         {short(data.address)} · {opened ? "open" : "not opened yet"}
       </div>
 
       <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <StatTile name="Liquid" value={`${usdc(data.idle)} USDC`} />
+        <StatTile
+          name="Liquid"
+          tint="bg-[#eef3fb]"
+          value={`${usdc(data.idle)} USDC`}
+        />
         <StatTile
           name="Working"
           note={bps === null ? undefined : `${(bps / 100).toFixed(1)}% at work`}
+          tint="bg-[#ecf5f0]"
           value={`${usdc(data.working)} USDC`}
         />
         <StatTile

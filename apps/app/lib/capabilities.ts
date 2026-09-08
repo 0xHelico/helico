@@ -37,42 +37,38 @@ export const GRANTS: Grant[] = [
     name: "Put idle capital to work",
     glyph: "leaf",
     detail:
-      "Move what is sitting still into a lending market you allow-listed, and take it back out. The agent has no say in where it goes: neither call takes a recipient, so both ends are your own account.",
+      "Into a market you allow-listed, and back out. Neither call takes a recipient, so both ends are your own account.",
     wired: false,
   },
   {
     name: "Keep a position in range",
     glyph: "arcs",
     detail:
-      "Re-centre a Uniswap v4 range when the price drifts. Built and tested; it is no longer what the agent is pointed at.",
+      "Re-centre a Uniswap v4 range as the price drifts. Built and tested; not where the agent is pointed now.",
     wired: true,
   },
   {
     name: "Lend and borrow",
     glyph: "bank",
-    detail:
-      "Supply and borrow under a health-factor floor the account enforces.",
+    detail: "Under a health-factor floor the account enforces.",
     wired: false,
   },
   {
     name: "Perpetuals",
     glyph: "bars",
-    detail:
-      "Bounded leverage and size, and no margin top-ups — so a losing position cannot be defended with your money.",
+    detail: "Bounded size, and no margin top-ups with your money.",
     wired: false,
   },
   {
     name: "Pay for its own work",
     glyph: "coins",
-    detail:
-      "Machine-to-machine payment for inference and data, under a daily ceiling.",
+    detail: "Inference and data, under a daily ceiling.",
     wired: false,
   },
   {
     name: "Move across chains",
     glyph: "layers",
-    detail:
-      "Bridge to an allow-listed destination, and only to your own address.",
+    detail: "To an allow-listed chain, and only to your own address.",
     wired: false,
   },
 ];

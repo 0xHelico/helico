@@ -104,6 +104,11 @@ export function MandatesPanel() {
         </Empty>
       );
     }
+    // The section is titled "what this wallet may spend", and a docked mandate spends nothing.
+    // Forty-eight rows where thirty-seven are dashes buries the eleven that answer the question.
+    const live = data.rows.filter((m) => m.active);
+    const docked = data.rows.length - live.length;
+
     return (
       <>
         {moves.data && moves.data.timestamps.length > 0 ? (
@@ -120,12 +125,11 @@ export function MandatesPanel() {
                 <th className="py-2 pr-4 font-medium">Mandate</th>
                 <th className="py-2 pr-4 font-medium">App</th>
                 <th className="py-2 pr-4 font-medium">Spendable</th>
-                <th className="py-2 pr-4 font-medium">Moves</th>
-                <th className="py-2 font-medium">State</th>
+                <th className="py-2 font-medium">Moves</th>
               </tr>
             </thead>
             <tbody className="divide-line divide-y">
-              {data.rows.map((m) => (
+              {live.map((m) => (
                 <tr key={m.strategyHash}>
                   <td className="tabular py-2.5 pr-4 font-mono text-body">
                     {short(m.strategyHash)}
@@ -138,13 +142,8 @@ export function MandatesPanel() {
                       {spendable(m) || "—"}
                     </span>
                   </td>
-                  <td className="tabular py-2.5 pr-4 font-mono text-body">
+                  <td className="tabular py-2.5 font-mono text-body">
                     {m.movements}
-                  </td>
-                  <td className="py-2.5">
-                    <span className={m.active ? "text-pos" : "text-faint"}>
-                      {m.active ? "live" : "docked"}
-                    </span>
                   </td>
                 </tr>
               ))}
@@ -152,10 +151,12 @@ export function MandatesPanel() {
           </table>
         </div>
         <p className="mt-4 text-[11px] text-faint leading-relaxed">
-          {data.rows.length} mandate{data.rows.length === 1 ? "" : "s"},{" "}
-          {data.active} still live. A docked one reports zero because docking
-          zeroes the ledger, so the state comes from Aqua&rsquo;s own sentinel
-          rather than from the amount — the two are indistinguishable otherwise.
+          {live.length} live
+          {docked > 0 ? `, ${docked} docked and not listed` : ""} of{" "}
+          {data.rows.length}. A docked mandate reports zero because docking
+          zeroes the ledger, so &ldquo;spendable&rdquo; comes from Aqua&rsquo;s
+          own sentinel rather than from the amount — by amount alone the two are
+          the same.
         </p>
       </>
     );

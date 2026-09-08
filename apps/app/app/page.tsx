@@ -1,9 +1,8 @@
 import Link from "next/link";
-import { AccountPanel } from "@/components/account-panel";
 import { Asks, Grants } from "@/components/capabilities";
 import { PageHeader } from "@/components/chat/page-header";
 import { MandatePanel } from "@/components/mandate-panel";
-import { MandatesPanel } from "@/components/mandates-panel";
+import { PortfolioSummary } from "@/components/portfolio-summary";
 
 export const metadata = { title: "Helico" };
 
@@ -11,9 +10,13 @@ export const metadata = { title: "Helico" };
  * The front door.
  *
  * It used to be the conversation, which meant the first thing anyone saw was a box offering to
- * swap — and Helico is not a swap tool. It is an agent that may act on your position only inside
- * limits you commit to on chain, so the page reads in that order: what it may be allowed to do,
- * the limits themselves, and only then the sentences you can say to it.
+ * swap — and Helico is not a swap tool.
+ *
+ * The order is facts, then offer, then controls. Your account and what it may spend are true
+ * right now and readable by anyone; what the agent *may* be allowed to do is a list of mostly
+ * unbuilt things, and leading with it put five greyed-out rows above the fold and the product
+ * below it. Each section is one card with one title, so the page has one rhythm rather than a
+ * heading, a dashed row, a white card and a table all claiming the same level.
  */
 export default function Page() {
   return (
@@ -25,52 +28,46 @@ export default function Page() {
             <h1 className="font-semibold text-3xl tracking-tight">
               An agent, and the limits it works inside
             </h1>
-            <p className="mt-3 text-[15px] text-muted-foreground leading-relaxed">
-              Helico's agent decides inside a confidential enclave, and the
-              vault refuses anything your mandate does not allow. The worst a
-              wrong decision costs you is an action — never your funds — and you
-              can end it at any time without asking anyone.
+            <p className="mt-3 text-[14px] text-soft leading-relaxed">
+              It decides inside a confidential enclave and can never send your
+              money anywhere but back to you. The worst a wrong decision costs
+              you is an action, never your funds, and you can end it without
+              asking anyone.
             </p>
           </header>
 
-          <section className="mt-12">
-            <h2 className="font-semibold text-lg tracking-tight">
+          <PortfolioSummary />
+
+          <section className="mt-10">
+            <h2 className="font-medium text-[15px] text-ink">
               What it may be allowed to do
             </h2>
-            <p className="mt-1.5 text-muted-foreground text-sm">
-              Authority it holds over time. One is real today; the rest are the
-              direction, and their switches do not move.
+            <p className="mt-1.5 text-[12.5px] text-soft">
+              Authority it holds over time. One is wired to a contract; the rest
+              are the direction, and their switches do not move.
             </p>
             <Grants />
           </section>
 
-          {/* No heading: each card carries its own title, and the section had been saying it
-              twice — "Where your capital sits" above a card headed the same. */}
-          <section className="mt-12" id="account">
-            <AccountPanel />
-            <MandatesPanel />
-          </section>
-
-          <section className="mt-12" id="mandate">
-            <h2 className="font-semibold text-lg tracking-tight">
+          <section className="mt-10" id="mandate">
+            <h2 className="font-medium text-[15px] text-ink">
               The limits you set
             </h2>
-            <p className="mt-1.5 text-muted-foreground text-sm">
-              Committed on chain, enforced by the contract, and revocable by you
+            <p className="mt-1.5 text-[12.5px] text-soft">
+              Committed on chain, enforced by the contract, revocable by you
               alone.
             </p>
             <MandatePanel />
           </section>
 
-          <section className="mt-12 pb-6">
-            <h2 className="font-semibold text-lg tracking-tight">
+          <section className="mt-10 pb-8">
+            <h2 className="font-medium text-[15px] text-ink">
               What you can ask it
             </h2>
-            <p className="mt-1.5 text-muted-foreground text-sm">
-              These happen once and you sign them yourself. Say it in a sentence
-              in the{" "}
+            <p className="mt-1.5 text-[12.5px] text-soft">
+              Said once, signed by you, in the{" "}
               <Link
-                className="underline underline-offset-2 hover:text-foreground"
+                className="underline underline-offset-2 hover:text-ink"
                 href="/chat"
               >
                 conversation
