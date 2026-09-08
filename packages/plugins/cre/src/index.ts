@@ -404,6 +404,38 @@ function holdLine(judged: Judged[], fleet: string): string {
 	return `HOLD (${reason})${rest}${fleet}${first.buffer}`
 }
 
+/**
+ * The most secret ids one request may carry.
+ *
+ * `cre secrets create` states this limit out loud — *"cannot have more than 10 items in a single
+ * payload"* — and the retrieval side does not: it answers a batch of eleven with
+ * `relay quorum unreachable: 0 signed responses, need 4`, which reads like the DON is down.
+ *
+ * The first production run failed exactly that way, on exactly eleven requests: seven policy
+ * values, the agent key, and three model-router credentials. Nothing in a simulator reaches it,
+ * because a simulated run reads secrets from the environment and never asks a DON at all.
+ */
+const MAX_SECRETS_PER_REQUEST = 10
+
+/**
+ * Every secret the run needs, asked for in requests the relay will answer.
+ *
+ * Chunked rather than capped: the list grows with configuration — turning the model on adds
+ * three — so a limit that silently drops the tail would take the agent key with it on some
+ * configurations and not others.
+ */
+function readSecrets(
+	runtime: TeeRuntime<Config>,
+	ids: string[],
+): Record<string, { value: string }> {
+	const all: Record<string, { value: string }> = {}
+	for (let i = 0; i < ids.length; i += MAX_SECRETS_PER_REQUEST) {
+		const batch = ids.slice(i, i + MAX_SECRETS_PER_REQUEST)
+		Object.assign(all, runtime.getSecrets(batch.map((id) => ({ id }))).result())
+	}
+	return all
+}
+
 // ─── TEE cron callback ───────────────────────────────────────
 export const onCronTrigger = async (runtime: TeeRuntime<Config>): Promise<string> => {
 	const config = runtime.config
@@ -416,7 +448,7 @@ export const onCronTrigger = async (runtime: TeeRuntime<Config>): Promise<string
 		...(signs ? [config.agentKeySecretId] : []),
 		...(config.aiUrl ? Object.values(AI_SECRET_IDS) : []),
 	]
-	const secrets = runtime.getSecrets(ids.map((id) => ({ id }))).result()
+	const secrets = readSecrets(runtime, ids)
 	const policy = policyFromSecrets(secrets)
 	const hash = policyHash(policy)
 	const now = Math.floor(runtime.now().getTime() / 1000)

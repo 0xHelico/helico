@@ -1202,3 +1202,56 @@ describe('every account the factory opened', () => {
 		expect(result).toStartWith(`SUPPLY 800000000 to ${aave}`)
 	})
 })
+
+/**
+ * The first production run failed here, and no test could have seen it.
+ *
+ * `cre secrets create` states the limit out loud — *"cannot have more than 10 items in a single
+ * payload"* — and the retrieval side does not. It answers a batch of eleven with
+ * `relay quorum unreachable: 0 signed responses, at most 3 possible, need 4`, which reads like
+ * an outage rather than a request that was never going to be answered.
+ *
+ * Eleven is what this workflow asks for whenever the model is configured: seven policy values,
+ * the agent key, three router credentials. A simulator never reaches it, because a simulated run
+ * reads secrets from the environment and asks no DON at all.
+ */
+describe('the secrets request the relay will actually answer', () => {
+	const withModel: Partial<Config> = {
+		delivery: 'signature',
+		chainId: 42_161,
+		aiUrl: 'https://router.example/v1/chat/completions',
+	}
+	const allKeys = {
+		...secrets,
+		AGENT_KEY: agentKey,
+		AI_USERNAME: 'u',
+		AI_PASSWORD: 'p',
+		AI_API_KEY: 'k',
+	}
+
+	test('asks for eleven secrets, and never more than ten in one request', async () => {
+		const { secretRequests, secretBatches } = await run({ ...allIdle, nonce: 7n }, withModel, {
+			secrets: allKeys,
+		})
+
+		expect(secretRequests).toHaveLength(11)
+		expect(secretBatches.length).toBeGreaterThan(1)
+		for (const batch of secretBatches) expect(batch.length).toBeLessThanOrEqual(10)
+		// Every id still arrives. Chunking that quietly dropped the tail would take the agent key
+		// with it on this configuration and not on one without the model.
+		expect(new Set(secretRequests).size).toBe(11)
+		expect(secretRequests).toContain('AGENT_KEY')
+	})
+
+	test('a run without the model asks once, because eight fits', async () => {
+		const { secretBatches } = await run(
+			{ ...allIdle, nonce: 7n },
+			{ delivery: 'signature', chainId: 42_161 },
+			{
+				secrets: { ...secrets, AGENT_KEY: agentKey },
+			},
+		)
+		expect(secretBatches).toHaveLength(1)
+		expect(secretBatches[0]).toHaveLength(8)
+	})
+})
