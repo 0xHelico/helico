@@ -58,10 +58,17 @@ jobs:
             OpenZeppelin/openzeppelin-contracts@v5.7.0 \
             OpenZeppelin/openzeppelin-contracts-upgradeable@v5.7.0 \
             1inch/aqua@v1.0.0 \
-            1inch/solidity-utils@6.9.7
+            1inch/solidity-utils@6.9.7 \
+            1inch/swap-vm@v1.0.2
       - name: Check formatting
         working-directory: contracts
         run: forge fmt --check
+      # The default profile does not compile `src/swapvm` — SwapVM needs the IR pipeline, and
+      # turning that on for everything changes when custom-error arguments are evaluated. This
+      # step is what stops "skipped by the default profile" from becoming "never compiled".
+      - name: Build the SwapVM instruction set
+        working-directory: contracts
+        run: FOUNDRY_PROFILE=swapvm forge build
       # Before the build, because the compiler's own message names a version requirement rather
       # than the file that is out of step. Two green branches can still merge into a main that
       # does not compile -- one moves the pin, the other adds a file carrying the old one, and

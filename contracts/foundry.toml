@@ -7,9 +7,36 @@ solc = "0.8.30"
 optimizer = true
 optimizer_runs = 200
 via_ir = false
+# SwapVM will not compile without the IR pipeline, and switching that on globally would change
+# when custom-error arguments are evaluated — which `HelicoMandateSwap` has a documented case
+# depending on. So the default profile does not see those files at all; `[profile.swapvm]` below
+# is what builds and tests them.
+skip = ["src/swapvm/**", "script/DeploySwapVMRouter.s.sol", "test/ForkSwapVMYieldCover.t.sol"]
 # Emit the storage layout into every artifact, so `forge inspect` can always answer and
 # `scripts/check-storage-layout.py` never reports a stale cache as a mystery.
 extra_output = ["storageLayout"]
+
+# SwapVM does not compile without the IR pipeline — the canonical `SwapVM.sol` overflows the
+# stack otherwise. Kept as its own profile rather than switched on globally: `via_ir` changes
+# when custom-error arguments are evaluated, and `HelicoMandateSwap` has a documented case that
+# depends on the default pipeline's eager evaluation.
+[profile.swapvm]
+# Explicit, and not redundant: Foundry profiles inherit `[profile.default]`, so without this the
+# swapvm profile would skip the only files it exists to build — and `forge test` answers that
+# with "No tests found", which reads like a missing file rather than a config that hid it.
+skip = []
+src = "src"
+test = "test"
+out = "out-swapvm"
+libs = ["lib"]
+solc = "0.8.30"
+optimizer = true
+optimizer_runs = 700
+via_ir = true
+extra_output = ["storageLayout"]
+
+[profile.swapvm.optimizer_details]
+yul = true
 
 [fmt]
 line_length = 110

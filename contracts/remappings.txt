@@ -3,3 +3,5 @@
 @openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/
 @openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/
 forge-std/=lib/forge-std/src/
+@1inch/swap-vm/=lib/swap-vm/src/
+lib/swap-vm/:@1inch/aqua/=lib/aqua/

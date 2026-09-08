@@ -66,6 +66,30 @@ and docking destroys it. `ForkAquaHoldsATokens.t.sol` is the proof and should st
 **The wallet is spent before any lending market.** A swap that does not need the yield layer
 must never be able to fail because of it.
 
+**An app's reach is the ship, and `msg.sender` is what makes that true.** Aqua indexes balances
+by the caller, not by an address the caller supplies:
+
+```solidity
+function pull(address maker, bytes32 strategyHash, address token, uint256 amount, address to) external {
+    Balance storage balance = _balances[maker][msg.sender][strategyHash][token];
+    balance.store(prevBalance - amount.toUint248(), tokensCount);
+    IERC20(token).safeTransferFrom(maker, to, amount);
+}
+```
+
+So a contract cannot claim to be another app, and nothing it does reaches a maker who did not
+ship to *its* address, under *that* hash. That is what makes deploying our own SwapVM router a
+boring sentence rather than an alarming one: a redeployed router is not a door into anybody
+else's position, and it is Aqua's property rather than our promise.
+
+Read the bound exactly, though. Within what a maker shipped to it, an app has **full
+discretion** — `to` is a parameter, so it may send pulled tokens anywhere, and there is no
+active-strategy check: the subtraction underflowing is the only thing that stops an over-pull.
+Shipping to an app is trusting that app with those amounts, and the ship is the whole of the
+trust. Aqua validates nothing about the app it is handed — no registry, no allowlist, no code
+check — which is why `ship` to the wrong address succeeds silently and
+`ForkSwapVMYieldCover.t.sol` measures what that costs rather than arguing about it.
+
 **Refusals are named, and the quote refuses what the swap refuses.** A lending market's own
 limits surface as arithmetic panics from inside it; a caller cannot read those. And a quote
 that answers for a swap that would revert sends an agent to build a transaction that cannot
@@ -135,6 +159,39 @@ feat(cre): add confidential handler for the risk workflow
 fix(contracts): reject zero-address beneficiary on settle
 docs: record the Uniswap integration entry points
 ```
+
+## Finishing a piece of work
+
+Work starts from an issue and lands through a pull request. Three things then happen, and none
+of them waits to be asked:
+
+**Close the issue.** When the work it describes is done and merged, close it — with a comment
+saying what settled it, not just the PR number. An issue left open after its work landed makes
+the list a record of what was once true, and the next person reading it plans around a problem
+that no longer exists.
+
+**Move it on the board.** [Helico Team](https://github.com/orgs/0xHelico/projects/1), and the
+status field means what it says: `Ready` when nothing blocks it, `In progress` when someone is
+actually on it, `In review` for an open pull request, `Blocked` when it is waiting on somebody,
+`Done` on merge. Items are added automatically; the status is not, so everything sits in
+`Backlog` and the board says nothing until someone moves it.
+
+**Label it, on both issues and pull requests.** One area label at minimum, so the list can be
+filtered by where the work is:
+
+| | |
+|---|---|
+| `contracts` | `contracts/` — the Aqua app, the accounts, the SwapVM instruction |
+| `app` | `apps/app`, the dapp |
+| `landing` | `apps/landing`, the marketing page |
+| `be` | `apps/be`, the Go backend |
+| `cre` | `packages/plugins/cre` and the CRE workflow |
+| `thegraph` | `subgraph/` and `packages/plugins/thegraph` |
+| `1inch` | Aqua, SwapVM, `packages/plugins/1inch` |
+| `submission` | the ETHGlobal deadline, dashboard, video, prize rules |
+
+More than one is fine and often right — a change to the account contracts that the workflow
+reads is `contracts` and `cre`. `uniswap` still exists for history; it is not a submitted track.
 
 ## ETHOnline 2026 compliance
 

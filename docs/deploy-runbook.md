@@ -64,6 +64,24 @@ of 0.00005 ETH, so the agent's balance covers hundreds.
 - [ ] `forge test`, the fork suite and `check-storage-layout.py` green on `main`
 - [ ] Deployer funded on Arbitrum One (chain id 42161)
 
+### How much, measured rather than guessed
+
+@rifkyeasy ran every step above on a fork and totalled the gas. At Arbitrum One's price when he
+measured it — `cast gas-price` said **0.02 gwei**:
+
+| | gas | at 0.02 gwei |
+|---|---|---|
+| implementation + factory | 2,845,193 | 0.000057 ETH |
+| open, permit, setAgent | ~300,000 | 0.000006 ETH |
+| `HelicoMandateSwap` | ~400,000 | 0.000008 ETH |
+| SwapVM router | ~5,000,000 | 0.000100 ETH |
+| **everything** | | **~0.00017 ETH** |
+
+**0.005 ETH covers all of it at twenty-five times that gas price.** Fund more than the estimate —
+a script that runs out of gas halfway is a bad way to learn the number — but not by two orders of
+magnitude, which is what "0.02 ETH" was. That figure gated this deploy for four days and nobody
+had measured it.
+
 ## 1. The account factory
 
 ```bash
@@ -107,6 +125,27 @@ cast call $ACCOUNT 'agent()(address)' --rpc-url $ARBITRUM_RPC_URL
 cast call $ACCOUNT 'permittedVenue(address)(bool)' 0x794a61358D6845594F94dc1DB02A252b5b4814aD --rpc-url $ARBITRUM_RPC_URL
 ```
 
+### And two calls that prove it did what it was for
+
+Added after @rifkyeasy rehearsed everything above on a fork and pointed out that the runbook
+stops one step early. A deployment that leaves you unable to answer *"can the agent act, and can
+I get out"* is not finished, and both answers are one `cast send` each.
+
+```bash
+# as the agent — the whole product in one call, and the owner never signs for it
+cast send $ACCOUNT 'supplyIdle(address,address,uint256)' $AAVE_POOL $USDC <amount> \
+  --rpc-url $ARBITRUM_RPC_URL --private-key "$AGENT_KEY"
+
+# as the owner — the door nobody can wall up, with the aToken in the list
+cast send $ACCOUNT 'escape(address[])' "[$AUSDC]" \
+  --rpc-url $ARBITRUM_RPC_URL --private-key "$OWNER_KEY"
+```
+
+On the fork, `escape` returned **40,000.000099 aUSDC against 40,000 supplied**. The position
+comes home with what it earned, because an aToken is an ERC-20 the account holds and `escape`
+takes a token list — nothing has to be unwound first and none of the yield is stranded. Do this
+with a small amount before trusting it with a real one.
+
 ## 3. Fill in the workflow's config
 
 `apps/cre/workflow/config.production.json`:
@@ -130,14 +169,55 @@ key must be the one whose address step 2 named as agent. Then deploy against
 nothing yet, the honest outcome is a hold — a workflow that supplies from an empty account would
 be the surprising result, not the reassuring one.
 
+## The SwapVM router
+
+Independent of everything above — CRE does not read it, and no account has to exist first.
+
+```bash
+cd contracts
+SWAPVM_RESCUER=<address> \
+FOUNDRY_PROFILE=swapvm forge script script/DeploySwapVMRouter.s.sol:DeploySwapVMRouter \
+  --rpc-url $ARBITRUM_RPC_URL --broadcast --private-key "$KEY"
+```
+
+**`FOUNDRY_PROFILE=swapvm` is not optional.** SwapVM needs the IR pipeline; the default profile
+does not compile these files at all, so without it the script is not there to run.
+
+`SWAPVM_RESCUER` is the only authority the router has: whoever may retrieve tokens stranded in
+it. Unset means nobody can, and stranded tokens stay stranded. It cannot touch a maker's funds —
+those move only through Aqua, keyed to the app a maker shipped to.
+
+**Record:** the router address. Then read the two lines the script prints after broadcasting: it
+checks that the router points at the canonical Aqua, and that it reports opcode 34, which is the
+number an off-chain program builder has to emit. What it cannot check is that opcode 34 is the
+instruction we mean — only a swap proves that, and `test/ForkSwapVMYieldCover.t.sol` is where it
+is proven, against a fork of this chain.
+
+> ⚠️ **Ship to this address, not to 1inch's.** A maker ships to an app address and Aqua keys
+> every balance by it. Ship a program containing opcode 34 to the canonical router and that
+> router has nothing at 34: the swap reverts on an out-of-range instruction, and the maker is
+> left with a live commitment against a strategy nobody can fill. The address printed above is
+> the one that goes into the frontend, the taker script, and the video.
+>
+> **It costs a transaction, not funds** — measured, not assumed, in
+> `test_ShippingToTheWrongRouterStrandsTheStrategyAndSpendsNothing`. The wrong router really does
+> hold a live commitment, and it can still spend none of it: the swap reverts before any transfer,
+> the wallet, the lending position and the other side of the pair are all untouched, and the taker
+> receives nothing. `dock` with the shipped token set takes the commitment back in one call.
+>
+> What it cannot do is be repaired in place. Aqua refuses to re-ship a strategy hash that already
+> has balances (`StrategiesMustBeImmutable`), and docking sets the per-token sentinel to 255
+> rather than back to zero — so that hash is spent for that app, permanently. Ship to the right
+> app instead; a different app is a different ledger key, and unaffected.
+
 ## What can be deployed before all of this
 
 `HelicoMandateSwap` stands outside the chain above: CRE does not read it, and nothing still open
 changes its behaviour. The wrinkle this section used to carry is gone — #182 landed, so `main` is
 the source Arbiscan would verify against and it is not about to move underneath a verification.
 
-It is still the one contract that can be deployed while the account questions are open, because
-nothing above depends on it and it depends on nothing above.
+It and the SwapVM router are the two that can go out while the account questions are still open,
+because nothing above depends on either and neither depends on anything above.
 
 ## Do not deploy
 
