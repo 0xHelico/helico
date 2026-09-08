@@ -8,7 +8,12 @@ export type GlyphKind = 'sign' | 'brain' | 'browser' | 'lock' | 'anchor' | 'swap
 export type Receipt = {
 	id: string
 	glyph: GlyphKind
-	layer: 'You' | 'Enclave' | 'Vault' | 'Chain'
+	/**
+	 * The four things a move crosses, and each one can refuse — which is what makes the trail
+	 * worth drawing rather than decorating. `Vault` was here until 8 September; it is no longer
+	 * a layer of this product.
+	 */
+	layer: 'You' | 'Account' | 'Enclave' | 'Aqua'
 	narration: string
 	proofHref?: string
 	delayMs: number
@@ -26,20 +31,20 @@ const EVIDENCE = 'https://github.com/0xHelico/helico#readme'
 export const PROVENANCE: Record<string, Provenance> = {
 	mandate: {
 		intro: INTRO,
-		outcome: 'Mandate live · the enclave watches, the vault enforces',
+		outcome: 'Account open · the enclave decides, the account holds',
 		receipts: [
 			{
 				id: 'm-you',
 				glyph: 'sign',
 				layer: 'You',
-				narration: 'You set the terms once: range width, retained liquidity, cooldown.',
+				narration: 'You set the terms once: how much stays liquid, which markets, which agent.',
 				delayMs: 2700,
 			},
 			{
-				id: 'm-vault',
+				id: 'm-account',
 				glyph: 'lock',
-				layer: 'Vault',
-				narration: 'The vault stores the mandate and its hash on chain.',
+				layer: 'Account',
+				narration: 'The account is yours alone, at an address known before it was deployed.',
 				delayMs: 4300,
 			},
 			{
@@ -50,108 +55,96 @@ export const PROVENANCE: Record<string, Provenance> = {
 				delayMs: 5700,
 			},
 			{
-				id: 'm-chain',
+				id: 'm-aqua',
 				glyph: 'anchor',
-				layer: 'Chain',
-				narration: 'A cron trigger arms the confidential workflow.',
+				layer: 'Aqua',
+				narration: 'A mandate is filed as a ledger entry. No tokens moved to open it.',
 				proofHref: EVIDENCE,
 				delayMs: 7600,
 			},
 		],
 	},
-	recentre: {
+	supply: {
 		intro: INTRO,
-		outcome: 'Re-centred · every rule checked on chain before the mint',
+		outcome: '40,000 at work · 10,000 kept liquid',
 		receipts: [
 			{
-				id: 'r-read',
-				glyph: 'browser',
+				id: 's-enclave',
+				glyph: 'brain',
 				layer: 'Enclave',
-				narration: 'The enclave read the pool and your position from inside the TEE.',
-				delayMs: 3900,
+				narration: 'The enclave read the account and the market rate from inside the TEE.',
+				delayMs: 2600,
 			},
 			{
-				id: 'r-size',
-				glyph: 'swap',
+				id: 's-decide',
+				glyph: 'brain',
 				layer: 'Enclave',
-				narration: 'It sized the swap and the mint against your mandate.',
-				delayMs: 4700,
+				narration: 'It sized the move against your liquid floor, then checked it was worth making.',
+				delayMs: 4200,
 			},
 			{
-				id: 'r-sign',
-				glyph: 'sign',
-				layer: 'Enclave',
-				narration: 'It signed the authorisation with a key that exists only inside the enclave.',
-				delayMs: 5500,
-			},
-			{
-				id: 'r-vault',
+				id: 's-account',
 				glyph: 'lock',
-				layer: 'Vault',
-				narration: 'The vault recomputed the mandate hash and checked every rule.',
-				delayMs: 6300,
+				layer: 'Account',
+				narration: 'The account checked the market was one you allow-listed, and supplied.',
+				delayMs: 5900,
 			},
 			{
-				id: 'r-chain',
-				glyph: 'anchor',
-				layer: 'Chain',
-				narration: 'Burn, swap, mint in one transaction; tokens never left the vault.',
+				id: 's-back',
+				glyph: 'swap',
+				layer: 'Account',
+				narration: 'The receipt came back here. There is no address it could have gone to instead.',
 				proofHref: EVIDENCE,
-				delayMs: 7200,
+				delayMs: 7500,
 			},
 		],
 	},
 	refuse: {
 		intro: INTRO,
-		outcome: 'Refused · nothing left the enclave',
+		outcome: 'Refused by shape · not by a rule anyone can edit',
 		receipts: [
 			{
-				id: 'f-you',
+				id: 'r-ask',
 				glyph: 'sign',
 				layer: 'You',
-				narration: 'Someone asked for terms outside the mandate.',
-				delayMs: 2700,
+				narration: 'Somebody asked for the balance to be sent to an address.',
+				delayMs: 2500,
 			},
 			{
-				id: 'f-brain',
-				glyph: 'brain',
-				layer: 'Enclave',
-				narration: 'The enclave recomputed the hash from the thresholds it was given.',
-				delayMs: 3300,
-			},
-			{
-				id: 'f-lock',
+				id: 'r-account',
 				glyph: 'lock',
-				layer: 'Vault',
-				narration: 'It did not match the one on chain. The enclave stopped before its first read.',
-				delayMs: 4600,
+				layer: 'Account',
+				narration: 'The agent has two calls. Neither has a parameter for where anything goes.',
+				delayMs: 4100,
+			},
+			{
+				id: 'r-stop',
+				glyph: 'lock',
+				layer: 'Account',
+				narration: 'So an agent that was entirely compromised still could not do it.',
+				proofHref: EVIDENCE,
+				delayMs: 5800,
 			},
 		],
 	},
 	hold: {
 		intro: INTRO,
-		outcome: 'Held · no signature, no transaction',
+		outcome: 'Nothing signed · no gas spent',
 		receipts: [
 			{
-				id: 'h-read',
-				glyph: 'browser',
-				layer: 'Enclave',
-				narration: 'The enclave read the tick from inside the TEE.',
-				delayMs: 3900,
-			},
-			{
-				id: 'h-brain',
+				id: 'h-enclave',
 				glyph: 'brain',
 				layer: 'Enclave',
-				narration: 'In range: the mandate says leave it alone.',
-				delayMs: 4700,
+				narration: 'The enclave read the split from inside the TEE.',
+				delayMs: 2500,
 			},
 			{
-				id: 'h-lock',
-				glyph: 'lock',
-				layer: 'Vault',
-				narration: 'No authorisation was produced, so the vault had nothing to accept.',
-				delayMs: 5600,
+				id: 'h-decide',
+				glyph: 'brain',
+				layer: 'Enclave',
+				narration:
+					'Interest moves it every block. This one was too small to be worth a transaction.',
+				delayMs: 4300,
 			},
 		],
 	},
