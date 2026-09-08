@@ -173,12 +173,24 @@ prices the wallet can no longer honour.
 #### SwapVM, with one instruction of ours
 
 **Powered by SwapVM — © Degensoft Ltd 2025.** [`contracts/src/swapvm/`](contracts/src/swapvm/)
-carries a redeployment of Degensoft's `AquaSwapVMRouter` with one instruction added, which their
-own terms allow in as many words: *"redeployments of a modified SwapVM contract is allowed."*
-Their VM, their transfer phase, their Aqua accounting and every published instruction are
-unchanged and used as released; the addition is opcode 34, and it is
+carries a redeployment of Degensoft's `AquaSwapVMRouter` with one instruction added. Their VM,
+their transfer phase, their Aqua accounting and every published instruction are unchanged and
+used as released; the addition is opcode 34, and it is
 [marked as ours](contracts/src/swapvm/AquaYieldCover.sol) under
 [their licence](https://github.com/1inch/swap-vm/blob/main/LICENSES/SwapVM-1.1.txt).
+
+The licence is what permits it, and it is specific rather than incidental: §4 makes
+non-commercial use free of charge and names **hackathons** among the uses it means, subject to
+§3 for modifications. §3.1 then lists what a modification owes, and all five are paid here — the
+same licence on our files, upstream notices preserved, this attribution, the changes marked and
+dated in each docblock, and build and deploy instructions in
+[the runbook](docs/deploy-runbook.md).
+
+§3.1C asks for that attribution in the README *and in the UI where applicable*. It is not
+applicable yet — nothing in `apps/app` builds a SwapVM program — and it becomes applicable the
+moment one does. Written here rather than left to be noticed later, because "where applicable"
+is the kind of clause that is satisfied on the day it is read and quietly breached on the day
+the feature ships.
 
 **What it does that no published instruction can.** Every curve SwapVM ships prices against
 `balanceOut`, and Aqua answers that from what the maker *shipped* — a ledger number, written with

@@ -16,11 +16,16 @@ import {HelicoAquaOpcodes} from "./HelicoAquaOpcodes.sol";
 /// @title HelicoAquaSwapVMRouter
 /// @notice Degensoft's `AquaSwapVMRouter`, with `_aquaYieldCoverXD` in its instruction set.
 ///
-/// @dev The published qualification for this is explicit — *"redeployments of a modified SwapVM
-///      contract is allowed"* — and this is one: the VM, the transfer phase, the Aqua accounting
-///      and every published instruction are theirs and unchanged. What is ours is opcode 35 and
-///      the fact that this address, rather than the canonical router, is the Aqua app a maker
-///      ships to.
+/// @dev The VM, the transfer phase, the Aqua accounting and every published instruction are
+///      theirs and unchanged. What is ours is opcode 34 and the fact that this address, rather
+///      than the canonical router, is the Aqua app a maker ships to.
+///
+///      Two separate permissions, and they are worth not conflating. **Degensoft's licence** is
+///      what allows the modification: §4 makes non-commercial use free and names hackathons,
+///      subject to §3, whose five obligations are met across these files, the README and the
+///      runbook. **1inch's prize page on ETHGlobal** is separately explicit that a redeployment
+///      qualifies — *"Official Aqua/SwapVM contracts must be used (redeployments of a modified
+///      SwapVM contract is allowed)"* — which is a submission rule, not a licence grant.
 ///
 ///      That last part is the authority the added instruction needs. `Aqua.pull` is keyed on
 ///      `msg.sender` as the app, so only a router a maker deliberately shipped to can spend that
