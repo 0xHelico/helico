@@ -3,10 +3,17 @@
 import type { Address, PublicClient } from "viem";
 import { getAddress, isAddress, parseAbi } from "viem";
 
-/** Only what the app reads. The factory has more; a smaller surface is a smaller lie. */
+/**
+ * Only what the app calls. The factory has more; a smaller surface is a smaller lie.
+ *
+ * `open` is the one write. It has no access control on chain — anyone may open an account for
+ * anyone, and a second call returns the same address rather than reverting — so the button that
+ * sends it needs no permission of its own, and a double click costs gas rather than correctness.
+ */
 export const factoryAbi = parseAbi([
   "function accountFor(address owner) view returns (address)",
   "function isOpen(address owner) view returns (bool)",
+  "function open(address owner) returns (address)",
 ]);
 
 export const accountReadAbi = parseAbi([
