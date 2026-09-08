@@ -21,6 +21,16 @@ staging-settings:
 # `production-settings` is the same workflow against the real chain. It needs a
 # deployed vault, and deploying one is not something this file can do for you.
 production-settings:
+    account:
+        # Who owns the deployed workflow: may update it, pause it, delete it. The deployer,
+        # because its role is to deploy and then be idle — it is not the agent, whose key lives
+        # inside the enclave and never signs a deploy, and not the upgrader, whose blast radius
+        # is account code rather than a workflow.
+        workflow-owner-address: "0x6DCd7485aB17e0CBD0723b8435a35bb8d029439E"
     rpcs:
+        # The workflow registry lives on Ethereum mainnet, not on the chain the workflow reads.
+        # Deploying and linking a key are mainnet transactions, at mainnet gas.
+        - chain-name: ethereum-mainnet
+          url: https://ethereum-rpc.publicnode.com
         - chain-name: ethereum-mainnet-arbitrum-1
           url: https://arb1.arbitrum.io/rpc
