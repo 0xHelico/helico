@@ -32,6 +32,12 @@ const backend = (
   process.env.NEXT_PUBLIC_BE_API_URL || "https://api.helico.site"
 ).replace(/\/$/, "");
 
+/**
+ * The chain this build reads, for the same reason as `backend`: a build pointed at a fork has to
+ * be allowed to reach it, and `e2e/fork-account.ts` points one at anvil.
+ */
+const rpc = process.env.NEXT_PUBLIC_ARBITRUM_RPC_URL?.replace(/\/$/, "");
+
 const csp = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline'",
@@ -43,6 +49,7 @@ const csp = [
     "connect-src 'self'",
     backend,
     "https://arb1.arbitrum.io https://*.arbitrum.io",
+    rpc ?? "",
     "https://api.studio.thegraph.com",
     "https://api.web3modal.org https://rpc.walletconnect.org https://pulse.walletconnect.org",
     "wss://relay.walletconnect.org wss://relay.walletconnect.com",

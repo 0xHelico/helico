@@ -37,11 +37,24 @@ to point somewhere else.
 ## Checks
 
 ```bash
-bun run --filter @helico/app e2e   # 31 browser checks; needs apps/be and a build on :3100
+bun run --filter @helico/app e2e   # 32 browser checks; needs apps/be and a build on :3100
 ```
 
 They are written to fail for the right reason. Three of them unplug our own subgraph cache and
-assert the page still answers, because a fallback nobody exercises is a fallback nobody has.
+assert the page still answers, because a fallback nobody exercises is a fallback nobody has, and
+one fails on any Content-Security-Policy violation the browser reports.
+
+And the whole account flow, through the interface, on a fork of Arbitrum One:
+
+```bash
+anvil --fork-url https://arb1.arbitrum.io/rpc --port 8545 --silent &
+NEXT_PUBLIC_ARBITRUM_RPC_URL=http://127.0.0.1:8545 bun run build && bun run start -p 3100 &
+bun run --filter @helico/app e2e:account
+```
+
+It presses *Open this account*, *Nominate Helico's agent* and the venue switch, and every
+assertion reads the **chain** rather than the screen — a page can say an account is open because
+it is optimistic; only `isOpen` knows.
 
 ## Where it came from
 
