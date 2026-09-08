@@ -166,8 +166,19 @@ mandates does this maker have, and what is left in each?"* has **no on-chain ans
 which is what makes an indexer load-bearing here rather than decorative.
 
 The subgraph is in [`subgraph/`](subgraph/), deployed to Subgraph Studio and indexing the live
-Aqua. `bun scripts/check-subgraph.ts` shows what comes back. Against the busiest maker on the
-chain — not ours:
+Aqua. `bun scripts/check-subgraph.ts` **measures the claim above before answering it** — it asks
+the chain for `Shipped` logs and counts the topics on them:
+
+```
+Shipped logs in the last 200,000 blocks: 1
+topics per log: 1–1
+→ only topic0, the signature. No parameter is indexed, so logs cannot be
+  filtered by maker, by app or by token. Only by "a Shipped happened".
+```
+
+If any parameter were indexed a log would carry two topics or more, and the script would say so
+instead. Then it asks the subgraph the same question. Against the busiest maker on the chain —
+not ours:
 
 ```
 maker     0xef9f7f4006fe95afede04f6916e72556a957ebbc

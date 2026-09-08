@@ -52,6 +52,55 @@ if (block) {
 	console.log(`errors    ${block.hasIndexingErrors}`)
 }
 
+// ── The claim this whole integration rests on, measured rather than asserted ──────────────
+//
+// "There is no on-chain way to ask which mandates a maker has." Every README in this repository
+// says it, and until now the evidence was a reading of Aqua's source. This asks the chain.
+//
+// `Shipped(address maker, address app, bytes32 strategyHash, bytes strategy)` declares no
+// parameter `indexed`, so every log it emits carries exactly one topic — the event signature —
+// and `eth_getLogs` has nothing to filter on but that. **If any parameter were indexed, a log
+// would carry two topics or more and this section would say so.** That is the point of running
+// it: the check fails visibly if the claim is false.
+const AQUA = '0x1111113CCf1426A8E30e2bfF5E005d929bF6a90a'
+const SHIPPED = '0xdc3622e06fb145651f567d421c9ef261d71d43e3778b761907bc0d70d42e52b0'
+const rpc = process.env.ARBITRUM_RPC_URL ?? 'https://arb1.arbitrum.io/rpc'
+
+const call = async (method: string, params: unknown[]) => {
+	const r = await fetch(rpc, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+	})
+	return (await r.json()) as { result?: unknown; error?: { message?: string } }
+}
+
+console.log('\nwhat the chain can answer, asked directly:')
+try {
+	const head = Number((await call('eth_blockNumber', [])).result)
+	const from = `0x${Math.max(0, head - 200_000).toString(16)}`
+	const logs = (await call('eth_getLogs', [
+		{ address: AQUA, topics: [SHIPPED], fromBlock: from, toBlock: 'latest' },
+	])) as { result?: { topics: string[] }[]; error?: { message?: string } }
+	if (logs.error || !logs.result) {
+		console.log(`  the node refused the range: ${logs.error?.message ?? 'no result'}`)
+	} else {
+		const topics = logs.result.map((l) => l.topics.length)
+		const most = topics.length ? Math.max(...topics) : 0
+		console.log(`  Shipped logs in the last 200,000 blocks: ${logs.result.length}`)
+		console.log(`  topics per log: ${topics.length ? `${Math.min(...topics)}–${most}` : 'n/a'}`)
+		console.log(
+			most <= 1
+				? '  → only topic0, the signature. No parameter is indexed, so logs cannot be'
+				: `  → ${most} topics: a parameter IS indexed, and the claim below is wrong.`,
+		)
+		if (most <= 1)
+			console.log('    filtered by maker, by app or by token. Only by "a Shipped happened".')
+	}
+} catch (e) {
+	console.log(`  could not ask the chain: ${e instanceof Error ? e.message : String(e)}`)
+}
+
 const res = await makerMandates(subgraph, maker)
 console.log(`\nmaker     ${res.maker}`)
 console.log(`mandates  ${res.mandates.length}, of which ${res.active} still active`)
