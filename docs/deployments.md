@@ -111,6 +111,54 @@ trying rather than assume a bad deploy:
 - a clean `FOUNDRY_PROFILE=swapvm forge build` from `main` reproduces the deployed creation
   bytecode, checked by deleting `out-swapvm` and rebuilding.
 
+## 8 September 2026 — the CRE workflow, and the subgraph it reads
+
+Not a contract of ours, so it sits apart: a workflow registered in Chainlink's
+`WorkflowRegistry 2.0.0` on **Ethereum mainnet**, running against Arbitrum.
+
+```
+name          helico-production
+workflow id   003fbfdc48ddd69b017c6c3d55c4dce234d7620896faf06a8a659ba83fbedff0
+DON family    zone-a
+owner         0x6DCd7485aB17e0CBD0723b8435a35bb8d029439E   (the deployer)
+schedule      every 5 minutes
+```
+
+| | |
+|---|---|
+| link the owner | [`0xda752a60…`](https://etherscan.io/tx/0xda752a60bbc69c8292ac1d32d838aecafb4845571cb6dd57a51fef289dcbf818) |
+| register the workflow | [`0x2b81e564…`](https://etherscan.io/tx/0x2b81e5649c620ad203befdded20daacdd3fdbccc8a23db8165b81249e3ba4959), 803,030 gas |
+
+Read back from the registry rather than from the CLI, which reported *"No workflows found"* about
+this same workflow while it was running:
+
+```
+isOwnerLinked(deployer)                → true
+totalActiveWorkflowsByOwner(deployer)  → 1
+getWorkflowById(0x003fbfdc…)           → present, owner 0x6dcd7485…
+```
+
+**Eleven secrets are in the Vault DON** under namespace `main`: the seven policy values, the
+agent key, and three model-router credentials. The policy is the strategy and is the reason the
+workflow is a *Confidential* one — node operators never see it.
+
+**What it does today: it holds, every run, correctly.** No account has been opened on mainnet, so
+there is nothing to manage. The moment somebody opens one and calls `setAgent`, the enclave picks
+it up — no redeploy, because the account list comes from the subgraph.
+
+### The subgraph, v0.2.0
+
+`helico-arbitrum-one`, now indexing `HelicoAccountFactory` alongside Aqua, which is what makes the
+sentence above true.
+
+```
+block 503,020,287 against a chain head of 503,020,302   ·   hasIndexingErrors: false
+accounts: 0   ← correct; none opened yet
+```
+
+Queried at `…/helico-arbitrum-one/version/latest`, which is what
+`config.production.json` names, so a new version is picked up without editing the workflow.
+
 ### Deliberately not deployed
 
 - **`HelicoVault` and the Uniswap v4 path.** CRE no longer drives it. See

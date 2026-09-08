@@ -298,6 +298,59 @@ key must be the one whose address step 2 named as agent. Then deploy against
 nothing yet, the honest outcome is a hold — a workflow that supplies from an empty account would
 be the surprising result, not the reassuring one.
 
+### What deploying CRE actually costs, and on which chain
+
+Everything below was measured on 8 September while doing it, not read.
+
+> ⚠️ **The workflow registry is on Ethereum mainnet, not on the chain the workflow reads.**
+> Every CLI command stops at `missing RPC URL for ethereum-mainnet - required to deploy CRE
+> workflows` until `project.yaml` names one. It is not configurable: the chain and the registry
+> address are compiled into the CLI, one pair per environment —
+> `CRE_CLI_WORKFLOW_REGISTRY_CHAIN_NAME: "ethereum-mainnet"` with
+> `0x4Ac54353FA4Fa961AfcC5ec4B118596d3305E7e5`, and a Sepolia pair beside it.
+>
+> The same address on Arbitrum holds a different contract — `RBACTimelock`, which reverts on
+> `typeAndVersion()`. Finding bytecode there and stopping is how you conclude the registry is on
+> Arbitrum when it is not. `typeAndVersion()` on Ethereum answers `"WorkflowRegistry 2.0.0"`.
+
+**Nothing about the product moves.** The registry write is a registration; the workflow still
+reads the account, Aave and the subgraph on Arbitrum, and still writes its verdict there.
+
+| operation | gas | at 0.10 gwei |
+|---|---|---|
+| `account link-key`, once per owner | 127,940 | ~0.000013 ETH |
+| `workflow deploy` — **every deploy, not just the first** | 803,030 | ~0.00008 ETH |
+| `secrets create` / `list` — each allowlists a digest on chain | ~185,000 | ~0.00002 ETH |
+| activate, pause, delete | ~167,000 | ~0.000017 ETH |
+
+**0.005 ETH on Ethereum mainnet covers a hackathon's worth of redeploys** at that gas price, and
+still does at ten times it. What it must not be is zero, which is what an Arbitrum-funded deployer
+holds there.
+
+### Three things that will stop you, in order
+
+**`workflow-owner-address` must be set in `project.yaml`.** Whoever owns the deployed workflow may
+update, pause and delete it. The deployer — not the agent, whose key lives inside the enclave and
+must never sign a deploy, and not the upgrader, whose blast radius is account code.
+
+**`cre secrets create` refuses more than ten items in one payload.** There are eleven, which is
+why they live in `secrets.yaml` and `secrets-ai.yaml`. Upload both; the DON holds one namespace
+and the workflow asks for names, not files.
+
+**`cre workflow list` can say "No workflows found" about a workflow that is deployed and running.**
+It reads an indexer that lags. Do not conclude anything from it — ask the registry, which is the
+only thing that knows:
+
+```bash
+REG=0x4Ac54353FA4Fa961AfcC5ec4B118596d3305E7e5
+cast call $REG 'isOwnerLinked(address)(bool)' $OWNER --rpc-url $ETH_RPC
+cast call $REG 'totalActiveWorkflowsByOwner(address)(uint256)' $OWNER --rpc-url $ETH_RPC
+cast call $REG 'getWorkflowById(bytes32)' $WORKFLOW_ID --rpc-url $ETH_RPC
+```
+
+`cre workflow activate ./workflow` refusing with *"workflow is already active"* is the second
+answer, and it agrees.
+
 ## The SwapVM router
 
 Independent of everything above — CRE does not read it, and no account has to exist first.
