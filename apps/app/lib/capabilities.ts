@@ -1,12 +1,11 @@
 import type { GlyphName } from "@/components/glyph";
 
 /**
- * Authority the agent holds: something it may do on your behalf while a mandate says so, and
- * which a switch genuinely turns off.
+ * Two different things live on the front page and they are not interchangeable.
  *
- * There used to be a second kind here — an *ask*, a sentence you said to a chat. It went with
- * the chat, because the product's loop has no human in it: you set the terms once and revoke
- * when you want to stop, and neither of those is a conversation.
+ * A **grant** is authority the agent holds: something it may do on your behalf while a mandate
+ * says so, and which a switch genuinely turns off. An **ask** is a sentence you say — it happens
+ * once, you sign it, and there is nothing to leave switched on.
  *
  * Every row here is either wired — something in this repository answers it today and a test
  * proves it — or it is not, and the difference is rendered rather than described. A switch that
@@ -18,6 +17,13 @@ export type Grant = {
   glyph: GlyphName;
   detail: string;
   wired: boolean;
+};
+
+export type Ask = {
+  name: string;
+  glyph: GlyphName;
+  say: string;
+  detail: string;
 };
 
 /**
@@ -68,5 +74,35 @@ export const GRANTS: Grant[] = [
     detail:
       "Bridge to an allow-listed destination, and only to your own address.",
     wired: false,
+  },
+];
+
+/**
+ * Sentences that are answered today. Each one happens once, and you sign it.
+ *
+ * The third is the only one a panel cannot do better. A table can show that nothing moved; only
+ * a sentence can say *why* nothing moved, and "180 dollars does not cover its own gas" is the
+ * answer people actually want.
+ */
+export const ASKS: Ask[] = [
+  {
+    name: "Read the split",
+    glyph: "percent",
+    say: "How much is working and how much is liquid?",
+    detail: "What is earning, what is spendable, and at what rate.",
+  },
+  {
+    name: "Read your mandates",
+    glyph: "document",
+    say: "What am I allowed to spend?",
+    detail:
+      "Answered from the subgraph, because the chain cannot list them at all.",
+  },
+  {
+    name: "Ask why it held",
+    glyph: "scales",
+    say: "Why did you not move anything?",
+    detail:
+      "The deadband, in words: a move has to beat its own gas and matter against the size of the account.",
   },
 ];
