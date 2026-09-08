@@ -13,6 +13,7 @@ proven to work**.
 | Tool | Model | Used for |
 |---|---|---|
 | Claude Code | Opus 5 | Hackathon rule research, repository scaffolding, workshop session notes |
+| Claude Code | Opus 5 | The dapp (`apps/app`), the Go backend (`apps/be`), the landing's nginx, `@helico/plugin-thegraph`, and the READMEs |
 | Claude Code | Fable 5.1 | Uniswap plugin (`packages/plugins/uniswap`), its plan, README, and `FEEDBACK.md` |
 | Claude Code | Fable 5.1 | Chainlink CRE plugin scaffold (`packages/plugins/cre`), its plan and README |
 | Claude Code | Fable 5.1 | Monorepo tooling — bun workspaces (started on pnpm), Turborepo, Biome, Husky, `packages/` scaffold |
@@ -923,6 +924,72 @@ It appeared often enough in one day that the operational defaults are now in `CL
 of them — running Solidity's format check before push instead of only in CI — became a git hook,
 because a lesson written down was violated again within the hour and a hook does not need to be
 remembered.
+
+### 2026-09-08 — the dapp off the vault, a subgraph cache, and three local-run bugs
+
+Fourteen pull requests in one session, in `apps/app`, `apps/be`, `apps/landing`,
+`packages/plugins/` and the READMEs. **Nothing in `contracts/` or `apps/cre` was touched** —
+Ghoza fenced those two directories for this session, and the fence held, including for their
+READMEs.
+
+- **Done, by pull request:**
+  - **The dapp stops being built on a vault that will not exist.** #219 replaced the
+    "point this at the vault" form on the front page with the account's two owner-only limits
+    (`setAgent`, `permitVenue`); #205 added the button that opens an account; #229 moved the
+    chat's two non-swap answers onto the account and the subgraph and deleted `lib/vault.ts`.
+    `HelicoVault` now has no surface in the app (#175).
+  - **A cache in front of Subgraph Studio** (#214): `POST /api/graph` in `apps/be`, which
+    forwards a `{query, variables}` body and remembers the answer for a minute. It knows no
+    GraphQL beyond the operation name — the queries stay in `@helico/plugin-thegraph` — and the
+    browser falls back to Studio when it is absent.
+  - **Three bugs that made a local run unusable** (#207, #209, #216): the app pointed at the
+    production API, so a `SameSite=Lax` cookie was set and never sent again; the session key was
+    regenerated on every boot; and every run needed four assignments typed in front of it.
+  - **Security headers** (#221, #231): the landing declared five and sent two, because nginx
+    discards inherited `add_header` in any `location` that sets one of its own. And a content
+    policy for the dapp, shipped report-only — see below.
+  - **The portfolio reads what it claimed to read** (#211): the summary's total was
+    `{factory ? "—" : "—"}` under a permanent "Reading the account…", with no account query in
+    the component at all.
+  - **Copy and documentation** (#223, #228): the READMEs went from 1,154 lines to 834 with every
+    pinned permalink intact, and the two pages stopped explaining themselves at four levels of
+    heading.
+
+- **AI's role:** Claude Code (Opus 5) wrote all fourteen branches, with Ghoza directing each in a
+  sentence or two — *"kenapa tiap refresh harus sign lagi?"*, *"buat semua readme simple, singkat,
+  on point"*, *"di app terlalu banyak deskripsi"*. Two design decisions were Ghoza's and were
+  followed rather than argued: keep the chat rather than replace it with a market agent, and keep
+  the portfolio separate from the mandate page. One was overruled in the other direction — #202
+  asked for the relayer to sponsor `open()`, and the pull request argues for the owner's own
+  wallet instead and says why, rather than doing it quietly.
+
+- **Reviewing a teammate's work was part of it.** #212 was read line by line rather than approved:
+  the signing path still bound the EIP-712 domain to `config.account`, which that same pull
+  request made default to the zero address — so every signature in the intended production
+  configuration would have been unusable. 236 tests passed over it, because every fleet test gave
+  its accounts identical balances so the tie went to the anchor, and the signing test asserted the
+  same wrong expression the code computed. Ghoza fixed the line and the harness; the fix was then
+  verified by restoring the bug and checking that exactly one test failed.
+
+- **Plans:** this session ran from issues rather than plan files — #202, #203, #206, #208, #210,
+  #213, #215, #227 were each written before their branch and each states what would be verified.
+
+- **Verified:** every pull request carries its own evidence and none was merged on a red or
+  pending check. Across the session: the 31 browser checks (32 after #231) on a production build
+  against a local backend; `go test ./...`, `go vet`, `gofmt`; `turbo run test typecheck lint`;
+  `next build`. Beyond the suites — `setAgent` and `permitVenue` were exercised against the
+  **deployed** factory on an Arbitrum fork with the exact ABI strings the UI sends, confirming
+  `venueEverPermitted` stays true after a revoke; the subgraph cache was checked against the live
+  Studio endpoint for `X-Cache: miss` then `hit`, and a `403` for an unlisted operation; and the
+  session key was proved to survive a restart by hashing it across two boots.
+
+- **One claim deliberately weakened after testing it.** The content policy in #231 was built from
+  measured traffic, and the browser checks were made to fail on any violation. Then the guard
+  itself was tested, by deleting `api.web3modal.org` from the allow-list — **and the checks still
+  passed**, because nothing they do asks that origin. So the policy ships as
+  `Content-Security-Policy-Report-Only`, with only `frame-ancestors` enforced. A guard that cannot
+  fail is not a guard, and enforcing a list with a known hole three days before the demo video
+  would risk the one flow the submission depends on.
 
 <!--
 Template for the next entry:
