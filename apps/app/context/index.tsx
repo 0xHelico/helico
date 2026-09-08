@@ -7,7 +7,18 @@ import type { ReactNode } from "react";
 import { type Config, cookieToInitialState, WagmiProvider } from "wagmi";
 import { projectId, wagmiAdapter } from "@/config";
 
-const queryClient = new QueryClient();
+/**
+ * A minute of staleness, and no refetch when a tab comes back.
+ *
+ * Every read here is a chain call or a subgraph query, both metered and neither changing by the
+ * second. The default of "stale immediately" turned a click between two pages into a fresh round
+ * of both, which is what made a rate limit reachable at all from a handful of visitors.
+ */
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: { staleTime: 60_000, refetchOnWindowFocus: false },
+  },
+});
 
 /** Where this copy of the app is actually being served from. */
 const origin =

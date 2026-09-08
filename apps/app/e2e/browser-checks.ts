@@ -301,6 +301,52 @@ const browser = await chromium.launch();
   );
 }
 
+// 7. The subgraph panels must survive our own backend.
+//
+// Reading Studio directly is what made them work when everything of ours was down, and putting a
+// cache in front would trade that away without a word. Every request to the cache is refused
+// here; the page can only answer by asking Studio itself.
+{
+  const ctx = await browser.newContext();
+  const page = await ctx.newPage();
+  await withWallet(page);
+  await page.goto(`${APP}/`, { waitUntil: "domcontentloaded" });
+  const verify = page.getByRole("button", { name: /verify wallet/i });
+  await verify.waitFor({ timeout: 30_000 });
+  await verify.click();
+  await page.waitForTimeout(3000);
+
+  let refused = 0;
+  let direct = 0;
+  await page.route("**/api/graph", (route) => {
+    refused++;
+    return route.abort("connectionrefused");
+  });
+  await page.route("**/api.studio.thegraph.com/**", (route) => {
+    direct++;
+    return route.continue();
+  });
+
+  await page.goto(`${APP}/portfolio`, { waitUntil: "domcontentloaded" });
+  await page
+    .getByText(/not opened yet|open$/)
+    .first()
+    .waitFor({ timeout: 30_000 });
+  await page.waitForTimeout(4000);
+  const text = (await page.locator("body").innerText()).trim();
+
+  check("the cache is asked first", refused > 0, `${refused} refused`);
+  check(
+    "and Studio answers when it is not there",
+    direct > 0,
+    `${direct} direct`,
+  );
+  check(
+    "so the panel still renders with our backend unreachable",
+    /What this wallet may spend/.test(text),
+  );
+}
+
 await browser.close();
 if (failures.length) {
   console.error(`\n${failures.length} failed: ${failures.join(", ")}`);

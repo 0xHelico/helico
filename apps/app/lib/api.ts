@@ -18,7 +18,7 @@
  * `||` rather than `??` on purpose: an empty value in a `.env` file means "I did not set this",
  * and treating it as a base URL of `""` silently turns every call into a relative one.
  */
-const BASE = (
+export const API_BASE = (
   process.env.NEXT_PUBLIC_BE_API_URL ||
   (process.env.NODE_ENV === "development"
     ? "http://localhost:8787"
@@ -50,7 +50,7 @@ const TIMEOUT_MS = 12_000;
 const SESSION_TIMEOUT_MS = 3000;
 
 async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await fetch(`${API_BASE}${path}`, {
     ...init,
     credentials: "include",
     signal: init.signal ?? AbortSignal.timeout(TIMEOUT_MS),
