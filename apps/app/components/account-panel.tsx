@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { type Address, formatUnits } from "viem";
 import { useAccount, usePublicClient, useWriteContract } from "wagmi";
 
@@ -15,22 +15,13 @@ import {
 } from "@/components/kit";
 import { TokenMark } from "@/components/token-mark";
 import { Button } from "@/components/ui/button";
+import { CHAIN_ID, useAccountState } from "@/hooks/use-account-state";
 import {
-  type AccountState,
   configuredFactory,
   factoryAbi,
   hasAgent,
-  readAccount,
   workingBps,
 } from "@/lib/account";
-
-// Arbitrum One. The idle side is what a swap is paid from; the working side is Aave's receipt
-// for the same asset, which is why they are the same token in two states rather than two assets.
-const USDC = "0xaf88d065e77c8cC2239327C5EDb3A432268e5831" as const;
-const AUSDC = "0x724dc807b04555b71ed48a6896b6F41593b8C637" as const;
-
-// Arbitrum One, the same chain the rest of the app reads.
-const CHAIN_ID = 42161;
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 const usdc = (v: bigint) =>
@@ -64,17 +55,9 @@ export function AccountPanel() {
   const factory = configuredFactory();
   const { writeContractAsync } = useWriteContract();
 
-  const { data, error, refetch } = useQuery<AccountState>({
-    enabled: Boolean(client && address),
-    queryKey: ["account", factory, address],
-    queryFn: async () => {
-      if (!(client && address)) throw new Error("no client");
-      return readAccount(client, factory, address, {
-        idle: USDC,
-        working: AUSDC,
-      });
-    },
-  });
+  // One read for the page. The hero and the summary ask for the same key, so react-query
+  // answers all three from a single set of calls rather than three of everything.
+  const { data, error, refetch } = useAccountState();
 
   const openAccount = useMutation({
     mutationFn: async () => {

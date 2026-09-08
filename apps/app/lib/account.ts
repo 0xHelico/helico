@@ -76,6 +76,18 @@ export type AccountState =
 export type AccountTokens = { idle: Address; working: Address };
 
 /**
+ * Arbitrum One. The idle side is what a swap is paid from; the working side is Aave's receipt for
+ * the same asset — which is why they are one asset in two states rather than two assets.
+ *
+ * Here rather than in each component. Three of them declared this pair, and a fourth would have
+ * been three chances to get one character wrong in an address nobody reads twice.
+ */
+export const ACCOUNT_TOKENS: AccountTokens = {
+  idle: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+  working: "0x724dc807b04555b71ed48a6896b6F41593b8C637",
+};
+
+/**
  * Read an owner's account.
  *
  * Every read is allowed to fail on its own. A chain that answers the factory but not the aToken

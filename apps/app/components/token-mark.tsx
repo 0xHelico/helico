@@ -45,19 +45,38 @@ const TEXT = {
   textAnchor: "middle" as const,
 };
 
-/** Circle, inner ring, and the dollar stroke through it. */
+/**
+ * The blue disc, the gradient ring around it, and the dollar between two arcs.
+ *
+ * The ring is the part that identifies it at this size — the disc and the `$` alone are a dozen
+ * dollar-stablecoins. SVG has no conic gradient, so the sweep is a linear one laid across the
+ * same diagonal, which is indistinguishable at 24 pixels and is one element rather than twelve.
+ *
+ * The gradient id is fixed, not generated. Every instance draws the same three stops, so the
+ * first definition in the document is the right one for all of them, and a per-instance id would
+ * put a unique `<defs>` in the page for each row of a table.
+ */
 function Usdc({ size }: { size: number }) {
   return (
     <Mark label="USDC" size={size}>
-      <Circle fill="#2775ca" />
+      <defs>
+        <linearGradient id="usdc-ring" x1="0.15" x2="0.5" y1="0" y2="1">
+          <stop offset="0%" stopColor="#7b4bd0" />
+          <stop offset="45%" stopColor="#c8459d" />
+          <stop offset="100%" stopColor="#2ec4c4" />
+        </linearGradient>
+      </defs>
+      <Circle fill="url(#usdc-ring)" />
+      <circle cx="16" cy="16" fill="#fff" r="14.4" />
+      <circle cx="16" cy="16" fill="#2775ca" r="13.2" />
       <path
-        d="M12.6 24.6a9.2 9.2 0 0 1 0-17.2M19.4 7.4a9.2 9.2 0 0 1 0 17.2"
+        d="M12.9 23.9a8.4 8.4 0 0 1 0-15.8M19.1 8.1a8.4 8.4 0 0 1 0 15.8"
         fill="none"
         stroke="#fff"
         strokeLinecap="round"
-        strokeWidth="1.8"
+        strokeWidth="1.7"
       />
-      <text {...TEXT} fontSize="13" x="16" y="20.6">
+      <text {...TEXT} fontSize="12.5" x="16" y="20.4">
         $
       </text>
     </Mark>
