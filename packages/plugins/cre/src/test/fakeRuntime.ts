@@ -48,7 +48,7 @@ export function fakeRuntime(input: {
 	const writes: WriteReportCall[] = []
 	const reports: string[] = []
 	const secretRequests: string[] = []
-	const secretBatches: string[][] = []
+	const secretBatches: { id: string; namespace?: string }[][] = []
 
 	/**
 	 * Two different questions go to one endpoint, so the fake dispatches on the query the way the
@@ -136,7 +136,9 @@ export function fakeRuntime(input: {
 			secretRequests.push(...requests.map((r) => r.id))
 			// The boundaries too, not only the ids. A flat list cannot tell one request for
 			// eleven from two requests for eight and three, and the relay refuses the first.
-			secretBatches.push(requests.map((r) => r.id))
+			// The whole request, not only the id: the namespace is the field that was empty, and a
+			// recording that dropped it could not have shown that.
+			secretBatches.push(requests.map((r) => ({ ...r })))
 			return {
 				result: () =>
 					Object.fromEntries(

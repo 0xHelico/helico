@@ -93,6 +93,7 @@ const config: Config = {
 	gasLimit: '1500000',
 	deadlineSeconds: 600,
 	maxAccountsPerRun: 25,
+	secretsNamespace: 'main',
 }
 const now = 1_700_000_000
 
@@ -1241,6 +1242,23 @@ describe('the secrets request the relay will actually answer', () => {
 		// with it on this configuration and not on one without the model.
 		expect(new Set(secretRequests).size).toBe(11)
 		expect(secretRequests).toContain('AGENT_KEY')
+	})
+
+	/**
+	 * The second half of the same failure, and the half that actually caused it. Batching changed
+	 * `11 request(s)` to `10 request(s)` in the error and nothing else — because the request was
+	 * never too big, it was addressed to the empty namespace. Every node looked for a secret that
+	 * is not there, and enough errors became `relay quorum unreachable`, which reads like an
+	 * outage.
+	 */
+	test('every request names the namespace the secrets were created in', async () => {
+		const { secretBatches } = await run({ ...allIdle, nonce: 7n }, withModel, {
+			secrets: allKeys,
+		})
+		expect(secretBatches.length).toBeGreaterThan(0)
+		for (const batch of secretBatches) {
+			for (const req of batch) expect(req.namespace).toBe('main')
+		}
 	})
 
 	test('a run without the model asks once, because eight fits', async () => {

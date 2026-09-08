@@ -104,6 +104,19 @@ export const configShape = {
 	 */
 	maxAccountsPerRun: z.number().int().positive().max(1000).default(25),
 	/**
+	 * The Vault DON namespace the secrets live in.
+	 *
+	 * `SecretRequest` carries an id **and a namespace**, and omitting the second sends the empty
+	 * string — which is not where `cre secrets create` writes. Every node then looks for a secret
+	 * that is not there and answers with an error, and enough of those become
+	 * `relay quorum unreachable: 0 signed responses`, which reads like the DON is down rather
+	 * than like a request for the wrong shelf. That message cost two deploys to see through.
+	 *
+	 * `main` is the CLI's default and what `cre secrets list` reports against every identifier
+	 * we hold.
+	 */
+	secretsNamespace: z.string().default('main'),
+	/**
 	 * The lending markets to choose between, in the owner's own order — which is what breaks a
 	 * tie between two paying the same. The account must already permit each of them; the enclave
 	 * reads the allowlist rather than assuming it, and a market it does not permit is skipped
@@ -427,11 +440,12 @@ const MAX_SECRETS_PER_REQUEST = 10
 function readSecrets(
 	runtime: TeeRuntime<Config>,
 	ids: string[],
+	namespace: string,
 ): Record<string, { value: string }> {
 	const all: Record<string, { value: string }> = {}
 	for (let i = 0; i < ids.length; i += MAX_SECRETS_PER_REQUEST) {
 		const batch = ids.slice(i, i + MAX_SECRETS_PER_REQUEST)
-		Object.assign(all, runtime.getSecrets(batch.map((id) => ({ id }))).result())
+		Object.assign(all, runtime.getSecrets(batch.map((id) => ({ id, namespace }))).result())
 	}
 	return all
 }
@@ -448,7 +462,7 @@ export const onCronTrigger = async (runtime: TeeRuntime<Config>): Promise<string
 		...(signs ? [config.agentKeySecretId] : []),
 		...(config.aiUrl ? Object.values(AI_SECRET_IDS) : []),
 	]
-	const secrets = readSecrets(runtime, ids)
+	const secrets = readSecrets(runtime, ids, config.secretsNamespace)
 	const policy = policyFromSecrets(secrets)
 	const hash = policyHash(policy)
 	const now = Math.floor(runtime.now().getTime() / 1000)
