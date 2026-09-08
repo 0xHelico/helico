@@ -127,24 +127,27 @@ caught.** What that turned up, and the four limits it did not fix, are in
 
 ### The Graph
 
-> **Deployed to Subgraph Studio, and pointed at the wrong contract until it is redeployed.**
-> The subgraph is in [`subgraph/`](subgraph/); `@helico/plugin-thegraph` queries it; one command
-> shows what comes back, and prints `_meta` first:
+> **Deployed to Subgraph Studio, indexing the Aqua 1inch uses.** The subgraph is in
+> [`subgraph/`](subgraph/); `@helico/plugin-thegraph` queries it, and so does the CRE workflow;
+> one command shows what comes back, and prints `_meta` first:
 >
 > ```sh
 > bun scripts/check-subgraph.ts
 > ```
 >
-> ⚠️ **The manifest is corrected; the deployment is not.** Until 7 September this indexed
-> `0x499943E7…`, which is a real Aqua with real events and has had none since block 451,737,844.
-> The Aqua 1inch actually uses on Arbitrum One is `0x1111113ccf…` — it is what
-> `@1inch/aqua-sdk` names, and the deployed `AquaSwapVMRouter` carries it in its bytecode with no
-> reference to the old one. `subgraph.yaml` now points at it, from its deployment block
-> 485,505,646. **Redeploying to Studio is what makes that true of the data**, and has not
-> happened yet ([#165](https://github.com/0xHelico/helico/issues/165)).
+> It holds 47 makers and mandates spanning blocks 485,793,304 to 502,288,683, with
+> `hasIndexingErrors: false`.
 >
-> One consolation: the new range is ~17M blocks to head rather than ~100M, so the re-index is
-> far shorter than the one it replaces.
+> ⚠️ **It served the wrong contract for a day, and nothing looked wrong.** The manifest was
+> corrected on 7 September, but `bun run deploy` targeted `helico-aqua-arbitrum-one` while
+> everything queries `helico-arbitrum-one` — both exist in Studio, so every deploy succeeded and
+> landed on the one nobody reads. The endpoint answered, `hasIndexingErrors` was false, and
+> `_meta` tracked the chain head throughout.
+>
+> The check that catches it is one comparison: **the oldest entity an endpoint serves cannot
+> predate the first log of the contract it indexes.** It was serving mandates from block
+> 403,010,640 against a first log at 485,505,646. It now serves 485,793,304, which is the
+> canonical Aqua's first `Shipped`. See [#181](https://github.com/0xHelico/helico/issues/181).
 
 Aqua cannot answer the question an agent has to ask first.
 
