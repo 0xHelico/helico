@@ -82,6 +82,28 @@ those two lines has already verified itself.
 **Record:** implementation address, factory address — in [`deployments.md`](deployments.md),
 which is where the live ones already are.
 
+**Then verify, in the same sitting.** A contract deployed and not verified is one a judge has to
+take a screenshot's word for:
+
+```bash
+forge verify-contract $IMPLEMENTATION src/HelicoAccount.sol:HelicoAccount \
+  --chain-id 42161 --etherscan-api-key "$ETHERSCAN_API_KEY" \
+  --constructor-args $(cast abi-encode "constructor(address)" $ACCOUNT_UPGRADER) --watch
+```
+
+`ETHERSCAN_API_KEY` lives in the source-of-truth `.env`. **One key serves every chain** on
+Etherscan's v2 API — there is no separate Arbiscan key to look for, and `--chain-id 42161` is
+what aims it. The constructor arguments are in
+`broadcast/<Script>.s.sol/42161/run-latest.json` under `arguments`, so they never have to be
+remembered.
+
+Check it from the other side afterwards. `forge` reporting success and the explorer serving the
+source are two different claims:
+
+```bash
+curl -s "https://api.etherscan.io/v2/api?chainid=42161&module=contract&action=getsourcecode&address=$ADDR&apikey=$ETHERSCAN_API_KEY"
+```
+
 ## 2. Open an account, and give it its rules
 
 ```bash
