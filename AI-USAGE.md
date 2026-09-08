@@ -1068,6 +1068,81 @@ READMEs.
   line described the code's intent rather than the deployment's behaviour, which is the one thing
   a deployment record must not do. It now carries the execution list instead.
 
+### 2026-09-09 — the one-sided maker, and the two apps built to serve them
+
+- **Done:** the whole product ran end to end on a fork in one command — an account opened
+  *through the app* on the deployed factory, managed by the enclave, capital moved. Then a
+  question from Ghoza turned into two new Aqua apps: one to answer it, one to act on the answer.
+
+- **AI's role:** Ghoza asked the questions and made every call — build it now rather than after
+  submission, keep the deck private, delete what will not ship. Claude did the reading,
+  the code and the measurements, and was corrected twice on things it had asserted.
+
+- **The question, and why it needed an answer rather than an opinion.** *"Can I put up only USDC,
+  without ETH?"* `HelicoMandateSwap` refuses a zero side with `DegenerateReserves`, so the easy
+  answer is no. The real answer needed the distinction between our app and the protocol:
+
+  ```
+  amountOut = amountIn * balanceOut / (balanceIn + amountIn)
+  ```
+
+  With `balanceIn == 0` the `amountIn` cancels top and bottom and the whole opposite side leaves
+  for two wei. That is a fact about **our curve**. Aqua prices nothing at all — eighty-one lines,
+  no `price`, no `quote`, no curve — which was verified by reading the vendored source rather than
+  by trusting our own comment that said so.
+
+- **So it was tested rather than argued.** `test/FixedPriceBoard.sol` is the smallest app that
+  reads its price from a field instead of a ratio. Two answers came back, and the second is the
+  one worth having: naming only USDC fails for a **bookkeeping** reason — `ship` sets
+  `tokensCount` from `tokens.length`, so a token never named reverts every read that touches it —
+  while naming both and giving one of them **zero** works, and the maker's capital stays 100%
+  USDC.
+
+- **Then the answer was built on.** A fixed price serves a one-sided maker but never brakes, so a
+  market that moves converts the whole position at yesterday's number.
+  `HelicoOracleBoard` takes the price from Chainlink's live ETH/USD feed and the brake from Aqua's
+  own ledger — both quotes shift down as inventory accumulates, so selling in gets worse and
+  buying it back gets better. That is what a constant product gets for free, restored on top of a
+  feed that knows nothing about who holds what.
+
+- **Corrected, in public, after asserting it.** Claude reported *"Test-nya sudah masuk, PR #257"*.
+  There was no PR #257 — `gh pr create` had never been run. The number was arithmetic from "the
+  last one was 256", presented as a fact. It surfaced two hours later when a different piece of
+  work was assigned that number. Recorded, with the check that would have caught it: a PR number
+  must come from the command that made or read the PR, never from a pattern.
+
+- **A green assertion that proved nothing**, found before it was committed: a test read the ask
+  price *after* the fill and compared it with itself. It passed for that reason. Now both quotes
+  are read before.
+
+- **Plans:** no plan file. The session ran from conversation and from
+  [#234](https://github.com/0xHelico/helico/issues/234), recorded here as it happened.
+
+- **Verified:** `forge test` — **108 passed, 0 failed**, including six fork tests against the live
+  Chainlink feed and four against Aqua. The inventory brake is mutation-checked: forcing the skew
+  to zero turns the bend test red and leaves the other five green, so the test is specific to what
+  it names. `forge fmt --check`, `bun run check` / `typecheck` / `test`, and five python checks.
+  The deploy script was dry-run against Arbitrum One rather than only compiled.
+
+  Beyond the suites, the end-to-end rehearsal on a fork of Arbitrum One:
+
+  ```
+  app opened the account   0xBCb6c913…fC77   on the deployed factory, by pressing a button
+  nominated the agent      0x84C3891a…5fcAf  from the page, not from a script
+  funded                   5,000 USDC
+  the enclave decided      SUPPLY 4,000 to Aave v3
+  sent as the agent        working  0 -> 3,999,999,999
+                           idle     1,000,000,000
+  the agent's own USDC     0
+  ```
+
+  Its first run reported **success while having failed**: `${VAR,,}` is bash 4 and macOS ships
+  3.2, and the exit code read belonged to `tail` at the end of the pipe. Both fixed, and the
+  second reason is a rule this repository already had.
+
+- **The deployed workflow, meanwhile:** twenty consecutive `SUCCESS`, five minutes apart, holding
+  correctly because no account exists on the live chain for it to manage.
+
 <!--
 Template for the next entry:
 
