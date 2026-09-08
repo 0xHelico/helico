@@ -18,6 +18,9 @@ RUN bun run --filter @helico/landing build
 # Static files behind nginx running as an unprivileged user on port 8080.
 FROM nginxinc/nginx-unprivileged:1.27-alpine
 COPY apps/landing/nginx.conf /etc/nginx/conf.d/default.conf
+# Outside conf.d on purpose: that directory is globbed by the base image's nginx.conf, and a file
+# of bare `add_header` directives landing there would be loaded a second time at the http level.
+COPY apps/landing/security-headers.conf /etc/nginx/security-headers.conf
 COPY --from=build /repo/apps/landing/dist /usr/share/nginx/html
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s \

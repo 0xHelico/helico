@@ -36,6 +36,11 @@ jobs:
       # ran it, so five of the twenty-three pins had drifted by the time anyone looked — and a
       # permalink to the wrong lines is worse than none, because it looks checked.
       - run: python3 scripts/check-readme-links.py
+      # nginx drops every inherited `add_header` in a location that sets one of its own, so the
+      # landing was serving two headers of five on its assets while the file declared all five.
+      # Nothing about a response says which headers it should have had, so this is the only place
+      # the rule can be enforced before a deploy rather than after a measurement.
+      - run: python3 scripts/check-nginx-headers.py
       # Runs every package's `test` script through Turborepo. A package without one is skipped,
       # so this step proves only what the packages define.
       - run: bun run test
