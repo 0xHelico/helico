@@ -147,3 +147,20 @@ export async function readMovements(
     capped: raw.movements.length === PAGE,
   };
 }
+
+/**
+ * Aqua apps this repository can name.
+ *
+ * Two of them are ours and one is 1inch's, and the table says which without the reader having to
+ * recognise a hex prefix. Anything else stays an address: a wrong name beside a real balance is
+ * the mistake this file avoids everywhere else.
+ */
+const APPS: Record<string, string> = {
+  "0xa16d313816247628deb7d89dc7a3cf4adb5287ed": "HelicoMandateSwap",
+  "0xb8c9f14d46bf387a6d70d796df30f11a0eb8c3be": "Helico SwapVM",
+  "0x111111338c5091e8440b67b168bae16a668ac0de": "1inch SwapVM",
+};
+
+export function appName(address: string): string | null {
+  return APPS[address.toLowerCase()] ?? null;
+}

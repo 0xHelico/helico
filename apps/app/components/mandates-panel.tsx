@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { isAddress } from "viem";
 import { useAccount } from "wagmi";
-
+import { Glyph } from "@/components/glyph";
 import {
   Card,
   Empty,
@@ -13,9 +13,11 @@ import {
   SectionTitle,
 } from "@/components/kit";
 import { byDay, Sparkline } from "@/components/sparkline";
+import { TokenBars } from "@/components/token-bars";
 import { Input } from "@/components/ui/input";
 import {
   amount,
+  appName,
   type MandateView,
   readMandates,
   readMovements,
@@ -134,8 +136,12 @@ export function MandatesPanel() {
                   <td className="tabular py-2.5 pr-4 font-mono text-body">
                     {short(m.strategyHash)}
                   </td>
-                  <td className="tabular py-2.5 pr-4 font-mono text-body">
-                    {short(m.app)}
+                  <td className="py-2.5 pr-4 text-body">
+                    {appName(m.app) ? (
+                      <span className="text-ink">{appName(m.app)}</span>
+                    ) : (
+                      <span className="tabular font-mono">{short(m.app)}</span>
+                    )}
                   </td>
                   <td className="tabular max-w-[16rem] truncate py-2.5 pr-4 font-mono text-ink">
                     <span title={spendable(m) || undefined}>
@@ -150,6 +156,8 @@ export function MandatesPanel() {
             </tbody>
           </table>
         </div>
+        <TokenBars totals={data.spendable} />
+
         <p className="mt-4 text-[11px] text-faint leading-relaxed">
           {live.length} live
           {docked > 0 ? `, ${docked} docked and not listed` : ""} of{" "}
