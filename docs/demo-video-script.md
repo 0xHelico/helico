@@ -28,19 +28,45 @@ The script assumes work that is not all finished. Every shot that depends on som
 and each has a fallback that is true today. **Record the fallback version first**: it is the one
 that exists, and #22 asks for a full-length take by **11 September** rather than the night before.
 
-| Shot | Needs | Fallback if it is not there |
+| Shot | Needs | State on **8 September** |
 |---|---|---|
-| 3 — the swap | `HelicoMandateSwap` deployed to Arbitrum One | the fork test, `forge test --match-contract ForkMandateSwapTest -vvvv` — **the four `v`s are the shot**, see below |
-| 4 — the query | the subgraph deployed and indexing | **satisfied since 8 September** — deployed, synced, and serving the canonical Aqua |
+| 3 — the swap | `HelicoMandateSwap` deployed to Arbitrum One | **satisfied.** Deployed and verified at [`0xA16D3138…87Ed`](https://arbiscan.io/address/0xA16D313816247628DeB7d89DC7a3Cf4aDb5287Ed#code). The fork test is no longer the fallback, it is the second angle |
+| 4 — the query | the subgraph deployed and indexing | **satisfied.** Deployed, synced, serving the canonical Aqua |
 | 5 — the enclave | nothing, works today | — |
 
 A shot that has to fall back is not a weaker video. A shot that claims something untrue ends the
 submission.
 
-### Pre-flight, run 7 September
+### Pre-flight, re-run 8 September
 
 Checked so the first take is not spent discovering these. Re-check on the day — the point of the
-list is that it changes.
+list is that it changes, and between the 7th and the 8th four rows did.
+
+| | State on 8 September, measured |
+|---|---|
+| The three sites | `helico.site`, `app.helico.site`, `api.helico.site/healthz` all 200. `bun run --filter @helico/app prod` runs 20 checks against them and passes |
+| **"Nothing of ours is deployed"** | **No longer true, and this is the biggest change since the 7th.** Live and verified on Arbitrum One: the account factory `0x01CC7d9F…E081`, the account implementation, `HelicoMandateSwap`, and the SwapVM router. The subgraph is on Studio. The workflow is registered as `helico-production` on DON `zone-a` |
+| The caveat that replaces it | **No account has been opened on the live chain**, so the deployed workflow reaches its logic and holds every run. Say that, not "not live" — "not live" is now a false claim rather than a modest one |
+| Shot 2, the chain refusing | **New, and worth a take.** `bun scripts/check-subgraph.ts` now asks the chain before it asks the index: it fetches `Shipped` logs and counts the topics. One topic, the signature — so nothing is indexed and nothing can be filtered. That is the shot's own sentence, measured on camera instead of read off a source file |
+| Shot 3, at `-vv` | Unchanged: one `[PASS]` line and no balances. Use `-vvvv` |
+| Shot 4, the numbers | Re-run `bun scripts/check-subgraph.ts` on the day and read them off that run. As of the 8th: 49 mandates for the busiest maker, 11 still active, five tokens |
+
+### The shot that became possible on the 8th
+
+The app can now open a real account, nominate the agent and permit a market — all from the page,
+all owner-only, all on Arbitrum One. `open()` costs **0.00000703 ETH**, and the whole path is
+checked against the chain by `bun run --filter @helico/app e2e:account` on a fork.
+
+**Doing it live on camera is the strongest thirty seconds available**, because it is the product
+being used rather than described, and because it turns the honest caveat above into a past tense:
+the moment the account exists and names the agent, the enclave picks it up on its next run with
+no redeploy. If you would rather not send a transaction while recording, open it beforehand and
+show the page reading it back — the account is still real either way.
+
+### Pre-flight, run 7 September — kept for the rows that have not moved
+
+The table above supersedes this one wherever they disagree. It stays because most of it is still
+true, and because the disagreements are the interesting part.
 
 | | State on 7 September |
 |---|---|
@@ -50,7 +76,7 @@ list is that it changes.
 | Shot 3, at `-vv` | **Would have cost a take.** One `[PASS]` line, no balances. Use `-vvvv` |
 | Shot 4, the subgraph | **Recordable.** Deployed and synced 8 September, serving the Aqua 1inch uses: 47 makers, mandates from block 485,793,304. It spent a day pointed at the retired deployment and looked healthy the whole time ([#181](https://github.com/0xHelico/helico/issues/181)), so re-run `bun scripts/check-subgraph.ts` on the day and read the numbers off that run |
 | Shot 5, the enclave | Runs. A recorded rehearsal with its numbers checked against the policy is in [`docs/evidence/2026-09-08-idle-capital-rehearsal.md`](evidence/2026-09-08-idle-capital-rehearsal.md). The 7 September file records the vault path the workflow no longer drives |
-| "Deployed", "live", "in production" | Still says nothing that is deployed except Aqua itself, which is 1inch's |
+| "Deployed", "live", "in production" | **Superseded by the 8 September table above.** On the 7th nothing of ours was deployed; on the 8th four contracts, the subgraph and the workflow are |
 
 ## Shot list
 
@@ -217,7 +243,7 @@ End on the repo URL. No outro music.
 
 - **"Deployed", "live", or "in production"** about anything that is not — check each one on the
   day, because this list changes as things land
-- **"Audited"** — twelve AI agents reviewed the vault, and that is not an audit
+- **"Audited"** — twelve AI agents reviewed the contracts, and that is not an audit
 - **"Runs in a TEE"** — it runs in the simulator, which announces that it is not a TEE
 - **Anything about Uniswap being one of our tracks** — it is not, and the video should not imply
   a fourth
