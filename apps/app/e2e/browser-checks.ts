@@ -59,6 +59,17 @@ const wallet = (key: `0x${string}`, address: string) => `
   announce();
 })()`;
 
+/**
+ * What says a page is past the sign-in gate.
+ *
+ * It used to be "any textbox", which worked only because the front page happened to carry the
+ * vault-address input. That form went with the vault it configured, and a check that depends on
+ * an unrelated input is a check that fails for reasons it is not about — so this asks for the
+ * page's own heading, which is the thing the gate is standing in front of.
+ */
+const inTheApp = (page: Page) =>
+  page.getByRole("heading", { name: /limits it works inside/ });
+
 async function withWallet(page: Page) {
   const key = generatePrivateKey();
   const account = privateKeyToAccount(key);
@@ -126,7 +137,7 @@ const browser = await chromium.launch();
   await page
     .getByRole("button", { name: /Verify wallet/ })
     .click({ timeout: 20_000 });
-  await page.getByRole("textbox").first().waitFor({ timeout: 30_000 });
+  await inTheApp(page).waitFor({ timeout: 30_000 });
   await page.reload({ waitUntil: "domcontentloaded" });
   let flashed = false;
   for (let i = 0; i < 25; i++) {
@@ -136,10 +147,7 @@ const browser = await chromium.launch();
     }
   }
   check("a reload does not flash the gate", !flashed);
-  check(
-    "and lands back in the app",
-    (await page.getByRole("textbox").count()) > 0,
-  );
+  check("and lands back in the app", (await inTheApp(page).count()) > 0);
 }
 
 // 4. And the one that actually bit: the cookie must come back on a reload even when the browser
@@ -157,7 +165,7 @@ const browser = await chromium.launch();
   await page
     .getByRole("button", { name: /Verify wallet/ })
     .click({ timeout: 20_000 });
-  await page.getByRole("textbox").first().waitFor({ timeout: 30_000 });
+  await inTheApp(page).waitFor({ timeout: 30_000 });
 
   const jar = (await ctx.cookies()).filter((c) => c.name === "helico_session");
   check("the session cookie is stored", jar.length === 1);
@@ -171,7 +179,7 @@ const browser = await chromium.launch();
   await page.waitForTimeout(2500);
   check(
     "still signed in after a reload, third-party cookies blocked",
-    (await page.getByRole("textbox").count()) > 0,
+    (await inTheApp(page).count()) > 0,
   );
   await strict.close();
 }
@@ -230,9 +238,13 @@ const browser = await chromium.launch();
   );
 
   // A grant nobody has wired must be genuinely unmovable rather than merely dimmed. At most one
-  // switch on this page is operable — the real one — and it is only operable when a vault and a
-  // wallet are both present, so "none" is also correct here.
-  const switches = page.getByRole("switch");
+  // switch in this list is operable — the real one — and it is only operable with an open account
+  // and a wallet, so "none" is also correct here.
+  //
+  // Scoped to the list rather than the page. The limits panel below has a switch of its own now,
+  // and a page-wide count would have failed here for a reason this check is not about the moment
+  // an account was open.
+  const switches = page.getByTestId("grants").getByRole("switch");
   const total = await switches.count();
   let operable = 0;
   for (let i = 0; i < total; i++) {
