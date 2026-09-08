@@ -1,29 +1,28 @@
 # Plugins
 
-**Every partner integration lives here.** One package per integration, at
-`packages/plugins/<name>`, published in the workspace as `@helico/plugin-<name>`.
-Apps consume them; apps never talk to a protocol directly.
+**Every partner integration lives here**, one package each, as `@helico/plugin-<name>`. Apps
+consume them; apps never talk to a protocol directly.
 
-A plugin may depend on [`@helico/core`](../core/) through `workspace:*`; none does yet.
+| Plugin | Integration |
+|---|---|
+| [`cre/`](cre/) | Chainlink CRE confidential workflows |
+| [`1inch/`](1inch/) | Aqua mandates, priced by the deployed SwapVM |
+| [`thegraph/`](thegraph/) | Our Aqua subgraph, and Uniswap v4's published one |
+| [`uniswap/`](uniswap/) | Uniswap v4 on any chain: pools, quotes, swaps, Permit2, liquidity |
 
-| Plugin | Package | Integration |
-|---|---|---|
-| [`cre/`](cre/) | `@helico/plugin-cre` | Chainlink CRE confidential workflows |
-| [`uniswap/`](uniswap/) | `@helico/plugin-uniswap` | Uniswap v4 on-chain, any chain: pools, quotes, swaps, Permit2 approvals, liquidity |
-| [`thegraph/`](thegraph/) | `@helico/plugin-thegraph` | The Graph: our Aqua subgraph, and Uniswap v4's published one |
-| [`1inch/`](1inch/) | `@helico/plugin-1inch` | 1inch Aqua: concentrated positions priced by the deployed SwapVM |
+## Why not just put it in the app
 
-## Why a package rather than code inside an app
+Because a partner reviewer has to find the lines that prove the integration, and one package per
+partner keeps those references stable. It also keeps apps thin: what the product does stays
+separable from how it talks to a protocol.
 
-- Uniswap's bounty rewards "tooling or solutions built for the broader ecosystem".
-  A reusable package is that; integration code buried in an app is not.
-- Both partner prizes require a README pointing reviewers at the exact lines that prove
-  the integration. One package per partner keeps those references stable.
-- Apps stay thin, so what the product does stays separable from how it talks to a protocol.
+The exception is anything deployed. `HelicoMandateSwap` is an Aqua app, so it is Solidity in
+[`contracts/`](../../contracts/) — wrapping it in a package would add a layer that proves nothing.
+The rule is about where protocol knowledge lives, not about the directory.
 
 ## Adding one
 
-1. `packages/plugins/<name>/` with `package.json` naming it `@helico/plugin-<name>`
+1. `packages/plugins/<name>/` with a `package.json` naming it `@helico/plugin-<name>`
 2. `typecheck` and `test` scripts, so the workspace tasks and CI pick it up
-3. A README stating what the integration does and which lines prove it
-4. Add a row to the table above
+3. A README saying what it does and which lines prove it
+4. A row in the table above

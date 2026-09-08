@@ -1,116 +1,58 @@
 # @helico/plugin-uniswap
 
-Uniswap v4 on-chain through the official SDKs and viem, on any chain. No API key, no wallet:
-the package resolves addresses, reads pools, quotes, and builds calldata. It never signs or
-sends. Plans: [`2026-09-05-plugin-uniswap.md`](../../../docs/plans/2026-09-05-plugin-uniswap.md),
-[`2026-09-05-plugin-uniswap-complete.md`](../../../docs/plans/2026-09-05-plugin-uniswap-complete.md).
+Uniswap v4 on any chain, through the official SDKs and viem. No API key, no wallet: it resolves
+addresses, reads pools, quotes, and builds calldata. **It never signs or sends.**
+
+Plans: [`plugin-uniswap`](../../../docs/plans/2026-09-05-plugin-uniswap.md),
+[`plugin-uniswap-complete`](../../../docs/plans/2026-09-05-plugin-uniswap-complete.md).
 
 ## Modules
 
-| Module | Exports | Proven by |
-|---|---|---|
-| [`addresses`](src/addresses.ts) | `addresses(chainId)` with the Universal Router version per chain, `registerV4Addresses`, `supportedChainIds` | tests pin Base, Base Sepolia, and Robinhood Chain to the official deployments page |
-| [`networks`](src/networks.ts) | `network(key)`, `registerNetwork`, `networkByChainId`, built-ins for Ethereum, Arbitrum, Polygon, BNB, Base, Base Sepolia, Robinhood Chain, Robinhood Chain Testnet | tests resolve every built-in |
-| [`pool`](src/pool.ts) | `createPoolKey`, `sortCurrencies`, `poolId`, `getPoolState`, `nearestUsableTick`, `sqrtPriceX96ToPrice`, `tickToPrice`, `priceToTick` | tests; live `StateView` reads |
-| [`quote`](src/quote.ts) | `quoteExactInputSingle`, `quoteExactOutputSingle`, `quoteExactInput`, `quoteExactOutput` | tests through the real ABI; live v4 `Quoter` calls |
-| [`swap`](src/swap.ts) | `encodeSwapExactInSingle`, `encodeSwapExactOutSingle`, `encodeSwapExactIn`, `encodeSwapExactOut`, `buildPath`, `minimumAfterSlippage`, `maximumAfterSlippage`, `deadlineFromNow` | tests decode every action in both router layouts; all four shapes accepted by the router live |
-| [`approval`](src/approval.ts) | `getAllowances`, `approvalsNeeded`, `encodeApproveTokenToPermit2`, `encodeApprovePermit2`, `permitSingleTypedData` | tests; approvals executed on-chain |
-| [`liquidity`](src/liquidity.ts) | `encodeInitializePool`, `encodeMintPosition`, `encodeIncreaseLiquidity`, `encodeDecreaseLiquidity`, `encodeCollectFees`, `sqrtPriceX96FromAmounts` | tests decode the `V4PositionManager` calldata; all six executed on-chain |
+| Module | What it gives you |
+|---|---|
+| [`addresses`](src/addresses.ts) | `addresses(chainId)` with the right Universal Router version per chain, plus runtime registration for chains the SDKs do not list |
+| [`networks`](src/networks.ts) | the viem chain, explorer, wrapped native, quote stablecoin and a verified reference pool, per chain |
+| [`pool`](src/pool.ts) | pool keys, `poolId`, `getPoolState` through `StateView`, tick and price conversions |
+| [`quote`](src/quote.ts) | the v4 `Quoter`, exact-in and exact-out, single and multi-hop |
+| [`swap`](src/swap.ts) | calldata for all four swap shapes, in whichever router layout the chain has |
+| [`approval`](src/approval.ts) | Permit2 allowances, approval calldata, and EIP-712 permit data |
+| [`liquidity`](src/liquidity.ts) | initialise, mint, increase, decrease, collect, burn |
 
-Not here: sending anything, the Trading API (needs a key), UniswapX, hooks development, CCA.
-`permitSingleTypedData` produces the EIP-712 data for a Permit2 signature, but this package
-does not encode the router's `PERMIT2_PERMIT` command yet; use the on-chain approvals, or
-consume the signature in your own router call.
-
-## Chains
-
-`addresses(chainId)` resolves from `@uniswap/sdk-core` and `@uniswap/universal-router-sdk`
-first, picking the router version that chain has (2.0 where it exists, else 2.1.1, else
-2.2.0; the encoders build the matching swap structs). Chains the SDKs do not list come from
-[`deployments.ts`](src/deployments.ts) or from `registerV4Addresses(chainId, …)` at runtime.
-
-`networks.ts` adds what the scripts need per chain: the viem chain, explorer, wrapped native,
-the quote stablecoin, and a verified reference pool. `registerNetwork({...})` adds any chain.
-Built-ins:
-
-| `CHAIN` | Chain | Router | Reference pool |
-|---|---|---|---|
-| `ethereum` | Ethereum | 2.0 | not verified yet, run `discover` |
-| `arbitrum` | Arbitrum One | 2.0 | ETH/USDC 0.05 %, read with liquidity |
-| `polygon` | Polygon | 2.0 | not verified yet |
-| `bnb` | BNB Smart Chain | 2.0 | BNB/USDC 0.05 %, read with liquidity |
-| `base` | Base | 2.0 | ETH/USDC 0.05 %, read with liquidity; multi-hop via USDT |
-| `base-sepolia` | Base Sepolia | 2.0 | ETH/USDC 0.05 % (Circle test USDC) |
-| `robinhood` | Robinhood Chain (4663) | 2.1.1 | ETH/USDG fee 87 / spacing 1, the deepest hook-less pool found |
-| `robinhood-testnet` | Robinhood Chain Testnet (46630) | 2.1.1 | none needed; the e2e made its own and ran there |
-
-**Robinhood Chain.** viem ships no definition, so [`chains.ts`](src/chains.ts) defines both
-networks from Robinhood's docs. The mainnet only has Universal Router 2.1.1. The quote asset
-of most pools is USDG (Global Dollar), and most ETH/USDG pools use a dynamic-fee hook. v4 is
-also on the testnet at the mainnet addresses (PoolManager, Quoter, and StateView bytecode is
-identical), which neither Uniswap's deployments page nor the SDKs list; that deployment is
-recorded in `deployments.ts` with the evidence.
+Not here: sending anything, the Trading API, UniswapX, hooks, CCA.
 
 ## Where to look
 
-The lines that prove the integration, for reviewers:
+The lines that prove the integration:
 
 | Evidence | Lines |
 |---|---|
-| Universal Router `execute` with V4_SWAP and the router-level SWEEP | [`src/swap.ts#L100-L121`](src/swap.ts#L100-L121) |
-| v4 `SWAP_EXACT_IN_SINGLE` action, router-version aware | [`src/swap.ts#L135-L170`](src/swap.ts#L135-L170) |
-| v4 `Quoter` through a read-only `eth_call` | [`src/quote.ts#L17-L28`](src/quote.ts#L17-L28) |
-| Protocol state through `StateView` | [`src/pool.ts#L64-L82`](src/pool.ts#L64-L82) |
-| `PoolId` derivation | [`src/pool.ts#L39-L52`](src/pool.ts#L39-L52) |
-| Addresses and router version from the official SDKs | [`src/addresses.ts#L46-L67`](src/addresses.ts#L46-L67) |
-| Any chain: runtime registration | [`src/addresses.ts#L87-L89`](src/addresses.ts#L87-L89) |
-| Permit2 approvals and EIP-712 permit data | [`src/approval.ts#L93-L110`](src/approval.ts#L93-L110) |
-| `V4PositionManager` mint | [`src/liquidity.ts#L93-L124`](src/liquidity.ts#L93-L124) |
-| Robinhood Chain definitions | [`src/chains.ts#L8-L14`](src/chains.ts#L8-L14) |
+| Universal Router `execute` with `V4_SWAP` and the router-level `SWEEP` | [`swap.ts#L100-L121`](src/swap.ts#L100-L121) |
+| `SWAP_EXACT_IN_SINGLE`, router-version aware | [`swap.ts#L135-L170`](src/swap.ts#L135-L170) |
+| The v4 `Quoter` through a read-only `eth_call` | [`quote.ts#L17-L28`](src/quote.ts#L17-L28) |
+| Protocol state through `StateView` | [`pool.ts#L64-L82`](src/pool.ts#L64-L82) |
+| `PoolId` derivation | [`pool.ts#L39-L52`](src/pool.ts#L39-L52) |
+| Addresses and router version from the official SDKs | [`addresses.ts#L46-L67`](src/addresses.ts#L46-L67) |
+| Permit2 approvals and EIP-712 permit data | [`approval.ts#L93-L110`](src/approval.ts#L93-L110) |
+| `V4PositionManager` mint | [`liquidity.ts#L93-L124`](src/liquidity.ts#L93-L124) |
+| Robinhood Chain, which viem does not define | [`chains.ts#L8-L14`](src/chains.ts#L8-L14) |
 
-## Use
-
-```ts
-import { createPublicClient, http } from 'viem'
-import * as uni from '@helico/plugin-uniswap'
-
-const net = uni.network('robinhood')
-const client = createPublicClient({ chain: net.chain, transport: http() })
-const poolKey = uni.createPoolKey({ currencyA: '0x0000000000000000000000000000000000000000', currencyB: net.usd.address, fee: 500, tickSpacing: 10 })
-
-const { amountOut } = await uni.quoteExactInputSingle(client, { poolKey, zeroForOne: true, amountIn: 10n ** 18n })
-const tx = uni.encodeSwapExactInSingle({
-	chainId: net.chain.id, poolKey, zeroForOne: true, amountIn: 10n ** 18n,
-	amountOutMinimum: uni.minimumAfterSlippage(amountOut, 50), deadline: uni.deadlineFromNow(600),
-})
-// tx = { to, data, value }: simulate with client.call, or sign and send it yourself
-```
-
-Multi-hop: `uni.buildPath({ currencies: [A, B, C], pools: [p, p] })`, then `quoteExactInput` /
-`encodeSwapExactIn` with `exactInPath`, or the exact-output pair with `exactOutPath`. ERC-20
-inputs need `getAllowances` → `approvalsNeeded` → the two approvals first.
-
-## Scripts
+## Run
 
 ```bash
-bun run --filter @helico/plugin-uniswap typecheck
-bun run --filter @helico/plugin-uniswap test                  # offline, one file per module
-CHAIN=base bun run --filter @helico/plugin-uniswap smoke      # live, read-only: state, quotes, every swap shape via eth_call
-CHAIN=robinhood bun run --filter @helico/plugin-uniswap discover   # find native/usd pools with liquidity
-CHAIN=base-sepolia bun run --filter @helico/plugin-uniswap e2e     # sends real transactions; needs PRIVATE_KEY
+bun run --filter @helico/plugin-uniswap test                       # offline
+CHAIN=base bun run --filter @helico/plugin-uniswap smoke           # live, read-only
+CHAIN=robinhood bun run --filter @helico/plugin-uniswap discover   # find pools with liquidity
+CHAIN=base-sepolia bun run --filter @helico/plugin-uniswap e2e     # sends real transactions
 ```
 
-Copy `.env.example` to `.env` for `e2e`; bun loads it. `RPC_URL` overrides a public endpoint.
+`e2e` needs only the native coin: it wraps some, initialises a native/wrapped pool at 1:1 when
+none exists, then mints, increases, swaps every single-hop shape, collects and burns.
 
-## Executed on-chain
+## Executed on chain
 
-`e2e` needs nothing but the native coin: it wraps some, initialises a native/wrapped pool of
-its own at 1:1 when none exists, then mints, increases, swaps every single-hop shape, collects,
-and burns. Every step sends with a 50 % gas cushion and never resends once a hash exists.
-
-Base Sepolia, 2026-09-05, wallet
+**Base Sepolia, 2026-09-05**, wallet
 [`0x7461…88C0`](https://sepolia.basescan.org/address/0x746182D0Cccc5CeFc69853bb0325C850029388C0),
-all `status: success`:
+every one `status: success`:
 
 | Step | Transaction |
 |---|---|
@@ -127,22 +69,8 @@ all `status: success`:
 | Collect fees | [`0xfbbc…e3ed5`](https://sepolia.basescan.org/tx/0xfbbc73fe97ab91f532ec9e46b465352ea6589c3d1e51a630eb56cc6e162e3ed5) |
 | Decrease 100 % and burn the NFT | [`0xf98a…ad617`](https://sepolia.basescan.org/tx/0xf98a4ad77e81b07d7f15efcafa8f169e5d77b84d5bbb1bbe06568992223ad617) |
 
-An earlier run against the public ETH/USDC pool (mint #27362, swaps, collect, burn) is in the
-commit history of this file.
-
-**Arbitrum One mainnet, read-only, 2026-09-06** (`CHAIN=arbitrum bun run smoke`): router 2.0
-at `0xA51a…81a3`, the hook-less ETH/USDC 0.05 % / spacing 10 pool at tick −198064 with liquidity
-5.69e17 (2504.05 USDC per ETH), quote 1 ETH → 2502.262635 USDC and 100 USDC ← 0.03996 ETH, both
-single-hop swap shapes accepted by the Universal Router via `eth_call`, Permit2 allowances read.
-No e2e there yet: the wallet holds no ETH on Arbitrum.
-
-**Robinhood Chain mainnet, read-only, 2026-09-05** (`CHAIN=robinhood bun run smoke`): router
-2.1.1 resolved, ETH/USDG 87/1 read at tick −198250 with liquidity 2.2e17 (2,458 USDG per ETH),
-quote 1 ETH → 2,457.18 USDG, exact-in and exact-out swap calldata in the 2.1.1 layout accepted
-by the Universal Router via `eth_call`, allowances read.
-
-**Robinhood Chain Testnet, executed, 2026-09-05** (`CHAIN=robinhood-testnet bun run e2e`,
-router 2.1.1, wallet `0x7461…88C0`), all `status: success`:
+**Robinhood Chain Testnet, 2026-09-05**, router 2.1.1, same wallet — a chain neither Uniswap's
+deployments page nor the SDKs list, where v4 turned out to be live at the mainnet addresses:
 
 | Step | Transaction |
 |---|---|
@@ -159,12 +87,18 @@ router 2.1.1, wallet `0x7461…88C0`), all `status: success`:
 | Collect fees | [`0x0c5c…eb8d9`](https://explorer.testnet.chain.robinhood.com/tx/0x0c5cb5a3ff4bc0cf12b6ead0779eca9c08d592551c992dacd06bdce6720eb8d9) |
 | Decrease 100 % and burn the NFT | [`0x7ab3…4397`](https://explorer.testnet.chain.robinhood.com/tx/0x7ab35c8ee3db057fdccfbd4e90cf1c20dfcc6aa6ba42e8cbb228942532fc4397) |
 
+Read-only runs elsewhere: Arbitrum One (router 2.0, ETH/USDC 0.05%, both swap shapes accepted via
+`eth_call`) and Robinhood Chain mainnet (router 2.1.1, ETH/USDG, same). No e2e on either — the
+wallet holds nothing there.
+
 ## Do not forget
 
-- `amountOutMinimum` / `amountInMaximum` are the only slippage guards. Derive them from a fresh quote.
-- The V4_SWAP input is `V4Planner.finalize()`; `RoutePlanner.inputs` is wrong for it.
-- Native-input exact-output swaps leave ETH in the router; the encoders add a router-level
-  `SWEEP` back to the caller. The v4 action set has no sweep and the router rejects one.
-- A route that ends in its own input currency nets its deltas out and reverts; use distinct endpoints.
-- Public RPCs lag across nodes and under-estimate gas for position-manager calls; the e2e
-  retries with fresh builds and cushions gas.
+- `amountOutMinimum` / `amountInMaximum` are the **only** slippage guards. Derive them from a
+  fresh quote.
+- The `V4_SWAP` input is `V4Planner.finalize()`. `RoutePlanner.inputs` is wrong for it, and wrong
+  quietly.
+- Native-input exact-output swaps leave ETH in the router, so the encoders add a router-level
+  `SWEEP` back to the caller — the v4 action set has no sweep and the router rejects one.
+- A route ending in its own input currency nets its deltas out and reverts. Use distinct endpoints.
+- Public RPCs lag across nodes and under-estimate gas for position-manager calls; the e2e retries
+  with fresh builds and cushions gas.
