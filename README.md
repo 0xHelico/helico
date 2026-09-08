@@ -170,6 +170,39 @@ prices the wallet can no longer honour.
 > own example is named after. The three ways this integration can be wrong *without reverting*
 > are in [the plugin's README](packages/plugins/1inch/README.md), each with a test.
 
+#### SwapVM, with one instruction of ours
+
+**Powered by SwapVM — © Degensoft Ltd 2025.** [`contracts/src/swapvm/`](contracts/src/swapvm/)
+carries a redeployment of Degensoft's `AquaSwapVMRouter` with one instruction added, which their
+own terms allow in as many words: *"redeployments of a modified SwapVM contract is allowed."*
+Their VM, their transfer phase, their Aqua accounting and every published instruction are
+unchanged and used as released; the addition is opcode 34, and it is
+[marked as ours](contracts/src/swapvm/AquaYieldCover.sol) under
+[their licence](https://github.com/1inch/swap-vm/blob/main/LICENSES/SwapVM-1.1.txt).
+
+**What it does that no published instruction can.** Every curve SwapVM ships prices against
+`balanceOut`, and Aqua answers that from what the maker *shipped* — a ledger number, written with
+no transfer and no balance check. So a maker may commit 43,000 USDC while holding 5,000. The
+curve is right to price against 43,000; what breaks is the end of the swap, where `_transferOut`
+pulls the tokens themselves and tokens earning yield elsewhere are not there to pull. Nothing in
+the published set closes that, because none of those instructions has a concept of a lending
+market — they compute prices. `_aquaYieldCoverXD` moves capital, once, for exactly the shortfall,
+inside the transaction that needs it.
+
+**Measured on a fork of Arbitrum One**, against the canonical Aqua, real USDC and a real Aave
+position — [`ForkSwapVMYieldCover.t.sol`](contracts/test/ForkSwapVMYieldCover.t.sol):
+
+```
+liquid before    5,000 USDC
+supplied before 38,000 USDC   (earning in Aave v3)
+paid to taker    8,600 USDC   ← more than the wallet held
+supplied after  34,400 USDC   (3,600 unwound mid-swap, and no more)
+```
+
+Run it with `FOUNDRY_PROFILE=swapvm forge test --match-path test/ForkSwapVMYieldCover.t.sol`.
+SwapVM needs the IR pipeline, so it builds under its own profile; the default one does not
+compile these files, and CI builds both.
+
 ### The Graph
 
 > **Deployed to Subgraph Studio, indexing the live Aqua, and caught up.** The subgraph is in

@@ -38,3 +38,4 @@ artifacts
 contracts/out
 contracts/cache
 contracts/lib
+contracts/out-swapvm
