@@ -6,10 +6,25 @@
 > an account's idle capital should be earning in a lending market and moves it — see
 > [`docs/plans/2026-09-08-cre-manages-idle-capital.md`](../../docs/plans/2026-09-08-cre-manages-idle-capital.md).
 >
-> `@helico/plugin-cre` is rewritten for that and its tests pass. **`rehearse.sh` is not**: it
-> still deploys the vault and drives the LP path, so it rehearses the route being retired.
-> Rehearsing the new one needs a deployed `HelicoAccount`, a permitted Aave venue and USDC on the
-> fork — not written yet, and said here rather than left for someone to discover mid-demo.
+> `@helico/plugin-cre` is rewritten for that, and **`rehearse-idle.sh` runs the new path end to
+> end** — deploys the factory, opens an account at an address predicted before it exists, funds it
+> with real USDC taken from a whale on the fork, lets the enclave decide and sign, and carries the
+> signed call to the chain. A recorded run, 8 September: 50,000 USDC in,
+> `SUPPLY 40000000000 to 0x794a…14ad`, and the account ends holding 39,999.999999 aUSDC against a
+> 10,000 USDC buffer. The agent's own balance is zero at the end, which is the half worth checking.
+>
+> **`config.pools` is a list, and this script's has one entry.** The workflow compares the live
+> `currentLiquidityRate` at every market the owner permitted and moves capital to the best of
+> them; Aave v3 is the only market on Arbitrum we found answering that interface for USDC, so the
+> script exercises the choice with a list of one. Choosing between several, and the round-trip bar
+> a migration has to clear, are covered by the unit tests rather than by this script.
+>
+> `rehearse.sh` is the old one and still drives the vault path. Kept working rather than deleted,
+> because `Deploy.s.sol` still deploys the vault.
+>
+> **If your `.env` predates 8 September it has the vault's `MANDATE_*` names and none of the
+> `IDLE_*` ones.** `rehearse-idle.sh` checks and names the whole missing list; the CRE CLI names
+> one variable at a time.
 >
 > The frontend still imports the retiring ABIs, which is why they are kept exported. That is
 > tracked in #175.
@@ -42,16 +57,30 @@ To simulate without the fork setup — useful once a vault exists somewhere — 
 
 ## What a run proves, and what it does not
 
-It proves the delivery path and the vault's execution: the report this package encodes is the
-report the vault decodes, `onReport` runs the same `_recenter` the fork tests exercise, and it
-does so against the real Uniswap v4 contracts and the real ETH/ARB pool at its real depth.
+**`rehearse-idle.sh`** proves the whole path for the workflow this package now runs. The
+workflow compiles for the CRE runtime, reads an account's state from inside the handler, decides
+against thresholds released only there, signs an EIP-712 statement, and the signed call lands and
+moves real USDC into the real Aave v3 pool at its real depth. A recorded run: 50,000 USDC funded,
+`SUPPLY 40000000000 to 0x794a6135…`, and the account ends holding 39,999.999999 aUSDC against a
+10,000 buffer.
 
-It does **not** prove authorisation by a decentralised oracle network. The simulator is not a
-TEE — it says so itself when it runs — and the mock forwarder verifies no signatures. The same
-run against a deployed vault through the production forwarder is
-[#21](https://github.com/0xHelico/helico/issues/21), and it waits on a deployment.
+The last thing it checks is the agent's own balance, which is zero. That is the assertion that
+matters, for the reason the section below gives about transaction hashes.
+
+It does **not** prove authorisation by a decentralised oracle network. The simulator is not a TEE
+— it says so itself when it runs, and names the enclave it would use in production. It is also a
+fork, not a live network.
+
+**`rehearse.sh`** is the older script and still drives the Uniswap v4 vault path, which the
+workflow no longer touches. Kept working rather than deleted, because `Deploy.s.sol` still
+deploys the vault.
 
 ## ⚠️ A transaction hash is not evidence here
+
+This section is about **forwarder delivery**, which `rehearse.sh` uses and the idle-capital
+workflow does not — it signs instead. The rule generalises anyway, and `rehearse-idle.sh` applies
+it for a different reason: it checks the account's balances rather than the transaction, because a
+call that succeeds and moves nothing is indistinguishable from one that worked.
 
 `KeystoneForwarder` calls the receiver inside a `try`. **If `onReport` reverts, the forwarder
 swallows it and the transaction still succeeds.** So the workflow prints
@@ -73,7 +102,7 @@ That check is what found [#78](https://github.com/0xHelico/helico/issues/78).
 | | |
 |---|---|
 | `project.yaml` | RPC per target. `staging-settings` is the local fork; `production-settings` is Arbitrum One |
-| `secrets.yaml` | Vault DON secret ids. Six of the mandate's seven fields, plus the agent key |
+| `secrets.yaml` | Vault DON secret ids. The idle-capital policy, the agent key, and the model's two auth layers |
 | `workflow/workflow.yaml` | Workflow name and artefact paths per target |
 | `workflow/main.ts` | The entry point. Four lines around `@helico/plugin-cre` |
 | `workflow/config.staging.json` | Public config for the fork. Rewritten by `rehearse.sh` |
@@ -83,15 +112,20 @@ That check is what found [#78](https://github.com/0xHelico/helico/issues/78).
 
 ## What is confidential, and what is not
 
-Six of the mandate's seven fields are Vault DON secrets, read only inside the enclave: the
-range width, the improvement floor, the cooldown, the liquidity cap, the expiry, and the
-retention floor. Those are the user's strategy. The seventh, the pool, is public because the
-vault stores it and anyone can read the chain.
+The **policy** is a Vault DON secret, read only inside the enclave: what share of the capital
+should be earning, how much must stay liquid to cover a swap, how large a difference is worth
+paying gas to correct, and the rate below which supplying is not worth it. That is the strategy,
+and it is the thing a competitor would want.
 
-The enclave does not get to be trusted for them either way. Every report carries
-`keccak256(abi.encode(mandate))`, and the vault refuses a verdict whose hash is not the one its
-own storage holds — so a secret that disagrees with the committed mandate can only produce a
-refusal, never a wrong move.
+The account, the markets and the asset are public, because they are on chain and anyone can read
+them.
+
+**Nothing on chain holds the policy, and that is a deliberate difference from the vault.**
+`HelicoAccount` enforces the *shape* of what an agent may do — capital moves between the account
+and a market the owner allowlisted, with no recipient anywhere in the call — and leaves *how
+much* and *when* to the enclave. So a wrong secret produces a wrongly-sized move, never a stolen
+one. The check against that is `policyHash` in the config: publish the hash and the enclave
+refuses any secrets that do not produce it. Leave it zero and there is nothing to disagree with.
 
 The workflow binary is not confidential. Chainlink's own template says so, and so does this:
 the logic is in a public package, and that is the point. What stays inside the enclave is the

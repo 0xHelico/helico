@@ -29,6 +29,9 @@ import { fakeRuntime, RpcError } from './test/fakeRuntime'
 const AAVE_POOL = '0x794a61358D6845594F94dc1DB02A252b5b4814aD'
 const USDC = '0xaf88d065e77c8cC2239327C5EDb3A432268e5831'
 const AUSDC = '0x724dc807b04555b71ed48a6896b6F41593b8C637'
+/** A second Aave-family market and its receipt. Only their addresses matter to these tests. */
+const OTHER_POOL = `0x${'22'.repeat(20)}`
+const OTHER_RECEIPT = `0x${'23'.repeat(20)}`
 const account = getAddress('0x746182d0cccc5cefc69853bb0325c850029388c0')
 // Anvil's first account. The enclave holds the key behind it in signature mode.
 const agent = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
@@ -37,6 +40,8 @@ const agentKey = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2
 /** USDC has six decimals, so every amount below is `whole * 1e6`. */
 const usdc = (whole: number): bigint => BigInt(whole) * 1_000_000n
 const RATE = 27_514_566_416_591_863_466_760_475n // 2.75%, the live USDC rate on the day
+/** A rate as a ray: 1e27 is 100%. */
+const percent = (pct: number): bigint => BigInt(Math.round(pct * 100)) * 10n ** 23n
 
 const secrets = {
 	[POLICY_SECRET_IDS.targetWorkingBps]: '8000',
@@ -66,6 +71,11 @@ const config: Config = {
 	aiFallbackModel: 'ag/gemini-3-flash',
 	aiMaxTokens: 1200,
 	aiTimeoutSeconds: 30,
+	// The subgraph is off by default here for the same reason `aiUrl` is: an empty endpoint means
+	// no request is made and the buffer is the owner's `minIdleAmount` alone, which is what every
+	// assertion below was written against. `the Aqua buffer` covers the other path.
+	subgraphUrl: '',
+	subgraphTimeoutSeconds: 20,
 	schedule: '0 */5 * * * *',
 	rpcUrl: 'https://arb1.arbitrum.io/rpc',
 	delivery: 'forwarder',
@@ -75,7 +85,7 @@ const config: Config = {
 	agentKeySecretId: 'AGENT_KEY',
 	nonceFunction: 'nonce',
 	account: account.toLowerCase(),
-	pool: AAVE_POOL.toLowerCase(),
+	pools: [AAVE_POOL.toLowerCase()],
 	asset: USDC.toLowerCase(),
 	agent: agent.toLowerCase(),
 	reportReceiver: '0x3333333333333333333333333333333333333333',
@@ -85,16 +95,22 @@ const config: Config = {
 }
 const now = 1_700_000_000
 
-type Chain = {
-	agent?: Address
+/** One market, with everything the enclave reads about it. */
+type VenueFixture = {
+	pool: string
 	permitted?: boolean
-	idle: bigint
+	receipt?: string
+	receiptAsset?: string
 	supplied: bigint
-	receipt?: Address
-	receiptAsset?: Address
 	venueLiquidity?: bigint
 	rate?: bigint
+}
+
+type Chain = {
+	agent?: Address
+	idle: bigint
 	nonce?: bigint
+	venues: VenueFixture[]
 }
 
 const sel = (sig: string): Hex => toFunctionSelector(sig)
@@ -104,51 +120,74 @@ const word = (x: bigint | number | boolean | string): Hex =>
 		: encodeAbiParameters([{ type: 'uint256' }], [BigInt(x)])
 
 /**
- * The reads the enclave makes, answered from one description of the chain. `balanceOf` is asked
- * of two different contracts, so it dispatches on the address rather than on the selector.
+ * The reads the enclave makes, answered from one description of the chain.
+ *
+ * Three of them need more than the selector to answer. `permittedVenue` is asked of the *account*
+ * with the market as its argument, so it dispatches on the calldata; `balanceOf` is asked of the
+ * asset and of every receipt, so it dispatches on the address; and everything a market answers is
+ * looked up by which market was asked.
  */
-const handlers = (c: Chain) => ({
-	[sel('function agent()')]: () => word(c.agent ?? agent),
-	[sel('function permittedVenue(address)')]: () => word(c.permitted ?? true),
-	[sel('function nonce()')]: () => word(c.nonce ?? 0n),
-	[sel('function getReserveAToken(address)')]: () => word(c.receipt ?? AUSDC),
-	[sel('function getVirtualUnderlyingBalance(address)')]: () =>
-		word(c.venueLiquidity ?? 29_318_183_885_841n),
-	[sel('function UNDERLYING_ASSET_ADDRESS()')]: () => word(c.receiptAsset ?? USDC),
-	[sel('function balanceOf(address)')]: (_: Hex, to: string) =>
-		word(to.toLowerCase() === USDC.toLowerCase() ? c.idle : c.supplied),
-	[sel('function getReserveData(address)')]: () =>
-		encodeAbiParameters(
-			parseAbiParameters(
-				'(uint256, uint128, uint128, uint128, uint128, uint128, uint40, uint16, address, address, address, address, uint128, uint128, uint128)',
-			),
-			[
+const handlers = (c: Chain) => {
+	const receiptOf = (venue: VenueFixture) => venue.receipt ?? AUSDC
+	const marketAt = (to: string): VenueFixture => {
+		const found = c.venues.find((venue) => venue.pool.toLowerCase() === to.toLowerCase())
+		if (!found) throw new Error(`unmodelled market ${to}`)
+		return found
+	}
+	const behindReceipt = (to: string): VenueFixture => {
+		const found = c.venues.find((venue) => receiptOf(venue).toLowerCase() === to.toLowerCase())
+		if (!found) throw new Error(`unmodelled receipt ${to}`)
+		return found
+	}
+	return {
+		[sel('function agent()')]: () => word(c.agent ?? agent),
+		[sel('function permittedVenue(address)')]: (data: Hex) =>
+			word(marketAt(`0x${data.slice(-40)}`).permitted ?? true),
+		[sel('function nonce()')]: () => word(c.nonce ?? 0n),
+		[sel('function getReserveAToken(address)')]: (_: Hex, to: string) =>
+			word(receiptOf(marketAt(to))),
+		[sel('function getVirtualUnderlyingBalance(address)')]: (_: Hex, to: string) =>
+			word(marketAt(to).venueLiquidity ?? 29_318_183_885_841n),
+		[sel('function UNDERLYING_ASSET_ADDRESS()')]: (_: Hex, to: string) =>
+			word(behindReceipt(to).receiptAsset ?? USDC),
+		[sel('function balanceOf(address)')]: (_: Hex, to: string) =>
+			word(to.toLowerCase() === USDC.toLowerCase() ? c.idle : behindReceipt(to).supplied),
+		[sel('function getReserveData(address)')]: (_: Hex, to: string) =>
+			encodeAbiParameters(
+				parseAbiParameters(
+					'(uint256, uint128, uint128, uint128, uint128, uint128, uint40, uint16, address, address, address, address, uint128, uint128, uint128)',
+				),
 				[
-					0n,
-					10n ** 27n,
-					c.rate ?? RATE,
-					10n ** 27n,
-					0n,
-					0n,
-					now,
-					12,
-					AUSDC,
-					zeroAddress,
-					zeroAddress,
-					zeroAddress,
-					0n,
-					0n,
-					0n,
+					[
+						0n,
+						10n ** 27n,
+						marketAt(to).rate ?? RATE,
+						10n ** 27n,
+						0n,
+						0n,
+						now,
+						12,
+						receiptOf(marketAt(to)) as Address,
+						zeroAddress,
+						zeroAddress,
+						zeroAddress,
+						0n,
+						0n,
+						0n,
+					],
 				],
-			],
-		),
-})
+			),
+	}
+}
 
 type Faults = {
 	writeStatus?: number
 	httpStatus?: number
 	rpcBody?: string
 	secrets?: Record<string, string>
+	graphStatus?: number
+	graphBody?: string
+	graphThrows?: boolean
 }
 const run = async (chain: Chain, overrides: Partial<Config> = {}, faults: Faults = {}) => {
 	const fake = fakeRuntime({
@@ -159,6 +198,9 @@ const run = async (chain: Chain, overrides: Partial<Config> = {}, faults: Faults
 		writeStatus: faults.writeStatus,
 		httpStatus: faults.httpStatus,
 		rpcBody: faults.rpcBody,
+		graphStatus: faults.graphStatus,
+		graphBody: faults.graphBody,
+		graphThrows: faults.graphThrows,
 	})
 	const result = await onCronTrigger(fake.runtime)
 	return { ...fake, result }
@@ -170,8 +212,31 @@ const decodeReport = (rawReport: Uint8Array) =>
 		bytesToHex(rawReport),
 	)
 
+/** The single-market account this workflow started as. */
+const one = (idle: bigint, supplied: bigint, over: Partial<VenueFixture> = {}): Chain => ({
+	idle,
+	venues: [{ pool: AAVE_POOL, supplied, ...over }],
+})
+
+/** Two markets, and the config that lets the enclave choose between them. */
+const two = (
+	idle: bigint,
+	aave: Partial<VenueFixture> & { supplied: bigint },
+	other: Partial<VenueFixture> & { supplied: bigint },
+): Chain => ({
+	idle,
+	venues: [
+		{ pool: AAVE_POOL, ...aave },
+		{ pool: OTHER_POOL, receipt: OTHER_RECEIPT, ...other },
+	],
+})
+const bothPools: Partial<Config> = { pools: [AAVE_POOL.toLowerCase(), OTHER_POOL] }
+
 /** 1,000 USDC sitting idle and nothing working: 800 of it should be at the market. */
-const allIdle: Chain = { idle: usdc(1_000), supplied: 0n }
+const allIdle: Chain = one(usdc(1_000), 0n)
+
+/** What the enclave prints and what a report carries is the lowercased config address. */
+const aave = AAVE_POOL.toLowerCase()
 
 // ─── Tests ───────────────────────────────────────────────────
 describe('configSchema', () => {
@@ -182,8 +247,8 @@ describe('configSchema', () => {
 	})
 
 	test('lowercases hex values so a checksummed config compares equal to what the chain returns', () => {
-		const parsed = configSchema.parse({ ...config, pool: AAVE_POOL, asset: USDC, agent })
-		expect(parsed.pool).toBe(AAVE_POOL.toLowerCase())
+		const parsed = configSchema.parse({ ...config, pools: [AAVE_POOL], asset: USDC, agent })
+		expect(parsed.pools).toEqual([aave])
 		expect(parsed.asset).toBe(USDC.toLowerCase())
 		expect(parsed.agent).toBe(agent.toLowerCase())
 	})
@@ -195,6 +260,23 @@ describe('configSchema', () => {
 		)
 		expect(configSchema.parse({ ...config, delivery: 'signature', chainId: 42_161 }).delivery).toBe(
 			'signature',
+		)
+	})
+
+	/** A list of one is the single-market configuration, and it has to keep parsing. */
+	test('takes one market or several, and refuses none at all', () => {
+		expect(configSchema.parse({ ...config, ...bothPools }).pools).toHaveLength(2)
+		expect(() => configSchema.parse({ ...config, pools: [] })).toThrow()
+	})
+
+	/**
+	 * A market named twice is read twice and then compared against itself, which is a rate gap of
+	 * zero dressed up as a choice. The two readings of a repeated address are not the same wish,
+	 * so neither is guessed at.
+	 */
+	test('refuses the same market twice, however it was cased', () => {
+		expect(() => configSchema.parse({ ...config, pools: [AAVE_POOL, aave] })).toThrow(
+			'pools must not repeat a market',
 		)
 	})
 })
@@ -220,7 +302,7 @@ describe('onCronTrigger', () => {
 		expect(rpcRequests).toHaveLength(2)
 		const lower = (a: string) => a.toLowerCase()
 		expect(rpcRequests[0]?.map((r) => lower(r.params[0].to))).toEqual(
-			[account, account, USDC, AAVE_POOL, AAVE_POOL, AAVE_POOL].map(lower),
+			[account, USDC, account, AAVE_POOL, AAVE_POOL, AAVE_POOL].map(lower),
 		)
 		// The receipt's address came out of the first batch, from the market. Asking the receipt
 		// which market it belongs to would read as the same check and is not one.
@@ -240,32 +322,24 @@ describe('onCronTrigger', () => {
 		],
 		[
 			'the owner took the venue off the allowlist',
-			{ ...allIdle, permitted: false },
+			one(usdc(1_000), 0n, { permitted: false }),
 			'HOLD (the owner has not permitted this venue)',
 		],
 		[
 			'the market does not list the asset',
-			{ ...allIdle, receipt: zeroAddress },
+			one(usdc(1_000), 0n, { receipt: zeroAddress }),
 			'HOLD (the venue does not list this asset)',
 		],
 		[
 			'the receipt is for a different asset',
-			{ ...allIdle, receiptAsset: AAVE_POOL as Address },
+			one(usdc(1_000), 0n, { receiptAsset: AAVE_POOL }),
 			"HOLD (the venue's receipt is for a different asset)",
 		],
-		[
-			'the account is empty',
-			{ idle: 0n, supplied: 0n },
-			'HOLD (the account holds nothing to place)',
-		],
-		[
-			'the split is already met',
-			{ idle: usdc(200), supplied: usdc(800) },
-			'HOLD (already at the target split)',
-		],
+		['the account is empty', one(0n, 0n), 'HOLD (the account holds nothing to place)'],
+		['the split is already met', one(usdc(200), usdc(800)), 'HOLD (already at the target split)'],
 		[
 			'the drift is smaller than the deadband',
-			{ idle: usdc(210), supplied: usdc(800) },
+			one(usdc(210), usdc(800)),
 			'HOLD (inside the deadband)',
 		],
 	] as [string, Chain, string][])(
@@ -279,7 +353,7 @@ describe('onCronTrigger', () => {
 
 	/** No receipt means no second batch: there is nothing to ask and nowhere to ask it. */
 	test('an unlisted asset costs one batch, not two', async () => {
-		const { rpcRequests } = await run({ ...allIdle, receipt: zeroAddress })
+		const { rpcRequests } = await run(one(usdc(1_000), 0n, { receipt: zeroAddress }))
 		expect(rpcRequests).toHaveLength(1)
 	})
 
@@ -310,12 +384,12 @@ describe('onCronTrigger', () => {
 			expiry: 2_000_000_000,
 		})
 		const { result } = await run(allIdle, { policyHash: hash }, { secrets: floor })
-		expect(result).toBe('HOLD (the venue pays below the policy floor)')
+		expect(result).toBe('HOLD (every venue pays below the policy floor)')
 	})
 
 	test('supplies the excess and delivers the move as a report', async () => {
 		const { result, writes, reports } = await run(allIdle)
-		expect(result).toBe(`SUPPLY 800000000 tx 0x${'ab'.repeat(32)}`)
+		expect(result).toBe(`SUPPLY 800000000 to ${aave} tx 0x${'ab'.repeat(32)}`)
 		expect(writes).toHaveLength(1)
 		const write = writes[0] as NonNullable<(typeof writes)[0]>
 		expect(bytesToHex(write.receiver)).toBe(config.reportReceiver as Hex)
@@ -333,8 +407,8 @@ describe('onCronTrigger', () => {
 	})
 
 	test('withdraws when the account has fallen below the buffer it needs to cover a swap', async () => {
-		const { result, writes } = await run({ idle: usdc(10), supplied: usdc(990) })
-		expect(result).toBe(`WITHDRAW 190000000 tx 0x${'ab'.repeat(32)}`)
+		const { result, writes } = await run(one(usdc(10), usdc(990)))
+		expect(result).toBe(`WITHDRAW 190000000 from ${aave} tx 0x${'ab'.repeat(32)}`)
 		const [, , p] = decodeReport(writes[0]?.report?.rawReport ?? new Uint8Array())
 		expect(p.supply).toBe(false)
 		expect(p.amount).toBe(usdc(190))
@@ -346,27 +420,19 @@ describe('onCronTrigger', () => {
 	 * would pay gas to move three dollars because the market could not manage the rest.
 	 */
 	test('holds when the market can only return a fragment of what was wanted', async () => {
-		const { result, writes } = await run({
-			idle: usdc(10),
-			supplied: usdc(990),
-			venueLiquidity: usdc(3),
-		})
-		expect(result).toBe('HOLD (the venue liquidity leaves a move inside the deadband)')
+		const { result, writes } = await run(one(usdc(10), usdc(990), { venueLiquidity: usdc(3) }))
+		expect(result).toBe('HOLD (no venue can return enough to be worth a move)')
 		expect(writes).toHaveLength(0)
 	})
 
 	test('holds when the market can return nothing at all', async () => {
-		const { result } = await run({ idle: usdc(10), supplied: usdc(990), venueLiquidity: 0n })
-		expect(result).toBe('HOLD (the venue cannot return anything right now)')
+		const { result } = await run(one(usdc(10), usdc(990), { venueLiquidity: 0n }))
+		expect(result).toBe('HOLD (no venue can return enough to be worth a move)')
 	})
 
 	test('a market that can only pay part of it still moves that part, when the part is worth moving', async () => {
-		const { result } = await run({
-			idle: usdc(10),
-			supplied: usdc(990),
-			venueLiquidity: usdc(120),
-		})
-		expect(result).toStartWith('WITHDRAW 120000000 tx')
+		const { result } = await run(one(usdc(10), usdc(990), { venueLiquidity: usdc(120) }))
+		expect(result).toStartWith('WITHDRAW 120000000')
 	})
 
 	test('the per-move ceiling bounds what one run can do', async () => {
@@ -381,7 +447,7 @@ describe('onCronTrigger', () => {
 			expiry: 2_000_000_000,
 		})
 		const { result } = await run(allIdle, { policyHash: hash }, { secrets: capped })
-		expect(result).toStartWith('SUPPLY 100000000 tx')
+		expect(result).toStartWith('SUPPLY 100000000')
 	})
 
 	test.each([
@@ -401,6 +467,324 @@ describe('onCronTrigger', () => {
 	})
 })
 
+// ─── Several markets ─────────────────────────────────────────
+describe('choosing between markets', () => {
+	test('supplies to the better of two markets, and names it', async () => {
+		const { result, writes } = await run(
+			two(usdc(1_000), { supplied: 0n, rate: percent(2) }, { supplied: 0n, rate: percent(5) }),
+			bothPools,
+		)
+		expect(result).toBe(`SUPPLY 800000000 to ${OTHER_POOL} tx 0x${'ab'.repeat(32)}`)
+		const [, , p] = decodeReport(writes[0]?.report?.rawReport ?? new Uint8Array())
+		expect(p.pool).toBe(getAddress(OTHER_POOL))
+	})
+
+	/** Reading two markets is still two round trips; the batches get longer, not more numerous. */
+	test('reads every market in the same two batches', async () => {
+		const { rpcRequests } = await run(
+			two(usdc(1_000), { supplied: 0n }, { supplied: 0n }),
+			bothPools,
+		)
+		expect(rpcRequests).toHaveLength(2)
+		expect(rpcRequests[0]).toHaveLength(10)
+		expect(rpcRequests[1]).toHaveLength(4)
+	})
+
+	/**
+	 * The rule `_venueFor` follows in the contract, now in the workflow: a market the account
+	 * cannot use disqualifies itself and not the run.
+	 */
+	test('a market the owner has not permitted is skipped, not fatal', async () => {
+		const { result } = await run(
+			two(
+				usdc(1_000),
+				{ supplied: 0n, rate: percent(2) },
+				{ supplied: 0n, rate: percent(5), permitted: false },
+			),
+			bothPools,
+		)
+		expect(result).toBe(`SUPPLY 800000000 to ${aave} tx 0x${'ab'.repeat(32)}`)
+	})
+
+	test('a market that does not list the asset is skipped too', async () => {
+		const { result } = await run(
+			two(
+				usdc(1_000),
+				{ supplied: 0n, rate: percent(2) },
+				{ supplied: 0n, rate: percent(5), receipt: zeroAddress },
+			),
+			bothPools,
+		)
+		expect(result).toStartWith(`SUPPLY 800000000 to ${aave}`)
+	})
+
+	/**
+	 * With one market, "the venue does not list this asset" is the whole answer. With several it
+	 * answers nothing unless it says which, so every refusal arrives with its address.
+	 */
+	test('when nothing is usable, the hold names each market and why', async () => {
+		const { result, writes } = await run(
+			two(usdc(1_000), { supplied: 0n, permitted: false }, { supplied: 0n, receipt: zeroAddress }),
+			bothPools,
+		)
+		expect(result).toBe(
+			`HOLD (no venue is usable (${aave} — the owner has not permitted this venue; ${OTHER_POOL} — the venue does not list this asset))`,
+		)
+		expect(writes).toHaveLength(0)
+	})
+
+	test('takes liquidity out of the market paying least for it', async () => {
+		const { result } = await run(
+			two(
+				usdc(10),
+				{ supplied: usdc(500), rate: percent(2) },
+				{ supplied: usdc(490), rate: percent(5) },
+			),
+			bothPools,
+		)
+		expect(result).toStartWith(`WITHDRAW 190000000 from ${aave}`)
+	})
+})
+
+// ─── Migration ───────────────────────────────────────────────
+/**
+ * The account is where the policy wants it and the capital is in the wrong place. `nonce` is
+ * strictly sequential, so one signed statement authorises one call: the worse market is emptied
+ * now and the better one is filled by the next run's ordinary supply.
+ */
+describe('migrating between markets', () => {
+	/** 1,000 in total with 200 idle: exactly the target split, so nothing to rebalance. */
+	const spread = (aaveRate: number, otherRate: number, over: Partial<VenueFixture> = {}) =>
+		two(
+			usdc(200),
+			{ supplied: usdc(400), rate: percent(aaveRate), ...over },
+			{ supplied: usdc(400), rate: percent(otherRate) },
+		)
+
+	test('empties the worse market, and leaves the supply to the next run', async () => {
+		const { result, writes } = await run(spread(2, 5), bothPools)
+		expect(result).toBe(`WITHDRAW 400000000 from ${aave} tx 0x${'ab'.repeat(32)}`)
+		const [, , p] = decodeReport(writes[0]?.report?.rawReport ?? new Uint8Array())
+		expect(p.supply).toBe(false)
+		expect(p.pool).toBe(getAddress(AAVE_POOL))
+	})
+
+	test('holds when the difference does not cover a round trip', async () => {
+		const { result, writes } = await run(spread(4.6, 5), bothPools)
+		expect(result).toBe('HOLD (already at the target split)')
+		expect(writes).toHaveLength(0)
+	})
+
+	/**
+	 * The bar a migration has to clear is twice the ordinary deadband, and it survives the clamp:
+	 * the same 40 USDC ceiling lets an ordinary withdrawal through and refuses a migration, which
+	 * is the whole point of carrying the round-trip number into the second check.
+	 */
+	test('the round-trip bar is what the clamped move is measured against', async () => {
+		const capped = { ...secrets, [POLICY_SECRET_IDS.maxMoveAmount]: '40000000' }
+		const hash = policyHash({
+			targetWorkingBps: 8_000,
+			minIdleAmount: usdc(100),
+			minMoveAmount: usdc(25),
+			minMoveBps: 50,
+			minSupplyRateRay: 0n,
+			maxMoveAmount: usdc(40),
+			expiry: 2_000_000_000,
+		})
+		const migration = await run(
+			spread(2, 5),
+			{ ...bothPools, policyHash: hash },
+			{ secrets: capped },
+		)
+		expect(migration.result).toBe('HOLD (the per-move ceiling leaves a move inside the deadband)')
+
+		const rebalance = await run(
+			two(
+				usdc(10),
+				{ supplied: usdc(500), rate: percent(2) },
+				{ supplied: usdc(490), rate: percent(5) },
+			),
+			{ ...bothPools, policyHash: hash },
+			{ secrets: capped },
+		)
+		expect(rebalance.result).toStartWith(`WITHDRAW 40000000 from ${aave}`)
+	})
+
+	/** One market cannot be both the source and the destination of a move between markets. */
+	test('a single-market account never migrates', async () => {
+		const { result } = await run(one(usdc(200), usdc(800)))
+		expect(result).toBe('HOLD (already at the target split)')
+	})
+})
+
+// ─── The Aqua buffer, from The Graph ─────────────────────────
+/**
+ * The buffer is sized by what this account's own Aqua mandates could still be asked to pay out of
+ * its wallet, and that question has no on-chain answer: `_balances` is private and four levels
+ * deep and none of Aqua's four events indexes a parameter. The index is the only place the number
+ * exists — and every one of its failure modes has to leave the run with a decision that is worse
+ * rather than wrong.
+ */
+describe('the Aqua buffer', () => {
+	const SUBGRAPH =
+		'https://api.studio.thegraph.com/query/1758877/helico-arbitrum-one/version/latest'
+	const indexed: Partial<Config> = { subgraphUrl: SUBGRAPH }
+
+	/** `tokensCount` 2 is Aqua's sentinel for a live two-token ship. */
+	const balances = (...amounts: bigint[]) =>
+		JSON.stringify({
+			data: { balances: amounts.map((amount) => ({ amount: String(amount), tokensCount: 2 })) },
+		})
+
+	test('is not asked for at all when no endpoint is configured', async () => {
+		const { result, graphRequests } = await run(allIdle)
+		expect(graphRequests).toHaveLength(0)
+		expect(result).toBe(`SUPPLY 800000000 to ${aave} tx 0x${'ab'.repeat(32)}`)
+	})
+
+	test('asks the index for this account’s live balances of the asset it manages', async () => {
+		const { graphRequests } = await run(allIdle, indexed, { graphBody: balances() })
+		expect(graphRequests).toHaveLength(1)
+		const { variables } = graphRequests[0] as NonNullable<(typeof graphRequests)[0]>
+		expect(variables).toEqual({
+			maker: account.toLowerCase(),
+			token: USDC.toLowerCase(),
+			first: 1000,
+		})
+	})
+
+	/**
+	 * 1,000 USDC and a policy asking for 100 liquid would supply 800. Mandates that could demand
+	 * 400 leave only 600 free to work, and the buffer is what changed — nothing else in the
+	 * policy moved.
+	 */
+	test('raises the buffer to what the mandates could demand, and the move follows', async () => {
+		const { result } = await run(allIdle, indexed, { graphBody: balances(usdc(250), usdc(150)) })
+		expect(result).toStartWith(
+			`SUPPLY 600000000 to ${aave} [buffer 400000000: policy floor 100000000, 2 live Aqua balances could demand 400000000]`,
+		)
+	})
+
+	/** A demand larger than the account's idle side is what pulls capital back out of the market. */
+	test('a mandate the account cannot cover turns a hold into a withdrawal', async () => {
+		const settled = one(usdc(200), usdc(800))
+		expect((await run(settled)).result).toBe('HOLD (already at the target split)')
+		const { result } = await run(settled, indexed, { graphBody: balances(usdc(400)) })
+		expect(result).toStartWith(`WITHDRAW 200000000 from ${aave} [buffer 400000000`)
+	})
+
+	/**
+	 * The direction that must never happen. The owner's minimum is theirs; an index reporting less
+	 * than it has nothing to say about a number they set themselves.
+	 */
+	test('never lowers the owner’s floor, however little the mandates demand', async () => {
+		const { result } = await run(allIdle, indexed, { graphBody: balances(1n) })
+		expect(result).toStartWith(
+			`SUPPLY 800000000 to ${aave} [buffer 100000000: policy floor 100000000, 1 live Aqua balance could demand 1]`,
+		)
+	})
+
+	/**
+	 * The raised floor is not the owner's published policy and must never be hashed as if it were:
+	 * a run with a live mandate would then look like a policy edited underneath the workflow, and
+	 * every run would hold.
+	 */
+	test('the report still carries the hash the owner published, not one recomputed from the raised floor', async () => {
+		const { result, writes } = await run(allIdle, indexed, { graphBody: balances(usdc(400)) })
+		expect(result).not.toContain('policy hash mismatch')
+		const [, hash] = decodeReport(writes[0]?.report?.rawReport ?? new Uint8Array())
+		expect(hash).toBe(committedHash)
+	})
+
+	/** A mismatch stops before the chain, and before the index too — there is nothing to size. */
+	test('a policy the owner did not publish stops before the index is asked', async () => {
+		const { result, graphRequests } = await run(
+			allIdle,
+			{ ...indexed, policyHash: `0x${'ab'.repeat(32)}` },
+			{ graphBody: balances(usdc(400)) },
+		)
+		expect(result).toBe('HOLD (policy hash mismatch)')
+		expect(graphRequests).toHaveLength(0)
+	})
+
+	/**
+	 * Every way the index can fail to answer, and the same outcome each time: the owner's own
+	 * floor, the move the workflow would have made before the subgraph was in the loop, and a
+	 * verdict that says which of the two buffers it used.
+	 */
+	test.each([
+		['it cannot be reached', { graphThrows: true }, 'the subgraph could not be reached'],
+		['it answers a bad status', { graphStatus: 502 }, 'the subgraph answered HTTP 502'],
+		[
+			'it answers 200 with errors, the way GraphQL refuses a query',
+			{ graphBody: '{"errors":[{"message":"indexers not available"}]}' },
+			'the subgraph answered indexers not available',
+		],
+		[
+			'it answers something that is not JSON',
+			{ graphBody: '<html>504 Gateway Time-out</html>' },
+			'the subgraph answered something that is not JSON',
+		],
+	])('falls back to the policy floor when %s, and says so', async (_, faults, reason) => {
+		const { result, writes } = await run(allIdle, indexed, faults)
+		expect(result).toBe(
+			`SUPPLY 800000000 to ${aave} [buffer 100000000: policy floor only, ${reason}] tx 0x${'ab'.repeat(32)}`,
+		)
+		// The fallback is a decision, not a hold: the run still moves capital.
+		expect(writes).toHaveLength(1)
+	})
+
+	/**
+	 * An empty answer and an absent one produce the same buffer and are reported differently on
+	 * purpose. One is a fact about the maker — no live mandate in this asset — and the other is a
+	 * fact about the index.
+	 */
+	test('an empty index is a fact about the maker, not a failure', async () => {
+		const { result } = await run(allIdle, indexed, { graphBody: balances() })
+		expect(result).toContain(
+			'[buffer 100000000: policy floor 100000000, 0 live Aqua balances could demand 0]',
+		)
+	})
+
+	/**
+	 * An indexer behind the chain under-reports, so the buffer comes out too small and more
+	 * capital is supplied than ideal. That degrades into the path the swap takes today —
+	 * `HelicoMandateSwap._cover` unwinds inside the swap — rather than into a wrong move, which is
+	 * why lag is survivable and why the floor may only ever be raised.
+	 */
+	test('an indexer that lags under-reports, which is the safe direction', async () => {
+		const behind = await run(allIdle, indexed, { graphBody: balances(usdc(250)) })
+		const current = await run(allIdle, indexed, { graphBody: balances(usdc(250), usdc(150)) })
+		// The lagging run supplies 150 more than it should, which is 150 the next swap has to
+		// unwind from Aave inside itself. Slower and refusable, but the existing path.
+		expect(behind.result).toStartWith('SUPPLY 750000000')
+		expect(current.result).toStartWith('SUPPLY 600000000')
+	})
+
+	/** A full page may be a prefix, and a sum over a prefix is a floor rather than the total. */
+	test('a full page says so rather than passing a prefix off as the whole', async () => {
+		const page = balances(...Array.from({ length: 1000 }, () => 1_000_000n))
+		const { result } = await run(allIdle, indexed, { graphBody: page })
+		expect(result).toContain('could demand 1000000000; a full page, so there may be more')
+	})
+
+	/**
+	 * `rehearse-idle.sh` lifts the signed statement out of this line with a greedy match to the
+	 * last `}`, so anything printed after the JSON would be swallowed into what it parses. The
+	 * note goes in front, and this is the script's own regex run against the real output.
+	 */
+	test('the note never lands where the rehearsal reads the signed statement', async () => {
+		const { result } = await run(
+			{ ...allIdle, nonce: 7n },
+			{ ...indexed, delivery: 'signature', chainId: 42_161 },
+			{ secrets: { ...secrets, AGENT_KEY: agentKey }, graphBody: balances(usdc(400)) },
+		)
+		expect(result).toContain('[buffer 400000000')
+		const lifted = result.match(/\{"params.*\}/)?.[0] as string
+		expect(JSON.parse(lifted).params.amount).toBe('600000000')
+	})
+})
+
 describe('signature delivery', () => {
 	const signing: Partial<Config> = { delivery: 'signature', chainId: 42_161 }
 	const withKey = { ...secrets, AGENT_KEY: agentKey }
@@ -411,7 +795,7 @@ describe('signature delivery', () => {
 			secrets: withKey,
 		})
 		expect(secretRequests).toContain('AGENT_KEY')
-		expect(result.startsWith('SUPPLY 800000000 {')).toBe(true)
+		expect(result.startsWith(`SUPPLY 800000000 to ${aave} {`)).toBe(true)
 		const auth = JSON.parse(result.slice(result.indexOf('{'))) as {
 			params: Record<string, string | boolean>
 			policyHash: Hex
@@ -458,10 +842,28 @@ describe('signature delivery', () => {
 		}
 	})
 
+	/** The market chosen is the one the statement is about, so a relayer cannot substitute one. */
+	test('the statement names the market the enclave picked', async () => {
+		const { result } = await run(
+			{
+				...two(usdc(1_000), { supplied: 0n, rate: percent(2) }, { supplied: 0n, rate: percent(5) }),
+				nonce: 7n,
+			},
+			{ ...signing, ...bothPools },
+			{ secrets: withKey },
+		)
+		const auth = JSON.parse(result.slice(result.indexOf('{'))) as {
+			params: { pool: Address }
+		}
+		expect(auth.params.pool).toBe(OTHER_POOL as Address)
+	})
+
 	test('a hold signs nothing and asks for nothing more than the policy', async () => {
-		const { result, reports, secretRequests } = await run({ ...chain, permitted: false }, signing, {
-			secrets: withKey,
-		})
+		const { result, reports, secretRequests } = await run(
+			{ ...chain, venues: [{ pool: AAVE_POOL, supplied: 0n, permitted: false }] },
+			signing,
+			{ secrets: withKey },
+		)
 		expect(result).toBe('HOLD (the owner has not permitted this venue)')
 		expect(reports).toHaveLength(0)
 		expect(secretRequests).toContain('AGENT_KEY')

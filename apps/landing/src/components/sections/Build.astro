@@ -16,15 +16,15 @@ const check = source.slice(from, to).replace(/^ {4}/gm, '')
 const startLine = source.slice(0, from).split('\n').length
 const packages = [
 	{
-		name: '@helico/plugin-uniswap',
-		stat: '52',
+		name: '@helico/plugin-thegraph',
+		stat: '28',
 		unit: 'tests',
-		copy: 'Reads pools and positions from the SDK\'s own address maps, on any chain in config.',
-		href: `${repo}/tree/main/packages/plugins/uniswap`,
+		copy: 'Asks the index what Aqua cannot be asked: which mandates a wallet holds, and what is left in each.',
+		href: `${repo}/tree/main/packages/plugins/thegraph`,
 	},
 	{
 		name: '@helico/plugin-cre',
-		stat: '116',
+		stat: '208',
 		unit: 'tests',
 		copy: 'Decides, sizes, and signs inside the enclave. The key never leaves it.',
 		href: `${repo}/tree/main/packages/plugins/cre`,

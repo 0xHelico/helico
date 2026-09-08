@@ -250,10 +250,17 @@ than arriving as a symmetry nobody asked for.
 
 ### Believing the tests
 
-28 tests run against a real `Aqua` deployed in `setUp`. Nothing mocks Aqua or the app, because
-Aqua holds no tokens and needs no other protocol, so a local deployment *is* the real thing.
+28 tests run against a real `Aqua` deployed in `setUp`, and 7 more in
+`MandateVenueUnwind.t.sol` cover the unwind path. Nothing mocks Aqua or the app, because Aqua
+holds no tokens and needs no other protocol, so a local deployment *is* the real thing.
 
-Every guard was then removed, one at a time, and the suite re-run. All 11 mutations are caught.
+Every guard on the swap path was removed, one at a time, and the suite re-run. All 11 mutations
+are caught.
+
+The unwind path was added later and its guards were checked the same way, but the one worth
+recording is the pool-to-receipt binding. Removing it does not merely turn a test red — the swap
+**succeeds**, and 90.66 of another party's receipt tokens leave the contract. A test that passes
+with a fix already in place has not been shown to catch anything; that number is what showed it.
 The reentrancy one needed care: deleting the modifier makes `_safeCheckAquaPush` revert with
 `MissingNonReentrantModifier`, so every test fails and none of them say anything about the
 attack. Removing the guard **and** inlining the same balance check leaves a contract that looks
@@ -263,6 +270,100 @@ balance and a single payment satisfies both checks.
 Negative tests use funded, approved callback contracts, so deleting the rule under test would
 let the swap *succeed*. The agent test has a control: the same contract that is refused
 succeeds once a mandate names it.
+
+## HelicoAccount, HelicoAccountProxy, HelicoAccountFactory
+
+One contract per owner, so a bug in the code that holds one person's money cannot reach anyone
+else's. The factory computes the address with `CREATE2` before anything is deployed, which means
+an owner can be paid before they have ever sent a transaction, and `open` is idempotent and
+permissionless — opening someone's account grants nothing, because the owner is fixed by the
+address itself.
+
+### The escape hatch lives in the proxy, and that is the whole design
+
+A proxy forwards everything to its implementation. Put "send everything back to the owner" in the
+implementation, and the same key that replaces the implementation can delete the way out. An exit
+that can be revoked is not an exit.
+
+So `escape` is the proxy's own function and `OWNER` is an `immutable` — in bytecode rather than
+storage, where no implementation can write it and no layout can shift it.
+
+**What that costs, written here rather than left to be discovered.** Two selectors belong to the
+proxy and never reach the implementation: `escape(address[])` and `OWNER()`. An implementation
+must not declare them.
+
+`test_AnUpgradeCannotTakeTheAccountOrDeleteTheWayOut` installs an implementation that declares
+both and answers them in an attacker's favour. Ownership does not move and the owner still
+withdraws everything.
+
+The implementation address lives in each proxy's own ERC-1967 slot rather than a shared beacon. A
+beacon is cheaper — one write changes everyone's code — and that is exactly the shared fate this
+architecture exists to avoid.
+
+### The account stores no owner
+
+It reads the proxy's immutable. One source of truth, in the half that cannot be upgraded, so no
+version of the replaceable half can disagree with the escape hatch about who the owner is. That
+also removes the initializer: during the proxy's constructor its own code is not yet deployed, so
+a callback to read `OWNER` would revert, and an owner passed as an argument would create a second
+place for the answer to live.
+
+### What the agent may do, and why the shape is the guarantee
+
+`supplyIdle(pool, asset, amount)` and `withdrawIdle(pool, asset, amount)` move the account's
+assets between the account and a lending market the **owner** allowlisted. **There is no recipient
+parameter in either signature.** An agent holding this authority can decide where money works, and
+has no interface through which to send it anywhere else. That is a property of the shape rather
+than a rule anyone is trusted to follow.
+
+The allowlist is the owner's alone. Deciding where money works was delegated; deciding what counts
+as a market was not, because a contract that merely behaves like a lending pool is how an
+allowlist gets drained.
+
+The approval `supplyIdle` grants is for exactly `amount` and is taken back in the same call — an
+allowance outlives the nomination that justified it, and revoking an agent has to revoke
+something.
+
+Eleven of the account's tests are the negative space: the agent cannot make a general call, cannot
+use the escape hatch, cannot upgrade, cannot nominate another agent, and cannot introduce its own
+venue.
+
+### Signed execution, so a first-time user signs once and sends nothing
+
+`executeWithSignature` lets the owner authorise one call and anyone carry it, which is what makes
+the first-time flow a single step: a relayer opens the account and runs the owner's first command
+in the same transaction.
+
+EIP-712 written out rather than inherited, because `EIP712Upgradeable` keeps its name and version
+in storage and needs an initializer this contract deliberately does not have. The domain binds
+`address(this)` — the owner's own proxy — and `block.chainid`, and there are tests for a signature
+travelling to the owner's *other* account and to another chain.
+
+The nonce is strictly sequential, which is a design choice rather than an implementation detail:
+exactly one authorisation is valid at a time, and that is what makes `invalidateSignatures`
+correct at `+1`.
+
+The digest lives in `AccountAuth` rather than on the account, because the owner has to be able to
+sign **before their account exists** — at signing time there is no contract to ask. The factory
+answers for the address the account *will* have, both route through one library so they cannot
+drift, and a test asserts the digest signed before deployment is the one verified after.
+
+### Upgrades take effect immediately, and that is deliberate
+
+`HelicoVault` has an announce-and-wait timelock. This contract had one too, and it was removed on
+purpose for the hackathon: during a five-day event, being able to fix a mistake in minutes is
+worth more than seeing one coming two days out, and a two-day delay would mean a defect found on
+the last day cannot be fixed at all.
+
+What it costs: the owner cannot review or refuse a specific upgrade before it lands. What remains
+are the two protections that do not depend on timing — `refuseAutoUpgrade`, which removes the
+upgrader for good, and the escape hatch, which no implementation can reach.
+
+**Restoring the delay is the first thing to do before this is used with real money.**
+
+Storage layout is covered by `scripts/check-storage-layout.py`, and it matters more here than for
+the vault precisely because upgrades are immediate: a shifted `nonce` would make spent signatures
+verify again.
 
 ## Known limitations
 
@@ -296,6 +397,17 @@ Written down rather than glossed over.
   wallet, so a maker who moves their balance out breaks their own mandate. The quote still
   answers, because it reads the ledger. 1inch's `SafeERC20` swallows the token's revert reason,
   so every settlement failure looks like `SafeTransferFromFailed()`.
+- **The unwind assumes one receipt unit is one underlying unit.** True for a rebasing aToken,
+  which is what `ILendingVenue` is shaped for. False for a share-priced receipt — a cToken, or a
+  seasoned ERC-4626 share. Below parity the withdrawal reverts; above it the mandate's receipt
+  budget drains faster than the position does, and that direction is quiet. Only the owner can
+  add a venue, so this is a configuration hazard rather than an attack surface, and it is what
+  blocks a non-Aave market being added today.
+- **Unwind dust returns to the maker's wallet, not to Aqua's ledger.** The ledger is debited the
+  full amount pulled while any remainder goes back to the wallet, so the mandate's receipt budget
+  shrinks by slightly more than the position does. Exactly zero for Aave aTokens, where the
+  transfer and the burn round identically — it only appears on the venue-agnostic paths the
+  interface advertises.
 - **`expiry = 0` means permanently dead, not "no expiry".** Because a mandate is immutable and
   docking burns its hash, the typo cannot be repaired in place — only re-issued under a new
   salt.

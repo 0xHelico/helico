@@ -31,7 +31,7 @@ that exists, and #22 asks for a full-length take by **11 September** rather than
 | Shot | Needs | Fallback if it is not there |
 |---|---|---|
 | 3 — the swap | `HelicoMandateSwap` deployed to Arbitrum One | the fork test, `forge test --match-contract ForkMandateSwapTest -vvvv` — **the four `v`s are the shot**, see below |
-| 4 — the query | the subgraph deployed and indexing | skip the shot; give its 25 seconds to shot 5 |
+| 4 — the query | the subgraph deployed and indexing | **satisfied since 8 September** — deployed, synced, and serving the canonical Aqua |
 | 5 — the enclave | nothing, works today | — |
 
 A shot that has to fall back is not a weaker video. A shot that claims something untrue ends the
@@ -46,10 +46,10 @@ list is that it changes.
 |---|---|
 | `app.helico.site` (shot 0) | 200. The chat path answers: "swap 1000 USDC to WETH" returns the checked intent, same pair the fork test uses |
 | `helico.site`, `api.helico.site/healthz` | 200 |
-| Shot 3, the swap | **Recordable in full.** The fork test and `DeployMandateSwap.s.sol` both pin Aqua at `0x1111113CCf…` — the address 1inch confirmed in `#partner-1inch`, exports from `@1inch/aqua-sdk`, and has in the deployed `AquaSwapVMRouter`'s bytecode. It was `0x499943E7…` until 8 September, from a README five months stale; that one is a real Aqua with no event since block 451,737,844 ([#165](https://github.com/0xHelico/helico/issues/165)). The sentence *"the Aqua 1inch deployed"* is true on camera now, and was not when this row was first written — check the cell against the constant before recording rather than trusting either |
+| Shot 3, the swap | **Recordable in full.** The fork test and `DeployMandateSwap.s.sol` both pin Aqua at `0x1111113CCf…` — the address 1inch confirmed in `#partner-1inch`, exports from `@1inch/aqua-sdk`, and has in the deployed `AquaSwapVMRouter`'s bytecode. It was `0x499943E7…` until 8 September, taken from the README inside the `v1.0.0` tag we vendor — a March snapshot, which is what a tag is; 1inch's `main` README names the right one. That address is a real Aqua with no event since block 451,737,844 ([#165](https://github.com/0xHelico/helico/issues/165)). The sentence *"the Aqua 1inch deployed"* is true on camera now, and was not when this row was first written — check the cell against the constant before recording rather than trusting either |
 | Shot 3, at `-vv` | **Would have cost a take.** One `[PASS]` line, no balances. Use `-vvvv` |
-| Shot 4, the subgraph | Not deployed. Fall back as written |
-| Shot 5, the enclave | Runs. A recorded rehearsal with its numbers checked is in [`docs/evidence/2026-09-07-cre-rehearsal.md`](evidence/2026-09-07-cre-rehearsal.md) |
+| Shot 4, the subgraph | **Recordable.** Deployed and synced 8 September, serving the Aqua 1inch uses: 47 makers, mandates from block 485,793,304. It spent a day pointed at the retired deployment and looked healthy the whole time ([#181](https://github.com/0xHelico/helico/issues/181)), so re-run `bun scripts/check-subgraph.ts` on the day and read the numbers off that run |
+| Shot 5, the enclave | Runs. A recorded rehearsal with its numbers checked against the policy is in [`docs/evidence/2026-09-08-idle-capital-rehearsal.md`](evidence/2026-09-08-idle-capital-rehearsal.md). The 7 September file records the vault path the workflow no longer drives |
 | "Deployed", "live", "in production" | Still says nothing that is deployed except Aqua itself, which is 1inch's |
 
 ## Shot list
@@ -105,14 +105,20 @@ No logo animation, no title card. Under 20 seconds, as the guidance asks.
 
 *Screen: `packages/plugins/cre/src/index.ts`, `cre.handlerInTee` visible.*
 
-> The decision runs inside a Chainlink CRE confidential workflow — in an enclave. The mandate
-> thresholds are secrets released only in there, because they are your strategy, and now the
-> Graph query key is a second private input alongside them.
+> The decision runs inside a Chainlink CRE confidential workflow — in an enclave. What it decides
+> is how much of your capital should be earning and how much has to stay liquid to cover a swap.
+> The thresholds are secrets released only in there, because they are your strategy.
 >
-> What comes out is a verdict and the hash of the mandate it was decided against. The contract
-> refuses any verdict whose hash is not the one it stored.
+> What comes out is a signed statement and the call it is about. And the authority that call uses
+> has no recipient parameter anywhere in it — the agent can choose where your money works, and has
+> no way to send it somewhere else.
 >
-> So the enclave can be wrong and it still cannot move you outside your own terms.
+> So the enclave can be wrong and it still cannot take anything.
+
+*Screen: `HelicoAccount.supplyIdle` — frame the signature, which has no `to`.*
+
+> **The shot is the function signature, not prose about it.** `supplyIdle(address pool, address
+> asset, uint256 amount)`. A viewer who pauses can see there is nowhere for a destination to go.
 
 ### 2:00–2:50 — Run it
 
@@ -135,6 +141,23 @@ Speak over the run. Cut the waiting, never speed it up.
 > A thousand USDC in, and the WETH goes straight out of the maker's wallet to the recipient.
 > Aqua held nothing. The app held nothing. There was never a moment when anyone else had custody.
 
+*Screen: terminal, `cd apps/cre && ./rehearse-idle.sh`.*
+
+> **This is the one shot that shows the whole product in one command.** It forks Arbitrum,
+> deploys the account factory, opens an account at an address computed before it existed, funds it
+> with real USDC, and lets the enclave decide.
+
+> Fifty thousand dollars arrives. The enclave decides forty thousand should be earning and ten
+> thousand should stay liquid to cover a swap. It signs that, and the call lands.
+
+*Screen: the last three lines of the run.*
+
+> The line to frame is the last one: **the agent's own balance is zero.** A transaction that
+> succeeds and moves nothing looks identical in a log to one that worked, so the balances are the
+> only thing worth believing.
+>
+> Read the numbers off the take being recorded — it forks `latest`, so they change every run.
+
 *Screen: the same swap one wei over the ceiling, refused by name.*
 
 > Same four `v`s: `forge test --match-test test_TheCeilingStillRefusesOnTheRealChain -vvvv`. The
@@ -152,6 +175,16 @@ Speak over the run. Cut the waiting, never speed it up.
 > cannot act after the expiry, and it was never able to take custody in the first place.
 >
 > Docking the mandate ends it, needs nobody's permission, and nothing we run can block it.
+
+*Screen: `test_AnUpgradeCannotTakeTheAccountOrDeleteTheWayOut`, and its `[PASS]` line.*
+
+> And the way out cannot be removed by us either. Every owner's contract can have its code
+> replaced — that is how we fix a bug during a hackathon. So the exit does not live in the code
+> that gets replaced. It lives in the proxy, and the owner is written into the bytecode.
+
+> This test installs a deliberately hostile version that declares both of those functions and
+> answers them in an attacker's favour. Ownership does not move, and the owner still withdraws
+> everything.
 
 ### 3:15–3:30 — What is and is not done
 
@@ -171,6 +204,11 @@ End on the repo URL. No outro music.
       take is not spent on a dependency download
 - [ ] `ARBITRUM_RPC_URL` set, and the fork suite run once beforehand: it forks `latest`, so the
       numbers differ every time and the spoken figures must match the take that ships
+- [ ] `./rehearse-idle.sh` run once to warm it — it takes about two minutes, and it rewrites
+      `apps/cre/workflow/config.staging.json`, so `git checkout` that file between takes
+- [ ] An `.env` written before 8 September has the vault's `MANDATE_*` names and none of the
+      `IDLE_*` ones. The script checks and names the whole missing list; the CRE CLI names one
+      variable at a time
 - [ ] Terminal font large enough to read at 720p
 - [ ] Close anything with a wallet, a key, or a private repository in it
 - [ ] One rough full-length take by **11 September**, two days before the deadline
@@ -183,4 +221,16 @@ End on the repo URL. No outro music.
 - **"Runs in a TEE"** — it runs in the simulator, which announces that it is not a TEE
 - **Anything about Uniswap being one of our tracks** — it is not, and the video should not imply
   a fourth
+- **"The AI decides where your money goes"** — it does not. A model turns the verdict into a
+  sentence the owner can read, and the verdict is computed before it is called and never reads its
+  answer back. Say *"the enclave decides, and a model explains it"*
+- **"It finds the best yield across protocols"** — half true, so say the half that is. It *does*
+  compare live rates across the markets the owner permitted and move to the best when the gap
+  clears a round-trip bar. Those markets are Aave-family only; Compound and Morpho need an
+  adapter and are blocked on a receipt-conversion assumption. Say *"across the markets you
+  permitted"*, not *"across protocols"*. `0xHelico/helico#179`
+- **"The Graph tells the agent what to work on"** — no. What is true, and sayable: *the workflow
+  asks The Graph how much the maker's mandates could demand, and sizes the liquid buffer to it.*
+  It still reads the account's own balances over RPC. The distinction is small and a judge who
+  knows the stack will hear it
 - Any figure not read off the take being recorded

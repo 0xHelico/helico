@@ -109,10 +109,9 @@ describe('completionRequest', () => {
 })
 
 describe('describeForOwner', () => {
-	const venue = {
-		pool: '0x794a61358D6845594F94dc1DB02A252b5b4814aD',
-		asset: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
-	}
+	const AAVE = '0x794a61358D6845594F94dc1DB02A252b5b4814aD'
+	const OTHER = `0x${'22'.repeat(20)}`
+	const asset = '0xaf88d065e77c8cC2239327C5EDb3A432268e5831'
 	const policy = {
 		targetWorkingBps: 8_000,
 		minIdleAmount: 100_000_000n,
@@ -122,9 +121,14 @@ describe('describeForOwner', () => {
 	}
 	const state = {
 		idle: 1_000_000_000n,
-		supplied: 0n,
-		venueLiquidity: 29_318_183_885_841n,
-		supplyRateRay: 27_514_566_416_591_863_466_760_475n,
+		venues: [
+			{
+				pool: AAVE,
+				supplied: 0n,
+				venueLiquidity: 29_318_183_885_841n,
+				supplyRateRay: 27_514_566_416_591_863_466_760_475n,
+			},
+		],
 	}
 	const split = {
 		total: 1_000_000_000n,
@@ -134,28 +138,28 @@ describe('describeForOwner', () => {
 	}
 
 	test('hands the model the decision, so it explains rather than decides', () => {
-		const prompt = describeForOwner(venue, policy, state, split, {
+		const prompt = describeForOwner(asset, policy, state, split, {
 			act: true,
-			params: { amount: 800_000_000n, supply: true },
+			params: { pool: AAVE, amount: 800_000_000n, supply: true },
 		})
-		expect(prompt).toContain('Decision: supply 800000000')
-		expect(prompt).toContain('paying 2.75%')
+		expect(prompt).toContain(`Decision: supply 800000000 to ${AAVE}`)
+		expect(prompt).toContain('pays 2.75%')
 		expect(prompt).toContain('80% of it should be working')
 		expect(prompt).toContain('target at 800000000 working and 200000000 idle')
 		expect(prompt).toContain('smallest move worth making 25000000')
 	})
 
 	test('names the other direction as a withdrawal, not as a negative supply', () => {
-		const prompt = describeForOwner(venue, policy, state, split, {
+		const prompt = describeForOwner(asset, policy, state, split, {
 			act: true,
-			params: { amount: 190_000_000n, supply: false },
+			params: { pool: AAVE, amount: 190_000_000n, supply: false },
 		})
-		expect(prompt).toContain('Decision: withdraw 190000000')
+		expect(prompt).toContain(`Decision: withdraw 190000000 from ${AAVE}`)
 		expect(prompt).not.toContain('supply 190000000')
 	})
 
 	test('says plainly when nothing happened, and why', () => {
-		const prompt = describeForOwner(venue, policy, state, split, {
+		const prompt = describeForOwner(asset, policy, state, split, {
 			act: false,
 			reason: 'inside the deadband',
 		})
@@ -167,13 +171,90 @@ describe('describeForOwner', () => {
 	 * happened" is only explicable next to the number the move would have had to clear.
 	 */
 	test('carries the numbers a hold has to be justified against', () => {
-		const prompt = describeForOwner(venue, policy, state, split, {
+		const prompt = describeForOwner(asset, policy, state, split, {
 			act: false,
 			reason: 'inside the deadband',
 		})
 		expect(prompt).toContain('1000000000 idle')
 		expect(prompt).toContain('0 supplied')
 		expect(prompt).toContain('able to pay out 29318183885841')
+		// The round trip is a bar the owner never set directly, so it is stated rather than left
+		// to be inferred from a hold about a rate gap.
+		expect(prompt).toContain('pays gas twice')
+	})
+
+	/**
+	 * The floor handed to the model is the **effective** one, so where it came from is a fact the
+	 * model needs: a buffer the maker's Aqua mandates raised would otherwise read as a number the
+	 * owner typed, and the sentence about their policy would be false.
+	 */
+	test('says which of the two floors the buffer is, and what the mandates could demand', () => {
+		const raised = { ...policy, minIdleAmount: 400_000_000n }
+		const prompt = describeForOwner(
+			asset,
+			raised,
+			state,
+			split,
+			{ act: true, params: { pool: AAVE, amount: 600_000_000n, supply: true } },
+			{ policy, demand: { known: true, amount: 400_000_000n, balances: 2, complete: true } },
+		)
+		expect(prompt).toContain('never less than 400000000 left liquid')
+		expect(prompt).toContain(
+			'The liquid floor of 400000000 is the larger of two numbers: the 100000000 the owner set, and the 400000000 that 2 live Aqua mandate balances could still ask this account to pay out of its wallet.',
+		)
+	})
+
+	/** A missing answer is a fact too, and the one worth having if a later swap cannot be covered. */
+	test('says when the index did not answer, rather than passing the policy floor off as sized', () => {
+		const prompt = describeForOwner(
+			asset,
+			policy,
+			state,
+			split,
+			{ act: false, reason: 'inside the deadband' },
+			{ policy, demand: { known: false, reason: 'answered HTTP 502' } },
+		)
+		expect(prompt).toContain(
+			'The Aqua index did not answer this run — the subgraph answered HTTP 502 — so the liquid floor is the 100000000 the owner set and no mandate raised it.',
+		)
+	})
+
+	/** With no subgraph consulted there is nothing to say about one, and nothing is said. */
+	test('says nothing about the index when none was consulted', () => {
+		const prompt = describeForOwner(asset, policy, state, split, {
+			act: false,
+			reason: 'inside the deadband',
+		})
+		expect(prompt).not.toContain('Aqua')
+	})
+
+	/**
+	 * Every market the decision could have chosen, not only the one it did. A hold that comes
+	 * down to a rate gap is not explicable without both rates in front of the model.
+	 */
+	test('describes every market the decision was allowed to consider', () => {
+		const prompt = describeForOwner(
+			asset,
+			policy,
+			{
+				idle: 200_000_000n,
+				venues: [
+					{ ...(state.venues[0] as (typeof state.venues)[0]), supplied: 400_000_000n },
+					{
+						pool: OTHER,
+						supplied: 400_000_000n,
+						venueLiquidity: 4_000_000_000n,
+						supplyRateRay: 41_000_000_000_000_000_000_000_000n,
+					},
+				],
+			},
+			split,
+			{ act: false, reason: 'already at the target split' },
+		)
+		expect(prompt).toContain('across 2 permitted lending markets')
+		expect(prompt).toContain(`Market ${AAVE} pays 2.75%, holds 400000000`)
+		expect(prompt).toContain(`Market ${OTHER} pays 4.1%, holds 400000000`)
+		expect(prompt).toContain('has 800000000 supplied')
 	})
 })
 

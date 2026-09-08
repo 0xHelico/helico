@@ -1,11 +1,11 @@
 # @helico/plugin-cre
 
 Chainlink CRE handler that decides, inside a TEE enclave, how much of a `HelicoAccount`'s idle
-stablecoin should be earning in a lending market and how much should stay liquid — and emits the
-one call that moves it. Plan:
+stablecoin should be earning, **which of the owner's permitted lending markets it should be
+earning in**, and how much should stay liquid — and emits the one call that moves it. Plan:
 [`cre-manages-idle-capital`](../../../docs/plans/2026-09-08-cre-manages-idle-capital.md).
 
-The account's balances, the market's rate and its available liquidity are all public on chain.
+The account's balances, each market's rate and its available liquidity are all public on chain.
 What the enclave keeps confidential is the **policy**: the target split, the buffer the owner
 needs on hand to cover a swap against their Aqua mandate, and the deadband below which nothing
 moves. Those come from Vault DON secrets and are read only inside the enclave.
@@ -17,19 +17,31 @@ Every run (cron trigger, `handlerInTee`):
 1. `getSecrets` releases the policy into the enclave. If the owner published
    `keccak256(abi.encode(policy))` in `config.policyHash`, the enclave recomputes it and stops on
    a mismatch **before touching the chain**; a zero hash means nothing was published.
-2. Two JSON-RPC batches of `eth_call`, made from inside the enclave. First the account
-   (`agent`, `permittedVenue(pool)`), the asset (`balanceOf(account)`), and the market
+2. Two JSON-RPC batches of `eth_call`, made from inside the enclave, whatever the number of
+   markets — comparing them costs more calls, not more waiting. First the account (`agent`, and
+   `permittedVenue(pool)` per market), the asset (`balanceOf(account)`), and every market
    (`getReserveAToken`, `getVirtualUnderlyingBalance`, `getReserveData`). Then, in a second
-   batch, the receipt token the *market* named: its `balanceOf` and its
+   batch, the receipt token each *market* named: its `balanceOf` and its
    `UNDERLYING_ASSET_ADDRESS`. Asking the receipt which market it belongs to instead reads as the
    same check and is not one — a forged receipt returns the real pool's address and passes.
-3. `decide` refuses what the account itself would refuse, so a run that cannot succeed ends as a
-   hold with a reason rather than a reverted transaction: the account no longer names this agent,
-   the owner took the venue off the allowlist, the market does not list the asset, or the receipt
-   is for a different asset.
-4. `decideIdleMove` sets the target split and applies the deadband; `sizeIdleMove` clamps the
-   move to what the market can actually pay out and to the policy's per-move ceiling, and the
-   deadband is applied **again** to the clamped number.
+2b. One GraphQL POST to the Aqua subgraph, from inside the enclave, asking what this account's
+   live mandates could still be asked to pay out of its wallet in this asset — and the liquid
+   buffer is raised to it. **That question has no on-chain answer**: Aqua's `_balances` is
+   `private` and four levels deep and not one parameter of its four events is `indexed`, so an
+   index is the only place the number exists. The floor may only be **raised**, never lowered, so
+   an endpoint that is absent, unreachable, empty or behind leaves the run with the owner's own
+   `minIdleAmount` and a verdict that says which buffer it used. See
+   [`src/subgraph.ts`](src/subgraph.ts).
+3. `eligibleVenues` refuses what the account itself would refuse, per market: the owner took this
+   venue off the allowlist, it does not list the asset, or its receipt is for a different asset.
+   **A refused market is skipped, not fatal** — the rule `_venueFor` follows in
+   `HelicoMandateSwap`, because ending the search at a market that cannot serve this account
+   strands a usable one further down the list. The one fatal check is `decide`'s first: an account
+   that no longer names this agent has nothing for the enclave to decide.
+4. `decideIdleMove` sets the target split, applies the deadband, and picks the market — the
+   best-paying one to supply to, the worst-paying funded one to withdraw from. `sizeIdleMove`
+   clamps the move to what *that* market can actually pay out and to the policy's per-move
+   ceiling, and the deadband is applied **again** to the clamped number.
 5. Crosses out with the move only, one of two ways. `delivery: 'signature'` (any chain, and what
    both config files use today): the agent key — a Vault DON secret released only into the
    enclave — signs an EIP-712 `IdleMove(IdleMoveParams params, bytes32 policyHash, uint256 nonce)`
@@ -41,18 +53,28 @@ Every run (cron trigger, `handlerInTee`):
 ## The decision rule
 
 ```
-total     = idle + supplied
-wantIdle  = clamp(max(minIdleAmount, total − total × targetWorkingBps / 10 000), 0, total)
+minIdle   = max(policy.minIdleAmount, Σ Balance.amount)   spendable, this asset, live mandates
+total     = idle + Σ supplied         over every market this run may use
+wantIdle  = clamp(max(minIdle, total − total × targetWorkingBps / 10 000), 0, total)
 delta     = idle − wantIdle          →  positive: supply,  negative: withdraw
 deadband  = max(minMoveAmount, total × minMoveBps / 10 000)
 ```
 
-Three things in that are load-bearing:
+Five things in that are load-bearing:
 
 - **The buffer wins over the target share.** `minIdleAmount` is a floor under the idle side, not
   a second target. The account has to be able to cover a swap against its Aqua mandate out of
   what it holds, and a mandate that cannot be covered fails at the moment it is taken — which
   costs more than the yield missed by holding the buffer.
+- **And the mandates size that buffer, through The Graph.** A fixed secret does not follow the
+  maker: ship a larger mandate and the buffer stays where it was, and the next swap the mandate
+  permits has to unwind a lending position inside itself — `HelicoMandateSwap._cover`, which is
+  slower and which `_venueFor` can refuse outright. `Balance.amount` in the subgraph is the
+  spendable amount per token per mandate, and its own schema calls it "the number an agent has to
+  know before acting". The floor moves up to it and never down, so **no failure of the index can
+  make the decision wrong** — only less good: unreachable or empty falls back to the owner's
+  number, and an indexer that lags under-reports, which supplies a little too much and degrades
+  into the unwind path the swap already has rather than into a loss.
 - **The deadband has two halves and a move must clear both.** The absolute half is about gas: a
   move costs the same whatever it moves, so below some size the correction is worth less than
   making it. The relative half is about churn: on a large balance a few dollars clears the gas
@@ -63,9 +85,56 @@ Three things in that are load-bearing:
   market is drained is exactly the move the deadband exists to refuse, and it only becomes small
   after the clamp.
 
+- **A market that cannot serve the move is skipped, not chosen.** Two conditions and not one,
+  because a market can be deep and hold nothing of this account's, or hold the position and be
+  drained; and the amount it has to be able to hand back is the bar the move must clear anyway.
+  Ranking by rate alone lands on a market that cannot pay and strands a funded one behind it.
+
 `delta` is bounded by construction, not by a later clamp: `wantIdle` is inside `[0, total]`, so
-`delta` is inside `[−supplied, idle]` and neither direction can ask for more than the side it
-comes out of holds.
+`delta` is inside `[−Σ supplied, idle]` and neither direction can ask for more than the side it
+comes out of holds. That bound is across markets, so a withdrawal is clamped again to the
+position at the one market it comes out of — only one move leaves per run.
+
+## Choosing between markets, and moving between them
+
+`config.pools` is a list. The enclave reads every market in it, drops the ones the account would
+refuse, and then:
+
+| The account is | What happens |
+|---|---|
+| above the target idle share, by more than the deadband | supply the excess to the **best-paying** market that clears the policy's rate floor |
+| below it, by more than the deadband | withdraw from the **worst-paying** market that holds capital and can hand back enough to be worth the move |
+| at the target, but holding capital at a market paying materially less than the best | withdraw from the worse market **this** run; the next run's ordinary supply places it at the best |
+
+That last row takes two runs and is not a compromise: `HelicoAccount.nonce` is strictly
+sequential, so one signed statement authorises exactly one call. A batch cannot be pre-signed,
+and that is the property `invalidateSignatures` depends on.
+
+**A migration clears a higher bar than a rebalance, and both halves of it come from the policy
+the owner already set — there is no new secret.**
+
+- **Size doubles.** `minMoveAmount` is what one transaction's gas is worth in this asset. A round
+  trip pays it twice, so a migration must be worth `2 × deadband`. That bar is carried through
+  the clamp, so a migration cut down by the per-move ceiling is refused where an ordinary
+  withdrawal of the same size would go through.
+- **The rate gap must clear `minMoveBps`, read as basis points of rate.** A size bar alone cannot
+  stop this: a large enough balance clears any of them on a one-basis-point difference, and then
+  the account migrates back the first time the two rates cross. `minMoveBps` is the owner's own
+  answer to "how small a difference is not worth a transaction", asked of the account's size
+  rather than of a rate — so a policy refusing to move less than 0.5% of the account also refuses
+  to chase less than 0.5 percentage points of yield. The reuse is deliberate and is written down
+  in `decision.ts` rather than left to be discovered.
+
+Neither half is a yield model, and claiming otherwise would be dishonest: pricing a migration
+properly needs a holding period — gas is paid once, the gain accrues per unit-second — and
+nothing in the policy names one.
+
+Two other consequences worth stating plainly. A market the owner has **un-permitted** takes its
+position out of the total: `withdrawIdle` would revert on the same allowlist, so counting it
+would set a target against money the agent cannot move. And every market in `pools` must be a
+real Aave-family market — one that cannot answer the reads **fails the run** rather than being
+skipped, because a view missing a market's rate would pick the best of the rest and call it the
+best.
 
 There is **no cooldown**, and that is a consequence rather than an omission: `HelicoAccount`
 stores no timestamp of its last move, so the enclave has nothing to read one from. The cron
@@ -101,11 +170,13 @@ Those three were checked against the live chain with `cast` on 8 September 2026,
 |---|---|
 | TEE registration, `handlerInTee` | [`src/index.ts`](src/index.ts) `initWorkflow` |
 | The enclave callback, steps 1 to 5 | [`src/index.ts`](src/index.ts) `onCronTrigger` |
-| The refusals the account would make | [`src/index.ts`](src/index.ts) `decide` |
-| The target split and the deadband | [`src/decision.ts`](src/decision.ts) |
+| The refusals the account would make | [`src/venues.ts`](src/venues.ts) `eligibleVenues` |
+| The target split, the deadband and the round trip | [`src/decision.ts`](src/decision.ts) |
+| Which markets are usable, and which is best or worst | [`src/venues.ts`](src/venues.ts) |
 | Clamping to the market and the ceiling | [`src/sizing.ts`](src/sizing.ts) |
 | The policy, its secrets and its hash | [`src/policy.ts`](src/policy.ts) |
 | Reads from inside the enclave | [`src/chain.ts`](src/chain.ts) `readAccountState` |
+| The Aqua mandates behind the buffer | [`src/subgraph.ts`](src/subgraph.ts) `readMandateDemand`, `withMandateBuffer` |
 | The signed statement, EIP-712 | [`src/sign.ts`](src/sign.ts) |
 | The call a relayer carries | [`src/relay.ts`](src/relay.ts) `encodeIdleMove` |
 
@@ -114,10 +185,10 @@ Those three were checked against the live chain with `cast` on 8 September 2026,
 | | |
 |---|---|
 | Registers a TEE handler with `handlerInTee` | ✅ |
-| Decision logic is Helico's | ✅ policy hash check, in-enclave reads, target split with a two-part deadband applied before and after clamping, a rate floor that gates supplying only, a per-move ceiling |
+| Decision logic is Helico's | ✅ policy hash check, in-enclave reads, target split with a two-part deadband applied before and after clamping, a liquid buffer sized from the maker's live Aqua mandates through The Graph, a choice between the owner's permitted markets by live `currentLiquidityRate`, a round-trip bar on migrating between them, a rate floor that gates supplying only, a per-move ceiling |
 | Emits the call | ✅ `supplyIdle` / `withdrawIdle` calldata, pinned to `cast calldata`, delivered as a signed EIP-712 statement or as a DON report |
-| Delivered on chain | ❌ **not run end to end against a deployed `HelicoAccount`.** `rehearse.sh` still deploys `HelicoVault` and drives the old LP path; it has not been rewritten for this one |
-| Unit tests, `bun test` | ✅ 116 across 8 files: EIP-712 digest and domain separator checked against the spec by hand, the report tuple and the account calldata pinned to `cast`-produced vectors (commands in the tests), the decision table, the deadband boundaries, and a fake `TeeRuntime` answering `eth_call` by selector |
+| Delivered on chain | ⚠️ **on a fork, not on a live network.** [`apps/cre/rehearse-idle.sh`](../../../apps/cre/rehearse-idle.sh) forks Arbitrum One, deploys the factory, funds an account with real USDC from a whale, and carries the enclave's signed call to the chain: a run on 8 September moved 40,000 of 50,000 USDC into real Aave v3 and left the agent's own balance at zero. The same run queried the live Subgraph Studio endpoint from inside the compiled workflow and printed `[buffer 100000000: policy floor 100000000, 0 live Aqua balances could demand 0]` — a freshly deployed account has shipped no mandate, and a subgraph that answered is reported differently from one that did not. No `HelicoAccount` is deployed on a live network yet, and the simulator is not a TEE |
+| Unit tests, `bun test` | ✅ 208 across 10 files: EIP-712 digest and domain separator checked against the spec by hand, the report tuple and the account calldata pinned to `cast`-produced vectors (commands in the tests), the decision table, the deadband boundaries, the market choice and the round-trip bar, the buffer raised from a recorded live subgraph answer with every way that answer can fail, and a fake `TeeRuntime` answering `eth_call` by selector and GraphQL by URL |
 | Deployed | ❌ deploy access exists on the team's CRE org; the Confidential Workflows private beta is requested (#41) |
 
 ## Use
@@ -130,10 +201,13 @@ const runner = await Runner.newRunner({ configSchema })
 await runner.run(initWorkflow)
 ```
 
-Config: `{ schedule, rpcUrl, delivery, account, pool, asset, agent, reportReceiver, policyHash,
-gasLimit, deadlineSeconds }` plus, for `delivery: 'signature'`, `chainId` and optionally
+Config: `{ schedule, rpcUrl, delivery, account, pools, asset, agent, reportReceiver, policyHash,
+gasLimit, deadlineSeconds }` — `pools` is a non-empty list of markets with no repeats, and a list
+of one behaves exactly as the single-market configuration did — plus, for `delivery: 'signature'`, `chainId` and optionally
 `domainName` (`HelicoAccount`), `domainVersion` (`1`), `agentKeySecretId` (`AGENT_KEY`),
-`nonceFunction` (`nonce`); for `delivery: 'forwarder'`, `chainSelectorName`. Hex values are
+`nonceFunction` (`nonce`); for `delivery: 'forwarder'`, `chainSelectorName`. `subgraphUrl` names
+the Aqua subgraph the buffer is sized from and `subgraphTimeoutSeconds` bounds that call — leave
+`subgraphUrl` empty to skip the step, exactly as an empty `aiUrl` skips the model. Hex values are
 lowercased on parse. `secrets.yaml` must map `IDLE_TARGET_WORKING_BPS`, `IDLE_MIN_IDLE_AMOUNT`,
 `IDLE_MIN_MOVE_AMOUNT`, `IDLE_MIN_MOVE_BPS`, `IDLE_MIN_SUPPLY_RATE_RAY`, `IDLE_MAX_MOVE_AMOUNT`
 and `IDLE_EXPIRY` to env vars, and in signature mode `AGENT_KEY` to the agent's private key.

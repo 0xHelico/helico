@@ -16,9 +16,13 @@ import { fakeRuntime } from './test/fakeRuntime'
 const AAVE_POOL = '0x794a61358D6845594F94dc1DB02A252b5b4814aD'
 const USDC = '0xaf88d065e77c8cC2239327C5EDb3A432268e5831'
 const AUSDC = '0x724dc807b04555b71ed48a6896b6F41593b8C637'
+/** A second Aave-family market, and the receipt it issues. Only their addresses matter here. */
+const OTHER_POOL = `0x${'22'.repeat(20)}`
+const OTHER_RECEIPT = `0x${'23'.repeat(20)}`
 const account = getAddress('0x746182d0cccc5cefc69853bb0325c850029388c0')
 const agent = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
 const RATE = 27_514_566_416_591_863_466_760_475n
+const OTHER_RATE = 41_000_000_000_000_000_000_000_000n // 4.1%
 
 const config = configSchema.parse({
 	schedule: '0 */5 * * * *',
@@ -26,7 +30,7 @@ const config = configSchema.parse({
 	delivery: 'forwarder',
 	chainSelectorName: 'ethereum-mainnet-arbitrum-1',
 	account: account.toLowerCase(),
-	pool: AAVE_POOL.toLowerCase(),
+	pools: [AAVE_POOL.toLowerCase()],
 	asset: USDC.toLowerCase(),
 	agent: agent.toLowerCase(),
 	reportReceiver: zeroAddress,
@@ -67,45 +71,76 @@ const reserveData = (aToken: string, rate: bigint): Hex =>
 		],
 	)
 
-const handlers = (receipt: string) => ({
-	[sel('function agent()')]: () => word(agent),
-	[sel('function permittedVenue(address)')]: () => word(true),
-	[sel('function nonce()')]: () => word(7n),
-	[sel('function getReserveAToken(address)')]: () => word(receipt),
-	[sel('function getVirtualUnderlyingBalance(address)')]: () => word(29_318_183_885_841n),
-	[sel('function UNDERLYING_ASSET_ADDRESS()')]: () => word(USDC),
-	[sel('function balanceOf(address)')]: (_: Hex, to: string) =>
-		word(to.toLowerCase() === USDC.toLowerCase() ? 1_000_000_000n : 500_000_000n),
-	[sel('function getReserveData(address)')]: () => reserveData(AUSDC, RATE),
-})
+/** What each market answers, keyed by the market's own address. */
+const market = (receipt: string, rate: bigint, liquidity: bigint) => ({ receipt, rate, liquidity })
+type Market = ReturnType<typeof market>
 
-const read = (receipt: string, options: { withNonce?: boolean } = {}) => {
-	const fake = fakeRuntime({ config, secrets: {}, now: 1_700_000_000, handlers: handlers(receipt) })
+const handlers = (markets: Record<string, Market>) => {
+	const at = (to: string): Market => {
+		const found = markets[to.toLowerCase()]
+		if (!found) throw new Error(`unmodelled market ${to}`)
+		return found
+	}
+	return {
+		[sel('function agent()')]: () => word(agent),
+		[sel('function permittedVenue(address)')]: () => word(true),
+		[sel('function nonce()')]: () => word(7n),
+		[sel('function getReserveAToken(address)')]: (_: Hex, to: string) => word(at(to).receipt),
+		[sel('function getVirtualUnderlyingBalance(address)')]: (_: Hex, to: string) =>
+			word(at(to).liquidity),
+		[sel('function UNDERLYING_ASSET_ADDRESS()')]: () => word(USDC),
+		[sel('function balanceOf(address)')]: (_: Hex, to: string) => {
+			if (to.toLowerCase() === USDC.toLowerCase()) return word(1_000_000_000n)
+			return word(to.toLowerCase() === AUSDC.toLowerCase() ? 500_000_000n : 700_000_000n)
+		},
+		[sel('function getReserveData(address)')]: (_: Hex, to: string) =>
+			reserveData(at(to).receipt, at(to).rate),
+	}
+}
+
+const aave = (receipt = AUSDC) => market(receipt, RATE, 29_318_183_885_841n)
+const other = market(OTHER_RECEIPT, OTHER_RATE, 4_000_000_000n)
+
+const read = (markets: Record<string, Market>, options: { withNonce?: boolean } = {}) => {
+	const pools = Object.keys(markets) as Address[]
+	const fake = fakeRuntime({
+		config: configSchema.parse({ ...config, pools }),
+		secrets: {},
+		now: 1_700_000_000,
+		handlers: handlers(markets),
+	})
 	const state = readAccountState(
 		fake.runtime,
 		config.rpcUrl,
-		{
-			account: config.account as Address,
-			pool: config.pool as Address,
-			asset: config.asset as Address,
-		},
+		{ account: config.account as Address, pools, asset: config.asset as Address },
 		options,
 	)
 	return { state, ...fake }
 }
 
+const onlyAave = (receipt = AUSDC) => ({ [AAVE_POOL.toLowerCase()]: aave(receipt) })
+const both = {
+	[AAVE_POOL.toLowerCase()]: aave(),
+	[OTHER_POOL.toLowerCase()]: other,
+}
+
 describe('readAccountState', () => {
 	test('reads both sides of the account, the market, and its rate', () => {
-		const { state } = read(AUSDC)
+		const { state } = read(onlyAave())
 		expect(state).toEqual({
 			agent: getAddress(agent),
-			venuePermitted: true,
 			idle: 1_000_000_000n,
-			receipt: getAddress(AUSDC),
-			receiptAsset: getAddress(USDC),
-			supplied: 500_000_000n,
-			venueLiquidity: 29_318_183_885_841n,
-			supplyRateRay: RATE,
+			venues: [
+				{
+					pool: AAVE_POOL.toLowerCase() as Address,
+					venuePermitted: true,
+					receipt: getAddress(AUSDC),
+					receiptAsset: getAddress(USDC),
+					supplied: 500_000_000n,
+					venueLiquidity: 29_318_183_885_841n,
+					supplyRateRay: RATE,
+				},
+			],
 			nonce: undefined,
 		})
 	})
@@ -116,35 +151,95 @@ describe('readAccountState', () => {
 	 * pass the question asked the other way round.
 	 */
 	test('takes the receipt from the market, then reads it in a second batch', () => {
-		const { rpcRequests } = read(AUSDC)
+		const { rpcRequests } = read(onlyAave())
 		expect(rpcRequests).toHaveLength(2)
 		const to = (batch: number) => rpcRequests[batch]?.map((r) => r.params[0].to.toLowerCase()) ?? []
 		expect(to(0)).toEqual(
-			[account, account, USDC, AAVE_POOL, AAVE_POOL, AAVE_POOL].map((a) => a.toLowerCase()),
+			[account, USDC, account, AAVE_POOL, AAVE_POOL, AAVE_POOL].map((a) => a.toLowerCase()),
 		)
 		expect(to(1)).toEqual([AUSDC.toLowerCase(), AUSDC.toLowerCase()])
 	})
 
+	/**
+	 * Comparing markets costs more calls, not more waiting. Two batches whatever the number of
+	 * markets is what keeps the enclave's round trips flat.
+	 */
+	test('reads several markets in the same two batches, in the order they were configured', () => {
+		const { state, rpcRequests } = read(both)
+		expect(rpcRequests).toHaveLength(2)
+		const to = (batch: number) => rpcRequests[batch]?.map((r) => r.params[0].to.toLowerCase()) ?? []
+		expect(to(0)).toEqual(
+			[
+				account,
+				USDC,
+				account,
+				AAVE_POOL,
+				AAVE_POOL,
+				AAVE_POOL,
+				account,
+				OTHER_POOL,
+				OTHER_POOL,
+				OTHER_POOL,
+			].map((a) => a.toLowerCase()),
+		)
+		expect(to(1)).toEqual([AUSDC, AUSDC, OTHER_RECEIPT, OTHER_RECEIPT].map((a) => a.toLowerCase()))
+		expect(state.venues.map((v) => v.pool)).toEqual([
+			AAVE_POOL.toLowerCase() as Address,
+			OTHER_POOL.toLowerCase() as Address,
+		])
+	})
+
+	/** Each market's own position and rate, and no chance of one being read as another's. */
+	test("keeps every market's numbers with the market they came from", () => {
+		const { state } = read(both)
+		expect(state.venues[0]).toMatchObject({ supplied: 500_000_000n, supplyRateRay: RATE })
+		expect(state.venues[1]).toMatchObject({
+			supplied: 700_000_000n,
+			supplyRateRay: OTHER_RATE,
+			venueLiquidity: 4_000_000_000n,
+			receipt: getAddress(OTHER_RECEIPT),
+		})
+	})
+
 	test('a market that does not list the asset costs one batch and reports nothing supplied', () => {
-		const { state, rpcRequests } = read(zeroAddress)
+		const { state, rpcRequests } = read(onlyAave(zeroAddress))
 		expect(rpcRequests).toHaveLength(1)
-		expect(state.receipt).toBe(zeroAddress)
-		expect(state.receiptAsset).toBe(zeroAddress)
-		expect(state.supplied).toBe(0n)
+		expect(state.venues[0]?.receipt).toBe(zeroAddress)
+		expect(state.venues[0]?.receiptAsset).toBe(zeroAddress)
+		expect(state.venues[0]?.supplied).toBe(0n)
 		// The market's own numbers are still read; only the receipt's are missing.
-		expect(state.venueLiquidity).toBe(29_318_183_885_841n)
+		expect(state.venues[0]?.venueLiquidity).toBe(29_318_183_885_841n)
+	})
+
+	/**
+	 * A market with no receipt contributes nothing to the second batch, and the markets that do
+	 * still have to line up with their own answers. Getting that mapping wrong reads one market's
+	 * position as another's, and both numbers look plausible.
+	 */
+	test('an unlisted market drops out of the second batch without shifting the others', () => {
+		const { state, rpcRequests } = read({
+			[AAVE_POOL.toLowerCase()]: aave(zeroAddress),
+			[OTHER_POOL.toLowerCase()]: other,
+		})
+		expect(rpcRequests[1]?.map((r) => r.params[0].to.toLowerCase())).toEqual([
+			OTHER_RECEIPT.toLowerCase(),
+			OTHER_RECEIPT.toLowerCase(),
+		])
+		expect(state.venues[0]?.supplied).toBe(0n)
+		expect(state.venues[1]?.supplied).toBe(700_000_000n)
 	})
 
 	/**
 	 * `HelicoAccount.nonce()` takes no argument, where `HelicoVault.nonces(address)` took the
 	 * owner. Encoded with an argument it is a different selector and the call reverts, so the
-	 * calldata length is the assertion: four bytes, no words.
+	 * calldata length is the assertion: four bytes, no words. It is also the last call in the
+	 * batch, behind however many markets there are.
 	 */
 	test('asks for the nonce with no argument, and only when it is going to sign', () => {
-		const { state, rpcRequests } = read(AUSDC, { withNonce: true })
+		const { state, rpcRequests } = read(both, { withNonce: true })
 		expect(state.nonce).toBe(7n)
-		expect(rpcRequests[0]).toHaveLength(7)
-		expect(rpcRequests[0]?.[6]?.params[0].data).toBe(toFunctionSelector('function nonce()'))
-		expect(read(AUSDC).rpcRequests[0]).toHaveLength(6)
+		expect(rpcRequests[0]).toHaveLength(11)
+		expect(rpcRequests[0]?.[10]?.params[0].data).toBe(toFunctionSelector('function nonce()'))
+		expect(read(both).rpcRequests[0]).toHaveLength(10)
 	})
 })
