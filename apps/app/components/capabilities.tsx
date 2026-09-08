@@ -2,7 +2,6 @@
 
 import { useMutation } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
-import Link from "next/link";
 import { useMemo } from "react";
 import {
   useAccount,
@@ -12,7 +11,7 @@ import {
 } from "wagmi";
 import { Glyph } from "@/components/glyph";
 import { Switch } from "@/components/ui/switch";
-import { ASKS, GRANTS } from "@/lib/capabilities";
+import { GRANTS } from "@/lib/capabilities";
 import { cn } from "@/lib/utils";
 import { configuredVault, vaultAbi } from "@/lib/vault";
 
@@ -127,28 +126,3 @@ export function Grants() {
 }
 
 /** Sentences the conversation answers today. Each happens once, and you sign it. */
-export function Asks() {
-  return (
-    <ul className="mt-5 grid gap-2.5 sm:grid-cols-3">
-      {ASKS.map((a) => (
-        <li key={a.name}>
-          <Link
-            className="glyph-hover flex h-full flex-col rounded-2xl border bg-card p-4 transition-colors hover:border-[var(--helico-on)]/40"
-            href="/chat"
-          >
-            <Glyph name={a.glyph} size={32} />
-            <p className="mt-3 font-medium text-[13.5px] leading-none">
-              {a.name}
-            </p>
-            <p className="mt-2 text-muted-foreground text-xs leading-relaxed">
-              {a.detail}
-            </p>
-            <p className="mt-3 text-[11px] text-muted-foreground/60 italic">
-              “{a.say}”
-            </p>
-          </Link>
-        </li>
-      ))}
-    </ul>
-  );
-}

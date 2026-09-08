@@ -1,9 +1,8 @@
-import Link from "next/link";
 import { AccountPanel } from "@/components/account-panel";
-import { Asks, Grants } from "@/components/capabilities";
-import { PageHeader } from "@/components/chat/page-header";
+import { Grants } from "@/components/capabilities";
 import { MandatePanel } from "@/components/mandate-panel";
 import { MandatesPanel } from "@/components/mandates-panel";
+import { PageHeader } from "@/components/page-header";
 
 export const metadata = { title: "Helico" };
 
@@ -65,24 +64,6 @@ export default function Page() {
               alone.
             </p>
             <MandatePanel />
-          </section>
-
-          <section className="mt-12 pb-6">
-            <h2 className="font-semibold text-lg tracking-tight">
-              What you can ask it
-            </h2>
-            <p className="mt-1.5 text-muted-foreground text-sm">
-              These happen once and you sign them yourself. Say it in a sentence
-              in the{" "}
-              <Link
-                className="underline underline-offset-2 hover:text-foreground"
-                href="/chat"
-              >
-                conversation
-              </Link>
-              .
-            </p>
-            <Asks />
           </section>
         </main>
       </div>

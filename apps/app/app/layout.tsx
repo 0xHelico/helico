@@ -3,18 +3,16 @@ import { Inter } from "next/font/google";
 import { headers } from "next/headers";
 import type { ReactNode } from "react";
 import { Toaster } from "sonner";
-import { AppShell } from "@/components/chat/app-shell";
 import { ThemeProvider } from "@/components/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppKitProvider } from "@/context";
-import { HelicoSessionProvider } from "@/hooks/use-helico-session";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 const TITLE = "Helico | Your Funds, on Autopilot";
 const DESCRIPTION =
-  "Say what you want in a sentence. Helico turns it into a swap you check and sign yourself.";
+  "An account only you can empty. An agent puts what is idle to work and can never send it anywhere but back to you.";
 
 // The icons and the social card are the landing's, so the three sites read as one product.
 export const metadata: Metadata = {
@@ -62,9 +60,6 @@ export default async function RootLayout({
   children,
 }: Readonly<{ children: ReactNode }>) {
   const cookies = (await headers()).get("cookie");
-  // Remembered across reloads, and open on a first visit: the sidebar is where the
-  // conversations are, and a rail of icons does not say that.
-  const collapsed = cookies?.includes("sidebar_state=false") ?? false;
 
   return (
     <html className={inter.variable} lang="en" suppressHydrationWarning>
@@ -75,12 +70,14 @@ export default async function RootLayout({
           disableTransitionOnChange
           enableSystem
         >
+          {/*
+            No gate. Everything this page shows is public: a mandate ledger anyone can read and
+            an account address anyone can derive. Asking a visitor to sign before showing them
+            public data was a habit from when the app was a conversation that had to be kept to
+            one address.
+          */}
           <AppKitProvider cookies={cookies}>
-            <HelicoSessionProvider>
-              <TooltipProvider>
-                <AppShell defaultOpen={!collapsed}>{children}</AppShell>
-              </TooltipProvider>
-            </HelicoSessionProvider>
+            <TooltipProvider>{children}</TooltipProvider>
           </AppKitProvider>
           <Toaster position="top-center" />
         </ThemeProvider>
