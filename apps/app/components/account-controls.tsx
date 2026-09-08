@@ -11,7 +11,7 @@ import {
 } from "wagmi";
 
 import { Glyph } from "@/components/glyph";
-import { Card, NotDeployed, SectionTitle } from "@/components/kit";
+import { Card, NotDeployed } from "@/components/kit";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { CHAIN_ID, useAccountState } from "@/hooks/use-account-state";
@@ -91,41 +91,29 @@ export function AccountControls() {
   if (!isConnected) {
     return (
       <Card className="mt-4">
-        <SectionTitle>What you have allowed</SectionTitle>
-        <div className="mt-3">
-          <NotDeployed>
-            Connect a wallet to see what its account permits. Both limits are
-            owner-only, so there is nothing to show until we know who you are.
-          </NotDeployed>
-        </div>
+        <NotDeployed>
+          Connect a wallet to see what its account permits.
+        </NotDeployed>
       </Card>
     );
   }
 
   return (
     <Card className="mt-4">
-      <SectionTitle>What you have allowed</SectionTitle>
-      <p className="mt-2 text-[11.5px] text-soft leading-relaxed">
-        Two settings, both owner-only, and together they are the whole of the
-        agent's reach. Neither call it can make takes a recipient, so every
-        address it can make your account touch is one you named here.
-      </p>
-
       {opened ? null : (
         <p className="mt-3 text-[11.5px] text-faint">
-          Your account is not open yet, so there is nothing to set on it. Open
-          it above and these become live.
+          Not open yet — open it above and these go live.
         </p>
       )}
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-2">
         <Limit
           detail={
             nominated
               ? isOurs
-                ? "Helico's enclave. It may move idle capital between the markets below, and nothing else."
-                : `An address you nominated: ${short((data as { agent: string }).agent)}.`
-              : "Nobody. Your account moves only when you move it."
+                ? "Helico's enclave. Idle capital only."
+                : "An address you nominated."
+              : "Nobody. It moves only when you move it."
           }
           glyph="wings"
           name="Who may move it"
@@ -172,8 +160,8 @@ export function AccountControls() {
         <Limit
           detail={
             permitted
-              ? "Aave v3 on Arbitrum One. Revoking closes the way in and leaves the way out open, so the agent can still unwind what is there."
-              : "Nowhere. Until a market is permitted, the agent has nothing to supply into."
+              ? "Aave v3. Revoking leaves the way out open."
+              : "Nowhere yet."
           }
           glyph="layers"
           name="Where it may go"

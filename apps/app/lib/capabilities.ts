@@ -43,15 +43,13 @@ export const GRANTS: Grant[] = [
   {
     name: "Put idle capital to work",
     glyph: "leaf",
-    detail:
-      "Into a market you allow-listed, and back out. Neither call takes a recipient, so both ends are your own account.",
+    detail: "Into a market you allowed, and back out again.",
     wired: true,
   },
   {
     name: "Keep a position in range",
     glyph: "arcs",
-    detail:
-      "Re-centre a Uniswap v4 range as the price drifts. Built and tested; not where the agent is pointed now.",
+    detail: "Re-centre a Uniswap v4 range as the price drifts.",
     wired: false,
   },
   {
