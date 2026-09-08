@@ -79,7 +79,8 @@ rather than assuming them: that the factory points at the implementation just de
 the address it predicts for an owner is the address it actually produces. A deploy that prints
 those two lines has already verified itself.
 
-**Record:** implementation address, factory address.
+**Record:** implementation address, factory address — in [`deployments.md`](deployments.md),
+which is where the live ones already are.
 
 ## 2. Open an account, and give it its rules
 
