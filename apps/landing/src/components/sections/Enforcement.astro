@@ -3,60 +3,67 @@ import { forkTests } from '../../lib/solidity-tests'
 const repo = 'https://github.com/0xHelico/helico'
 // Reading about Helico goes to the docs site; looking at the code goes to GitHub.
 const docs = 'https://docs.helico.site/docs'
-// Permalinks pinned at the commit these line numbers were read from, so they stay true when the file moves on.
-const vault = `${repo}/blob/154bcabd85ca3be8f73851bbc55a1a04ea42c6e4/contracts/src/HelicoVault.sol`
+// Permalinks pinned at the commit these line numbers were read from, so they stay true when the
+// files move on. Read from the code rather than remembered.
+const at = (file: string) =>
+	`${repo}/blob/cd1e76186f386ef15b00aee60aae940f9cf5ccf0/contracts/src/${file}`
+const account = at('HelicoAccount.sol')
+const proxy = at('HelicoAccountProxy.sol')
+const swap = at('HelicoMandateSwap.sol')
+// Deployed on Arbitrum One, 8 September 2026, and verified.
+const deployed = 'https://arbiscan.io/address/0x01CC7d9FE8da79B61bcc5d3f7e3f0433DCE7E081'
 const fields = [
-	{ label: 'Which market', field: 'poolId', value: 'ETH and ARB', note: 'nowhere else', line: 489 },
-	{ label: 'How wide', field: 'rangeWidthTicks', value: 'narrow, 20 steps', note: 'never wider or narrower', line: 733 },
-	{ label: 'Worth the move', field: 'minImprovementBps', value: 'at least 0.5% closer', note: 'or it stays put', line: 747 },
-	{ label: 'How often', field: 'cooldownSeconds', value: 'once an hour at most', note: 'no churning', line: 473 },
-	{ label: 'How much at once', field: 'maxLiquidity', value: 'a fixed cap', note: 'per move', line: 486 },
-	{ label: 'Until when', field: 'expiry', value: '30 days', note: 'then nothing moves', line: 468 },
-	{ label: 'How much to keep', field: 'minRetainedBps', value: 'at least 90%', note: 'checked after the move', line: 718 },
-	{ label: 'Where the price is', field: '_checkRange', value: 'inside the band', note: 'or it earns nothing', line: 739 },
+	{ label: 'Who may move it', field: 'setAgent', value: 'the one you name', note: 'nobody else, ever', href: `${account}#L232` },
+	{ label: 'Where it may go', field: 'permitVenue', value: 'markets you allow-list', note: 'and nowhere else', href: `${account}#L239` },
+	{ label: 'Putting money to work', field: 'supplyIdle', value: 'into a permitted market', note: 'no recipient in the call', href: `${account}#L258` },
+	{ label: 'Taking it back', field: 'withdrawIdle', value: 'even from one you revoked', note: 'so revoking never traps it', href: `${account}#L272` },
+	{ label: 'Who the account admits', field: '_requireOwnerOrAgent', value: 'you, or the one you named', note: 'and no one else', href: `${account}#L292` },
+	{ label: 'The way out', field: 'escape', value: 'everything, to you', note: 'no upgrade can remove it', href: `${proxy}#L71` },
+	{ label: 'How much a swap may take', field: 'maxOut', value: 'a ceiling you set', note: 'per token, on the way out', href: `${swap}#L60` },
+	{ label: 'Until when', field: 'expiry', value: 'a date you choose', note: 'then the mandate is dead', href: `${swap}#L68` },
 ]
-// The other tabs, illustrative like the mandate: the canvas's numbers for the position and the
-// enclave, the vault's rules, and the fork rehearsal for the evidence.
+// The other tabs, illustrative like the rules: the canvas's numbers for the account and the
+// enclave, the account's own refusals, and the fork rehearsal for the evidence.
 const position = [
-	['Market', 'ETH and ARB, on the Uniswap exchange, on the Arbitrum network'],
-	['Band', 'a narrow band of prices, 20 steps wide'],
-	['Price now', 'inside the band, so your funds are earning'],
-	['Last move', 'kept 94.3% of the funds working, as in the rehearsal'],
-	['Cooldown', 'until 15:32; no move can happen before then'],
-	['Owner', 'you; the funds stay in your wallet and the contract may only move them'],
+	['Where it lives', 'a contract that is yours alone, at an address known before it exists'],
+	['Liquid', 'enough to cover a swap against your mandate, held back on purpose'],
+	['At work', 'the rest, earning in a lending market you allow-listed'],
+	['Owner', 'you; the agent may move it between your own places and nowhere else'],
+	['Ending it', 'remove the agent, or take everything out through a door no upgrade can close'],
 ]
 const enclave = [
-	['Reads', 'the market\'s price and your funds, from inside a sealed environment'],
-	['Checks', 'that the rules it was given are the rules the contract holds; if not, it stops'],
-	['Decides', 'to wait while the price is inside the band or the cooldown runs; otherwise, a new band of your chosen width around the price'],
-	['Sizes', 'the exchange that covers both sides of the new band, and what goes back in'],
+	['Reads', 'your account and every market you permitted, from inside a sealed environment'],
+	['Checks', 'that the rules it was given are the rules you published; if not, it stops before touching the chain'],
+	['Asks', 'the index what your live mandates could still be asked to pay, and holds that much back'],
+	['Decides', 'the split, then whether the difference is worth its own gas'],
 	['Leaves', 'only the decision, signed with a key that never leaves the sealed environment'],
 ]
-const vaultRows = [
-	['Holds', 'a fingerprint of your rules, never the rules themselves'],
-	['Checks', 'that the decision matches your rules, then every rule again: market, width, worth it, how often, cap, expiry, share kept, price inside'],
-	['Moves', 'takes the funds out, exchanges only what the new band needs, puts them back in, all in one step'],
-	['Ends', 'holding nothing; whatever the move did not use goes back to you'],
-	['Refuses', 'anything else; there is no other way in'],
+const accountRows = [
+	['Admits', 'you, or the agent you named — and checks it on every call'],
+	['Refuses', 'any market you did not allow-list, and any caller you did not name'],
+	['Cannot', 'transfer, approve, add a market, or upgrade itself'],
+	['Has no recipient', 'both calls the agent can make end at this account; there is no address to redirect'],
+	['Cannot be walled up', 'the way out lives in the proxy, so replacing the code cannot remove it'],
 ]
 const evidence = [
-	['Rehearsal', 'on a snapshot of the real market, an automated decision moved a real position that had drifted out of its band'],
-	['Kept', '94.3% of the funds working; the rules demanded at least 50%'],
-	['Second run', 'correctly did nothing, because the cooldown was running'],
-	['Tests', `240+ automated tests, ${forkTests} of them on a snapshot of the real market`],
-	['Caveats', 'a snapshot, not the live network; the sealed environment was simulated; nothing is deployed yet'],
+	['Deployed', 'the account factory, the Aqua app and the SwapVM router are live on Arbitrum One and verified'],
+	['Rehearsal', 'on a snapshot of the real market, the sealed program moved 40,000 of 50,000 USDC into real Aave v3'],
+	['Left behind', '10,000 held liquid, and the agent\'s own balance zero — a move that goes nowhere reads like one that worked'],
+	['Through the app', 'opening an account, naming the agent and permitting a market, all checked against the chain rather than the screen'],
+	['Tests', `240+ automated tests, ${forkTests} of them on a snapshot of the real market, and 32 browser checks`],
+	['Caveats', 'the rehearsal is a snapshot, not the live network, and the sealed environment was simulated'],
 ]
 const tabs = [
 	{ id: 'mandate', label: 'Your rules' },
 	{ id: 'position', label: 'Your funds' },
 	{ id: 'enclave', label: 'The decider' },
-	{ id: 'vault', label: 'The contract' },
+	{ id: 'contract', label: 'The contract' },
 	{ id: 'evidence', label: 'Evidence' },
 ]
 const templates = [
-	{ label: 'Earns the most', name: 'Active', copy: 'Stays close to the price and moves often.', chips: ['moves often', 'keeps 90%'] },
-	{ label: 'Moves the least', name: 'Relaxed', copy: 'Moves only when the price has clearly drifted away.', chips: ['moves rarely', 'keeps 95%'] },
-	{ label: 'Keeps the most', name: 'Cautious', copy: 'Moves only when it clearly pays, and keeps almost everything.', chips: ['only when it pays', 'keeps 95%'] },
+	{ label: 'Earns the most', name: 'Active', copy: 'Keeps only what a swap needs on hand, and puts the rest to work.', chips: ['90% at work', 'moves on small gaps'] },
+	{ label: 'Moves the least', name: 'Relaxed', copy: 'Moves only when the difference is clearly worth its own gas.', chips: ['70% at work', 'moves rarely'] },
+	{ label: 'Keeps the most', name: 'Cautious', copy: 'Holds a wide buffer, so a swap never waits on a lending market.', chips: ['50% at work', 'wide buffer'] },
 ]
 ---
 
@@ -67,11 +74,11 @@ const templates = [
 		<p class="lede">You set the rules. The program decides. The contract checks. Nothing moves otherwise.</p>
 		<div class="actions">
 			<a class="btn btn--dark" href={`${docs}/introduction`}>Get Started</a>
-			<a class="btn btn--ghost" href={`${vault}#L724`}>See the Contract</a>
+			<a class="btn btn--ghost" href={deployed}>See the Contract</a>
 		</div>
 
-		<div class="panel" aria-label="An example mandate and the rule the vault enforces for each field">
-			<div class="panel__bar"><i></i><i></i><i></i><span>helico · vault · Arbitrum One · not deployed yet</span></div>
+		<div class="panel" aria-label="An example mandate and the rule the account enforces for each field">
+			<div class="panel__bar"><i></i><i></i><i></i><span>helico · account · Arbitrum One · deployed</span></div>
 			<div class="panel__body">
 				<div class="panel__side" role="tablist" aria-label="Panel sections" data-tabs>
 					{tabs.map((t, i) => (
@@ -82,7 +89,7 @@ const templates = [
 					<div class="panel__head">
 						<div>
 							<div class="panel__title">Your rules · example</div>
-							<div class="panel__sub">The seven rules for your funds, and what each one stops</div>
+							<div class="panel__sub">The rules for your funds, and what each one stops</div>
 						</div>
 						<span class="panel__badge">example</span>
 					</div>
@@ -91,7 +98,7 @@ const templates = [
 							<li>
 								<span class="fields__name">{f.label}</span>
 								<span class="fields__rule"><b>{f.value}</b> <span>{f.note}</span></span>
-								<a class="fields__line" href={`${vault}#L${f.line}`} title={f.field}>line {f.line} ↗</a>
+								<a class="fields__line" href={f.href} title={f.field}>{f.field} ↗</a>
 							</li>
 						))}
 					</ol>
@@ -100,8 +107,8 @@ const templates = [
 				{[
 					{ id: 'position', title: 'Your funds · example', sub: 'Your funds, as the contract and the program see them', rows: position },
 					{ id: 'enclave', title: 'The decider · one run', sub: 'A sealed program that decides, every five minutes', rows: enclave },
-					{ id: 'vault', title: 'The contract · every move', sub: 'It does not take the program\'s word for anything', rows: vaultRows },
-					{ id: 'evidence', title: 'Evidence · what has run', sub: 'On a snapshot of the real market, 2026-09-06', rows: evidence },
+					{ id: 'contract', title: 'The contract · every move', sub: 'It does not take the program\'s word for anything', rows: accountRows },
+					{ id: 'evidence', title: 'Evidence · what has run', sub: 'Deployed on Arbitrum One, and rehearsed on a snapshot of it', rows: evidence },
 				].map((t) => (
 					<div class="panel__main" role="tabpanel" id={`panel-${t.id}`} aria-labelledby={`tab-${t.id}`} hidden>
 						<div class="panel__head">
@@ -120,12 +127,12 @@ const templates = [
 				))}
 			</div>
 		</div>
-		<p class="panel__caption">An example, not a live account. Nothing is deployed yet; the seven rules are the ones the contract stores.</p>
+		<p class="panel__caption">An example account, not a live one — but the contracts are deployed on Arbitrum One, and every rule above links to the line that enforces it.</p>
 
 		<div class="split">
 			<div>
 				<h3>Rules for every style.</h3>
-				<p>Move often or rarely. Keep more or less. You pick once, and the contract stops everything else.</p>
+				<p>Keep more on hand or put more to work. Move on small differences or only on large ones. You pick once, and the contract stops everything else.</p>
 			</div>
 			<a class="btn btn--ghost" href={`${docs}/your-rules`}>About the Rules</a>
 		</div>

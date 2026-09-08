@@ -5,9 +5,11 @@ import { forkTests, solidityTests } from '../../lib/solidity-tests'
 const repo = 'https://github.com/0xHelico/helico'
 // Reading about Helico goes to the docs site; looking at the code goes to GitHub.
 const docs = 'https://docs.helico.site/docs'
-// Read from the vault source at build time, so the page shows the function as this checkout has it.
-const source = readFileSync(new URL('../../../../../contracts/src/HelicoVault.sol', import.meta.url), 'utf8')
-const from = source.indexOf('    function _checkRange(')
+// Read from the account's source at build time, so the page shows the function as this checkout
+// has it. `withdrawIdle` is the one worth showing: it is the rule that revoking a market closes
+// the way in and leaves the way out open, which is the difference between a limit and a trap.
+const source = readFileSync(new URL('../../../../../contracts/src/HelicoAccount.sol', import.meta.url), 'utf8')
+const from = source.indexOf('    function withdrawIdle(')
 const to = source.indexOf('\n    }\n', from) + '\n    }'.length
 const check = source.slice(from, to).replace(/^ {4}/gm, '')
 // The real line number of the first line in this checkout, for the gutter. The link below
@@ -24,16 +26,16 @@ const packages = [
 	},
 	{
 		name: '@helico/plugin-cre',
-		stat: '208',
+		stat: '242',
 		unit: 'tests',
 		copy: 'Decides, sizes, and signs inside the enclave. The key never leaves it.',
 		href: `${repo}/tree/main/packages/plugins/cre`,
 	},
 	{
-		name: 'HelicoVault',
+		name: 'HelicoAccount',
 		stat: String(solidityTests),
 		unit: 'tests',
-		copy: `Enforces the mandate on chain, with the swap inside its own lock. ${forkTests} of them run on a fork of Arbitrum One.`,
+		copy: `One account per owner, live on Arbitrum One. It admits you or the agent you named, and nobody else. ${forkTests} of these run on a fork of the real chain.`,
 		href: `${repo}/tree/main/contracts`,
 	},
 ]
@@ -50,7 +52,7 @@ const packages = [
 		</div>
 
 		<figure class="code" style={`--start:${startLine - 1}`}>
-			<figcaption>For builders · contracts/src/HelicoVault.sol · <code>_checkRange</code> · <a href={`${repo}/blob/main/contracts/src/HelicoVault.sol`}>open on GitHub ↗</a></figcaption>
+			<figcaption>For builders · contracts/src/HelicoAccount.sol · <code>withdrawIdle</code> · <a href={`${repo}/blob/main/contracts/src/HelicoAccount.sol`}>open on GitHub ↗</a></figcaption>
 			<Code code={check} lang="solidity" theme="dark-plus" />
 		</figure>
 
