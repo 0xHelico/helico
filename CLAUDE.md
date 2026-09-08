@@ -61,6 +61,30 @@ and docking destroys it. `ForkAquaHoldsATokens.t.sol` is the proof and should st
 **The wallet is spent before any lending market.** A swap that does not need the yield layer
 must never be able to fail because of it.
 
+**An app's reach is the ship, and `msg.sender` is what makes that true.** Aqua indexes balances
+by the caller, not by an address the caller supplies:
+
+```solidity
+function pull(address maker, bytes32 strategyHash, address token, uint256 amount, address to) external {
+    Balance storage balance = _balances[maker][msg.sender][strategyHash][token];
+    balance.store(prevBalance - amount.toUint248(), tokensCount);
+    IERC20(token).safeTransferFrom(maker, to, amount);
+}
+```
+
+So a contract cannot claim to be another app, and nothing it does reaches a maker who did not
+ship to *its* address, under *that* hash. That is what makes deploying our own SwapVM router a
+boring sentence rather than an alarming one: a redeployed router is not a door into anybody
+else's position, and it is Aqua's property rather than our promise.
+
+Read the bound exactly, though. Within what a maker shipped to it, an app has **full
+discretion** — `to` is a parameter, so it may send pulled tokens anywhere, and there is no
+active-strategy check: the subtraction underflowing is the only thing that stops an over-pull.
+Shipping to an app is trusting that app with those amounts, and the ship is the whole of the
+trust. Aqua validates nothing about the app it is handed — no registry, no allowlist, no code
+check — which is why `ship` to the wrong address succeeds silently and
+`ForkSwapVMYieldCover.t.sol` measures what that costs rather than arguing about it.
+
 **Refusals are named, and the quote refuses what the swap refuses.** A lending market's own
 limits surface as arithmetic panics from inside it; a caller cannot read those. And a quote
 that answers for a swap that would revert sends an agent to build a transaction that cannot
