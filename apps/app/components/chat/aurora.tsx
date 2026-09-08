@@ -1,6 +1,5 @@
 "use client";
 
-import { useTheme } from "next-themes";
 import { useEffect, useRef } from "react";
 
 /**
@@ -20,27 +19,6 @@ import { useEffect, useRef } from "react";
  * load bearing: a wash this smooth bands badly on 8-bit displays, and the reference has grain
  * for the same reason.
  */
-
-/** The reference's centre column, sampled at 1/88ths and kept as measured. */
-const DARK: [number, string][] = [
-  [0.0, "#bf99e0"],
-  [0.05, "#a677d9"],
-  [0.09, "#8a55cb"],
-  [0.14, "#6e3aba"],
-  [0.18, "#582ca5"],
-  [0.23, "#44238b"],
-  [0.27, "#331b6f"],
-  [0.32, "#241452"],
-  [0.36, "#19103a"],
-  [0.41, "#110a29"],
-  [0.45, "#0b091c"],
-  [0.5, "#090714"],
-  [0.55, "#07050c"],
-  [0.64, "#040407"],
-  [0.77, "#050508"],
-  [0.86, "#08050e"],
-  [1.0, "#10091a"],
-];
 
 /**
  * The same gradation the other way up: the lavender band still arcs down the edges, but it
@@ -76,7 +54,7 @@ const COLUMNS = 48;
 
 export function Aurora({ className }: { className?: string }) {
   const ref = useRef<HTMLCanvasElement>(null);
-  const { resolvedTheme } = useTheme();
+  // Light only. This read the theme and picked a ramp; there is one ramp now.
 
   useEffect(() => {
     const canvas = ref.current;
@@ -89,7 +67,7 @@ export function Aurora({ className }: { className?: string }) {
       return;
     }
 
-    const ramp = resolvedTheme === "light" ? LIGHT : DARK;
+    const ramp = LIGHT;
     const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     let width = 0;
     let height = 0;
@@ -105,7 +83,7 @@ export function Aurora({ className }: { className?: string }) {
         image.data[i] = v;
         image.data[i + 1] = v;
         image.data[i + 2] = v;
-        image.data[i + 3] = resolvedTheme === "light" ? 9 : 15;
+        image.data[i + 3] = 9;
       }
       gctx.putImageData(image, 0, 0);
     }
@@ -177,7 +155,7 @@ export function Aurora({ className }: { className?: string }) {
       cancelAnimationFrame(frame);
       observer.disconnect();
     };
-  }, [resolvedTheme]);
+  }, []);
 
   return (
     <canvas
