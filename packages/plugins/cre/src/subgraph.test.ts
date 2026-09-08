@@ -357,7 +357,7 @@ describe('the accounts the enclave manages', () => {
 	 */
 	test('the configured account is managed even when the index has never heard of it', () => {
 		expect(
-			accountsToManage(A, { known: true, accounts: [B.toLowerCase()], complete: true }),
+			accountsToManage(A, { known: true, accounts: [B.toLowerCase()], complete: true }, 25),
 		).toEqual([A.toLowerCase(), B.toLowerCase()])
 	})
 
@@ -367,16 +367,16 @@ describe('the accounts the enclave manages', () => {
 			accounts: [A.toLowerCase(), B.toLowerCase()],
 			complete: true,
 		}
-		expect(accountsToManage(A, both)).toEqual([A.toLowerCase(), B.toLowerCase()])
+		expect(accountsToManage(A, both, 25)).toEqual([A.toLowerCase(), B.toLowerCase()])
 	})
 
 	test('a checksummed address in config does not become a second account', () => {
 		const lower = { known: true as const, accounts: [A.toLowerCase()], complete: true }
-		expect(accountsToManage(A, lower)).toEqual([A.toLowerCase()])
+		expect(accountsToManage(A, lower, 25)).toEqual([A.toLowerCase()])
 	})
 
 	test('an index that did not answer leaves exactly the configured account', () => {
-		expect(accountsToManage(A, { known: false, reason: 'could not be reached' })).toEqual([
+		expect(accountsToManage(A, { known: false, reason: 'could not be reached' }, 25)).toEqual([
 			A.toLowerCase(),
 		])
 	})
@@ -415,9 +415,30 @@ describe('the accounts the enclave manages', () => {
 	 */
 	test('no anchor and an index that did not answer manages nothing, and says so', () => {
 		const down = { known: false as const, reason: 'could not be reached' }
-		expect(accountsToManage(NONE, down)).toEqual([])
+		expect(accountsToManage(NONE, down, 25)).toEqual([])
 		expect(accountsNote([], down, NONE)).toBe(
 			'0 accounts: nothing to manage, the subgraph could not be reached',
+		)
+	})
+
+	/**
+	 * `open` is permissionless, so anyone may create accounts faster than a run can read them.
+	 * The bound is why the anchor exists at all beyond an outage: it is added first, so the
+	 * account a demo depends on cannot be crowded out of its own run by strangers.
+	 */
+	test('the limit bounds the run, and the anchor is inside it rather than subject to it', () => {
+		const many = Array.from({ length: 5 }, (_, i) => `0x${(i + 1).toString().padStart(40, '0')}`)
+		const indexed = { known: true as const, accounts: many, complete: true }
+		expect(accountsToManage(A, indexed, 3)).toEqual([A.toLowerCase(), many[0], many[1]])
+		expect(accountsToManage(NONE, indexed, 3)).toEqual([many[0], many[1], many[2]])
+	})
+
+	test('what the limit left out is said, never silently dropped', () => {
+		const many = Array.from({ length: 5 }, (_, i) => `0x${(i + 1).toString().padStart(40, '0')}`)
+		const indexed = { known: true as const, accounts: many, complete: true }
+		const managed = accountsToManage(NONE, indexed, 3)
+		expect(accountsNote(managed, indexed, NONE)).toBe(
+			"3 accounts: 5 indexed, 2 beyond this run's limit",
 		)
 	})
 

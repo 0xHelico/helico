@@ -91,6 +91,19 @@ export const configShape = {
 	 */
 	account: hex(20).default(zeroAddress),
 	/**
+	 * The most accounts one run will read, decide about and rank.
+	 *
+	 * `evaluate` costs several `eth_call`s and one confidential HTTP request per account, and
+	 * `open` is permissionless — so without a bound, anyone can grow what a cron tick has to do
+	 * before it signs anything. That is not a way to take funds, it is a way to crowd an account
+	 * out of its own run, which is why the anchor above is added before this limit is applied.
+	 *
+	 * Twenty-five because it is comfortably more than this will hold during judging and
+	 * comfortably less than a run can time out on. Raise it when a run demonstrably finishes with
+	 * room, not before.
+	 */
+	maxAccountsPerRun: z.number().int().positive().max(1000).default(25),
+	/**
 	 * The lending markets to choose between, in the owner's own order — which is what breaks a
 	 * tie between two paying the same. The account must already permit each of them; the enclave
 	 * reads the allowlist rather than assuming it, and a market it does not permit is skipped
@@ -424,7 +437,7 @@ export const onCronTrigger = async (runtime: TeeRuntime<Config>): Promise<string
 	//    account managed on the first run after a deploy — the index lags the chain by a few
 	//    blocks, and `subgraphUrl` may be empty, which is still a supported configuration.
 	const discovered = readManagedAccounts(runtime, config)
-	const managed = accountsToManage(config.account, discovered)
+	const managed = accountsToManage(config.account, discovered, config.maxAccountsPerRun)
 	const fleet = config.subgraphUrl ? ` [${accountsNote(managed, discovered, config.account)}]` : ''
 
 	// 4. Decide for each of them, and act on one.
@@ -489,7 +502,16 @@ export const onCronTrigger = async (runtime: TeeRuntime<Config>): Promise<string
 			name: config.domainName,
 			version: config.domainVersion,
 			chainId: config.chainId as number,
-			verifyingContract: config.account as Address,
+			// **The account that acts, not the one config names.** `HelicoAccount.domainSeparator`
+			// is built from `address(this)`, so a statement signed under any other address
+			// recovers to something that is not the agent and the account refuses it. Since
+			// `account` now defaults to the zero address, using it here would sign every
+			// ordinary run against `0x0000…0000` and no signature would ever be usable.
+			//
+			// Caught by @rifkyeasy in review. The test that had covered signing agreed with the
+			// bug rather than measuring it: it built its expected domain from the same
+			// `config.account` expression the code used, so both were wrong together.
+			verifyingContract: acting.account as Address,
 		}
 		const { signature, signer } = await signIdleMove(key, domain, auth)
 		// The statement is public by design once relayed; it is what the DON attests to.

@@ -215,17 +215,27 @@ export function readManagedAccounts(
  * Lower-cased and de-duplicated, because the same account reaching this from both sources with
  * different capitalisation would be read twice and signed for twice.
  */
-export function accountsToManage(configured: string, discovered: ManagedAccounts): string[] {
+export function accountsToManage(
+	configured: string,
+	discovered: ManagedAccounts,
+	limit: number,
+): string[] {
 	const anchor = configured.toLowerCase()
 	// The zero address means no anchor was set, which is the ordinary configuration: the index
 	// sees every account the factory opened, so naming one here is not how an account gets
 	// managed. Including it would have the run read state for an address with no code, decide
 	// about nothing, and count it in the fleet — three lies for the price of a default.
+	//
+	// The anchor is added **before** the limit is applied, which is its second job and the
+	// reason to set one at all: `open` is permissionless, so anyone may create accounts faster
+	// than a run can read them, and without this the account a demo depends on could be pushed
+	// out of its own run by strangers. Raised by @rifkyeasy in review of #212.
 	const anchored = anchor !== ZERO_ADDRESS
 	const seen = new Set<string>(anchored ? [anchor] : [])
 	const all = anchored ? [anchor] : []
 	if (discovered.known) {
 		for (const account of discovered.accounts) {
+			if (all.length >= limit) break
 			if (seen.has(account)) continue
 			seen.add(account)
 			all.push(account)
@@ -254,7 +264,18 @@ export function accountsNote(
 	const from = anchored
 		? `${discovered.accounts.length} indexed plus the one in config`
 		: `${discovered.accounts.length} indexed`
-	return `${managed.length} account${plural}: ${from}${page}`
+	// What a limit left out is said, never silently dropped: a run that manages 25 of 200
+	// accounts and reports 25 is indistinguishable from a run where 25 is all there is.
+	//
+	// Counted as a set difference and not `indexed + anchor - managed`, because that arithmetic
+	// reports de-duplication as truncation — an anchor the index also returned would be counted
+	// twice on the way in and once on the way out, and the note would claim an account was
+	// dropped on exactly the runs where nothing was.
+	const reachable = new Set(discovered.accounts.map((a) => a.toLowerCase()))
+	if (anchored) reachable.add(configured.toLowerCase())
+	const capped = reachable.size - managed.length
+	const over = capped > 0 ? `, ${capped} beyond this run's limit` : ''
+	return `${managed.length} account${plural}: ${from}${over}${page}`
 }
 
 /**

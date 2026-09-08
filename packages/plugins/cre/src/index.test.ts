@@ -92,6 +92,7 @@ const config: Config = {
 	policyHash: committedHash,
 	gasLimit: '1500000',
 	deadlineSeconds: 600,
+	maxAccountsPerRun: 25,
 }
 const now = 1_700_000_000
 
@@ -109,6 +110,8 @@ type VenueFixture = {
 type Chain = {
 	agent?: Address
 	idle: bigint
+	/** Per-account idle balances, for runs where more than one account is read. */
+	idleByAccount?: Record<string, bigint>
 	nonce?: bigint
 	venues: VenueFixture[]
 }
@@ -150,8 +153,16 @@ const handlers = (c: Chain) => {
 			word(marketAt(to).venueLiquidity ?? 29_318_183_885_841n),
 		[sel('function UNDERLYING_ASSET_ADDRESS()')]: (_: Hex, to: string) =>
 			word(behindReceipt(to).receiptAsset ?? USDC),
-		[sel('function balanceOf(address)')]: (_: Hex, to: string) =>
-			word(to.toLowerCase() === USDC.toLowerCase() ? c.idle : behindReceipt(to).supplied),
+		// The asset's `balanceOf` dispatches on the **argument** as well as the contract, so two
+		// accounts in one run can hold different amounts. Without that every account reads
+		// identically, ties go to whichever `largestMove` sees first, and no test ever signs for
+		// an account the index discovered — which is how a signature bound to the wrong account
+		// stayed green through 236 of them.
+		[sel('function balanceOf(address)')]: (data: Hex, to: string) => {
+			if (to.toLowerCase() !== USDC.toLowerCase()) return word(behindReceipt(to).supplied)
+			const who = `0x${data.slice(-40)}`.toLowerCase()
+			return word(c.idleByAccount?.[who] ?? c.idle)
+		},
 		[sel('function getReserveData(address)')]: (_: Hex, to: string) =>
 			encodeAbiParameters(
 				parseAbiParameters(
@@ -842,6 +853,72 @@ describe('signature delivery', () => {
 	const signing: Partial<Config> = { delivery: 'signature', chainId: 42_161 }
 	const withKey = { ...secrets, AGENT_KEY: agentKey }
 	const chain: Chain = { ...allIdle, nonce: 7n }
+	const SUBGRAPH_URL =
+		'https://api.studio.thegraph.com/query/1758877/helico-arbitrum-one/version/latest'
+	const RICH_ACCOUNT = '0xa11ce00000000000000000000000000000000001'
+
+	/**
+	 * The test @rifkyeasy asked for, and it fails on the line he found.
+	 *
+	 * `HelicoAccount.domainSeparator()` is `AccountAuth.domainSeparator(address(this))` — the
+	 * account verifies against **itself** — so a statement signed under any other address
+	 * recovers to something that is not the agent, and the account refuses it. Signing used
+	 * `config.account`, which is the anchor and now defaults to the zero address, so every
+	 * ordinary run would have signed against `0x0000…0000`.
+	 *
+	 * The signing test above could not see it: it built its expected domain from the same
+	 * `config.account` expression the code used, so both were wrong together, and every fleet
+	 * test gave its accounts identical balances so the anchor won every tie. This one gives the
+	 * discovered account more to move, and recovers against **that** account's domain.
+	 */
+	test('signs for the account that acts, under that account’s own domain', async () => {
+		const { result, reports } = await run(
+			{
+				...allIdle,
+				nonce: 7n,
+				idleByAccount: { [config.account.toLowerCase()]: usdc(200), [RICH_ACCOUNT]: usdc(5_000) },
+			},
+			{ ...signing, subgraphUrl: SUBGRAPH_URL },
+			{
+				secrets: withKey,
+				graphAccountsBody: JSON.stringify({
+					data: { accounts: [{ id: RICH_ACCOUNT, owner: RICH_ACCOUNT }] },
+				}),
+			},
+		)
+
+		// The richer account is the one that moves, which is what puts the domain under test.
+		const auth = JSON.parse(result.slice(result.indexOf('{'))) as { signature: Hex }
+		const [p, hash, nonce, sig] = decodeAbiParameters(
+			[idleMoveParamsAbi, { type: 'bytes32' }, { type: 'uint256' }, { type: 'bytes' }],
+			bytesToHex(Buffer.from(reports[0] ?? '', 'base64')),
+		)
+		expect(p.account.toLowerCase()).toBe(RICH_ACCOUNT)
+		expect(sig).toBe(auth.signature)
+
+		const domainFor = (verifyingContract: Address) => ({
+			name: 'HelicoAccount',
+			version: '1',
+			chainId: 42_161,
+			verifyingContract,
+		})
+		expect(
+			await recoverIdleMoveSigner(
+				domainFor(RICH_ACCOUNT as Address),
+				{ params: p, policyHash: hash, nonce },
+				sig,
+			),
+		).toBe(agent)
+		// And not under the anchor's, which is the domain the bug used. Without this the test
+		// would pass for a signature bound to either.
+		expect(
+			await recoverIdleMoveSigner(
+				domainFor(config.account as Address),
+				{ params: p, policyHash: hash, nonce },
+				sig,
+			),
+		).not.toBe(agent)
+	})
 
 	test('signs the move with the agent key and lets only the statement out', async () => {
 		const { result, writes, reports, secretRequests } = await run(chain, signing, {
