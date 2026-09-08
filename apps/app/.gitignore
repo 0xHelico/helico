@@ -7,3 +7,14 @@ next-env.d.ts
 .DS_Store
 .vercel
 tsconfig.tsbuildinfo
+
+# Written by `next dev` on every run, and swept into two feature commits by `git add -A` before
+# this line existed. AGENTS.md is Next 16 telling an agent its APIs differ from the training
+# data, and CLAUDE.md is one line pointing at it.
+#
+# Ignored rather than committed because apps/app/CLAUDE.md changes the instructions every agent
+# reads in this directory, and that should be a decision somebody makes on purpose rather than a
+# passenger on whatever feature branch ran the dev server last. Their own text argues for
+# committing them; that argument is worth having, and this line is where to start it.
+AGENTS.md
+CLAUDE.md

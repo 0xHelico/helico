@@ -4,7 +4,6 @@ import { headers } from "next/headers";
 import type { ReactNode } from "react";
 import { Toaster } from "sonner";
 import { AppShell } from "@/components/chat/app-shell";
-import { ThemeProvider } from "@/components/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppKitProvider } from "@/context";
 import { HelicoSessionProvider } from "@/hooks/use-helico-session";
@@ -67,23 +66,18 @@ export default async function RootLayout({
   const collapsed = cookies?.includes("sidebar_state=false") ?? false;
 
   return (
-    <html className={inter.variable} lang="en" suppressHydrationWarning>
+    <html className={inter.variable} lang="en">
       <body className="antialiased">
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          disableTransitionOnChange
-          enableSystem
-        >
-          <AppKitProvider cookies={cookies}>
-            <HelicoSessionProvider>
-              <TooltipProvider>
-                <AppShell defaultOpen={!collapsed}>{children}</AppShell>
-              </TooltipProvider>
-            </HelicoSessionProvider>
-          </AppKitProvider>
-          <Toaster position="top-center" />
-        </ThemeProvider>
+        {/* Light only. Nothing sets `.dark`, so the `dark:` utilities in the chat compile
+            and never match — see the note in globals.css. */}
+        <AppKitProvider cookies={cookies}>
+          <HelicoSessionProvider>
+            <TooltipProvider>
+              <AppShell defaultOpen={!collapsed}>{children}</AppShell>
+            </TooltipProvider>
+          </HelicoSessionProvider>
+        </AppKitProvider>
+        <Toaster position="top-center" />
       </body>
     </html>
   );
