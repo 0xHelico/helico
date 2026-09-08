@@ -56,7 +56,7 @@ on Etherscan's v2 API, so `--chain-id 42161` is all that points it at Arbiscan.
 
 | Contract | Address | Answers | Source |
 |---|---|---|---|
-| `HelicoAquaSwapVMRouter` | [`0xb8c9f14d46bf387a6d70d796df30f11a0eb8c3be`](https://arbiscan.io/address/0xb8c9f14d46bf387a6d70d796df30f11a0eb8c3be) | `AQUA()` → `0x1111113CCf…`, `AQUA_YIELD_COVER_OPCODE()` → `34` | **not verified — see below** |
+| `HelicoAquaSwapVMRouter` | [`0xb8c9f14d46bf387a6d70d796df30f11a0eb8c3be`](https://arbiscan.io/address/0xb8c9f14d46bf387a6d70d796df30f11a0eb8c3be) | `AQUA()` → `0x1111113CCf…`, `AQUA_YIELD_COVER_OPCODE()` → `34` | verified |
 
 ```
 tx 0x074ad590cc29214e2a12667f538f8a0fb1d1cb87d39b4a4e878340abfa943ab7
@@ -71,28 +71,45 @@ router apart from 1inch's `"1inch SwapVM v1.0"` / `"1.0.2"` at
 above, not to that one** — see the runbook for what happens if you do not, and the fork test that
 measures it.
 
-### Why this one is not verified on Arbiscan
+### Verifying it took six attempts, and the sixth is the one to remember
 
-Three attempts, all `Compiled contract deployment bytecode does NOT match`. The deployment itself
-is faithful, which was checked rather than assumed:
+Every submission came back `Compiled contract deployment bytecode does NOT match`, while the
+other three verified first time with the same compiler and key. The settings were not the
+problem — they were copied from the artifact's own metadata and still failed.
 
-- the creation bytecode in the deploy transaction **starts with our local artifact's creation
-  bytecode exactly**, and the tail is the constructor arguments, byte for byte;
-- the runtime differs from the local artifact by ~377 bytes, and the artifact declares **16
-  immutable slots** — 512 bytes of placeholder that the constructor fills in. That difference is
-  the immutables and nothing else.
+**Sourcify named it.** Its rejection carries an error code the Etherscan API does not:
 
-So the bytecode on chain came from this repository. What Arbiscan cannot do is recompile it: this
-is the only contract built with **`via_ir` and `optimizer_details.yul`**, which the other three
-are not, and they verified on the first attempt with the same compiler and key.
+```
+extra_file_input_bug
+It seems your contract's metadata hashes match but not the bytecodes.
+Use the original full standard JSON input file that has all files including
+those not needed by this contract.
+```
 
-Two ways out, neither taken yet because both are choices rather than fixes:
+The metadata hash matching while the bytecode does not is the whole diagnosis. **solc's IR
+pipeline produces different bytecode depending on which files are in the compilation unit**, even
+when the extra files contribute nothing to the contract. Foundry compiles the whole project — 155
+sources here — while `forge verify-contract --show-standard-json-input` submits the dependency
+closure, 64. Same settings, same solc, 50 bytes of difference.
 
-1. **Leave it, and point at the build.** `FOUNDRY_PROFILE=swapvm forge build` from `main`
-   reproduces it; a judge can check the artifact against the chain the same way this section did.
-2. **Redeploy with settings Etherscan can reproduce** — pinning `evm_version` and dropping the
-   yul details. Costs 0.00022 ETH and a new address, and the address is already written down in
-   two places.
+The fix is to submit what was actually compiled. `out-swapvm/build-info/*.json` carries
+`source_id_to_path` for the real unit; rebuilding the standard JSON from all 155 and compiling it
+locally reproduced the deployed creation bytecode **exactly**, and Arbiscan then accepted it on
+the first try.
+
+This only bites contracts built with `via_ir`, which is why the other three never met it.
+
+### The deployment was faithful, and that was checked before any of this
+
+Worth keeping separate from the verification story, because it is what made it safe to keep
+trying rather than assume a bad deploy:
+
+- the creation bytecode in the deploy transaction **starts with the local artifact's exactly**,
+  and the tail is the constructor arguments byte for byte;
+- the runtime differs by ~377 bytes against **16 declared immutable slots** — 512 bytes of
+  placeholder the constructor fills;
+- a clean `FOUNDRY_PROFILE=swapvm forge build` from `main` reproduces the deployed creation
+  bytecode, checked by deleting `out-swapvm` and rebuilding.
 
 ### Deliberately not deployed
 
