@@ -64,6 +64,24 @@ of 0.00005 ETH, so the agent's balance covers hundreds.
 - [ ] `forge test`, the fork suite and `check-storage-layout.py` green on `main`
 - [ ] Deployer funded on Arbitrum One (chain id 42161)
 
+### How much, measured rather than guessed
+
+@rifkyeasy ran every step above on a fork and totalled the gas. At Arbitrum One's price when he
+measured it — `cast gas-price` said **0.02 gwei**:
+
+| | gas | at 0.02 gwei |
+|---|---|---|
+| implementation + factory | 2,845,193 | 0.000057 ETH |
+| open, permit, setAgent | ~300,000 | 0.000006 ETH |
+| `HelicoMandateSwap` | ~400,000 | 0.000008 ETH |
+| SwapVM router | ~5,000,000 | 0.000100 ETH |
+| **everything** | | **~0.00017 ETH** |
+
+**0.005 ETH covers all of it at twenty-five times that gas price.** Fund more than the estimate —
+a script that runs out of gas halfway is a bad way to learn the number — but not by two orders of
+magnitude, which is what "0.02 ETH" was. That figure gated this deploy for four days and nobody
+had measured it.
+
 ## 1. The account factory
 
 ```bash
@@ -106,6 +124,27 @@ cast send $ACCOUNT 'setAgent(address)' $AGENT \
 cast call $ACCOUNT 'agent()(address)' --rpc-url $ARBITRUM_RPC_URL
 cast call $ACCOUNT 'permittedVenue(address)(bool)' 0x794a61358D6845594F94dc1DB02A252b5b4814aD --rpc-url $ARBITRUM_RPC_URL
 ```
+
+### And two calls that prove it did what it was for
+
+Added after @rifkyeasy rehearsed everything above on a fork and pointed out that the runbook
+stops one step early. A deployment that leaves you unable to answer *"can the agent act, and can
+I get out"* is not finished, and both answers are one `cast send` each.
+
+```bash
+# as the agent — the whole product in one call, and the owner never signs for it
+cast send $ACCOUNT 'supplyIdle(address,address,uint256)' $AAVE_POOL $USDC <amount> \
+  --rpc-url $ARBITRUM_RPC_URL --private-key "$AGENT_KEY"
+
+# as the owner — the door nobody can wall up, with the aToken in the list
+cast send $ACCOUNT 'escape(address[])' "[$AUSDC]" \
+  --rpc-url $ARBITRUM_RPC_URL --private-key "$OWNER_KEY"
+```
+
+On the fork, `escape` returned **40,000.000099 aUSDC against 40,000 supplied**. The position
+comes home with what it earned, because an aToken is an ERC-20 the account holds and `escape`
+takes a token list — nothing has to be unwound first and none of the yield is stranded. Do this
+with a small amount before trusting it with a real one.
 
 ## 3. Fill in the workflow's config
 
