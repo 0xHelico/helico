@@ -21,7 +21,7 @@ toolchain, the SQLite driver is pure Go.
 | `BE_ADDR` | `:8787` | listen address |
 | `BE_DB_PATH` | `data/helico.db` | the SQLite file; its directory is created |
 | `BE_ADMIN_TOKEN` | empty | bearer token for writes; empty refuses writes with `503` |
-| `BE_CORS_ORIGINS` | `http://localhost:4321,http://localhost:4322` | browser origins allowed in |
+| `BE_CORS_ORIGINS` | `http://localhost:3000,http://localhost:3100,http://localhost:4321,http://localhost:4322` | browser origins allowed in |
 | `BE_CONTENT_DIR` | `content` | Markdown to seed from; missing means no seeding |
 | `BE_REQUEST_TIMEOUT` | `10s` | one request, end to end |
 | `BE_LLM_API_KEY` | empty | **empty turns the swap conversation off**, with a `503` that says so |
@@ -30,12 +30,17 @@ toolchain, the SQLite driver is pure Go.
 | `BE_LLM_TIMEOUT` | `8s` | one call to the model; must be shorter than `BE_REQUEST_TIMEOUT`, or startup refuses it |
 | `BE_SWAP_RATE_PER_MIN` | `6` | swap messages one address may send per minute |
 | `BE_SWAP_DAILY_MAX` | `500` | the process's ceiling on model calls per day |
+| `BE_SESSION_SECRET` | empty | signs the session cookie; empty keeps a generated key beside the database, and says so |
+| `BE_SUBGRAPH_URL` | Helico's Studio deployment | the subgraph `POST /api/graph` stands in front of |
+| `BE_GRAPH_TTL` | `60s` | how long a subgraph answer is served before it is asked for again |
+| `BE_GRAPH_RATE_PER_MIN` | `120` | subgraph reads one address may make per minute |
 
 ## Routes
 
 | Route | Auth | Answer |
 |---|---|---|
 | `GET /healthz` | | `{"status":"ok"}` |
+| `POST /api/graph` | | a cached subgraph read: same `{query, variables}` body and same JSON as Studio, `X-Cache: hit\|miss`. Only the operations the app sends (`Mandates`, `Movements`) are forwarded — anything else is `403` |
 | `GET /api/posts?limit=20&cursor=` | | `{items, next_cursor}`, newest first, keyset cursor, `ETag` |
 | `GET /api/posts/{slug}` | | the post with `html` and `markdown`; `ETag`, `304` on `If-None-Match` |
 | `PUT /api/posts/{slug}` | bearer | create (`201`) or replace (`200`) from `{title, summary, author, cover, tags, markdown, published_at}` |

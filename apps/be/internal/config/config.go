@@ -41,6 +41,16 @@ type Config struct {
 	// SwapDailyMax is the whole process's ceiling on model calls per day, because each one
 	// costs money.
 	SwapDailyMax int
+	// SubgraphURL is the subgraph the cache stands in front of. The default is the same Studio
+	// deployment packages/plugins/thegraph names; that package is the source of truth for it,
+	// and this is a copy so a deployment can be pointed elsewhere without a rebuild.
+	SubgraphURL string
+	// GraphTTL is how long an answer is served before it is asked for again. Aqua movements are
+	// minutes-old news, so a minute of staleness costs nothing and takes the repeated load off a
+	// Studio endpoint that is rate-limited per month.
+	GraphTTL time.Duration
+	// GraphRatePerMin is how many subgraph reads one address may make in a minute.
+	GraphRatePerMin int
 }
 
 // Lookup is the shape of os.LookupEnv, so tests can feed a map.
@@ -53,6 +63,10 @@ type Lookup func(key string) (string, bool)
 // The dapp's :3000 was missing for as long as this list existed, so a local page could not even
 // read the session endpoint — the browser refused the response before the cookie was ever the
 // question. :3100 is here so `bun run e2e` reaches a local backend without being told to.
+// defaultSubgraph is Helico's Aqua deployment on Studio. It carries no key — a judge can curl it
+// — so it is a default rather than a secret.
+const defaultSubgraph = "https://api.studio.thegraph.com/query/1758877/helico-arbitrum-one/version/latest"
+
 const devOrigins = "http://localhost:3000,http://localhost:3100,http://localhost:4321,http://localhost:4322"
 
 func FromEnv(lookup Lookup) (Config, error) {
@@ -76,6 +90,9 @@ func FromEnv(lookup Lookup) (Config, error) {
 		LLMTimeout:      8 * time.Second,
 		SwapRatePerMin:  6,
 		SwapDailyMax:    500,
+		SubgraphURL:     get("BE_SUBGRAPH_URL", defaultSubgraph),
+		GraphTTL:        60 * time.Second,
+		GraphRatePerMin: 120,
 	}
 	for _, o := range strings.Split(get("BE_CORS_ORIGINS", devOrigins), ",") {
 		if o = strings.TrimSpace(o); o != "" {
@@ -87,7 +104,7 @@ func FromEnv(lookup Lookup) (Config, error) {
 		key string
 		dst *time.Duration
 		set *bool
-	}{{"BE_REQUEST_TIMEOUT", &cfg.RequestTimeout, nil}, {"BE_LLM_TIMEOUT", &cfg.LLMTimeout, &llmTimeoutSet}} {
+	}{{"BE_REQUEST_TIMEOUT", &cfg.RequestTimeout, nil}, {"BE_LLM_TIMEOUT", &cfg.LLMTimeout, &llmTimeoutSet}, {"BE_GRAPH_TTL", &cfg.GraphTTL, nil}} {
 		if v, ok := lookup(d.key); ok && strings.TrimSpace(v) != "" {
 			parsed, err := time.ParseDuration(strings.TrimSpace(v))
 			if err != nil {
@@ -102,7 +119,7 @@ func FromEnv(lookup Lookup) (Config, error) {
 	for _, n := range []struct {
 		key string
 		dst *int
-	}{{"BE_SWAP_RATE_PER_MIN", &cfg.SwapRatePerMin}, {"BE_SWAP_DAILY_MAX", &cfg.SwapDailyMax}} {
+	}{{"BE_SWAP_RATE_PER_MIN", &cfg.SwapRatePerMin}, {"BE_SWAP_DAILY_MAX", &cfg.SwapDailyMax}, {"BE_GRAPH_RATE_PER_MIN", &cfg.GraphRatePerMin}} {
 		if v, ok := lookup(n.key); ok && strings.TrimSpace(v) != "" {
 			parsed, err := strconv.Atoi(strings.TrimSpace(v))
 			if err != nil || parsed < 0 {

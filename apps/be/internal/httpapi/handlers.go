@@ -16,6 +16,7 @@ import (
 
 	"github.com/0xHelico/helico/apps/be/internal/blog"
 	"github.com/0xHelico/helico/apps/be/internal/chat"
+	"github.com/0xHelico/helico/apps/be/internal/graph"
 	"github.com/0xHelico/helico/apps/be/internal/session"
 	"github.com/0xHelico/helico/apps/be/internal/swap"
 )
@@ -42,6 +43,11 @@ type Options struct {
 	// SwapRatePerMin and SwapDailyMax bound what the paid model costs.
 	SwapRatePerMin int
 	SwapDailyMax   int
+	// Graph caches subgraph reads. Nil means the route is not served and the browser goes
+	// straight to Studio, which is what it did before this existed.
+	Graph *graph.Cache
+	// GraphRatePerMin bounds what one address may spend of the shared subgraph quota.
+	GraphRatePerMin int
 }
 
 // cacheControl is what a CDN or browser may do with a read: keep it for a minute, serve it
@@ -65,13 +71,15 @@ func New(svc *blog.Service, opt Options) http.Handler {
 		panic(err)
 	}
 	api := &api{
-		svc:     svc,
-		opt:     opt,
-		chats:   opt.Chats,
-		nonces:  session.NewNonces(opt.NonceTTL),
-		cookies: cookies,
-		now:     opt.Now,
-		limit:   newLimiter(opt.SwapRatePerMin, opt.SwapDailyMax),
+		svc:        svc,
+		opt:        opt,
+		chats:      opt.Chats,
+		nonces:     session.NewNonces(opt.NonceTTL),
+		cookies:    cookies,
+		now:        opt.Now,
+		limit:      newLimiter(opt.SwapRatePerMin, opt.SwapDailyMax),
+		graph:      opt.Graph,
+		graphLimit: newLimiter(opt.GraphRatePerMin, 0),
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", api.health)
@@ -99,6 +107,10 @@ func New(svc *blog.Service, opt Options) http.Handler {
 	// The app asking rather than being told is what stops the two drifting apart — and an
 	// unconfigured key becomes something the page can say, rather than a 503 on send.
 	mux.HandleFunc("GET /api/swap/config", api.swapConfig)
+
+	// The subgraph, cached. A GraphQL endpoint like the one it stands in front of, so the client
+	// that speaks to Studio speaks to this by changing a URL and nothing else.
+	mux.HandleFunc("POST /api/graph", api.graphQuery)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { writeProblem(w, http.StatusNotFound, "") })
 
 	var h http.Handler = mux
@@ -121,6 +133,10 @@ type api struct {
 	cookies *session.Cookies
 	now     func() time.Time
 	limit   *limiter
+	graph   *graph.Cache
+	// A budget of its own. Sharing the swap limiter would let a page that reads mandates spend
+	// the allowance for the endpoint that costs money.
+	graphLimit *limiter
 }
 
 // postView is the JSON shape of a post. Full includes the body; list items omit it.
