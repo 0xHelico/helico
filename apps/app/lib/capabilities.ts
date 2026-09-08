@@ -26,25 +26,32 @@ export type Ask = {
   detail: string;
 };
 
-/** Authority, held over time. The first is real; the rest are the direction and are inert. */
+/**
+ * Authority, held over time. Exactly one is wired to a contract; the rest are the direction.
+ *
+ * The order changed on 8 September, when CRE moved off re-centring Uniswap v4 ranges and onto
+ * the yield layer. The list leads with what the agent is actually built to do now.
+ */
 export const GRANTS: Grant[] = [
+  {
+    name: "Put idle capital to work",
+    glyph: "leaf",
+    detail:
+      "Move what is sitting still into a lending market you allow-listed, and take it back out. The agent has no say in where it goes: neither call takes a recipient, so both ends are your own account.",
+    wired: false,
+  },
   {
     name: "Keep a position in range",
     glyph: "arcs",
     detail:
-      "Re-centre your Uniswap v4 range when the price drifts. Decided in an enclave, refused by the vault if it falls outside the limits you set.",
+      "Re-centre a Uniswap v4 range when the price drifts. Built and tested; it is no longer what the agent is pointed at.",
     wired: true,
   },
   {
     name: "Lend and borrow",
     glyph: "bank",
-    detail: "Supply and borrow under a health-factor floor the vault enforces.",
-    wired: false,
-  },
-  {
-    name: "Earn and yield",
-    glyph: "leaf",
-    detail: "Enter a yield position whose maturity cannot outlast the mandate.",
+    detail:
+      "Supply and borrow under a health-factor floor the account enforces.",
     wired: false,
   },
   {
