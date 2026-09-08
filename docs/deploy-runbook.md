@@ -450,7 +450,9 @@ the source Arbiscan would verify against and it is not about to move underneath 
 It and the SwapVM router are the two that can go out while the account questions are still open,
 because nothing above depends on either and neither depends on anything above.
 
-## Do not deploy
+## Deleted, so there is nothing to decide
 
-`HelicoVault` and the Uniswap v4 path. CRE no longer drives it, and the frontend's move off it is
-[#175](https://github.com/0xHelico/helico/issues/175).
+`HelicoVault` and the Uniswap v4 contracts were removed on 8 September 2026. They were never
+deployed, CRE had moved to the yield layer, and the Uniswap v4 work was never a submitted track.
+The frontend still imports `packages/plugins/uniswap` — that removal is
+[#175](https://github.com/0xHelico/helico/issues/175) and belongs to whoever moves the app.

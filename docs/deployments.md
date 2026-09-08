@@ -186,10 +186,12 @@ accounts: 0   ← correct; none opened yet
 Queried at `…/helico-arbitrum-one/version/latest`, which is what
 `config.production.json` names, so a new version is picked up without editing the workflow.
 
-### Deliberately not deployed
+### Deleted rather than left undeployed
 
-- **`HelicoVault` and the Uniswap v4 path.** CRE no longer drives it. See
-  [#175](https://github.com/0xHelico/helico/issues/175).
+- **`HelicoVault` and the Uniswap v4 contracts**, on 8 September 2026. Never deployed, CRE had
+  moved to the yield layer, and Uniswap v4 was never a submitted track — so "deliberately not
+  deployed" was a standing explanation for code nobody was going to run. The frontend's move off
+  `packages/plugins/uniswap` is [#175](https://github.com/0xHelico/helico/issues/175).
 
 ### Not done yet
 

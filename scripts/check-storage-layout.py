@@ -5,11 +5,14 @@ The vault is UUPS behind a proxy, so its storage outlives its code. Inserting a 
 middle shifts every slot after it, and the upgraded implementation then reads the wrong ones —
 silently, and unrecoverably except by another upgrade.
 
-This is not hypothetical here: adding `nonces` mid-declaration moved `poolManager` from slot 4
-to slot 5. Nothing was deployed, so nothing broke, but nothing would have noticed either. CI
-ran `fmt`, `build` and `test`, none of which sees a layout, and the only upgrade-test target is
-`VaultV2 is HelicoVault` — layout-identical by construction, so those tests can never detect a
-shift no matter how many are added.
+This is not hypothetical here. In `HelicoVault`, since deleted, adding `nonces` mid-declaration
+moved `poolManager` from slot 4 to slot 5. Nothing was deployed, so nothing broke, but nothing
+would have noticed either: CI ran `fmt`, `build` and `test`, none of which sees a layout, and the
+only upgrade-test target was a `V2` that inherited the layout it was meant to be checking — so
+those tests could never detect a shift, no matter how many were added.
+
+That contract is gone and the lesson is not. A test that inherits the layout it checks proves
+nothing about the layout, which is why this reads the compiler's output instead.
 
 `HelicoAccount` is checked for the same reason and a sharper one. Its upgrades are immediate —
 the delay was removed for the hackathon — and its upgrader may act without the owner. So a
@@ -38,7 +41,7 @@ SNAPSHOT = CONTRACTS / "storage-layout.txt"
 
 # Every contract whose storage outlives its code. A contract missing from here is not checked,
 # which is how `HelicoAccount` went unguarded while being the more dangerous of the two.
-UPGRADEABLE = ["HelicoVault", "HelicoAccount"]
+UPGRADEABLE = ["HelicoAccount"]
 
 
 def _shape(type_name: str) -> str:

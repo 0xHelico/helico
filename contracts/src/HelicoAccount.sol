@@ -28,15 +28,22 @@ import {HelicoAccountProxy} from "./HelicoAccountProxy.sol";
 ///      and `OWNER()` belong to the proxy and never reach this contract.
 ///      `test_TheProxyOwnsTwoSelectorsAndTheAccountMustNotClaimThem` holds that line.
 ///
-///      Upgrades copy `HelicoVault`'s pattern rather than inventing one: announced first,
-///      executable only after a delay, expiring after a grace period, and pinned to the exact
-///      code that was announced. The owner may cancel during the delay, and may refuse automatic
-///      upgrades permanently.
+///      **An upgrade takes effect immediately.** There is no announcement, no waiting period,
+///      no grace period and no window in which the owner can cancel one. This docblock used to
+///      claim all four, describing a pattern copied from a contract in this repo that has since
+///      been deleted — while `_authorizeUpgrade`, three hundred lines below, correctly said the
+///      opposite. A reader who stopped at the header would have believed a timelock protected
+///      them. Read `_authorizeUpgrade` for why the delay was removed and what it costs.
+///
+///      What does hold: the owner may refuse automatic upgrades permanently with
+///      `refuseAutoUpgrade`, and the proxy's escape hatch is reachable by no implementation.
 contract HelicoAccount is UUPSUpgradeable {
     /// @notice The key allowed to announce and run upgrades without the owner acting.
     /// @dev An immutable on the implementation, so changing it means shipping a new
-    ///      implementation — which is itself subject to the delay, the grace period and the
-    ///      owner's refusal. A mutable upgrader would be a way around all three.
+    ///      implementation — which the owner can refuse outright, permanently, with
+    ///      `refuseAutoUpgrade`. A mutable upgrader would be a way around that. There is no
+    ///      delay or grace period for it to be subject to; this said there was until the claim
+    ///      was checked against `_authorizeUpgrade`.
     address public immutable UPGRADER;
 
     /// @notice Once true, only the owner may change this account's code. Never returns to false.
@@ -186,7 +193,7 @@ contract HelicoAccount is UUPSUpgradeable {
     ///
     ///      Not payable, deliberately. Value comes from the account's own balance, so there is no
     ///      `msg.value` for a batching relayer to spend twice across several calls in one
-    ///      transaction — the mistake `HelicoVault`'s multicall docblock describes.
+    ///      transaction. `scripts/check-no-payable.py` holds that line against the ABI.
     ///
     ///      The owner must be an EOA: this recovers a key and does not consult ERC-1271. An
     ///      owner that is itself a contract uses `execute` and sends its own transaction.
@@ -305,8 +312,9 @@ contract HelicoAccount is UUPSUpgradeable {
     ///
     ///      **Not payable, and that is the whole safety argument.** `msg.value` is visible in
     ///      full to every call in a batch, so a payable batch lets one ETH be spent by each of
-    ///      them — the mistake `HelicoVault`'s multicall docblock describes. Here the value each
-    ///      call carries comes from the account's own balance, which cannot be counted twice.
+    ///      them. Here the value each call carries comes from the account's own balance, which
+    ///      cannot be counted twice. `scripts/check-no-payable.py` holds that line against the
+    ///      ABI, because a test can only show that today's batcher rejects value.
     ///
     ///      Atomic on purpose: a batch that half-lands leaves a mandate shipped without the
     ///      approvals it needs, which looks funded and fails at the first swap.
@@ -358,8 +366,8 @@ contract HelicoAccount is UUPSUpgradeable {
     /// @dev An upgrade takes effect immediately. There is no announcement, no waiting period and
     ///      no window in which the owner can cancel one.
     ///
-    ///      **That is a deliberate trade made for the hackathon, not an omission.** `HelicoVault`
-    ///      does have the delay, and this contract had it too until it was taken out on purpose:
+    ///      **That is a deliberate trade made for the hackathon, not an omission.** This contract
+    ///      had the delay, as did the vault it was modelled on, until it was taken out on purpose:
     ///      during a five-day event the ability to fix a mistake within minutes is worth more than
     ///      the ability to see one coming two days out. Judging happens over hours, and a
     ///      two-day timelock would mean a defect found on the last day cannot be fixed at all.

@@ -220,22 +220,6 @@ on Base Sepolia, listed in [the plugin's README](packages/plugins/uniswap/README
 | EIP-712 `PermitSingle` typed data | [`approval.ts#L134-L160`](https://github.com/0xHelico/helico/blob/89054c6fe9fdb8c7cfe7b978e11f9b37a1e42c25/packages/plugins/uniswap/src/approval.ts#L134-L160) |
 | `PositionManager` mint | [`liquidity.ts#L93-L124`](https://github.com/0xHelico/helico/blob/89054c6fe9fdb8c7cfe7b978e11f9b37a1e42c25/packages/plugins/uniswap/src/liquidity.ts#L93-L124) |
 
-### The vault
-
-`HelicoVault` enforces a committed mandate on the agent that re-centres a v4 position. Upgradeable
-behind a timelock, non-custodial, every rejection path a test. It is not what CRE drives any more
-— that moved to the yield layer — and it is kept because it works.
-
-| What | Where |
-|---|---|
-| The mandate a user commits | [`Mandate.sol#L23-L65`](https://github.com/0xHelico/helico/blob/89054c6fe9fdb8c7cfe7b978e11f9b37a1e42c25/contracts/src/Mandate.sol#L23-L65) |
-| Committing it against the position's real pool | [`HelicoVault.sol#L309-L347`](https://github.com/0xHelico/helico/blob/89054c6fe9fdb8c7cfe7b978e11f9b37a1e42c25/contracts/src/HelicoVault.sol#L309-L347) |
-| The action the agent may propose | [`HelicoVault.sol#L556-L609`](https://github.com/0xHelico/helico/blob/89054c6fe9fdb8c7cfe7b978e11f9b37a1e42c25/contracts/src/HelicoVault.sol#L556-L609) |
-| Every range rule, including the price one | [`HelicoVault.sol#L862-L886`](https://github.com/0xHelico/helico/blob/89054c6fe9fdb8c7cfe7b978e11f9b37a1e42c25/contracts/src/HelicoVault.sol#L862-L886) |
-| The swap that makes an out-of-range position recoverable | [`HelicoVault.sol#L616-L632`](https://github.com/0xHelico/helico/blob/89054c6fe9fdb8c7cfe7b978e11f9b37a1e42c25/contracts/src/HelicoVault.sol#L616-L632) |
-| An agent that cannot send transactions | [`HelicoVault.sol#L454-L474`](https://github.com/0xHelico/helico/blob/89054c6fe9fdb8c7cfe7b978e11f9b37a1e42c25/contracts/src/HelicoVault.sol#L454-L474) |
-| The exit, which nothing can block | [`HelicoVault.sol#L357-L369`](https://github.com/0xHelico/helico/blob/89054c6fe9fdb8c7cfe7b978e11f9b37a1e42c25/contracts/src/HelicoVault.sol#L357-L369) |
-
 Every link above is a **commit-pinned permalink**, checked against the code it points at by
 `scripts/check-readme-links.py` in CI — because a permalink to the wrong lines is worse than none.
 It looks checked.
