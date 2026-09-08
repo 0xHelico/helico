@@ -11,6 +11,65 @@ may act only inside them.
 - **`HelicoAquaSwapVMRouter`**, in [`src/swapvm/`](src/swapvm/) — a 1inch SwapVM instruction that
   settles a swap out of capital still earning in a lending market.
 
+A fourth, **`HelicoOracleBoard`**, is written and tested but **not deployed**. See below.
+
+## HelicoOracleBoard
+
+Built 9 September, **not deployed**. A second Aqua app, sitting beside `HelicoMandateSwap` rather
+than replacing it, and it exists because of a maker the first one cannot serve.
+
+That maker holds **one** token. Their USDC sits in a lending market earning, and a fill is settled
+out of it mid-swap by the SwapVM instruction. `HelicoMandateSwap` refuses to quote them, and is
+right to: its price *is* the ratio of two balances, so a zero side has no price at all.
+
+|  | quotes a one-sided maker | brakes itself |
+|---|---|---|
+| `HelicoMandateSwap` — constant product | no | yes, for free |
+| a fixed price — `test/FixedPriceBoard.sol` | yes | no |
+| `HelicoOracleBoard` | yes | yes |
+
+The price comes from Chainlink; the brake comes from Aqua's own ledger:
+
+```
+bid = mid * (BPS - spread - skew) / BPS      the maker buying base
+ask = mid * (BPS + spread - skew) / BPS      the maker selling base
+```
+
+Both sides shift **down** as base inventory accumulates, so selling into the board gets steadily
+worse while buying the inventory back gets steadily better. Inventory is pushed home by the price
+rather than by anyone watching — which is what a constant product gets for free, restored on top
+of a feed that knows nothing about who holds what.
+
+Measured against the live ETH/USD feed on Arbitrum One
+([`0x639Fe6ab…ba612`](https://arbiscan.io/address/0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612),
+`"ETH / USD"`, 8 decimals — read from the chain rather than assumed):
+
+```
+chainlink ETH/USD  2483.504394
+bid                2476.053880    empty inventory, the feed less 0.30%
+ask                2490.954907
+bid, half full     2451.218836    bent by half the skew
+```
+
+### Three guards, and each is the difference between a board and a gift
+
+- **Staleness.** A board quoting yesterday's price is a board being taken from. The feed's
+  `updatedAt` must be within `maxStaleness` or the fill is refused.
+- **A hard cap.** Skew bends the price but never refuses, and a bad price is still one somebody
+  takes once the market has moved far enough. `baseCap` is the refusal.
+- **A spread.** It is the only thing the maker earns here. Quote exactly at the feed and every
+  fill is somebody who knows the market moved before the feed did.
+
+What it does **not** do: it has no view on whether the feed is right. A feed manipulated inside
+its heartbeat is a loss here exactly as it is for anything else quoting from one, and the spread
+is the only cushion.
+
+### One thing a one-sided maker has to do that is easy to miss
+
+**Approve the token you do not hold yet.** The moment you acquire any base, you may be asked to
+sell it — and an approval covering only what you hold means you can buy and never sell. The fork
+test found this the hard way, as a `SafeTransferFromFailed` on the second fill.
+
 ## The vault, and why it is gone
 
 `HelicoVault` enforced a mandate on an agent re-centring a Uniswap v4 position, and most of this
