@@ -185,4 +185,41 @@ contract ForkSwapVMYieldCoverTest is Test {
         emit log_named_uint("paid to taker   ", amountOut);
         emit log_named_uint("supplied after  ", IERC20(AUSDC).balanceOf(account));
     }
+
+    /// @dev The branch the instruction takes on `isStaticContext`, which until this test was a
+    ///      claim in a comment. `ISwapVM.quote` is declared `view`, so calling through the
+    ///      interface is a `STATICCALL` — an instruction that writes anything on this path does
+    ///      not return a worse number, it reverts, and every price the frontend asks for fails.
+    function test_AQuoteIsAnsweredByAStaticCallAndMovesNothing() public onlyForked {
+        ISwapVM.Order memory order = _order();
+        _shipInOneBatch(order);
+
+        uint256 suppliedBefore = IERC20(AUSDC).balanceOf(account);
+
+        (, uint256 quoted,) = ISwapVM(address(router)).quote(order, WETH, USDC, 5e18, _takerData());
+
+        assertEq(quoted, 8_600e6, "the quote priced against the committed balance, not the cash");
+        assertGt(quoted, IERC20(USDC).balanceOf(account), "and quoted more than the wallet holds");
+        assertEq(IERC20(AUSDC).balanceOf(account), suppliedBefore, "asking a price unwound nothing");
+    }
+
+    /// @dev The other half of the branch: a swap the wallet can already pay for must not touch
+    ///      the lending position at all. A cover that unwinds anyway would cost the owner yield
+    ///      on every trade, and nothing about the swap's result would show it.
+    function test_TheCoverDoesNothingWhenTheWalletAlreadyHasEnough() public onlyForked {
+        ISwapVM.Order memory order = _order();
+        _shipInOneBatch(order);
+
+        uint256 suppliedBefore = IERC20(AUSDC).balanceOf(account);
+
+        deal(WETH, taker, 2e18);
+        vm.startPrank(taker);
+        IERC20(WETH).approve(address(router), type(uint256).max);
+        (, uint256 amountOut,) = router.swap(order, WETH, USDC, 2e18, _takerData());
+        vm.stopPrank();
+
+        assertLt(amountOut, 5_000e6, "this trade is small enough for the cash on hand");
+        assertEq(IERC20(USDC).balanceOf(taker), amountOut, "the taker was still paid");
+        assertEq(IERC20(AUSDC).balanceOf(account), suppliedBefore, "and the position was left alone");
+    }
 }
