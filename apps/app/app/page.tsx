@@ -1,7 +1,7 @@
 import Link from "next/link";
+import { AccountControls } from "@/components/account-controls";
 import { Asks, Grants } from "@/components/capabilities";
 import { PageHeader } from "@/components/chat/page-header";
-import { MandatePanel } from "@/components/mandate-panel";
 import { PortfolioSummary } from "@/components/portfolio-summary";
 
 export const metadata = { title: "Helico" };
@@ -54,10 +54,10 @@ export default function Page() {
               The limits you set
             </h2>
             <p className="mt-1.5 text-[12.5px] text-soft">
-              Committed on chain, enforced by the contract, revocable by you
+              Committed on chain, enforced by the account, revocable by you
               alone.
             </p>
-            <MandatePanel />
+            <AccountControls />
           </section>
 
           <section className="mt-10 pb-8">

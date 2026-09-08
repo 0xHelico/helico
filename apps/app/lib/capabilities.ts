@@ -31,6 +31,13 @@ export type Ask = {
  *
  * The order changed on 8 September, when CRE moved off re-centring Uniswap v4 ranges and onto
  * the yield layer. The list leads with what the agent is actually built to do now.
+ *
+ * `wired` moved with it, later than it should have. It sat on "Keep a position in range" — a row
+ * whose own sentence says it is *not where the agent is pointed* — so the one live switch on the
+ * page drove a capability the product had already left, and after the switch moved to the account
+ * it would have been revoking an agent under a heading about Uniswap ranges. The rule this list
+ * states about itself is that a row is wired when something answers it today; the row that
+ * qualifies is the one the account's agent actually performs.
  */
 export const GRANTS: Grant[] = [
   {
@@ -38,14 +45,14 @@ export const GRANTS: Grant[] = [
     glyph: "leaf",
     detail:
       "Into a market you allow-listed, and back out. Neither call takes a recipient, so both ends are your own account.",
-    wired: false,
+    wired: true,
   },
   {
     name: "Keep a position in range",
     glyph: "arcs",
     detail:
       "Re-centre a Uniswap v4 range as the price drifts. Built and tested; not where the agent is pointed now.",
-    wired: true,
+    wired: false,
   },
   {
     name: "Lend and borrow",

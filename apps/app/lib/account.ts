@@ -22,6 +22,32 @@ export const accountReadAbi = parseAbi([
   "function owner() view returns (address)",
 ]);
 
+/**
+ * The two limits an owner actually sets, and both are owner-only on chain.
+ *
+ * `setAgent` names who may move idle capital; `permitVenue` names where it may go. Together they
+ * are the whole of the agent's reach — `supplyIdle` is gated on `permittedVenue`, `withdrawIdle`
+ * on `venueEverPermitted`, and neither takes a recipient. Nothing else the agent can call moves a
+ * token.
+ */
+export const accountWriteAbi = parseAbi([
+  "function setAgent(address agent_)",
+  "function permitVenue(address pool, bool allowed)",
+]);
+
+/**
+ * The agent the deployed workflow signs as, and the market it is configured to use.
+ *
+ * Both are public addresses rather than configuration: the agent's is in the deploy runbook and
+ * on chain in every authorisation it has ever signed, and the pool is Aave v3's on Arbitrum One.
+ * A page that made the owner paste either of them would be asking for the one mistake — a
+ * mistyped agent — that this contract cannot take back for them.
+ */
+export const HELICO_AGENT =
+  "0x84C3891a9693c891877aC474a90d17d29075fcAf" as const;
+export const AAVE_V3_POOL =
+  "0x794a61358D6845594F94dc1DB02A252b5b4814aD" as const;
+
 const balanceOfAbi = parseAbi([
   "function balanceOf(address account) view returns (uint256)",
 ]);
