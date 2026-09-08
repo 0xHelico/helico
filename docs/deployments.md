@@ -52,13 +52,52 @@ that merely compiles to the same thing.
 Verification needs `ETHERSCAN_API_KEY` in the source-of-truth `.env`. One key serves every chain
 on Etherscan's v2 API, so `--chain-id 42161` is all that points it at Arbiscan.
 
+## 8 September 2026 — the SwapVM router
+
+| Contract | Address | Answers | Source |
+|---|---|---|---|
+| `HelicoAquaSwapVMRouter` | [`0xb8c9f14d46bf387a6d70d796df30f11a0eb8c3be`](https://arbiscan.io/address/0xb8c9f14d46bf387a6d70d796df30f11a0eb8c3be) | `AQUA()` → `0x1111113CCf…`, `AQUA_YIELD_COVER_OPCODE()` → `34` | **not verified — see below** |
+
+```
+tx 0x074ad590cc29214e2a12667f538f8a0fb1d1cb87d39b4a4e878340abfa943ab7
+block 502,984,884   gas 4,186,682   cost 0.0000839 ETH
+constructor(aqua, weth, rescuer, "Helico SwapVM", "1")
+rescuer 0x6DCd7485aB17e0CBD0723b8435a35bb8d029439E
+```
+
+The EIP-712 domain reads back as `"Helico SwapVM"` version `"1"`, which is how you tell this
+router apart from 1inch's `"1inch SwapVM v1.0"` / `"1.0.2"` at
+`0x111111338c5091E8440b67B168bAe16a668AC0De`. **Ship strategies carrying opcode 34 to the address
+above, not to that one** — see the runbook for what happens if you do not, and the fork test that
+measures it.
+
+### Why this one is not verified on Arbiscan
+
+Three attempts, all `Compiled contract deployment bytecode does NOT match`. The deployment itself
+is faithful, which was checked rather than assumed:
+
+- the creation bytecode in the deploy transaction **starts with our local artifact's creation
+  bytecode exactly**, and the tail is the constructor arguments, byte for byte;
+- the runtime differs from the local artifact by ~377 bytes, and the artifact declares **16
+  immutable slots** — 512 bytes of placeholder that the constructor fills in. That difference is
+  the immutables and nothing else.
+
+So the bytecode on chain came from this repository. What Arbiscan cannot do is recompile it: this
+is the only contract built with **`via_ir` and `optimizer_details.yul`**, which the other three
+are not, and they verified on the first attempt with the same compiler and key.
+
+Two ways out, neither taken yet because both are choices rather than fixes:
+
+1. **Leave it, and point at the build.** `FOUNDRY_PROFILE=swapvm forge build` from `main`
+   reproduces it; a judge can check the artifact against the chain the same way this section did.
+2. **Redeploy with settings Etherscan can reproduce** — pinning `evm_version` and dropping the
+   yul details. Costs 0.00022 ETH and a new address, and the address is already written down in
+   two places.
+
 ### Deliberately not deployed
 
 - **`HelicoVault` and the Uniswap v4 path.** CRE no longer drives it. See
   [#175](https://github.com/0xHelico/helico/issues/175).
-- **The SwapVM router.** [#195](https://github.com/0xHelico/helico/pull/195) is still in review,
-  and it is not on `main` to deploy. When it lands it needs `SWAPVM_RESCUER` decided first —
-  unset means tokens stranded in the router stay stranded.
 
 ### Not done yet
 
