@@ -160,6 +160,39 @@ fix(contracts): reject zero-address beneficiary on settle
 docs: record the Uniswap integration entry points
 ```
 
+## Finishing a piece of work
+
+Work starts from an issue and lands through a pull request. Three things then happen, and none
+of them waits to be asked:
+
+**Close the issue.** When the work it describes is done and merged, close it — with a comment
+saying what settled it, not just the PR number. An issue left open after its work landed makes
+the list a record of what was once true, and the next person reading it plans around a problem
+that no longer exists.
+
+**Move it on the board.** [Helico Team](https://github.com/orgs/0xHelico/projects/1), and the
+status field means what it says: `Ready` when nothing blocks it, `In progress` when someone is
+actually on it, `In review` for an open pull request, `Blocked` when it is waiting on somebody,
+`Done` on merge. Items are added automatically; the status is not, so everything sits in
+`Backlog` and the board says nothing until someone moves it.
+
+**Label it, on both issues and pull requests.** One area label at minimum, so the list can be
+filtered by where the work is:
+
+| | |
+|---|---|
+| `contracts` | `contracts/` — the Aqua app, the accounts, the SwapVM instruction |
+| `app` | `apps/app`, the dapp |
+| `landing` | `apps/landing`, the marketing page |
+| `be` | `apps/be`, the Go backend |
+| `cre` | `packages/plugins/cre` and the CRE workflow |
+| `thegraph` | `subgraph/` and `packages/plugins/thegraph` |
+| `1inch` | Aqua, SwapVM, `packages/plugins/1inch` |
+| `submission` | the ETHGlobal deadline, dashboard, video, prize rules |
+
+More than one is fine and often right — a change to the account contracts that the workflow
+reads is `contracts` and `cre`. `uniswap` still exists for history; it is not a submitted track.
+
 ## ETHOnline 2026 compliance
 
 The rules below carry disqualification consequences. They are not style preferences.
