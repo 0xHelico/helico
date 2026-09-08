@@ -8,6 +8,30 @@
 @plugin "tailwindcss-animate";
 @plugin "@tailwindcss/typography";
 
+/*
+ * The dashboard's palette. Named for what they are rather than for a step on a scale, so a
+ * component asks for `soft` and gets the one grey that passes contrast on `shade`.
+ *
+ * Light only. The `.dark` token block went with the theme toggle; the `dark:` utilities in the
+ * chat still compile and simply never match, because nothing sets the class any more.
+ */
+@theme {
+  --color-ink: #16181a;
+  --color-body: #3f4447;
+  --color-soft: #676c70;
+  --color-faint: #6f747a;
+  --color-line: #e9e9e7;
+  --color-shade: #f5f5f3;
+
+  /* Reserved for state, never for a series, and never used without a word beside them. */
+  --color-pos: #007a4b;
+  --color-neg: #d53f3f;
+
+  /* The one colour a chart may draw with — checked against this surface by the palette
+     validator for lightness, chroma and 3:1 contrast rather than chosen by eye. */
+  --color-on: #695cff;
+}
+
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -94,51 +118,12 @@
   --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.dark {
-  --background: oklch(0.195 0 0);
-  --foreground: oklch(0.94 0 0);
-  --card: oklch(0.225 0 0);
-  --card-foreground: oklch(0.94 0 0);
-  --popover: oklch(0.225 0 0);
-  --popover-foreground: oklch(0.94 0 0);
-  --primary: oklch(0.94 0 0);
-  --primary-foreground: oklch(0.195 0 0);
-  --secondary: oklch(0.26 0 0);
-  --secondary-foreground: oklch(0.75 0 0);
-  --muted: oklch(0.165 0 0);
-  --muted-foreground: oklch(0.6 0 0);
-  --accent: oklch(0.26 0 0);
-  --accent-foreground: oklch(0.94 0 0);
-  --destructive: oklch(0.7 0.15 25);
-  --border: oklch(0.27 0 0);
-  --input: oklch(0.27 0 0);
-  --ring: oklch(0.45 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.175 0 0);
-  --sidebar-foreground: oklch(0.78 0 0);
-  --sidebar-primary: oklch(0.94 0 0);
-  --sidebar-primary-foreground: oklch(0.195 0 0);
-  --sidebar-accent: oklch(0.94 0 0 / 0.06);
-  --sidebar-accent-foreground: oklch(0.94 0 0);
-  --sidebar-border: oklch(0.25 0 0);
-  --sidebar-ring: oklch(0.45 0 0);
+/*
+ * The `.dark` token block was here. It is gone with the theme toggle, and this note is in its
+ * place because the absence is the decision: one palette is one palette to check, and the
+ * contrast numbers above were measured rather than picked.
+ */
 
-  --shadow-card:
-    inset 0 1px 0 oklch(1 0 0 / 0.04), 0 1px 2px oklch(0 0 0 / 0.2),
-    0 0.5px 1px oklch(0 0 0 / 0.15);
-  --shadow-float:
-    0 0 0 1px oklch(1 0 0 / 0.06), 0 16px 48px -6px oklch(0 0 0 / 0.35),
-    0 6px 12px -2px oklch(0 0 0 / 0.2);
-  --shadow-composer:
-    0 1px 3px oklch(0 0 0 / 0.2), inset 0 1px 0 oklch(1 0 0 / 0.03);
-  --shadow-composer-focus:
-    0 0 0 1px oklch(1 0 0 / 0.1), 0 4px 16px -4px oklch(0 0 0 / 0.3),
-    inset 0 1px 0 oklch(1 0 0 / 0.04);
-}
 
 @layer base {
   * {
@@ -544,18 +529,76 @@ textarea:focus-visible {
    the landing's lavender when the card under them is hovered — the same pair the site uses,
    so the app and the site read as one product. */
 :root {
-  --glyph-1: #8d8a95;
-  --glyph-4: #b3b0ba;
-  --glyph-ink: #fff;
-  --helico-on: #695cff;
-}
-.dark {
-  --glyph-1: #b9b7c0;
-  --glyph-4: #55525b;
-  --glyph-ink: #fff;
+  /* The dark pair went with the theme. The light one was the wrong way round for a white page:
+     the fill was lighter than the outline, so a glyph read as a smudge. */
+  --glyph-1: #b6b3be;
+  --glyph-4: #6f747a;
+  --glyph-ink: #16181a;
   --helico-on: #695cff;
 }
 .glyph-hover:hover {
   --glyph-1: #b7abff;
   --glyph-4: #695cff;
+}
+
+/*
+ * One page container. The header and every section use it, so the page edges line up instead of
+ * each block choosing its own inset.
+ */
+.container-page {
+  margin-inline: auto;
+  width: 100%;
+  max-width: 64rem;
+  padding-inline: 1.25rem;
+}
+@media (min-width: 768px) {
+  .container-page {
+    padding-inline: 2rem;
+  }
+}
+
+/* Figures that do not shuffle sideways as they update. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * The chart reveals itself left to right, and the area under it fades in.
+ *
+ * A `stroke-dasharray` draw would be the obvious way and it is wrong here: the dash length is
+ * miscomputed under `non-scaling-stroke` with `preserveAspectRatio="none"`, and the line renders
+ * truncated — area filled under the last days with no line over it. Clipping the whole svg
+ * sidesteps the calculation entirely.
+ */
+@keyframes chart-reveal {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes chart-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.chart-reveal {
+  animation: chart-reveal 900ms cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+.chart-area {
+  opacity: 0;
+  animation: chart-fade 600ms ease-out 350ms forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chart-reveal,
+  .chart-area {
+    animation: none;
+    opacity: 1;
+    clip-path: none;
+  }
 }

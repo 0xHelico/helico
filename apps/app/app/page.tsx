@@ -1,8 +1,9 @@
+import Link from "next/link";
 import { AccountPanel } from "@/components/account-panel";
-import { Grants } from "@/components/capabilities";
+import { Asks, Grants } from "@/components/capabilities";
+import { PageHeader } from "@/components/chat/page-header";
 import { MandatePanel } from "@/components/mandate-panel";
 import { MandatesPanel } from "@/components/mandates-panel";
-import { PageHeader } from "@/components/page-header";
 
 export const metadata = { title: "Helico" };
 
@@ -43,14 +44,9 @@ export default function Page() {
             <Grants />
           </section>
 
+          {/* No heading: each card carries its own title, and the section had been saying it
+              twice — "Where your capital sits" above a card headed the same. */}
           <section className="mt-12" id="account">
-            <h2 className="font-semibold text-lg tracking-tight">
-              Where your capital sits
-            </h2>
-            <p className="mt-1.5 text-muted-foreground text-sm">
-              An account that is yours alone. Its address is known before it
-              exists, and nothing here can send your money anywhere else.
-            </p>
             <AccountPanel />
             <MandatesPanel />
           </section>
@@ -64,6 +60,24 @@ export default function Page() {
               alone.
             </p>
             <MandatePanel />
+          </section>
+
+          <section className="mt-12 pb-6">
+            <h2 className="font-semibold text-lg tracking-tight">
+              What you can ask it
+            </h2>
+            <p className="mt-1.5 text-muted-foreground text-sm">
+              These happen once and you sign them yourself. Say it in a sentence
+              in the{" "}
+              <Link
+                className="underline underline-offset-2 hover:text-foreground"
+                href="/chat"
+              >
+                conversation
+              </Link>
+              .
+            </p>
+            <Asks />
           </section>
         </main>
       </div>

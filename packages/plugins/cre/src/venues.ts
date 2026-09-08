@@ -26,6 +26,15 @@ export type VenueRefusal =
 export type SkippedVenue = { pool: Address; reason: VenueRefusal }
 
 /**
+ * A market the owner has revoked while the account still has capital in it, and how much of that
+ * capital the market can hand back right now.
+ *
+ * Separate from `Venue` because it is not a candidate for anything — nothing ranks it, nothing
+ * compares its rate. It is one instruction with an address and an amount.
+ */
+export type Evacuation = { pool: Address; amount: bigint }
+
+/**
  * The markets this run may use, and why the others were left out. Pure.
  *
  * The three refusals are the ones the account itself would enforce, checked here so a market that
@@ -38,22 +47,36 @@ export type SkippedVenue = { pool: Address; reason: VenueRefusal }
  * follows in `HelicoMandateSwap`: ending the search at the first market that cannot serve this
  * account strands a usable one further down the list.
  *
- * What a skipped venue takes with it is its position, and that is deliberate. Capital sitting at
- * a market the owner has since un-permitted cannot be moved by the agent at all — `withdrawIdle`
- * would revert on the same allowlist — so counting it towards the target split would set a
- * working share against money that cannot move, and the account would hold forever waiting to
- * correct a difference it has no way to correct.
+ * What a skipped venue takes with it is its position, and that is deliberate: it is not capital
+ * this run may place, so counting it towards the target split would set a working share against
+ * money the split cannot move, and the account would hold forever waiting to correct a difference
+ * it has no way to correct.
+ *
+ * **A revoked venue holding capital comes back as an evacuation rather than a skip.** Revoking is
+ * how an owner says they want out, so the useful response is to leave, not to stand beside the
+ * money and refuse. `withdrawIdle` is gated on `venueEverPermitted`, which a revoke does not
+ * clear, so the agent can still unwind what it can no longer supply. The other two refusals get
+ * no such treatment — without a receipt, or with one for another asset, there is no position here
+ * this run can name.
  */
 export function eligibleVenues(
 	asset: string,
 	venues: VenueState[],
-): { usable: Venue[]; skipped: SkippedVenue[] } {
+): { usable: Venue[]; skipped: SkippedVenue[]; evacuate: Evacuation[] } {
 	const usable: Venue[] = []
 	const skipped: SkippedVenue[] = []
+	const evacuate: Evacuation[] = []
 	for (const venue of venues) {
 		const reason = refusalFor(asset, venue)
 		if (reason) {
 			skipped.push({ pool: venue.pool, reason })
+			if (reason === 'the owner has not permitted this venue' && listsThisAsset(asset, venue)) {
+				// What the market can pay today, not what is owed. A drained market gets whatever
+				// it has now and the rest on the next run, which is better than one refusal.
+				const available =
+					venue.supplied < venue.venueLiquidity ? venue.supplied : venue.venueLiquidity
+				if (available > 0n) evacuate.push({ pool: venue.pool, amount: available })
+			}
 			continue
 		}
 		usable.push({
@@ -63,14 +86,18 @@ export function eligibleVenues(
 			supplyRateRay: venue.supplyRateRay,
 		})
 	}
-	return { usable, skipped }
+	return { usable, skipped, evacuate }
 }
+
+const listsThisAsset = (asset: string, venue: VenueState): boolean =>
+	venue.receipt !== zeroAddress && venue.receiptAsset.toLowerCase() === asset.toLowerCase()
 
 const refusalFor = (asset: string, venue: VenueState): VenueRefusal | undefined => {
 	if (!venue.venuePermitted) return 'the owner has not permitted this venue'
-	if (venue.receipt === zeroAddress) return 'the venue does not list this asset'
-	if (venue.receiptAsset.toLowerCase() !== asset.toLowerCase())
-		return "the venue's receipt is for a different asset"
+	if (!listsThisAsset(asset, venue))
+		return venue.receipt === zeroAddress
+			? 'the venue does not list this asset'
+			: "the venue's receipt is for a different asset"
 	return undefined
 }
 

@@ -140,6 +140,19 @@ contract HelicoAccount is UUPSUpgradeable {
     ///      leaving every other pre-signed authorisation valid after a revocation.
     uint256 public nonce;
 
+    /// @notice Every venue this owner has ever permitted, including ones they have since revoked.
+    ///
+    /// @dev Declared here rather than beside `permittedVenue`, which is where it belongs to read.
+    ///      This account is behind a proxy, so a new variable can only be **appended**; moving it
+    ///      up next to its sibling would push `nonce` from slot 2 to slot 3 and make every spent
+    ///      signature valid again. `check-storage-layout.py` refuses that, and this comment exists
+    ///      so the next person does not have to learn it from the failure.
+    ///
+    ///      Set on permit, never cleared on revoke. It is what lets the agent unwind a venue the
+    ///      owner has just revoked without ever being able to reach an address the owner never
+    ///      named: revoking closes the way in, not the way out.
+    mapping(address pool => bool) public venueEverPermitted;
+
     /// @notice The EIP-712 domain this account verifies against.
     /// @dev Derived in `AccountAuth` so the factory can answer the same question for an account
     ///      that does not exist yet. See that library for why the owner must be able to sign first.
@@ -226,6 +239,8 @@ contract HelicoAccount is UUPSUpgradeable {
     function permitVenue(address pool, bool allowed) external {
         if (msg.sender != owner()) revert NotOwner(msg.sender);
         permittedVenue[pool] = allowed;
+        // One-way, and only in the permitting direction. See `venueEverPermitted`.
+        if (allowed) venueEverPermitted[pool] = true;
         emit VenuePermitted(pool, allowed);
     }
 
@@ -256,16 +271,18 @@ contract HelicoAccount is UUPSUpgradeable {
     ///      in is an agent that cannot correct itself.
     function withdrawIdle(address pool, address asset, uint256 amount) external {
         _requireOwnerOrAgent();
-        // The allowlist bounds where the *agent* may send this account's money. Withdrawing sends
-        // it nowhere but back here, so the owner is not bound by it — otherwise revoking a venue
-        // would disable the one call that exists to bring capital home from it, which is the wrong
-        // way round for a safety control to fail.
+        // Revoking a venue must not be what strands capital in it. `permittedVenue` bounds where
+        // money may be **sent**; withdrawing sends it nowhere but back here, so the gate on the
+        // way out is the wider set — every venue the owner has ever named.
         //
-        // The agent stays bound, and deliberately. Dropping the check for it too would let a
-        // compromised agent make this account call any address with this selector, and "an agent
-        // can only churn capital between venues the owner allowlisted" is the property that makes
-        // a compromised agent harmless. The owner already has that reach through `execute`.
-        if (msg.sender != owner() && !permittedVenue[pool]) revert VenueNotPermitted(pool);
+        // That is what lets the agent react to a revocation instead of being disabled by it: the
+        // owner revokes, and the next run unwinds the position rather than holding beside it. The
+        // check is not dropped, because dropping it would let a compromised agent make this
+        // account call any address at all with this selector, and "the agent can only reach
+        // venues the owner named" is the property that makes a compromised agent harmless.
+        //
+        // The owner is exempt from even that, since `execute` already reaches everything.
+        if (msg.sender != owner() && !venueEverPermitted[pool]) revert VenueNotPermitted(pool);
 
         ILendingVenue(pool).withdraw(asset, amount, address(this));
 

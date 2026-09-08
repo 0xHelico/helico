@@ -40,7 +40,45 @@ describe('eligibleVenues', () => {
 		expect(eligibleVenues(USDC, [state()])).toEqual({
 			usable: [venue()],
 			skipped: [],
+			evacuate: [],
 		})
+	})
+
+	/**
+	 * A revoked market is both at once: skipped, so nothing places capital there or counts it
+	 * towards the split, and evacuated, so the position in it comes home. The two lists answer
+	 * different questions and a revoked venue belongs on both.
+	 */
+	test('a revoked market the account is sitting in comes back as an evacuation', () => {
+		const { usable, skipped, evacuate } = eligibleVenues(USDC, [state({ venuePermitted: false })])
+		expect(usable).toEqual([])
+		expect(skipped).toEqual([{ pool: AAVE, reason: 'the owner has not permitted this venue' }])
+		expect(evacuate).toEqual([{ pool: AAVE, amount: usdc(500) }])
+	})
+
+	test('a revoked market holding nothing is only skipped', () => {
+		const { evacuate } = eligibleVenues(USDC, [state({ venuePermitted: false, supplied: 0n })])
+		expect(evacuate).toEqual([])
+	})
+
+	test('a drained revoked market gives back what it has, and the rest next run', () => {
+		const { evacuate } = eligibleVenues(USDC, [
+			state({ venuePermitted: false, venueLiquidity: usdc(120) }),
+		])
+		expect(evacuate).toEqual([{ pool: AAVE, amount: usdc(120) }])
+	})
+
+	/**
+	 * The other two refusals get no evacuation, and that is not an oversight. Without a receipt,
+	 * or with one for another asset, there is no position here this run can name — `supplied` was
+	 * never read against this asset, so an amount built from it would be a number from nowhere.
+	 */
+	test.each([
+		['no receipt', { receipt: zeroAddress as Address }],
+		['a receipt for another asset', { receiptAsset: WBTC }],
+	] as [string, Partial<VenueState>][])('a revoked market with %s is not evacuated', (_, over) => {
+		const { evacuate } = eligibleVenues(USDC, [state({ venuePermitted: false, ...over })])
+		expect(evacuate).toEqual([])
 	})
 
 	/**

@@ -4,6 +4,7 @@ import {
   HELICO_AQUA,
   type MakerMandates,
   makerMandates,
+  query,
 } from "@helico/plugin-thegraph";
 
 /**
@@ -105,4 +106,44 @@ export function amount(value: bigint, decimals: number | null): string {
     .slice(0, 2)
     .replace(/0+$/, "");
   return frac ? `${whole.toLocaleString()}.${frac}` : whole.toLocaleString();
+}
+
+/**
+ * When this wallet's mandates were actually used, one timestamp per movement.
+ *
+ * Scoped with a nested filter on the mandate's maker rather than fetched and thrown away
+ * client-side: the top-level list is every movement on the chain, and paging through it to find
+ * one wallet's would be reading a thousand rows to keep a hundred.
+ *
+ * Capped at a page. A wallet past that reads as busier than the chart can draw, which is the
+ * right way for this to be wrong — the caption says so.
+ */
+const MOVEMENTS = `
+  query Movements($maker: Bytes!, $first: Int!) {
+    movements(
+      where: { mandate_: { maker: $maker } }
+      orderBy: timestamp
+      orderDirection: asc
+      first: $first
+    ) {
+      timestamp
+    }
+  }
+`;
+
+const PAGE = 1000;
+
+export async function readMovements(
+  maker: string,
+): Promise<{ timestamps: number[]; capped: boolean }> {
+  const raw = await query<{ movements: { timestamp: string }[] }>(
+    AQUA_SUBGRAPH,
+    { apiKey: "" },
+    MOVEMENTS,
+    { maker: maker.toLowerCase(), first: PAGE },
+  );
+  return {
+    timestamps: raw.movements.map((m) => Number(m.timestamp)),
+    capped: raw.movements.length === PAGE,
+  };
 }

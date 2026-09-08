@@ -46,11 +46,16 @@ What makes a compromised agent harmless is that every address it can make this a
 one the owner permitted: `withdrawIdle` sends to `address(this)` and never to `msg.sender`,
 `setAgent` and `permitVenue` are owner-only, `_authorizeUpgrade` goes through `UPGRADER`, and
 each `forceApprove` is closed in the same call. The convenience change that destroys this is
-giving `withdrawIdle` a recipient parameter; the second one is dropping its allowlist check
-outright, which would let a compromised agent make this account call any address with that
-selector. The owner is exempt from the check instead, because revoking a venue is how an owner
-says they want their capital home, and it must not be the thing that stops them getting it —
-the owner already reaches any address through `execute`, so exempting them adds nothing new.
+giving `withdrawIdle` a recipient parameter; the second one is dropping its venue check outright,
+which would let a compromised agent make this account call any address at all with that selector.
+
+**The check on the way out is the wider set, not the same one.** `supplyIdle` is gated on
+`permittedVenue`; `withdrawIdle` on `venueEverPermitted`, which is set on permit and never
+cleared. Revoking a venue closes the way in and leaves the way out open, so the agent unwinds a
+revoked position on its next run instead of holding beside money the owner said they wanted out
+of. The bound is unchanged in the way that matters: every address the agent can make this account
+touch is one the owner named. The owner is exempt from even that, because `execute` already
+reaches everything.
 
 **Aqua's ledger is the only way this code moves someone's tokens.** Never take an ERC-20
 approval to a Helico contract for a user's assets — not for a token, and especially not for a
