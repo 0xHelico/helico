@@ -65,8 +65,11 @@ export function Grants() {
 
   return (
     <ul className="mt-5 grid gap-2.5">
-      {GRANTS.map((g, i) => {
-        const first = i === 0;
+      {GRANTS.map((g) => {
+        // Keyed off the flag, not the position. This read `i === 0` until the list was
+        // reordered on 8 September, at which point the switch would have followed the order
+        // rather than the contract — and nothing would have said so.
+        const first = g.wired;
         return (
           <li
             className={cn(

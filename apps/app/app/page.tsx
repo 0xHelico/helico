@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AccountPanel } from "@/components/account-panel";
 import { Asks, Grants } from "@/components/capabilities";
 import { PageHeader } from "@/components/chat/page-header";
 import { MandatePanel } from "@/components/mandate-panel";
@@ -40,6 +41,17 @@ export default function Page() {
               direction, and their switches do not move.
             </p>
             <Grants />
+          </section>
+
+          <section className="mt-12" id="account">
+            <h2 className="font-semibold text-lg tracking-tight">
+              Where your capital sits
+            </h2>
+            <p className="mt-1.5 text-muted-foreground text-sm">
+              An account that is yours alone. Its address is known before it
+              exists, and nothing here can send your money anywhere else.
+            </p>
+            <AccountPanel />
           </section>
 
           <section className="mt-12" id="mandate">
