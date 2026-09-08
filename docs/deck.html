@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Helico — ETHOnline 2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;550;600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/*
+  The deck and the landing page are the same object, not two that resemble each other.
+  Every token and every primitive below is copied from apps/landing/src/styles/global.css:
+  the 32px section card with white fading into lavender, the centred sans headline at
+  weight 550 and -0.05em, the serif used only in italic, the 99px lavender pill.
+*/
+:root {
+	--color-ink: #0b0e15;
+	--ink-90: rgba(39, 34, 40, 0.9);
+	--ink-65: rgba(39, 34, 40, 0.65);
+	--ink-solid: #252228;
+	--caption: #636161;
+	--lav: #978eff;
+	--lav-btn: #695cff;
+	--lav-btn-hover: #5a4df0;
+	--lav-text: #6254ff;
+	--lav-tint: rgba(151, 142, 255, 0.1);
+	--ring: 0 0 0 1px rgba(37, 34, 40, 0.05);
+	--color-border: rgba(11, 14, 21, 0.1);
+	--good: #2f9e6b;
+	--warn: #b06f1e;
+
+	--font-sans: "Inter", system-ui, -apple-system, sans-serif;
+	--font-serif: "Instrument Serif", Georgia, serif;
+	--font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+	--content-max: 61.625rem;
+	--gutter: clamp(1rem, 2vw, 1.5rem);
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+body {
+	margin: 0;
+	background: #ffffff;
+	color: var(--color-ink);
+	font-family: var(--font-sans);
+	-webkit-font-smoothing: antialiased;
+	padding-bottom: var(--gutter);
+}
+
+a { color: inherit; text-decoration: none; }
+
+.font-serif-italic { font-family: var(--font-serif); font-style: italic; }
+
+/* ── page primitives, verbatim in behaviour ──────────────────── */
+.wrap {
+	width: calc(100% - 2 * var(--gutter));
+	margin-inline: auto;
+	margin-top: var(--gutter);
+	scroll-margin-top: 1rem;
+}
+.section-card {
+	border-radius: 32px;
+	padding: clamp(3.5rem, 7vw, 6rem)
+		max(clamp(1.25rem, 4vw, 3rem), calc((100% - var(--content-max)) / 2)) clamp(2rem, 4vw, 3rem);
+	background:
+		linear-gradient(180deg, #ffffff 0%, rgba(255, 255, 255, 0) 38%),
+		radial-gradient(120% 90% at 50% 100%, #e6e1ff 0%, #f1eeff 45%, #f8f7ff 100%);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+.section-card--white { background: #ffffff; box-shadow: var(--ring); }
+.section-card--dark { background: #0f0f10; color: #f6f7f4; box-shadow: none; }
+.center { text-align: center; }
+
+.eyebrow {
+	display: inline-flex; align-items: center; gap: 0.5rem;
+	font-size: 0.875rem; font-weight: 450; letter-spacing: -0.01em;
+	color: var(--ink-65);
+}
+.eyebrow .mark {
+	width: 20px; height: 20px; border-radius: 50%;
+	background: radial-gradient(circle at 30% 30%, var(--lav) 0%, var(--lav-btn) 100%);
+	flex: none;
+}
+.section-card--dark .eyebrow { color: rgba(255, 255, 255, 0.7); }
+
+.headline {
+	margin: 1.5rem 0 0;
+	font-size: clamp(2.5rem, 5vw, 4.5rem);
+	line-height: 1.1; letter-spacing: -0.05em; font-weight: 550;
+	color: var(--ink-90);
+	text-wrap: balance;
+}
+.headline--sm { font-size: clamp(2rem, 3.6vw, 3.25rem); }
+.section-card--dark .headline { color: #f6f7f4; }
+
+.lede {
+	margin: 1rem auto 0; max-width: 620px;
+	font-size: clamp(1.05rem, 1.4vw, 1.25rem); line-height: 1.36;
+	letter-spacing: -0.01em; color: var(--ink-65);
+}
+.section-card--dark .lede { color: rgba(255, 255, 255, 0.7); }
+
+.actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.75rem; margin-top: 2rem; }
+.btn {
+	display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+	height: 48px; padding: 0 24px; border-radius: 99px;
+	font-size: 1.0625rem; font-weight: 500; letter-spacing: -0.01em; line-height: 1;
+	white-space: nowrap; transition: background-color .15s, color .15s;
+}
+.btn--primary { background: var(--lav-btn); color: #fff; }
+.btn--primary:hover { background: var(--lav-btn-hover); }
+.btn--secondary { background: var(--lav-tint); color: var(--lav-text); }
+.btn--secondary:hover { background: rgba(151, 142, 255, 0.18); }
+
+/* ── deck-only additions, built from the same tokens ─────────── */
+.body-copy { margin: 1.25rem auto 0; max-width: 640px; font-size: 1rem; line-height: 1.5;
+             letter-spacing: -0.01em; color: var(--ink-65); }
+.body-copy strong { color: var(--ink-solid); font-weight: 550; }
+.section-card--dark .body-copy { color: rgba(255,255,255,.72); }
+.section-card--dark .body-copy strong { color: #f6f7f4; }
+
+.tiles { display: grid; gap: 0.75rem; margin-top: 2.5rem; text-align: left;
+         grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); }
+.tile {
+	background: #fff; border-radius: 20px; padding: 1.25rem 1.35rem;
+	box-shadow: var(--ring); display: flex; flex-direction: column; gap: .5rem;
+}
+.section-card--dark .tile { background: rgba(255,255,255,.05); box-shadow: 0 0 0 1px rgba(255,255,255,.08); }
+.tile h3 { margin: 0; font-size: 0.9375rem; font-weight: 550; letter-spacing: -0.02em; color: var(--ink-solid); }
+.section-card--dark .tile h3 { color: #f6f7f4; }
+.tile p { margin: 0; font-size: 0.875rem; line-height: 1.45; letter-spacing: -0.01em; color: var(--ink-65); }
+.section-card--dark .tile p { color: rgba(255,255,255,.66); }
+
+.badge {
+	display: inline-flex; align-items: center; gap: .4rem; align-self: flex-start;
+	font-size: .75rem; font-weight: 500; letter-spacing: -0.01em;
+	padding: .2rem .6rem; border-radius: 99px; background: var(--lav-tint); color: var(--lav-text);
+}
+.badge--ok   { background: rgba(47,158,107,.12); color: var(--good); }
+.badge--hold { background: rgba(176,111,30,.12); color: var(--warn); }
+.badge .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+.panel {
+	margin: 2rem auto 0; max-width: 46rem; text-align: left;
+	background: #fff; border-radius: 24px; box-shadow: var(--ring); overflow: hidden;
+}
+.section-card--dark .panel { background: rgba(255,255,255,.05); box-shadow: 0 0 0 1px rgba(255,255,255,.08); }
+.panel .row {
+	display: flex; justify-content: space-between; align-items: baseline; gap: 1rem;
+	padding: .85rem 1.35rem; border-bottom: 1px solid var(--color-border);
+	font-size: .9rem; letter-spacing: -0.01em;
+}
+.section-card--dark .panel .row { border-color: rgba(255,255,255,.08); }
+.panel .row:last-child { border-bottom: 0; }
+.panel .row span:first-child { color: var(--ink-65); }
+.section-card--dark .panel .row span:first-child { color: rgba(255,255,255,.6); }
+.panel .row span:last-child { font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+                              color: var(--ink-solid); text-align: right; }
+.section-card--dark .panel .row span:last-child { color: #f6f7f4; }
+
+pre {
+	margin: 2rem auto 0; max-width: 46rem; text-align: left;
+	font-family: var(--font-mono); font-size: .8125rem; line-height: 1.7;
+	background: #fff; border-radius: 24px; box-shadow: var(--ring);
+	padding: 1.35rem 1.5rem; overflow-x: auto; color: var(--ink-solid);
+}
+.section-card--dark pre { background: rgba(255,255,255,.05); box-shadow: 0 0 0 1px rgba(255,255,255,.08); color: #f6f7f4; }
+pre .muted { color: var(--caption); }
+.section-card--dark pre .muted { color: rgba(255,255,255,.45); }
+pre .lav { color: var(--lav-text); }
+.section-card--dark pre .lav { color: var(--lav); }
+
+/* The one moving figure: capital leaving, and being ready to come back. */
+.flow { margin: 2.5rem auto 0; max-width: 40rem; display: grid;
+        grid-template-columns: 1fr auto 1fr; align-items: center; gap: 1rem; }
+.flow .node { background: #fff; border-radius: 20px; box-shadow: var(--ring); padding: 1.1rem 1rem; }
+.flow .amt { font-family: var(--font-mono); font-size: clamp(1.1rem, 2.4vw, 1.6rem);
+             letter-spacing: -0.02em; color: var(--ink-solid); font-variant-numeric: tabular-nums; }
+.flow .lbl { display: block; margin-top: .3rem; font-size: .8125rem; letter-spacing: -0.01em; color: var(--ink-65); }
+.flow .wire { position: relative; height: 2px; min-width: 3.5rem; border-radius: 2px;
+              background: rgba(151,142,255,.35); }
+.flow .wire::after { content: ""; position: absolute; top: -4px; left: 0;
+                     width: 10px; height: 10px; border-radius: 50%; background: var(--lav-btn); }
+.js .flow .wire::after { animation: travel 2.8s cubic-bezier(.4,0,.2,1) infinite; }
+@keyframes travel {
+	0%   { left: 0; opacity: 0 }
+	14%  { opacity: 1 }
+	86%  { opacity: 1 }
+	100% { left: calc(100% - 10px); opacity: 0 }
+}
+
+/* Reveal. Visible by default; only JS opts in, so a failed script leaves a
+   readable page instead of an empty one — and the first card never waits. */
+.js .wrap:not(:first-of-type) [data-reveal] { opacity: 0; transform: translateY(14px); }
+.js .wrap.seen [data-reveal] {
+	opacity: 1; transform: none;
+	transition: opacity .55s ease, transform .55s cubic-bezier(.2,.7,.3,1);
+}
+@media (prefers-reduced-motion: reduce) {
+	.js .wrap:not(:first-of-type) [data-reveal] { opacity: 1; transform: none; }
+	.js .flow .wire::after { animation: none; }
+}
+
+.foot { margin-top: 2rem; font-size: .8125rem; letter-spacing: -0.01em; color: var(--ink-65); }
+.section-card--dark .foot { color: rgba(255,255,255,.55); }
+.scroller { overflow-x: auto; }
+
+/* The nav the landing carries: fixed, transparent, logo left, one black pill right. */
+.nav {
+	position: fixed; inset: 0 0 auto 0; z-index: 30; height: 82px;
+	display: flex; align-items: center; justify-content: space-between;
+	padding-inline: max(1.5rem, calc((100% - 78rem) / 2));
+	background: linear-gradient(180deg, rgba(255,255,255,.92) 0%, rgba(255,255,255,0) 100%);
+	backdrop-filter: saturate(140%) blur(6px);
+	pointer-events: none;
+}
+.nav > * { pointer-events: auto; }
+.nav .brand { display: inline-flex; align-items: center; gap: .55rem;
+              font-size: 1.15rem; font-weight: 600; letter-spacing: -0.03em; color: var(--ink-solid); }
+.nav .brand .mark { width: 26px; height: 26px; border-radius: 8px;
+                    background: radial-gradient(circle at 30% 25%, var(--lav) 0%, var(--lav-btn) 100%); }
+.nav .btn--dark { background: #111112; color: #fff; height: 40px; padding: 0 20px; font-size: .95rem; }
+.nav .btn--dark:hover { background: #000; }
+@media (max-width: 640px) { .nav { height: 64px; } .nav .brand { font-size: 1rem; } }
+</style>
+</head>
+<body>
+
+<header class="nav">
+	<a class="brand" href="https://helico.site"><span class="mark" aria-hidden="true"></span> helico</a>
+	<a class="btn btn--dark" href="https://app.helico.site">Launch App</a>
+</header>
+
+<!-- 1 ───────────────────────────────────────────────────────────── -->
+<section class="wrap" style="margin-top:0">
+	<div class="section-card center" data-reveal style="padding-top:calc(82px + clamp(2.5rem,5vw,4.5rem))">
+		<span class="eyebrow"><span class="mark" aria-hidden="true"></span> Helico · ETHOnline 2026</span>
+		<h1 class="headline">Your funds keep earning,<br><span class="font-serif-italic">and stay ready.</span></h1>
+		<p class="lede">A maker's stablecoins sit in a lending market, earning. When a swap needs them,
+			they are already back. The agent that decides how much may leave runs inside an enclave —
+			so the strategy is never visible to the operators running it.</p>
+		<div class="actions">
+			<a class="btn btn--primary" href="https://helico.site">helico.site</a>
+			<a class="btn btn--secondary" href="https://github.com/0xHelico/helico">The code</a>
+		</div>
+		<div class="tiles">
+			<div class="tile"><h3>Chainlink CRE</h3><p>A confidential workflow decides and signs inside a TEE. The policy never leaves it.</p></div>
+			<div class="tile"><h3>1inch Aqua</h3><p>Liquidity stays in the maker's own wallet. Our SwapVM instruction settles a fill out of earning capital.</p></div>
+			<div class="tile"><h3>The Graph</h3><p>How much must stay liquid is a question the chain cannot answer. The index can.</p></div>
+		</div>
+	</div>
+</section>
+
+<!-- 2 ───────────────────────────────────────────────────────────── -->
+<section class="wrap">
+	<div class="section-card center" data-reveal>
+		<span class="eyebrow"><span class="mark" aria-hidden="true"></span> The problem</span>
+		<h2 class="headline headline--sm">Idle capital is the price<br>of being able to fill.</h2>
+		<p class="lede">1inch Aqua leaves a maker's tokens in their own wallet and serves a fill from it
+			at the moment it fills. That is the good part. It also means the wallet has to be
+			<span class="font-serif-italic">ready</span> — and a wallet kept ready earns nothing.</p>
+		<div class="tiles">
+			<div class="tile">
+				<span class="badge badge--hold"><span class="dot"></span>put it to work</span>
+				<p>Supply everything to Aave and the yield is real — until a mandate is filled against a wallet that no longer holds the tokens, and the fill fails.</p>
+			</div>
+			<div class="tile">
+				<span class="badge badge--hold"><span class="dot"></span>keep it liquid</span>
+				<p>Hold everything in the wallet and every fill succeeds — while the capital earns nothing for the time nobody is filling against it.</p>
+			</div>
+			<div class="tile">
+				<span class="badge"><span class="dot"></span>the buffer</span>
+				<p>Not a percentage somebody picks. A number that changes every time a mandate is shipped, because what a maker could be asked to pay is what their live mandates add up to.</p>
+			</div>
+		</div>
+	</div>
+</section>
+
+<!-- 3 ───────────────────────────────────────────────────────────── -->
+<section class="wrap">
+	<div class="section-card center" data-reveal>
+		<span class="eyebrow"><span class="mark" aria-hidden="true"></span> How it works</span>
+		<h2 class="headline headline--sm">Three reads, one decision,<br>one signature.</h2>
+		<div class="flow">
+			<div class="node"><span class="amt">1,000</span><span class="lbl">liquid, ready to fill</span></div>
+			<div class="wire" aria-hidden="true"></div>
+			<div class="node"><span class="amt">4,000</span><span class="lbl">working in Aave v3</span></div>
+		</div>
+		<div class="tiles">
+			<div class="tile"><h3>Read</h3><p>The account's balances, every permitted market's rate and free liquidity, and what live Aqua mandates could still demand.</p></div>
+			<div class="tile"><h3>Decide</h3><p>Inside the enclave, against a policy nobody else can read: the target split, the liquid floor, and the smallest move worth paying gas for.</p></div>
+			<div class="tile"><h3>Sign</h3><p>An EIP-712 statement bound to the account, the policy hash and a nonce. The signing key exists only inside the enclave.</p></div>
+		</div>
+		<p class="body-copy"><strong>The agent cannot take anything.</strong> Neither call it may make has a
+			recipient parameter — one credits the account, the other returns to it. A compromised agent can
+			move a maker's money between markets the maker allow-listed, and nowhere else.</p>
+	</div>
+</section>
+
+<!-- 4 ───────────────────────────────────────────────────────────── -->
+<section class="wrap">
+	<div class="section-card section-card--white center" data-reveal>
+		<span class="eyebrow"><span class="mark" aria-hidden="true"></span> Live on Arbitrum One</span>
+		<h2 class="headline headline--sm">Deployed, verified, and cheap<br>enough to be boring.</h2>
+		<div class="panel">
+			<div class="row"><span>HelicoAccount — the implementation, behind a proxy</span><span>0x0842BB3f…4847</span></div>
+			<div class="row"><span>HelicoAccountFactory — one account per owner</span><span>0x01CC7d9F…E081</span></div>
+			<div class="row"><span>HelicoMandateSwap — the Aqua app</span><span>0xA16D3138…87Ed</span></div>
+			<div class="row"><span>HelicoAquaSwapVMRouter — our instruction, opcode 34</span><span>0xb8c9f14d…c3BE</span></div>
+		</div>
+		<div class="tiles">
+			<div class="tile"><h3>Workflow</h3><p><strong>helico-production</strong> on DON family zone-a, registered on the CRE registry — which lives on Ethereum mainnet, not on the chain it reads.</p></div>
+			<div class="tile"><h3>Subgraph</h3><p><strong>v0.2.0</strong> on Studio, indexing Aqua and the account factory. Zero indexing errors.</p></div>
+			<div class="tile"><h3>Cost</h3><p>Four contracts for <strong>0.0000929 ETH</strong>. Opening an account costs <strong>0.00000703 ETH</strong>.</p></div>
+		</div>
+	</div>
+</section>
+
+<!-- 5 ───────────────────────────────────────────────────────────── -->
+<section class="wrap">
+	<div class="section-card section-card--dark center" data-reveal>
+		<span class="eyebrow"><span class="mark" aria-hidden="true"></span> A bug worth a slide</span>
+		<h2 class="headline headline--sm">Every run failed. Three good<br>theories were wrong.</h2>
+		<p class="lede">The deployed workflow failed at secret retrieval on every single run. It never
+			reached its own logic — so <span class="font-serif-italic">"it holds correctly"</span> was
+			describing intent, not behaviour.</p>
+		<div class="tiles">
+			<div class="tile"><h3>The batch was too large</h3><p>Eleven and ten failed identically. Only the count changed.</p></div>
+			<div class="tile"><h3>The namespace was wrong</h3><p>A run with it set explicitly failed the same way — and the error had been printing the namespace all along.</p></div>
+			<div class="tile"><h3>The manifest was incomplete</h3><p><em>workflow unchanged; re-deployment skipped</em> proved the manifest is not part of the deployed artifact.</p></div>
+		</div>
+		<pre>getSecret(request) {
+  const c = this.getSecrets([secretRequest])   <span class="lav">// a batch of one</span>
+}
+const id = this.nextCallId; this.nextCallId++  <span class="lav">// inside getSecrets</span></pre>
+		<p class="body-copy">Splitting into one call per secret — the shape Chainlink's own reference
+			recommends — made <strong>call 0 succeed and call 1 fail</strong>, twice, on one binary. There is
+			no separate singular path: every retrieval is a batch, and what separates them is the callback
+			id. <strong>The DON answers one retrieval per execution.</strong> Eleven values now travel as one.</p>
+	</div>
+</section>
+
+<!-- 6 ───────────────────────────────────────────────────────────── -->
+<section class="wrap">
+	<div class="section-card center" data-reveal>
+		<span class="eyebrow"><span class="mark" aria-hidden="true"></span> Evidence</span>
+		<h2 class="headline headline--sm">Balances, not logs.</h2>
+		<p class="lede">A transaction that succeeds and moves nothing reads in a log exactly like one that
+			worked. So the rehearsal asserts on what the balances say afterwards.</p>
+		<pre>app opened the account   0xBCb6c913…fC77  <span class="muted">on the deployed factory, by pressing a button</span>
+nominated the agent      0x84C3891a…5fcAf <span class="muted">from the page, not from a script</span>
+funded                   5,000 USDC
+the enclave decided      SUPPLY 4,000 to Aave v3
+sent as the agent        working  0 -&gt; 3,999,999,999
+                         idle     1,000,000,000
+the agent's own USDC     0</pre>
+		<p class="body-copy">The last line is the one worth keeping: the agent decides, signs, and ends the
+			run holding nothing. Every number above comes from one command anyone can re-run on a fork of
+			Arbitrum One, with real USDC taken from a whale rather than minted.</p>
+		<div class="tiles">
+			<div class="tile"><span class="badge badge--ok"><span class="dot"></span>20 consecutive SUCCESS</span><p>The deployed workflow, every five minutes. Last failure 13:40:01, first success 13:45:02.</p></div>
+			<div class="tile"><h3>Tests</h3><p><strong>89</strong> on the contracts, <strong>244</strong> on the program that decides, <strong>32</strong> browser checks — on every change.</p></div>
+			<div class="tile"><h3>Guards that can fail</h3><p>Each verified by breaking the thing it guards and watching it go red. A check that cannot fail is not a check.</p></div>
+		</div>
+	</div>
+</section>
+
+<!-- 7 ───────────────────────────────────────────────────────────── -->
+<section class="wrap">
+	<div class="section-card center" data-reveal>
+		<span class="eyebrow"><span class="mark" aria-hidden="true"></span> What is not proven</span>
+		<h2 class="headline headline--sm">The honest half.</h2>
+		<p class="lede">Written down because the difference between measured and inferred is the difference
+			between evidence and a claim.</p>
+		<div class="tiles">
+			<div class="tile">
+				<span class="badge badge--hold"><span class="dot"></span>not yet</span>
+				<h3>An account on the live chain</h3>
+				<p>The factory is live and permissionless and nobody has called it. So the deployed workflow reaches its logic and holds, correctly, every run. The first person to press the button is the one it manages — no redeploy.</p>
+			</div>
+			<div class="tile">
+				<span class="badge badge--hold"><span class="dot"></span>not yet</span>
+				<h3>A signed move landing on mainnet</h3>
+				<p>Everything downstream of an account existing is proven on a fork and no other way. The CRE simulator is not a TEE, and says so while it runs.</p>
+			</div>
+			<div class="tile">
+				<span class="badge badge--ok"><span class="dot"></span>measured</span>
+				<h3>The enclave runs on the DON</h3>
+				<p>Every five minutes, reading its policy from the Vault DON before anything else. A run that completes is a run that got its secret.</p>
+			</div>
+			<div class="tile">
+				<span class="badge"><span class="dot"></span>inferred</span>
+				<h3>Attestation</h3>
+				<p>Chainlink's reference states execution completes only after DON consensus verifies the enclave's attestations. We have not read an attestation document ourselves — this follows from the documented mechanism plus a run that completed.</p>
+			</div>
+		</div>
+		<p class="body-copy">There has been no professional audit. Twelve automated reviewers went over the
+			contracts, then six more. That is not an audit, and nothing here calls it one.</p>
+	</div>
+</section>
+
+<!-- 8 ───────────────────────────────────────────────────────────── -->
+<section class="wrap">
+	<div class="section-card center" data-reveal>
+		<span class="eyebrow"><span class="mark" aria-hidden="true"></span> Submitted to</span>
+		<h2 class="headline headline--sm">Three tracks,<br><span class="font-serif-italic">each load-bearing.</span></h2>
+		<div class="tiles">
+			<div class="tile"><h3>Chainlink</h3><p>A Confidential Workflow whose policy <em>is</em> the product. Remove it and there is no private strategy — only a public one anybody can front-run.</p></div>
+			<div class="tile"><h3>1inch</h3><p>An Aqua app, plus our own instruction added to SwapVM at opcode 34, settling a fill out of capital still earning.</p></div>
+			<div class="tile"><h3>The Graph</h3><p><em>Shipped</em> declares nothing indexed, so its logs carry one topic and cannot be filtered by maker. The buffer needs that answer, and the index is the only place it exists.</p></div>
+		</div>
+		<p class="body-copy"><strong>Anyone can use it now.</strong> The app opens an account on the deployed
+			factory, nominates the agent and permits a market — all owner-only, all from the page. The enclave
+			picks it up on its next five-minute tick, with nothing switched on by us.</p>
+		<div class="actions">
+			<a class="btn btn--primary" href="https://app.helico.site">Open an account</a>
+			<a class="btn btn--secondary" href="https://docs.helico.site/docs/introduction">Read the docs</a>
+		</div>
+		<p class="foot">Helico · ETHOnline 2026 · Arbitrum One</p>
+	</div>
+</section>
+
+<script>
+	document.documentElement.classList.add("js");
+	const cards = [...document.querySelectorAll(".wrap")];
+	// The first card is marked seen at once, so the page is readable in its very first
+	// frame rather than waiting on an observer a screenshot never triggers.
+	cards[0].classList.add("seen");
+	const io = new IntersectionObserver((entries) => {
+		for (const e of entries) if (e.isIntersecting) { e.target.classList.add("seen"); io.unobserve(e.target); }
+	}, { threshold: 0.15 });
+	for (const c of cards) io.observe(c);
+</script>
+</body>
+</html>
