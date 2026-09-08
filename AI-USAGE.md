@@ -792,6 +792,94 @@ Format: date · what was done · the AI's role · what a human verified.
   `AquaApp` and the string appears zero times in that repository. And a claim that #101 was still
   failing was four hours older than its fix; I nearly repeated it as current.
 
+### 2026-09-07 — The Graph: a subgraph, a client, and paging that was silently wrong
+
+- **Done:** `subgraph/` indexing Aqua on Arbitrum One (#156), `@helico/plugin-thegraph` (#157,
+  #162), the maker-mandates query the whole track rests on, and `scripts/check-subgraph.ts`.
+- **AI's role:** all of the client and the check script, on the owner's instruction to deploy the
+  subgraph and wire it up. `@ghozzza` wrote the subgraph handlers and reviewed the client.
+- **Verified:** the client was run against the live Studio endpoint and its numbers compared
+  field by field against Aqua's own `rawBalances` — ten balances, zero mismatched, including two
+  docked mandates reporting `tokensCount 255`. The client and the subgraph agreeing proves less
+  than that comparison does, because both can be consistently wrong together.
+- **Two traps, both silent, both now tested:** the subgraph stores addresses lower-cased, so a
+  checksummed one matches nothing and returns an **empty list rather than an error** — a maker
+  with fifty mandates reads as a maker with none. And `Number('16577240263528345757')` returns a
+  number, just not the one on chain; amounts are `bigint` end to end. The test for that is
+  written against strings, because a wrong literal in a test is exactly as lossy as wrong code —
+  both of us independently wrote that assertion the wrong way first.
+- **A defect I shipped and @ghozzza found:** `makerMandates` took `first = 100` and returned
+  whatever came back, so a maker with 150 mandates got 100 of them, silently, and the caller
+  sized what an agent may spend against a portfolio it could not see all of. Fixed in #167 by
+  following pages until one comes back short. Their diagnosis included the part I had not
+  thought about: the query must be top-level `mandates(where:)` rather than
+  `maker(id:) { mandates }`, because a nested list caps at 100 with no `pageInfo` and no cursor,
+  so nothing in that response distinguishes 100 mandates from 100 of 5000.
+- **A collision worth recording:** we built the same module in parallel within the same hour.
+  Mine merged first by timing, not by merit; theirs had the paging and better typing. #161 was
+  closed and the two improvements it carried were landed separately (#167, #171) rather than
+  dropped.
+
+### 2026-09-07 — Execution evidence for CRE, and a video pre-flight that found a wrong sentence
+
+- **Done:** `docs/evidence/2026-09-07-cre-rehearsal.md` (#158), closing #21; and a pre-flight of
+  every shot in the demo script (#159).
+- **AI's role:** ran `apps/cre/rehearse.sh` end to end, recorded the transcript, and checked its
+  numbers against the mandate rather than quoting them.
+- **Verified:** the position had genuinely drifted (tick 96165 against a range of 94960..95160);
+  the new range is what `decision.ts` computes from `rangeWidthTicks` to the tick; 9427 bps of
+  liquidity retained against a floor of 5000; the vault kept nothing; a second run returned
+  `HOLD (cooldown)`. **The check that matters is the position id moving** — the forwarder calls
+  the vault inside a `try`, so a reverting `onReport` still leaves a green transaction.
+- **Stated plainly in the document, because overclaiming is a disqualification:** the simulator
+  is not a TEE, the mock forwarder verifies no DON signatures, nothing is deployed, and the AI
+  explanation step **did not run** — `config.staging.json` sets `aiUrl` so the call was attempted
+  and failed on `.env.example`'s placeholder credentials. That is the designed behaviour and it
+  is what a judge cloning the repository will see, so it is what the document shows.
+- **The pre-flight found a sentence that would have cost a take:** shot 3 asks for the maker's
+  balances on screen, and its fallback said to run the fork test at `-vv`. At `-vv` that test
+  prints one green `[PASS]` line and nothing else. The shot and its own fallback disagreed, and
+  the way to discover that, as written, was mid-take.
+
+### 2026-09-07 — The Aqua we had been building against was dead
+
+- **Done:** `subgraph.yaml` and the deploy script re-pointed (#166, and @ghozzza's #170),
+  `CLAUDE.md` updated with 1inch's answer on scope (#163), and `@helico/plugin-1inch` (#168).
+- **AI's role:** found it, verified it four ways, and wrote the plugin. The decision about what
+  to do with the 1inch track is the owner's and @ghozzza's.
+- **How it was found:** while testing whether a concentrated position could be shipped through
+  1inch's SwapVM, a quote reverted with `SafeBalancesForTokenNotInActiveStrategy` naming a
+  strategy hash Aqua had **just stored** and that `rawBalances` read back. A contract cannot fail
+  to find a balance it holds — unless it is a different contract.
+- **Verified:** `@1inch/aqua-sdk` exports `AQUA_CONTRACT_ADDRESSES[42161]` as
+  `0x1111113ccf…`; the deployed `AquaSwapVMRouter` carries that address in its bytecode and has
+  no reference to `0x499943E7…`; the two have different bytecode and the live one answers
+  `owner()` while the old one reverts; `eth_getLogs` over 400,000,000 → head gives 1,289 logs on
+  the old one, newest block 451,737,844, against 1,590 on the live one, newest 502,646,947.
+  @ghozzza independently confirmed the address with 1inch in `#partner-1inch`.
+- **The lesson, and it is about a check recorded in this file as passing:** the previous entry
+  says the address was *"checked on chain, not read off 1inch's README"* — code present,
+  `rawBalances` answering, `safeBalances` reverting correctly. Every one of those was true, and
+  **both contracts pass all three**, because both are real Aqua deployments. The address had been
+  found by scanning `eth_getLogs` forward for a contract emitting Aqua's events, and scanning for
+  a contract that behaves like Aqua finds a contract that behaves like Aqua. It cannot tell you
+  whether anyone still uses it. Behavioural verification was necessary and not sufficient; the
+  vendor's own SDK constant was the check that decides.
+- **`@helico/plugin-1inch`, and three more silent failures:** the concentrate price is a ratio of
+  **raw** amounts, so ETH at $2,800 against 6-decimal USDC is `2800e6` — passing `2800e18` quoted
+  at `$2,808,428,656,082,635` with zero output and **did not revert**. Which token is the
+  numerator is decided by comparing addresses as numbers, so it flips between chains for the same
+  pair. And `ship` takes the encoded order, not the bare program, because Aqua hashes the bytes
+  it is handed while SwapVM looks the balance up under the order's hash.
+- **Evidence, reproducible:** `scripts/check-aqua.ts` on a fork ships three concentrated
+  positions from one wallet — three Aqua events each, **zero token transfers**, wallet
+  byte-identical afterwards, 300% committed against what it holds, and all three quoting at
+  prices that spread the way concentration should ($2,967.26 / $2,989.53 / $2,584.81).
+- **Corrected in review of @ghozzza's #170:** the NatSpec said the canonical Aqua "carries none"
+  of the activity. `1,289` for the stale one was exact; the other half inverted the evidence.
+  Both contracts are active, which is why activity cannot separate them and why the partner's own
+  word was needed.
+
 <!--
 Template for the next entry:
 
