@@ -1,8 +1,8 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { formatUnits } from "viem";
-import { useAccount, usePublicClient } from "wagmi";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { type Address, formatUnits } from "viem";
+import { useAccount, usePublicClient, useWriteContract } from "wagmi";
 
 import { Glyph } from "@/components/glyph";
 import {
@@ -14,9 +14,11 @@ import {
   StatTile,
 } from "@/components/kit";
 import { TokenMark } from "@/components/token-mark";
+import { Button } from "@/components/ui/button";
 import {
   type AccountState,
   configuredFactory,
+  factoryAbi,
   hasAgent,
   readAccount,
   workingBps,
@@ -57,11 +59,12 @@ function _Row({ label, value }: { label: string; value: string }) {
  * difference between a missing environment variable and a new user.
  */
 export function AccountPanel() {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, chainId } = useAccount();
   const client = usePublicClient({ chainId: CHAIN_ID });
   const factory = configuredFactory();
+  const { writeContractAsync } = useWriteContract();
 
-  const { data, error } = useQuery<AccountState>({
+  const { data, error, refetch } = useQuery<AccountState>({
     enabled: Boolean(client && address),
     queryKey: ["account", factory, address],
     queryFn: async () => {
@@ -70,6 +73,21 @@ export function AccountPanel() {
         idle: USDC,
         working: AUSDC,
       });
+    },
+  });
+
+  const openAccount = useMutation({
+    mutationFn: async () => {
+      if (!(factory && client && address)) throw new Error("nothing to open");
+      const hash = await writeContractAsync({
+        abi: factoryAbi,
+        address: factory,
+        args: [address as Address],
+        chainId: CHAIN_ID,
+        functionName: "open",
+      });
+      await client.waitForTransactionReceipt({ hash });
+      await refetch();
     },
   });
 
@@ -144,9 +162,33 @@ export function AccountPanel() {
 
       <p className="mt-4 text-[11px] text-faint leading-relaxed">
         {opened
-          ? "The agent may move capital between markets you allow-listed. Neither call it can make takes a recipient, so it cannot send anything anywhere but here."
+          ? hasAgent(data)
+            ? "The agent may move capital between markets you allow-listed. Neither call it can make takes a recipient, so it cannot send anything anywhere but here."
+            : "Nobody is nominated, so nothing here moves without you. The workflow running in the enclave watches the one account named in its configuration — opening this one does not add it."
           : "This address is what CREATE2 says it will be. Tokens sent to it now are still yours when it exists."}
       </p>
+
+      {opened ? null : (
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <Button
+            disabled={openAccount.isPending || chainId !== CHAIN_ID}
+            onClick={() => openAccount.mutate()}
+            size="sm"
+          >
+            {openAccount.isPending ? "Opening…" : "Open this account"}
+          </Button>
+          <span className="text-[11px] text-faint">
+            {chainId === CHAIN_ID
+              ? "One transaction, from your wallet. It grants nothing and takes nothing."
+              : "Switch to Arbitrum One to open it."}
+          </span>
+        </div>
+      )}
+      {openAccount.error ? (
+        <p className="mt-2 text-[11px] text-neg">
+          {openAccount.error.message.split("\n")[0]}
+        </p>
+      ) : null}
     </Card>
   );
 }
