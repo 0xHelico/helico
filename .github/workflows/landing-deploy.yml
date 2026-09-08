@@ -10,6 +10,14 @@ on:
     branches: [main]
     paths:
       - apps/landing/**
+      # The blog is built at build time from these files — through the backend's API when it
+      # answers, and straight from the Markdown otherwise. Either way the built site is a
+      # snapshot, so a post that lands without a rebuild is published to the API and invisible
+      # on helico.site. That is exactly what happened to the 8 September post: the API served
+      # five, the page showed four, and the new one was a 404.
+      - apps/be/content/**
+      # For the same reason: Build.astro reads a function out of the contract source at build
+      # time, so the page can go stale against the code it is quoting.
       - contracts/src/**
       - contracts/test/**
       - package.json
