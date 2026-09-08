@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -107,7 +108,7 @@ func (a *api) signIn(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, http.StatusInternalServerError, "")
 		return
 	}
-	http.SetCookie(w, a.sessionCookie(value, a.cookies.Life()))
+	http.SetCookie(w, a.sessionCookie(r, value, a.cookies.Life()))
 	writeJSON(w, http.StatusOK, map[string]any{"address": wallet})
 }
 
@@ -134,8 +135,8 @@ func (a *api) whoami(w http.ResponseWriter, r *http.Request) {
 
 // signOut forgets the cookie. Stateless sessions cannot be revoked server-side, so this is
 // exactly as strong as clearing it in the browser — and no weaker.
-func (a *api) signOut(w http.ResponseWriter, _ *http.Request) {
-	http.SetCookie(w, a.sessionCookie("", -time.Hour))
+func (a *api) signOut(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, a.sessionCookie(r, "", -time.Hour))
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -149,18 +150,41 @@ func (a *api) signOut(w http.ResponseWriter, _ *http.Request) {
 // did not stick.
 //
 // Lax is sent on same-site requests of any kind, so app.helico.site reaches api.helico.site
-// with it. Secure stays: a session cookie has no business on a plain connection, and browsers
-// make an exception for localhost so a local run still works.
-func (a *api) sessionCookie(value string, life time.Duration) *http.Cookie {
+// with it.
+//
+// Secure is dropped for one case: a plain-HTTP request whose Host is loopback, which is a local
+// run and nothing else. Chrome and Firefox make an exception and store a Secure cookie from
+// http://localhost; Safari does not, and the belief that "browsers make an exception" cost a
+// working local sign-in on it — the session was issued, refused, and every reload looked like a
+// sign-out. Anywhere a request arrives over TLS or through a proxy that terminated it, Secure
+// stays, which is every deployment we have.
+func (a *api) sessionCookie(r *http.Request, value string, life time.Duration) *http.Cookie {
 	return &http.Cookie{
 		Name:     SessionCookie,
 		Value:    value,
 		Path:     "/",
 		MaxAge:   int(life.Seconds()),
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   !plainLoopback(r),
 		SameSite: http.SameSiteLaxMode,
 	}
+}
+
+// plainLoopback reports whether this request is the local run: no TLS, nothing in front that
+// terminated it, and a Host the machine is talking to itself on.
+//
+// It is deliberately narrow. A forwarded-proto header is trusted here only to say *keep* Secure,
+// never to drop it, so a spoofed one cannot weaken a deployed cookie — and a spoofed Host can
+// only weaken the cookie the spoofer is being handed.
+func plainLoopback(r *http.Request) bool {
+	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+		return false
+	}
+	host := r.Host
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	return host == "localhost" || host == "127.0.0.1" || host == "::1" || host == "[::1]"
 }
 
 // digestForSession exists so a test can build the same digest the handler verifies, rather
