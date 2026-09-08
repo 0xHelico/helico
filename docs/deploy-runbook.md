@@ -131,6 +131,79 @@ source are two different claims:
 curl -s "https://api.etherscan.io/v2/api?chainid=42161&module=contract&action=getsourcecode&address=$ADDR&apikey=$ETHERSCAN_API_KEY"
 ```
 
+### If it says the bytecode does not match — and the contract uses `via_ir`
+
+This cost six attempts on the SwapVM router. Read this before spending the fifth.
+
+**The failure looks like a settings problem and is not.** Settings copied from the artifact's own
+`metadata.settings` failed too. What separates it from a genuinely bad deployment is one check,
+and it is worth running first so the next hour is spent on the right thing:
+
+```bash
+# does the deploy transaction start with our own artifact's creation bytecode?
+python3 -c "
+import json
+art = json.load(open('out-swapvm/<Contract>.sol/<Contract>.json'))['bytecode']['object']
+tx  = json.load(open('broadcast/<Script>.s.sol/42161/run-latest.json'))['transactions'][0]['transaction']['input']
+print('faithful:', tx.lower().startswith(art.lower()))"
+```
+
+If that is `True`, the chain has what this repository built and the problem is the verifier.
+
+**The cause.** solc's IR pipeline produces different bytecode depending on **which files are in
+the compilation unit**, even when the extra files contribute nothing to the contract. Foundry
+compiles the whole project; `forge verify-contract --show-standard-json-input` submits only the
+contract's dependency closure. For the router that was 155 sources against 64 — same settings,
+same solc, fifty bytes apart. Contracts built without `via_ir` never meet this, which is why the
+other three verified first time.
+
+Sourcify names it and Etherscan does not, so when Etherscan will not say why,
+`forge verify-contract --verifier sourcify` is worth one run purely as a diagnosis:
+
+```
+extra_file_input_bug — metadata hashes match but not the bytecodes
+```
+
+**Metadata matching while bytecode does not always means compiler *input*, never compiler
+*settings*.** The hash is computed over the sources and settings; if it matches, those matched.
+
+**The fix.** Submit what was actually compiled. `build-info` names the real unit:
+
+```bash
+FOUNDRY_PROFILE=swapvm forge verify-contract $ADDR src/path/File.sol:Contract \
+  --chain-id 42161 --show-standard-json-input 2>/dev/null | sed -n '/^{/,$p' > /tmp/base.json
+
+python3 - <<'EOF'
+import json, glob
+bi = json.load(open(glob.glob('out-swapvm/build-info/*.json')[0]))
+base = json.load(open('/tmp/base.json'))
+sources = {p: {'content': open(p, encoding='utf-8').read()}
+           for p in sorted(bi['source_id_to_path'].values())}
+json.dump({'language': 'Solidity', 'sources': sources, 'settings': base['settings']},
+          open('/tmp/full.json', 'w'))
+print('sources:', len(sources), 'was:', len(base['sources']))
+EOF
+```
+
+**Then compile it locally before submitting anything.** This is the step that turns the next
+submission from a guess into a certainty, and it answers in seconds where Etherscan's queue takes
+minutes:
+
+```bash
+solc --standard-json --base-path . --allow-paths . < /tmp/full.json
+# compare .contracts[file][Contract].evm.bytecode.object against the artifact's bytecode.object
+```
+
+Once they are identical, POST it. Note that on Etherscan's v2 API **`chainid` belongs in the
+query string**, not the body — in the body it is rejected as missing:
+
+```
+POST https://api.etherscan.io/v2/api?chainid=42161&module=contract&action=verifysourcecode&apikey=$ETHERSCAN_API_KEY
+  codeformat=solidity-standard-json-input   sourceCode=<contents of full.json>
+  contractaddress=$ADDR                     contractname=src/path/File.sol:Contract
+  compilerversion=v0.8.30+commit.73712a01   constructorArguements=<no 0x>
+```
+
 ## 2. Open an account, and give it its rules
 
 ```bash
