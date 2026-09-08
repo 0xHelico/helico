@@ -415,6 +415,34 @@ describe('onCronTrigger', () => {
 	})
 
 	/**
+	 * Revoking is an instruction, not a pause. The table above has the same market revoked with
+	 * nothing in it and that one holds — the difference between the two rows is the behaviour.
+	 */
+	test('unwinds the whole position when the owner revokes a market it is sitting in', async () => {
+		const { result, writes } = await run(one(usdc(10), usdc(990), { permitted: false }))
+		expect(result).toBe(`WITHDRAW 990000000 from ${aave} tx 0x${'ab'.repeat(32)}`)
+		const [, , p] = decodeReport(writes[0]?.report?.rawReport ?? new Uint8Array())
+		expect(p.supply).toBe(false)
+		// All of it, not the split's 190. The split and the deadband are for moves worth making;
+		// this one was asked for.
+		expect(p.amount).toBe(usdc(990))
+	})
+
+	test('leaving a revoked market outranks the ordinary move the split would have made', async () => {
+		const { result } = await run(
+			two(
+				usdc(1_000),
+				{ supplied: usdc(500), permitted: false },
+				{ supplied: 0n, rate: percent(5) },
+			),
+			bothPools,
+		)
+		// Without the evacuation this run supplies the 5% market, which is the better trade and
+		// the wrong answer: it would place more money while the owner is trying to withdraw some.
+		expect(result).toBe(`WITHDRAW 500000000 from ${aave} tx 0x${'ab'.repeat(32)}`)
+	})
+
+	/**
 	 * The deadband is applied twice, and this is why. The split asked for 190 USDC, which clears
 	 * it easily; a drained market leaves 3, which does not. Without the second check the run
 	 * would pay gas to move three dollars because the market could not manage the rest.

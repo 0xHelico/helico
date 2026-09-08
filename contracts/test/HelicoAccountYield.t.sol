@@ -162,19 +162,38 @@ contract HelicoAccountYieldTest is Test {
         assertEq(receipt.balanceOf(account), 0, "and the position is closed");
     }
 
-    function test_TheAgentStaysBoundedByTheAllowlistOnTheWayBackToo() public {
+    function test_TheAgentUnwindsAVenueTheOwnerJustRevoked() public {
         vm.prank(agent);
         HelicoAccount(payable(account)).supplyIdle(address(pool), address(token), 600e18);
 
         vm.prank(owner);
         HelicoAccount(payable(account)).permitVenue(address(pool), false);
 
-        // Not a convenience gap. `withdrawIdle` reaches an arbitrary address with a fixed
-        // selector, and the agent is only harmless because the set of addresses it can reach is
-        // the owner's.
+        // Revoking is not a pause. The owner said they want out of this venue, and the agent is
+        // the one awake to act on it — so the way out stays open while the way in closes.
+        vm.prank(agent);
+        HelicoAccount(payable(account)).withdrawIdle(address(pool), address(token), 600e18);
+        assertEq(token.balanceOf(account), 1000e18, "the agent brought it home");
+
         vm.prank(agent);
         vm.expectRevert(abi.encodeWithSelector(HelicoAccount.VenueNotPermitted.selector, address(pool)));
-        HelicoAccount(payable(account)).withdrawIdle(address(pool), address(token), 600e18);
+        HelicoAccount(payable(account)).supplyIdle(address(pool), address(token), 100e18);
+    }
+
+    function test_TheAgentCannotReachAVenueTheOwnerNeverNamed() public {
+        MockLendingPool stranger = new MockLendingPool();
+
+        // The half of the check that is not a convenience. `withdrawIdle` makes this account call
+        // an address chosen by the caller, with a fixed selector — bounded only by the set of
+        // venues the owner has named at some point. A venue that was never named is not in it,
+        // revoked or otherwise.
+        vm.prank(agent);
+        vm.expectRevert(abi.encodeWithSelector(HelicoAccount.VenueNotPermitted.selector, address(stranger)));
+        HelicoAccount(payable(account)).withdrawIdle(address(stranger), address(token), 1);
+
+        // And the owner is not bounded by it, because `execute` already is not.
+        assertTrue(HelicoAccount(payable(account)).venueEverPermitted(address(pool)));
+        assertFalse(HelicoAccount(payable(account)).venueEverPermitted(address(stranger)));
     }
 
     function test_TheEscapeHatchStillMovesThePositionItself() public {
