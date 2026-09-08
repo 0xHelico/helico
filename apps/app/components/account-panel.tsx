@@ -4,13 +4,16 @@ import { useQuery } from "@tanstack/react-query";
 import { formatUnits } from "viem";
 import { useAccount, usePublicClient } from "wagmi";
 
+import { Glyph } from "@/components/glyph";
 import {
+  AssetTile,
   Card,
   Loading,
   NotDeployed,
   SectionTitle,
   StatTile,
 } from "@/components/kit";
+import { TokenMark } from "@/components/token-mark";
 import {
   type AccountState,
   configuredFactory,
@@ -113,23 +116,28 @@ export function AccountPanel() {
       </div>
 
       <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <StatTile
-          name="Liquid"
+        <AssetTile
+          mark={<TokenMark symbol="USDC" />}
+          note="liquid"
+          symbol="USDC"
           tint="bg-[#eef3fb]"
-          value={`${usdc(data.idle)} USDC`}
+          value={usdc(data.idle)}
         />
-        <StatTile
-          name="Working"
-          note={bps === null ? undefined : `${(bps / 100).toFixed(1)}% at work`}
+        <AssetTile
+          mark={<TokenMark symbol="aUSDC" />}
+          note={
+            bps === null ? "working" : `working · ${(bps / 100).toFixed(1)}%`
+          }
+          symbol="aUSDC"
           tint="bg-[#ecf5f0]"
-          value={`${usdc(data.working)} USDC`}
+          value={usdc(data.working)}
         />
         <StatTile
+          icon={<Glyph name="wings" size={24} />}
           name="Agent"
+          note={hasAgent(data) ? "nominated" : "nobody may move it"}
           value={
-            hasAgent(data)
-              ? short((data as { agent: string }).agent)
-              : "none nominated"
+            hasAgent(data) ? short((data as { agent: string }).agent) : "none"
           }
         />
       </div>

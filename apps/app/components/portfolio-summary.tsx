@@ -5,7 +5,7 @@ import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { useAccount } from "wagmi";
 
-import { Glyph } from "@/components/glyph";
+import { GeneratedAvatar } from "@/components/generated-avatar";
 import { Card } from "@/components/kit";
 import { byDay, Sparkline } from "@/components/sparkline";
 import { configuredFactory } from "@/lib/account";
@@ -39,7 +39,7 @@ export function PortfolioSummary() {
     <Card className="mt-6">
       <div className="flex items-start justify-between gap-4">
         <div className="flex min-w-0 items-center gap-3">
-          <Glyph name="bank" size={30} />
+          <GeneratedAvatar name={address ?? "helico"} size={32} />
           <div className="min-w-0">
             <p className="font-medium text-[14px] text-ink leading-none">
               {isConnected && address ? (
