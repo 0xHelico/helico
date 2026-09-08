@@ -16,6 +16,10 @@ Listens on `:8787`, creates `data/helico.db`, and seeds every `content/*.md` tha
 does not already hold word for word. `go build -o bin/be ./cmd/be` for a binary; it needs no C
 toolchain, the SQLite driver is pure Go.
 
+For a local run, copy `.env.example` to `.env` and fill in what you need — the process reads it
+for anything the environment does not set, and the environment always wins, so a deployment is
+unaffected by a file it never has.
+
 | Variable | Default | Meaning |
 |---|---|---|
 | `BE_ADDR` | `:8787` | listen address |

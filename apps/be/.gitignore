@@ -1,2 +1,5 @@
 # The SQLite database and its WAL, created at runtime.
 data/
+
+# Local configuration: the deployment sets variables instead.
+.env

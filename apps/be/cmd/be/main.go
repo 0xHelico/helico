@@ -37,7 +37,9 @@ func main() {
 
 func run() error {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	cfg, err := config.FromEnv(os.LookupEnv)
+	// A local run reads `.env` beside the binary for what the environment does not set; a
+	// deployment sets variables and never has the file. The environment wins either way.
+	cfg, err := config.FromEnv(config.DotEnv(".env", os.LookupEnv))
 	if err != nil {
 		return err
 	}
