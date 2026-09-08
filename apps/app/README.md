@@ -54,6 +54,13 @@ It opens helico.site, the blog and app.helico.site in a real browser, reads the 
 browser does not show, and asks the deployed subgraph cache for a hit and for a refusal. Worth
 running before recording anything.
 
+`PROBE_WALLET=1` adds three more that need a session, so they sign in with a throwaway wallet and
+write a session row exactly as a visitor does. They are the only way to see past the gate — and
+past it is where you find out whether the deployed build resolves a factory at all. A blank
+`NEXT_PUBLIC_ACCOUNT_FACTORY` renders the not-deployed path on purpose, and `?? DEPLOYED` does not
+catch an empty string, so one wrong value in the deployment turns the panel off while every other
+check still passes.
+
 And the whole account flow, through the interface, on a fork of Arbitrum One:
 
 ```bash
