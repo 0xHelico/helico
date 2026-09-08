@@ -12,7 +12,10 @@ export function Card({
 }) {
   return (
     <section
-      className={cn("rounded-2xl border border-line bg-white p-5", className)}
+      className={cn(
+        "rounded-2xl border border-line bg-white p-4 sm:p-5",
+        className,
+      )}
     >
       {children}
     </section>
@@ -59,7 +62,7 @@ export function StatTile({
  */
 export function Empty({ children }: { children: ReactNode }) {
   return (
-    <div className="flex flex-col items-center gap-2 py-12 text-center">
+    <div className="flex flex-col items-center gap-2 py-8 text-center">
       <p className="max-w-sm text-[12.5px] text-soft leading-relaxed">
         {children}
       </p>
@@ -78,7 +81,7 @@ export function ErrorState({
   onRetry: () => void;
 }) {
   return (
-    <div className="flex flex-col items-center gap-2 py-12 text-center">
+    <div className="flex flex-col items-center gap-2 py-8 text-center">
       <p className="text-[12.5px] text-soft">Could not read {what}.</p>
       {detail ? (
         <p className="max-w-sm font-mono text-[11px] text-faint">{detail}</p>

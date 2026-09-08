@@ -198,24 +198,23 @@ const browser = await chromium.launch();
     "it lists the authority on offer",
     /What it may be allowed to do/.test(text),
   );
-  check("where the capital sits", /Where your capital sits/.test(text));
-  // The three empty states look alike from outside and one of them is a broken build. With no
-  // factory address configured, the panel has to say that rather than render a figure — a screen
-  // that invents a balance is the failure the rules name, and an empty one is the smaller cost.
   check(
-    "and it says so rather than inventing a balance",
-    /No account factory is deployed yet/.test(text),
+    "the portfolio is summarised, not repeated",
+    /In your account/.test(text),
+  );
+  check(
+    "and it links to the page that has it",
+    (await page.getByRole("link", { name: /View full portfolio/ }).count()) > 0,
+  );
+  // A dash, not $0.00. Zero is a measurement — it says an account was read and found empty —
+  // and there is no account to read.
+  check(
+    "and says there is nothing to total rather than totalling nothing",
+    /account factory deployed yet/.test(text),
   );
   // The panel that could not exist without an indexer. It renders for a wallet-less visitor too,
   // because the claim is about any address rather than about theirs.
-  check(
-    "the mandates nobody can list are on the front door",
-    /What this wallet may spend/.test(text),
-  );
-  check(
-    "and it says why an indexer is the only way",
-    /no on-chain way to ask this/.test(text),
-  );
+
   check("the limits themselves", /The limits you set/.test(text));
   check("and the sentences it answers", /What you can ask it/.test(text));
   check(
@@ -259,6 +258,32 @@ const browser = await chromium.launch();
     (await page.getByPlaceholder(/Ask anything/i).count()) > 0,
   );
   check("which lives at /chat", new URL(page.url()).pathname === "/chat");
+}
+
+// 6. The portfolio has its own page now, and the two panels that only an indexer can answer live
+//    on it. Checked separately because a summary linking to a page nobody can load is worse than
+//    no summary.
+{
+  const page = await (await browser.newContext()).newPage();
+  await withWallet(page);
+  await page.goto(`${APP}/portfolio`, { waitUntil: "networkidle" });
+  await page
+    .getByRole("button", { name: /Verify wallet/ })
+    .click({ timeout: 20_000 });
+  await page
+    .getByRole("heading", { name: /Welcome|Portfolio/ })
+    .waitFor({ timeout: 30_000 });
+  const text = (await page.locator("body").innerText()).trim();
+  check("the portfolio page loads", /In your account/.test(text));
+  check("your account is on it", /Your account/.test(text));
+  check(
+    "and the mandates nobody can list",
+    /What this wallet may spend/.test(text),
+  );
+  check(
+    "which says why an indexer is the only way",
+    /no on-chain way to ask this/.test(text),
+  );
 }
 
 await browser.close();

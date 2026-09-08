@@ -310,11 +310,10 @@ function Compose({
         inside these limits, and only while you allow it.
       </p>
 
-      <div className="mt-5 space-y-4">
-        <Field
-          hint="The Uniswap v4 position the rules apply to."
-          label="Position number"
-        >
+      {/* Two columns for the numbers. Six full-width rows for six short integers was most of
+          why this panel read as long. */}
+      <div className="mt-5 space-y-4 [&_.pair]:grid [&_.pair]:gap-4 sm:[&_.pair]:grid-cols-2">
+        <Field hint="Uniswap v4, on Arbitrum One." label="Position">
           <Input
             inputMode="numeric"
             onChange={(e) => setTokenIdText(e.target.value)}
@@ -341,73 +340,75 @@ function Compose({
 
         {p && yours ? (
           <>
+            <div className="pair">
+              <Field
+                hint={`A whole number of this pool's ${spacing}-tick spacings. ${
+                  width === terms.rangeWidthTicks
+                    ? ""
+                    : `Rounded to ${width} to fit.`
+                }`}
+                label="Range width"
+              >
+                <Input
+                  inputMode="numeric"
+                  onChange={(e) =>
+                    setTerms({
+                      ...terms,
+                      rangeWidthTicks: Number(e.target.value) || 0,
+                    })
+                  }
+                  value={terms.rangeWidthTicks}
+                />
+              </Field>
+              <Field
+                hint="Basis points. Below it the agent may not act, so it cannot churn for nothing."
+                label="Worth the move"
+              >
+                <Input
+                  inputMode="numeric"
+                  onChange={(e) =>
+                    setTerms({
+                      ...terms,
+                      minImprovementBps: Number(e.target.value) || 0,
+                    })
+                  }
+                  value={terms.minImprovementBps}
+                />
+              </Field>
+              <Field
+                hint="Seconds between actions, at the shortest."
+                label="Cooldown"
+              >
+                <Input
+                  inputMode="numeric"
+                  onChange={(e) =>
+                    setTerms({
+                      ...terms,
+                      cooldownSeconds: Number(e.target.value) || 0,
+                    })
+                  }
+                  value={terms.cooldownSeconds}
+                />
+              </Field>
+              <Field
+                hint="Basis points. Re-centring withdraws it all; this is the least that goes back."
+                label="Keep invested"
+              >
+                <Input
+                  inputMode="numeric"
+                  onChange={(e) =>
+                    setTerms({
+                      ...terms,
+                      minRetainedBps: Number(e.target.value) || 0,
+                    })
+                  }
+                  value={terms.minRetainedBps}
+                />
+              </Field>
+            </div>
             <Field
-              hint={`A whole number of this pool's ${spacing}-tick spacings. ${
-                width === terms.rangeWidthTicks
-                  ? ""
-                  : `Rounded to ${width} to fit.`
-              }`}
-              label="How wide the range should be, in ticks"
-            >
-              <Input
-                inputMode="numeric"
-                onChange={(e) =>
-                  setTerms({
-                    ...terms,
-                    rangeWidthTicks: Number(e.target.value) || 0,
-                  })
-                }
-                value={terms.rangeWidthTicks}
-              />
-            </Field>
-            <Field
-              hint="Below this the agent may not act at all, so it cannot churn your position for nothing."
-              label="How much closer to the price a move must get, in basis points"
-            >
-              <Input
-                inputMode="numeric"
-                onChange={(e) =>
-                  setTerms({
-                    ...terms,
-                    minImprovementBps: Number(e.target.value) || 0,
-                  })
-                }
-                value={terms.minImprovementBps}
-              />
-            </Field>
-            <Field
-              hint="The shortest gap between two actions."
-              label="Seconds to wait between actions"
-            >
-              <Input
-                inputMode="numeric"
-                onChange={(e) =>
-                  setTerms({
-                    ...terms,
-                    cooldownSeconds: Number(e.target.value) || 0,
-                  })
-                }
-                value={terms.cooldownSeconds}
-              />
-            </Field>
-            <Field
-              hint="Re-centring withdraws everything and mints again. This is the least that has to go back in."
-              label="Share of the position that must stay invested, in basis points"
-            >
-              <Input
-                inputMode="numeric"
-                onChange={(e) =>
-                  setTerms({
-                    ...terms,
-                    minRetainedBps: Number(e.target.value) || 0,
-                  })
-                }
-                value={terms.minRetainedBps}
-              />
-            </Field>
-            <Field
-              hint="The agent's authority lapses then, with nothing for you to do."
-              label="Days until the rules lapse"
+              hint="Days. The authority lapses on its own."
+              label="Expires in"
             >
               <Input
                 inputMode="numeric"

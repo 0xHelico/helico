@@ -36,7 +36,7 @@ export function Grants() {
   const publicClient = usePublicClient({ chainId: CHAIN_ID });
   const { writeContractAsync } = useWriteContract();
 
-  const active = useReadContract({
+  const isActive = useReadContract({
     abi: vaultAbi,
     address: vault ?? undefined,
     chainId: CHAIN_ID,
@@ -56,51 +56,38 @@ export function Grants() {
         functionName: "revoke",
       });
       await publicClient?.waitForTransactionReceipt({ hash });
-      await active.refetch();
+      await isActive.refetch();
     },
   });
 
-  const live = Boolean(active.data);
+  const active = Boolean(isActive.data);
   const canToggle = Boolean(vault && isConnected && chainId === CHAIN_ID);
 
   return (
-    <ul className="mt-5 grid gap-2.5">
+    <ul className="mt-4 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
       {GRANTS.map((g) => {
         // Keyed off the flag, not the position. This read `i === 0` until the list was
-        // reordered on 8 September, at which point the switch would have followed the order
-        // rather than the contract — and nothing would have said so.
-        const first = g.wired;
+        // reordered, at which point the switch would have followed the order rather than the
+        // contract — and nothing would have said so.
+        const live = g.wired;
         return (
           <li
             className={cn(
-              "glyph-hover flex items-start gap-4 rounded-2xl border p-4 transition-colors",
-              g.wired
-                ? "bg-card hover:border-[var(--helico-on)]/40"
-                : "border-dashed opacity-55",
+              "glyph-hover flex flex-col rounded-2xl border p-4 transition-colors",
+              live
+                ? "border-line bg-white hover:border-[var(--helico-on)]/40"
+                : "border-dashed bg-transparent",
             )}
             key={g.name}
           >
-            <span className="mt-0.5 shrink-0">
-              <Glyph name={g.glyph} size={34} />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="font-medium text-[13.5px] leading-none">{g.name}</p>
-              <p className="mt-2 text-muted-foreground text-xs leading-relaxed">
-                {g.detail}
-              </p>
-              {first && revoke.error ? (
-                <p className="mt-2 text-destructive text-xs">
-                  {revoke.error.message.split("\n")[0]}
-                </p>
-              ) : null}
-            </div>
-            <div className="flex shrink-0 flex-col items-end gap-1.5">
-              {first && revoke.isPending ? (
-                <Loader2 className="size-4 animate-spin text-muted-foreground" />
-              ) : first ? (
+            <div className="flex items-start justify-between gap-3">
+              <Glyph name={g.glyph} size={28} />
+              {live && revoke.isPending ? (
+                <Loader2 className="mt-1 size-4 animate-spin text-faint" />
+              ) : live ? (
                 <Switch
                   aria-label={g.name}
-                  checked={live}
+                  checked={active}
                   disabled={!canToggle}
                   onCheckedChange={(next) => {
                     if (next) {
@@ -115,10 +102,21 @@ export function Grants() {
               ) : (
                 <Switch aria-label={g.name} checked={false} disabled />
               )}
-              <span className="text-[10.5px] text-muted-foreground/60">
-                {first ? (live ? "granted" : "not granted") : "not wired yet"}
-              </span>
             </div>
+            <p className="mt-3 font-medium text-[13px] text-ink leading-none">
+              {g.name}
+            </p>
+            <p className="mt-2 flex-1 text-[11.5px] text-soft leading-relaxed">
+              {g.detail}
+            </p>
+            <p className="mt-3 text-[10.5px] text-faint">
+              {live ? (active ? "granted" : "not granted") : "not wired yet"}
+            </p>
+            {live && revoke.error ? (
+              <p className="mt-1 text-[10.5px] text-neg">
+                {revoke.error.message.split("\n")[0]}
+              </p>
+            ) : null}
           </li>
         );
       })}
@@ -126,7 +124,6 @@ export function Grants() {
   );
 }
 
-/** Sentences the conversation answers today. Each happens once, and you sign it. */
 export function Asks() {
   return (
     <ul className="mt-5 grid gap-2.5 sm:grid-cols-3">
