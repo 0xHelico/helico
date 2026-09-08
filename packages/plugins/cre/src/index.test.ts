@@ -1216,7 +1216,7 @@ describe('every account the factory opened', () => {
  * the agent key, three router credentials. A simulator never reaches it, because a simulated run
  * reads secrets from the environment and asks no DON at all.
  */
-describe('the secrets request the relay will actually answer', () => {
+describe('the secrets a TEE handler asks for', () => {
 	const withModel: Partial<Config> = {
 		delivery: 'signature',
 		chainId: 42_161,
@@ -1230,46 +1230,47 @@ describe('the secrets request the relay will actually answer', () => {
 		AI_API_KEY: 'k',
 	}
 
-	test('asks for eleven secrets, and never more than ten in one request', async () => {
+	/**
+	 * Every production run failed on the batch form — `batch secret retrieval failed for 11
+	 * request(s)`, then `for 10` after chunking changed the count and nothing else. Chainlink's
+	 * reference for Confidential Workflows shows the singular form at the point of use, and
+	 * `SecretsProvider` exposes both, so nothing in the types chooses for you.
+	 */
+	test('asks for each secret on its own, never as a batch', async () => {
 		const { secretRequests, secretBatches } = await run({ ...allIdle, nonce: 7n }, withModel, {
 			secrets: allKeys,
 		})
 
 		expect(secretRequests).toHaveLength(11)
-		expect(secretBatches.length).toBeGreaterThan(1)
-		for (const batch of secretBatches) expect(batch.length).toBeLessThanOrEqual(10)
-		// Every id still arrives. Chunking that quietly dropped the tail would take the agent key
-		// with it on this configuration and not on one without the model.
 		expect(new Set(secretRequests).size).toBe(11)
+		// One request per secret is the shape under test: eleven requests of one, not one of
+		// eleven and not two of eight and three.
+		expect(secretBatches).toHaveLength(11)
+		for (const batch of secretBatches) expect(batch).toHaveLength(1)
 		expect(secretRequests).toContain('AGENT_KEY')
 	})
 
-	/**
-	 * The second half of the same failure, and the half that actually caused it. Batching changed
-	 * `11 request(s)` to `10 request(s)` in the error and nothing else — because the request was
-	 * never too big, it was addressed to the empty namespace. Every node looked for a secret that
-	 * is not there, and enough errors became `relay quorum unreachable`, which reads like an
-	 * outage.
-	 */
 	test('every request names the namespace the secrets were created in', async () => {
 		const { secretBatches } = await run({ ...allIdle, nonce: 7n }, withModel, {
 			secrets: allKeys,
 		})
-		expect(secretBatches.length).toBeGreaterThan(0)
 		for (const batch of secretBatches) {
 			for (const req of batch) expect(req.namespace).toBe('main')
 		}
 	})
 
-	test('a run without the model asks once, because eight fits', async () => {
-		const { secretBatches } = await run(
+	/**
+	 * A batch that fails names the count and not the secret, so eleven ids fail as one opaque
+	 * event. One at a time, the failure names the id — and `AGENT_KEY` failing is a different
+	 * sentence from `AI_API_KEY` failing.
+	 */
+	test('a run without the model asks for eight, and still one at a time', async () => {
+		const { secretRequests, secretBatches } = await run(
 			{ ...allIdle, nonce: 7n },
 			{ delivery: 'signature', chainId: 42_161 },
-			{
-				secrets: { ...secrets, AGENT_KEY: agentKey },
-			},
+			{ secrets: { ...secrets, AGENT_KEY: agentKey } },
 		)
-		expect(secretBatches).toHaveLength(1)
-		expect(secretBatches[0]).toHaveLength(8)
+		expect(secretRequests).toHaveLength(8)
+		expect(secretBatches).toHaveLength(8)
 	})
 })
