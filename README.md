@@ -184,10 +184,10 @@ hard-coded.
 
 | What | Where |
 |---|---|
-| The mandate a maker ships, and what each field is for | [`HelicoMandateSwap.sol#L19-L60`](https://github.com/0xHelico/helico/blob/89054c6fe9fdb8c7cfe7b978e11f9b37a1e42c25/contracts/src/HelicoMandateSwap.sol#L19-L60) |
-| The swap: gate, rules, quote, ceiling, then settle | [`HelicoMandateSwap.sol#L157-L183`](https://github.com/0xHelico/helico/blob/89054c6fe9fdb8c7cfe7b978e11f9b37a1e42c25/contracts/src/HelicoMandateSwap.sol#L157-L183) |
-| Delivery before payment, and the check that makes it safe | [`HelicoMandateSwap.sol#L187-L202`](https://github.com/0xHelico/helico/blob/89054c6fe9fdb8c7cfe7b978e11f9b37a1e42c25/contracts/src/HelicoMandateSwap.sol#L187-L202) |
-| A quote anyone may ask for, under the same rules | [`HelicoMandateSwap.sol#L126-L134`](https://github.com/0xHelico/helico/blob/89054c6fe9fdb8c7cfe7b978e11f9b37a1e42c25/contracts/src/HelicoMandateSwap.sol#L126-L134) |
+| The mandate a maker ships, and what each field is for | [`HelicoMandateSwap.sol#L37-L90`](https://github.com/0xHelico/helico/blob/247db3ba454ba058411f958850f38bc7c1739cca/contracts/src/HelicoMandateSwap.sol#L37-L90) |
+| The swap: gate, rules, quote, ceiling, then settle | [`HelicoMandateSwap.sol#L229-L256`](https://github.com/0xHelico/helico/blob/247db3ba454ba058411f958850f38bc7c1739cca/contracts/src/HelicoMandateSwap.sol#L229-L256) |
+| Delivery before payment, and the check that makes it safe | [`HelicoMandateSwap.sol#L378-L393`](https://github.com/0xHelico/helico/blob/247db3ba454ba058411f958850f38bc7c1739cca/contracts/src/HelicoMandateSwap.sol#L378-L393) |
+| A quote anyone may ask for, under the same rules | [`HelicoMandateSwap.sol#L196-L206`](https://github.com/0xHelico/helico/blob/247db3ba454ba058411f958850f38bc7c1739cca/contracts/src/HelicoMandateSwap.sol#L196-L206) |
 
 **Two corrections, kept rather than quietly edited, because the second overturns the first.**
 
