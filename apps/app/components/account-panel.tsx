@@ -1,31 +1,27 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { formatUnits } from "viem";
-import { useAccount, usePublicClient } from "wagmi";
+import { useMutation } from "@tanstack/react-query";
+import { type Address, formatUnits } from "viem";
+import { useAccount, usePublicClient, useWriteContract } from "wagmi";
 
+import { Glyph } from "@/components/glyph";
 import {
+  AssetTile,
   Card,
   Loading,
   NotDeployed,
   SectionTitle,
   StatTile,
 } from "@/components/kit";
+import { TokenMark } from "@/components/token-mark";
+import { Button } from "@/components/ui/button";
+import { CHAIN_ID, useAccountState } from "@/hooks/use-account-state";
 import {
-  type AccountState,
   configuredFactory,
+  factoryAbi,
   hasAgent,
-  readAccount,
   workingBps,
 } from "@/lib/account";
-
-// Arbitrum One. The idle side is what a swap is paid from; the working side is Aave's receipt
-// for the same asset, which is why they are the same token in two states rather than two assets.
-const USDC = "0xaf88d065e77c8cC2239327C5EDb3A432268e5831" as const;
-const AUSDC = "0x724dc807b04555b71ed48a6896b6F41593b8C637" as const;
-
-// Arbitrum One, the same chain the rest of the app reads.
-const CHAIN_ID = 42161;
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 const usdc = (v: bigint) =>
@@ -54,19 +50,27 @@ function _Row({ label, value }: { label: string; value: string }) {
  * difference between a missing environment variable and a new user.
  */
 export function AccountPanel() {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, chainId } = useAccount();
   const client = usePublicClient({ chainId: CHAIN_ID });
   const factory = configuredFactory();
+  const { writeContractAsync } = useWriteContract();
 
-  const { data, error } = useQuery<AccountState>({
-    enabled: Boolean(client && address),
-    queryKey: ["account", factory, address],
-    queryFn: async () => {
-      if (!(client && address)) throw new Error("no client");
-      return readAccount(client, factory, address, {
-        idle: USDC,
-        working: AUSDC,
+  // One read for the page. The hero and the summary ask for the same key, so react-query
+  // answers all three from a single set of calls rather than three of everything.
+  const { data, error, refetch } = useAccountState();
+
+  const openAccount = useMutation({
+    mutationFn: async () => {
+      if (!(factory && client && address)) throw new Error("nothing to open");
+      const hash = await writeContractAsync({
+        abi: factoryAbi,
+        address: factory,
+        args: [address as Address],
+        chainId: CHAIN_ID,
+        functionName: "open",
       });
+      await client.waitForTransactionReceipt({ hash });
+      await refetch();
     },
   });
 
@@ -113,32 +117,61 @@ export function AccountPanel() {
       </div>
 
       <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <StatTile
-          name="Liquid"
+        <AssetTile
+          mark={<TokenMark symbol="USDC" />}
+          note="liquid"
+          symbol="USDC"
           tint="bg-[#eef3fb]"
-          value={`${usdc(data.idle)} USDC`}
+          value={usdc(data.idle)}
         />
-        <StatTile
-          name="Working"
-          note={bps === null ? undefined : `${(bps / 100).toFixed(1)}% at work`}
+        <AssetTile
+          mark={<TokenMark symbol="aUSDC" />}
+          note={
+            bps === null ? "working" : `working · ${(bps / 100).toFixed(1)}%`
+          }
+          symbol="aUSDC"
           tint="bg-[#ecf5f0]"
-          value={`${usdc(data.working)} USDC`}
+          value={usdc(data.working)}
         />
         <StatTile
+          icon={<Glyph name="wings" size={24} />}
           name="Agent"
+          note={hasAgent(data) ? "nominated" : "nobody may move it"}
           value={
-            hasAgent(data)
-              ? short((data as { agent: string }).agent)
-              : "none nominated"
+            hasAgent(data) ? short((data as { agent: string }).agent) : "none"
           }
         />
       </div>
 
       <p className="mt-4 text-[11px] text-faint leading-relaxed">
         {opened
-          ? "The agent may move capital between markets you allow-listed. Neither call it can make takes a recipient, so it cannot send anything anywhere but here."
+          ? hasAgent(data)
+            ? "The agent may move capital between markets you allow-listed. Neither call it can make takes a recipient, so it cannot send anything anywhere but here."
+            : "Nobody is nominated, so nothing here moves without you. The workflow running in the enclave watches the one account named in its configuration — opening this one does not add it."
           : "This address is what CREATE2 says it will be. Tokens sent to it now are still yours when it exists."}
       </p>
+
+      {opened ? null : (
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <Button
+            disabled={openAccount.isPending || chainId !== CHAIN_ID}
+            onClick={() => openAccount.mutate()}
+            size="sm"
+          >
+            {openAccount.isPending ? "Opening…" : "Open this account"}
+          </Button>
+          <span className="text-[11px] text-faint">
+            {chainId === CHAIN_ID
+              ? "One transaction, from your wallet. It grants nothing and takes nothing."
+              : "Switch to Arbitrum One to open it."}
+          </span>
+        </div>
+      )}
+      {openAccount.error ? (
+        <p className="mt-2 text-[11px] text-neg">
+          {openAccount.error.message.split("\n")[0]}
+        </p>
+      ) : null}
     </Card>
   );
 }

@@ -3,6 +3,7 @@ package httpapi
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"io"
@@ -11,6 +12,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4/ecdsa"
@@ -429,6 +431,8 @@ func TestTheSessionCookieHasTheAttributesItNeeds(t *testing.T) {
 	if !cookie.HttpOnly {
 		t.Error("the cookie is readable from script")
 	}
+	// This server is TLS, which is the deployed shape. The one case that drops Secure — plain
+	// HTTP on loopback — is covered by TestTheCookieKeepsSecureEverywhereButTheLocalRun.
 	if !cookie.Secure {
 		t.Error("the cookie would travel on a plain connection")
 	}
@@ -527,4 +531,46 @@ func TestSignInRefusesABodyThatDoesNotSayItIsJSON(t *testing.T) {
 			t.Fatal("an accepted sign-in set no cookie")
 		}
 	})
+}
+
+// The one place Secure is dropped, and the three places it is not.
+//
+// Chrome and Firefox store a Secure cookie from http://localhost and Safari does not, so setting
+// it unconditionally meant a local sign-in that no reload survived on one of the three — which
+// looks exactly like a broken session rather than a cookie policy.
+//
+// The forwarded-proto rows are the ones worth having. That header is attacker-controlled, so it
+// is trusted here only in the direction that *keeps* Secure; nothing a caller can send takes it
+// away from a deployed request.
+func TestTheCookieKeepsSecureEverywhereButTheLocalRun(t *testing.T) {
+	for _, c := range []struct {
+		name       string
+		host       string
+		tls        bool
+		forwarded  string
+		wantSecure bool
+	}{
+		{name: "plain loopback by name", host: "localhost:8787"},
+		{name: "plain loopback by address", host: "127.0.0.1:8787"},
+		{name: "plain loopback v6", host: "[::1]:8787"},
+		{name: "behind a proxy that terminated TLS", host: "api.helico.site", forwarded: "https", wantSecure: true},
+		{name: "TLS at the process", host: "api.helico.site", tls: true, wantSecure: true},
+		{name: "plain, but not loopback", host: "10.0.0.4:8787", wantSecure: true},
+		{name: "loopback host claimed from outside, over TLS", host: "localhost:8787", tls: true, wantSecure: true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodPost, "/api/session", nil)
+			r.Host = c.host
+			if c.tls {
+				r.TLS = &tls.ConnectionState{}
+			}
+			if c.forwarded != "" {
+				r.Header.Set("X-Forwarded-Proto", c.forwarded)
+			}
+			got := (&api{}).sessionCookie(r, "value", time.Hour).Secure
+			if got != c.wantSecure {
+				t.Errorf("Secure = %v, want %v", got, c.wantSecure)
+			}
+		})
+	}
 }

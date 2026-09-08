@@ -6,8 +6,23 @@
  * rewriting it. `credentials: "include"` is what carries it; the backend's CORS allow-list is
  * what permits it. The swap intent keeps going through `/api/chat`, which has its own reason.
  */
-const BASE = (
-  process.env.NEXT_PUBLIC_BE_API_URL ?? "https://api.helico.site"
+/**
+ * A local run talks to a local backend, and that is correctness rather than convenience.
+ *
+ * The session is a cookie with `SameSite=Lax`, and `localhost` and `helico.site` are different
+ * *sites*. A page on `http://localhost:3000` pointed at `https://api.helico.site` signs in, gets
+ * the cookie, and never sends it again: every reload reads as a sign-out, and the sign-in that
+ * looked like it worked is the reason that is confusing rather than obvious. Both sides on
+ * `localhost` makes the request same-site, which is the only arrangement the session survives.
+ *
+ * `||` rather than `??` on purpose: an empty value in a `.env` file means "I did not set this",
+ * and treating it as a base URL of `""` silently turns every call into a relative one.
+ */
+export const API_BASE = (
+  process.env.NEXT_PUBLIC_BE_API_URL ||
+  (process.env.NODE_ENV === "development"
+    ? "http://localhost:8787"
+    : "https://api.helico.site")
 ).replace(/\/$/, "");
 
 export class ApiError extends Error {
@@ -35,7 +50,7 @@ const TIMEOUT_MS = 12_000;
 const SESSION_TIMEOUT_MS = 3000;
 
 async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await fetch(`${API_BASE}${path}`, {
     ...init,
     credentials: "include",
     signal: init.signal ?? AbortSignal.timeout(TIMEOUT_MS),

@@ -5,7 +5,10 @@ import {
   type MakerMandates,
   makerMandates,
   query,
+  type Subgraph,
 } from "@helico/plugin-thegraph";
+
+import { API_BASE } from "@/lib/api";
 
 /**
  * What a wallet is allowed to spend through Aqua, which the chain cannot tell you.
@@ -16,10 +19,38 @@ import {
  * faster way to answer this question. It is the only way.
  *
  * The endpoint is a Subgraph Studio deployment: no key, and `access-control-allow-origin: *`, so
- * the browser asks it directly. Nothing here goes through our backend, which means this panel
- * keeps working when everything of ours is down.
+ * the browser can ask it directly — and does, whenever our own cache is not there.
  */
 export const AQUA_SUBGRAPH = HELICO_AQUA[42161];
+
+/**
+ * The same subgraph, through our cache.
+ *
+ * Studio's free tier is metered per month, and every visitor asking the same two questions on
+ * every page load spends it on answers we already had. The backend forwards the identical
+ * `{query, variables}` body and returns the subgraph's own JSON, so this is a URL swap and
+ * nothing more — the queries stay in `@helico/plugin-thegraph`, which is what the submission
+ * points at, and the backend never learns the schema.
+ */
+const CACHED: Subgraph = { ...AQUA_SUBGRAPH, url: `${API_BASE}/api/graph` };
+
+/**
+ * Ask the cache; ask Studio if the cache does not answer.
+ *
+ * This is what keeps the old property. Reading straight from Studio meant these panels worked
+ * when everything of ours was down, and routing them through our backend would have quietly
+ * traded that away for a smaller bill. Now the backend is an optimisation: when it is missing,
+ * slow, or refusing, the page is exactly as good as it was before it existed.
+ */
+async function viaCache<T>(
+  ask: (subgraph: Subgraph) => Promise<T>,
+): Promise<T> {
+  try {
+    return await ask(CACHED);
+  } catch {
+    return await ask(AQUA_SUBGRAPH);
+  }
+}
 
 export type MandateRow = {
   strategyHash: string;
@@ -38,7 +69,7 @@ export type MandateView = {
 };
 
 export async function readMandates(maker: string): Promise<MandateView> {
-  const answer: MakerMandates = await makerMandates(AQUA_SUBGRAPH, maker);
+  const answer: MakerMandates = await viaCache((s) => makerMandates(s, maker));
   return {
     maker: answer.maker,
     rows: answer.mandates.map((m) => ({
@@ -136,14 +167,33 @@ const PAGE = 1000;
 export async function readMovements(
   maker: string,
 ): Promise<{ timestamps: number[]; capped: boolean }> {
-  const raw = await query<{ movements: { timestamp: string }[] }>(
-    AQUA_SUBGRAPH,
-    { apiKey: "" },
-    MOVEMENTS,
-    { maker: maker.toLowerCase(), first: PAGE },
+  const raw = await viaCache((subgraph) =>
+    query<{ movements: { timestamp: string }[] }>(
+      subgraph,
+      { apiKey: "" },
+      MOVEMENTS,
+      { maker: maker.toLowerCase(), first: PAGE },
+    ),
   );
   return {
     timestamps: raw.movements.map((m) => Number(m.timestamp)),
     capped: raw.movements.length === PAGE,
   };
+}
+
+/**
+ * Aqua apps this repository can name.
+ *
+ * Two of them are ours and one is 1inch's, and the table says which without the reader having to
+ * recognise a hex prefix. Anything else stays an address: a wrong name beside a real balance is
+ * the mistake this file avoids everywhere else.
+ */
+const APPS: Record<string, string> = {
+  "0xa16d313816247628deb7d89dc7a3cf4adb5287ed": "HelicoMandateSwap",
+  "0xb8c9f14d46bf387a6d70d796df30f11a0eb8c3be": "Helico SwapVM",
+  "0x111111338c5091e8440b67b168bae16a668ac0de": "1inch SwapVM",
+};
+
+export function appName(address: string): string | null {
+  return APPS[address.toLowerCase()] ?? null;
 }

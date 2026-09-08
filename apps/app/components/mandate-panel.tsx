@@ -18,6 +18,7 @@ import {
   useReadContracts,
   useWriteContract,
 } from "wagmi";
+import { Glyph, type GlyphName } from "@/components/glyph";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -313,7 +314,11 @@ function Compose({
       {/* Two columns for the numbers. Six full-width rows for six short integers was most of
           why this panel read as long. */}
       <div className="mt-5 space-y-4 [&_.pair]:grid [&_.pair]:gap-4 sm:[&_.pair]:grid-cols-2">
-        <Field hint="Uniswap v4, on Arbitrum One." label="Position">
+        <Field
+          hint="Uniswap v4, on Arbitrum One."
+          glyph="document"
+          label="Position"
+        >
           <Input
             inputMode="numeric"
             onChange={(e) => setTokenIdText(e.target.value)}
@@ -347,6 +352,7 @@ function Compose({
                     ? ""
                     : `Rounded to ${width} to fit.`
                 }`}
+                glyph="arcs"
                 label="Range width"
               >
                 <Input
@@ -362,6 +368,7 @@ function Compose({
               </Field>
               <Field
                 hint="Basis points. Below it the agent may not act, so it cannot churn for nothing."
+                glyph="percent"
                 label="Worth the move"
               >
                 <Input
@@ -377,6 +384,7 @@ function Compose({
               </Field>
               <Field
                 hint="Seconds between actions, at the shortest."
+                glyph="scales"
                 label="Cooldown"
               >
                 <Input
@@ -392,6 +400,7 @@ function Compose({
               </Field>
               <Field
                 hint="Basis points. Re-centring withdraws it all; this is the least that goes back."
+                glyph="leaf"
                 label="Keep invested"
               >
                 <Input
@@ -408,6 +417,7 @@ function Compose({
             </div>
             <Field
               hint="Days. The authority lapses on its own."
+              glyph="layers"
               label="Expires in"
             >
               <Input
@@ -465,17 +475,22 @@ function Compose({
 function Field({
   label,
   hint,
+  glyph,
   children,
 }: {
   label: string;
   hint?: string;
+  glyph?: GlyphName;
   children: React.ReactNode;
 }) {
   return (
     <div className="space-y-1.5">
-      <Label className="font-normal text-sm">{label}</Label>
+      <Label className="flex items-center gap-2 font-normal text-[13px] text-ink">
+        {glyph ? <Glyph name={glyph} size={20} /> : null}
+        {label}
+      </Label>
       {children}
-      {hint ? <p className="text-muted-foreground text-xs">{hint}</p> : null}
+      {hint ? <p className="text-[11.5px] text-soft">{hint}</p> : null}
     </div>
   );
 }

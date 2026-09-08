@@ -31,23 +31,78 @@ function path(days: Day[], max: number): { line: string; area: string } {
   return { line, area: `${line} L${x(n - 1)},${H} L${x(0)},${H} Z` };
 }
 
-export function Sparkline({ days, label }: { days: Day[]; label: string }) {
-  if (days.length === 0) return null;
-  const max = Math.max(...days.map((d) => d.count), 1);
-  const { line, area } = path(days, max);
-  const busiest = days.reduce((a, b) => (b.count > a.count ? b : a));
+/**
+ * Where to draw a rule, as a share of the plot's height.
+ *
+ * The same expression as `y` above rather than a second one that agrees with it today: a
+ * gridline that sits a pixel off its own value is worse than no gridline, because it is read as
+ * the value it is nearest.
+ */
+const pct = (v: number, max: number) =>
+  ((PAD + (1 - v / max) * (H - PAD)) / H) * 100;
 
-  return (
-    <figure className="mt-4">
-      <figcaption className="flex items-baseline justify-between gap-4">
-        <span className="text-[11.5px] text-soft">{label}</span>
-        <span className="tabular text-[11px] text-faint">
-          busiest {busiest.date} · {busiest.count}
-        </span>
-      </figcaption>
+/**
+ * A scale to rule and label, and the top of it.
+ *
+ * Three even gaps ending on a round number, rather than thirds of whatever the busiest day
+ * happened to be — dividing 7 into thirds gives 0, 2, 5, 7, which are four numbers with no
+ * pattern between them and read as arbitrary because they are.
+ *
+ * The steps are whole numbers throughout. These are counts of events, so a gridline at 2.5 would
+ * be a line at a value the data cannot take.
+ */
+function niceScale(max: number): { top: number; ticks: number[] } {
+  // Aim for four gaps, then let the top be the first multiple of the step that covers the data.
+  // Fixing the number of gaps instead pushes the top far above the busiest day — a 10 charted to
+  // 15 leaves a third of the plot empty and makes a busy week look like a quiet one.
+  const step = Math.max(1, niceStep(max / 4));
+  const top = Math.ceil(max / step) * step;
+  const ticks: number[] = [];
+  for (let v = top; v >= 0; v -= step) ticks.push(v);
+  return { top, ticks };
+}
+
+/** The next 1, 2 or 5 times a power of ten at or above `n`, which is what a reader expects. */
+function niceStep(n: number): number {
+  const mag = 10 ** Math.floor(Math.log10(n));
+  return ([1, 2, 5, 10].map((m) => m * mag).find((s) => s >= n) ??
+    10 * mag) as number;
+}
+
+/** A handful of dates spread across the range, first and last always among them. */
+function dateLabels(days: Day[], want: number): string[] {
+  if (days.length <= want) return days.map((d) => d.date);
+  const step = (days.length - 1) / (want - 1);
+  return Array.from(
+    { length: want },
+    (_, i) => (days[Math.round(i * step)] as Day).date,
+  );
+}
+
+export function Sparkline({
+  days,
+  label,
+  axes = false,
+}: {
+  days: Day[];
+  label: string;
+  /** Rules, a scale and dates along the bottom. Off by default: the summary has no room. */
+  axes?: boolean;
+}) {
+  if (days.length === 0) return null;
+  const busiest = days.reduce((a, b) => (b.count > a.count ? b : a));
+  // With rules drawn, the plot is scaled to the top of the scale rather than to the busiest day,
+  // or the top gridline would sit above the line it is meant to measure.
+  const scale = niceScale(Math.max(busiest.count, 1));
+  const max = axes ? scale.top : Math.max(busiest.count, 1);
+  const { line, area } = path(days, max);
+  const ticks = axes ? scale.ticks : [];
+
+  const plot = (
+    <>
       <svg
         aria-label={`${label}. ${days.length} days, busiest ${busiest.date} with ${busiest.count}.`}
-        className="chart-reveal mt-2 w-full"
+        className="chart-reveal block w-full"
         height={H}
         preserveAspectRatio="none"
         role="img"
@@ -86,12 +141,63 @@ export function Sparkline({ days, label }: { days: Day[]; label: string }) {
           vectorEffect="non-scaling-stroke"
         />
       </svg>
-      <div className="mt-1 flex justify-between text-[10.5px] text-faint">
-        <span>{days[0]?.date}</span>
-        <span>{days[days.length - 1]?.date}</span>
-      </div>
+    </>
+  );
+
+  // The rules and the scale are HTML, not SVG. This chart is drawn with
+  // `preserveAspectRatio="none"` so the line fills whatever width it is given, and anything with
+  // a shape of its own inside that viewBox — a glyph, a dash pattern — comes out stretched by
+  // however wide the card happens to be.
+  return (
+    <figure className="mt-4">
+      <figcaption className="flex items-baseline justify-between gap-4">
+        <span className="text-[11.5px] text-soft">{label}</span>
+        <span className="tabular text-[11px] text-faint">
+          busiest {busiest.date} · {busiest.count}
+        </span>
+      </figcaption>
+
+      {axes ? (
+        <>
+          <div className="relative mt-3 pl-8">
+            {ticks.map((v) => (
+              <div key={v}>
+                <span
+                  className="tabular -translate-y-1/2 absolute left-0 w-6 text-right text-[10px] text-faint leading-none"
+                  style={{ top: `${pct(v, max)}%` }}
+                >
+                  {v}
+                </span>
+                <span
+                  className="absolute right-0 left-8 border-line border-t border-dashed"
+                  style={{ top: `${pct(v, max)}%` }}
+                />
+              </div>
+            ))}
+            {plot}
+          </div>
+          <div className="mt-2 flex justify-between pl-8 text-[10.5px] text-faint">
+            {dateLabels(days, 5).map((d) => (
+              <span key={d}>{d}</span>
+            ))}
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="mt-2">{plot}</div>
+          <div className="mt-1 flex justify-between text-[10.5px] text-faint">
+            <span>{days[0]?.date}</span>
+            <span>{days[days.length - 1]?.date}</span>
+          </div>
+        </>
+      )}
     </figure>
   );
+}
+
+/** The last `n` days of a series, or all of it. One row is one day, so this is a date range. */
+export function lastDays(days: Day[], n: number | null): Day[] {
+  return n === null || days.length <= n ? days : days.slice(-n);
 }
 
 /**
