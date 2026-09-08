@@ -47,14 +47,20 @@ of 0.00005 ETH, so the agent's balance covers hundreds.
 - [ ] **The production agent key must eventually be the DON's.** For the hackathon it is a key on
       a laptop, which is not what "the key never leaves the enclave" means. Fine for a demo, and
       worth saying rather than implying otherwise — the video's do-not-say list already carries it.
-- [ ] **Who runs the relayer, and where its key lives.** Nothing calls `factory.open` yet:
-      `grep -rn "open(" apps/be apps/app` finds nothing. The wallet exists and is funded; the code
-      that uses it does not, and it belongs with the frontend work in #175.
+- [ ] **Who runs the relayer, and where its key lives.** #186 gave the app the read half —
+      `apps/app/lib/account.ts` calls `accountFor` and renders the account before it exists. The
+      write half is still missing: nothing sends `open`, in either `apps/app` or `apps/be`, so
+      today a user's account has to be opened for them by hand. The wallet exists and is funded;
+      the code that spends it does not. Still part of #175.
 
 ## Preconditions
 
-- [ ] **#182 merged** — the account contracts are not on `main` until it is
-- [ ] **#176 merged** — the workflow that reads the account
+- [x] **#182 merged** — 8 September 13:28 WIB. The account contracts are on `main`
+- [x] **#176 merged** — 8 September 13:32 WIB. The workflow that reads the account
+- [ ] **[#188](https://github.com/0xHelico/helico/pull/188) decided** — it changes
+      `HelicoAccount.withdrawIdle`, so it changes the implementation bytecode. Deploying before it
+      lands means the first upgrade is a bug fix, on the day the upgrade path is least rehearsed.
+      Merging it first costs a review; deploying without it costs an upgrade
 - [ ] `forge test`, the fork suite and `check-storage-layout.py` green on `main`
 - [ ] Deployer funded on Arbitrum One (chain id 42161)
 
@@ -126,11 +132,12 @@ be the surprising result, not the reassuring one.
 
 ## What can be deployed before all of this
 
-`HelicoMandateSwap` stands outside the chain above: CRE does not read it, and nothing in the open
-PRs changes its behaviour. Its source on `main` is byte-identical to the account branch's; the
-compiled bytecode differs only in the trailing metadata hash, because `ILendingVenue` gained a
-function the swap does not call. So deploying it now is safe, with one wrinkle worth knowing:
-Arbiscan would verify it against `main`'s sources, and those move when #182 lands.
+`HelicoMandateSwap` stands outside the chain above: CRE does not read it, and nothing still open
+changes its behaviour. The wrinkle this section used to carry is gone — #182 landed, so `main` is
+the source Arbiscan would verify against and it is not about to move underneath a verification.
+
+It is still the one contract that can be deployed while the account questions are open, because
+nothing above depends on it and it depends on nothing above.
 
 ## Do not deploy
 
