@@ -103,3 +103,25 @@ type Movement @entity(immutable: true) {
   block: BigInt!
   tx: Bytes!
 }
+
+"""
+An account opened by `HelicoAccountFactory`, and the reason this subgraph indexes a contract of
+ours alongside 1inch's.
+
+The enclave manages accounts, and until this existed it managed exactly one — the address written
+into `config.production.json` by hand. Nothing enumerated the others, so an account a stranger
+opened sat there with no agent looking at it while the panel that showed it implied otherwise.
+
+`AccountOpened` indexes the owner, so this is recoverable from logs alone; it is here rather than
+in an `eth_getLogs` loop because the workflow already queries this endpoint for mandate demand,
+and one round trip that returns both is cheaper inside an enclave than two.
+"""
+type Account @entity(immutable: true) {
+  "The account's address. Deterministic from the owner — `keccak256(abi.encode(owner))` as the CREATE2 salt."
+  id: Bytes!
+  "The wallet the account belongs to, fixed in the proxy's bytecode and never changeable."
+  owner: Bytes!
+  openedAt: BigInt!
+  openedAtBlock: BigInt!
+  openedTx: Bytes!
+}

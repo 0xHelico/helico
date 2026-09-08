@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import type { IdlePolicy } from './policy'
 import {
+	accountsFromResponse,
+	accountsNote,
+	accountsToManage,
 	bufferNote,
 	demandFromResponse,
 	demandHttpRequest,
@@ -302,5 +305,94 @@ describe('bufferNote', () => {
 		expect(bufferNote(policy, { known: false, reason: 'answered HTTP 502' })).toBe(
 			'buffer 100000000: policy floor only, the subgraph answered HTTP 502',
 		)
+	})
+})
+
+describe('the accounts the enclave manages', () => {
+	const A = '0xAAaaAAaAaaAAAAAaaAAaAAaAaaaAAaaAaAaAAaaA'
+	const B = '0xbbBBbbbbBBBbbBBbBBbBBbBbBBbBbBbbbbbbBBBB'
+	const answer = (ids: string[]) =>
+		JSON.stringify({ data: { accounts: ids.map((id) => ({ id, owner: id })) } })
+
+	test('reads the list, lower-cased, in the order the index returned it', () => {
+		expect(accountsFromResponse(answer([A, B]))).toEqual({
+			known: true,
+			accounts: [A.toLowerCase(), B.toLowerCase()],
+			complete: true,
+		})
+	})
+
+	test('an empty index is an answer, not a failure', () => {
+		expect(accountsFromResponse(answer([]))).toEqual({
+			known: true,
+			accounts: [],
+			complete: true,
+		})
+	})
+
+	/**
+	 * The same three shapes `demandFromResponse` refuses, and for the same reason: a partial list
+	 * is indistinguishable from a smaller one, and this list decides which owners get an agent.
+	 */
+	test.each([
+		['not JSON', '<html>504</html>', 'answered something that is not JSON'],
+		[
+			'a 200 with errors',
+			'{"errors":[{"message":"indexers not available"}]}',
+			'answered indexers not available',
+		],
+		['a 200 with no accounts', '{"data":{}}', 'answered a 200 with no accounts'],
+		[
+			'a row that is not an address',
+			'{"data":{"accounts":[{"id":"not-an-address","owner":"0x00"}]}}',
+			'answered an account that is not an address',
+		],
+	])('refuses %s', (_, body, reason) => {
+		expect(accountsFromResponse(body)).toEqual({ known: false, reason })
+	})
+
+	/**
+	 * The union, and the case it exists for: an account opened moments ago is real and absent from
+	 * the index, and the one config names is the demo account this workflow was deployed for.
+	 */
+	test('the configured account is managed even when the index has never heard of it', () => {
+		expect(
+			accountsToManage(A, { known: true, accounts: [B.toLowerCase()], complete: true }),
+		).toEqual([A.toLowerCase(), B.toLowerCase()])
+	})
+
+	test('the configured account is not managed twice when the index also returns it', () => {
+		const both = {
+			known: true as const,
+			accounts: [A.toLowerCase(), B.toLowerCase()],
+			complete: true,
+		}
+		expect(accountsToManage(A, both)).toEqual([A.toLowerCase(), B.toLowerCase()])
+	})
+
+	test('a checksummed address in config does not become a second account', () => {
+		const lower = { known: true as const, accounts: [A.toLowerCase()], complete: true }
+		expect(accountsToManage(A, lower)).toEqual([A.toLowerCase()])
+	})
+
+	test('an index that did not answer leaves exactly the configured account', () => {
+		expect(accountsToManage(A, { known: false, reason: 'could not be reached' })).toEqual([
+			A.toLowerCase(),
+		])
+	})
+
+	test('the note says where the list came from, both ways', () => {
+		expect(accountsNote([A], { known: false, reason: 'could not be reached' })).toBe(
+			'1 account: config only, the subgraph could not be reached',
+		)
+		expect(accountsNote([A, B], { known: true, accounts: [B.toLowerCase()], complete: true })).toBe(
+			'2 accounts: 1 indexed plus the one in config',
+		)
+	})
+
+	test('a full page says there are more, because the run cannot see them', () => {
+		expect(
+			accountsNote([A, B], { known: true, accounts: [B.toLowerCase()], complete: false }),
+		).toBe('2 accounts: 1 indexed plus the one in config; a full page, so there are more')
 	})
 })

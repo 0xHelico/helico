@@ -187,6 +187,7 @@ type Faults = {
 	secrets?: Record<string, string>
 	graphStatus?: number
 	graphBody?: string
+	graphAccountsBody?: string
 	graphThrows?: boolean
 }
 const run = async (chain: Chain, overrides: Partial<Config> = {}, faults: Faults = {}) => {
@@ -200,6 +201,7 @@ const run = async (chain: Chain, overrides: Partial<Config> = {}, faults: Faults
 		rpcBody: faults.rpcBody,
 		graphStatus: faults.graphStatus,
 		graphBody: faults.graphBody,
+		graphAccountsBody: faults.graphAccountsBody,
 		graphThrows: faults.graphThrows,
 	})
 	const result = await onCronTrigger(fake.runtime)
@@ -672,8 +674,11 @@ describe('the Aqua buffer', () => {
 
 	test('asks the index for this account’s live balances of the asset it manages', async () => {
 		const { graphRequests } = await run(allIdle, indexed, { graphBody: balances() })
-		expect(graphRequests).toHaveLength(1)
-		const { variables } = graphRequests[0] as NonNullable<(typeof graphRequests)[0]>
+		// Two questions to one endpoint: which accounts exist, then what this one's mandates owe.
+		expect(graphRequests).toHaveLength(2)
+		const demand = graphRequests.find((r) => r.query.includes('balances('))
+		expect(demand).toBeDefined()
+		const { variables } = demand as NonNullable<typeof demand>
 		expect(variables).toEqual({
 			maker: account.toLowerCase(),
 			token: USDC.toLowerCase(),
@@ -689,7 +694,7 @@ describe('the Aqua buffer', () => {
 	test('raises the buffer to what the mandates could demand, and the move follows', async () => {
 		const { result } = await run(allIdle, indexed, { graphBody: balances(usdc(250), usdc(150)) })
 		expect(result).toStartWith(
-			`SUPPLY 600000000 to ${aave} [buffer 400000000: policy floor 100000000, 2 live Aqua balances could demand 400000000]`,
+			`SUPPLY 600000000 to ${aave} [1 account: 0 indexed plus the one in config] [buffer 400000000: policy floor 100000000, 2 live Aqua balances could demand 400000000]`,
 		)
 	})
 
@@ -698,7 +703,9 @@ describe('the Aqua buffer', () => {
 		const settled = one(usdc(200), usdc(800))
 		expect((await run(settled)).result).toBe('HOLD (already at the target split)')
 		const { result } = await run(settled, indexed, { graphBody: balances(usdc(400)) })
-		expect(result).toStartWith(`WITHDRAW 200000000 from ${aave} [buffer 400000000`)
+		expect(result).toStartWith(
+			`WITHDRAW 200000000 from ${aave} [1 account: 0 indexed plus the one in config] [buffer 400000000`,
+		)
 	})
 
 	/**
@@ -708,7 +715,7 @@ describe('the Aqua buffer', () => {
 	test('never lowers the owner’s floor, however little the mandates demand', async () => {
 		const { result } = await run(allIdle, indexed, { graphBody: balances(1n) })
 		expect(result).toStartWith(
-			`SUPPLY 800000000 to ${aave} [buffer 100000000: policy floor 100000000, 1 live Aqua balance could demand 1]`,
+			`SUPPLY 800000000 to ${aave} [1 account: 0 indexed plus the one in config] [buffer 100000000: policy floor 100000000, 1 live Aqua balance could demand 1]`,
 		)
 	})
 
@@ -740,23 +747,41 @@ describe('the Aqua buffer', () => {
 	 * floor, the move the workflow would have made before the subgraph was in the loop, and a
 	 * verdict that says which of the two buffers it used.
 	 */
+	/**
+	 * The fleet note in each row is not noise: a fault at the transport — unreachable, a bad
+	 * status — takes **both** queries down, so the account list falls back to config as well. A
+	 * fault in the body only breaks the query whose body it is. The two columns differing is the
+	 * evidence that one endpoint really is answering two questions.
+	 */
 	test.each([
-		['it cannot be reached', { graphThrows: true }, 'the subgraph could not be reached'],
-		['it answers a bad status', { graphStatus: 502 }, 'the subgraph answered HTTP 502'],
+		[
+			'it cannot be reached',
+			{ graphThrows: true },
+			'the subgraph could not be reached',
+			'config only, the subgraph could not be reached',
+		],
+		[
+			'it answers a bad status',
+			{ graphStatus: 502 },
+			'the subgraph answered HTTP 502',
+			'config only, the subgraph answered HTTP 502',
+		],
 		[
 			'it answers 200 with errors, the way GraphQL refuses a query',
 			{ graphBody: '{"errors":[{"message":"indexers not available"}]}' },
 			'the subgraph answered indexers not available',
+			'0 indexed plus the one in config',
 		],
 		[
 			'it answers something that is not JSON',
 			{ graphBody: '<html>504 Gateway Time-out</html>' },
 			'the subgraph answered something that is not JSON',
+			'0 indexed plus the one in config',
 		],
-	])('falls back to the policy floor when %s, and says so', async (_, faults, reason) => {
+	])('falls back to the policy floor when %s, and says so', async (_, faults, reason, fleet) => {
 		const { result, writes } = await run(allIdle, indexed, faults)
 		expect(result).toBe(
-			`SUPPLY 800000000 to ${aave} [buffer 100000000: policy floor only, ${reason}] tx 0x${'ab'.repeat(32)}`,
+			`SUPPLY 800000000 to ${aave} [1 account: ${fleet}] [buffer 100000000: policy floor only, ${reason}] tx 0x${'ab'.repeat(32)}`,
 		)
 		// The fallback is a decision, not a hold: the run still moves capital.
 		expect(writes).toHaveLength(1)
@@ -1025,5 +1050,78 @@ describe('initWorkflow', () => {
 				},
 			},
 		})
+	})
+})
+
+/**
+ * The enclave managed one address until the factory was indexed: the one written into
+ * `config.production.json` by hand. `open` is permissionless, so an account somebody else created
+ * sat there with no agent looking at it while the panel that displayed it implied otherwise.
+ *
+ * Both accounts in these tests read the same chain state, which is the point — what is under test
+ * is that every account is *reached*, not which one wins a comparison. The ranking is unit-tested
+ * in `subgraph.test.ts`, where two different amounts can be stated directly.
+ */
+describe('every account the factory opened', () => {
+	const OTHER_ACCOUNT = '0xa11ce00000000000000000000000000000000001'
+	const indexed: Partial<Config> = {
+		subgraphUrl: 'https://api.studio.thegraph.com/query/1758877/helico-arbitrum-one/version/latest',
+	}
+	const opened = (ids: string[]) =>
+		JSON.stringify({ data: { accounts: ids.map((id) => ({ id, owner: id })) } })
+
+	test('asks the index which accounts exist, before reading any of them', async () => {
+		const { graphRequests } = await run(allIdle, indexed, {
+			graphAccountsBody: opened([config.account]),
+		})
+		const accounts = graphRequests.find((r) => r.query.includes('accounts('))
+		expect(accounts).toBeDefined()
+		expect(accounts?.variables).toEqual({ first: 1000 })
+	})
+
+	test('an account the index knows and config does not is managed too', async () => {
+		const { result } = await run(allIdle, indexed, {
+			graphAccountsBody: opened([config.account, OTHER_ACCOUNT]),
+		})
+		expect(result).toContain('[2 accounts: 2 indexed plus the one in config]')
+	})
+
+	test('the one in config is not counted twice when the index also returns it', async () => {
+		const { result } = await run(allIdle, indexed, {
+			graphAccountsBody: opened([config.account]),
+		})
+		expect(result).toContain('[1 account: 1 indexed plus the one in config]')
+	})
+
+	/**
+	 * One move leaves per run and that was already the rule — an account's nonce is strictly
+	 * sequential. What is new is that the accounts which did not move are counted, so a line
+	 * cannot be read as "there was only one account to look at".
+	 */
+	test('one account acts and the rest are counted in the line', async () => {
+		const { result, writes } = await run(allIdle, indexed, {
+			graphAccountsBody: opened([config.account, OTHER_ACCOUNT]),
+		})
+		expect(result).toStartWith(`SUPPLY 800000000 to ${aave} (1 other account held)`)
+		expect(writes).toHaveLength(1)
+	})
+
+	test('when every account holds, the hold says how many were looked at', async () => {
+		const { result, writes } = await run(
+			{ idle: 0n, venues: [{ pool: AAVE_POOL, supplied: 0n }] },
+			indexed,
+			{
+				graphAccountsBody: opened([config.account, OTHER_ACCOUNT]),
+			},
+		)
+		expect(result).toStartWith('HOLD (the account holds nothing to place), and 1 other holding')
+		expect(writes).toHaveLength(0)
+	})
+
+	test('without an index the run still manages the account config names', async () => {
+		const { result, graphRequests } = await run(allIdle)
+		expect(graphRequests).toHaveLength(0)
+		expect(result).not.toContain('account:')
+		expect(result).toStartWith(`SUPPLY 800000000 to ${aave}`)
 	})
 })
