@@ -18,5 +18,6 @@
 	"aiModel": "ag/claude-opus-4-6-thinking",
 	"aiFallbackModel": "ag/gemini-3-flash",
 	"aiMaxTokens": 1200,
-	"aiTimeoutSeconds": 30
+	"aiTimeoutSeconds": 30,
+	"secretsNamespace": ""
 }

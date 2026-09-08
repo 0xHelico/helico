@@ -333,9 +333,15 @@ holds there.
 update, pause and delete it. The deployer — not the agent, whose key lives inside the enclave and
 must never sign a deploy, and not the upgrader, whose blast radius is account code.
 
-**`cre secrets create` refuses more than ten items in one payload.** There are eleven, which is
-why they live in `secrets.yaml` and `secrets-ai.yaml`. Upload both; the DON holds one namespace
-and the workflow asks for names, not files.
+**`cre secrets create` refuses more than ten items in one payload, and `workflow.yaml` names
+exactly one.** Those two limits pull in opposite directions, and satisfying the first by splitting
+the file breaks the second: `SecretsPath` in the CLI is a single string, so a split manifest
+declares access to part of what the workflow asks for. The symptom is `secret not found` in the
+simulator and `relay quorum unreachable` in production — two messages for one cause.
+
+So `secrets.yaml` is the manifest and carries all eleven, and it is **never uploaded**. The upload
+runs twice from `secrets-upload-policy.yaml` and `secrets-upload-ai.yaml`, which are subsets of it
+and exist for no other reason.
 
 **`cre workflow list` can say "No workflows found" about a workflow that is deployed and running.**
 It reads an indexer that lags. Do not conclude anything from it — ask the registry, which is the
