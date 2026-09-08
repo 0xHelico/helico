@@ -71,6 +71,7 @@ const inTheApp = (page: Page) =>
   page.getByRole("heading", { name: /limits it works inside/ });
 
 async function withWallet(page: Page) {
+  watchCsp(page);
   const key = generatePrivateKey();
   const account = privateKeyToAccount(key);
   await page.exposeFunction("__personalSign", async (m: `0x${string}`) =>
@@ -85,10 +86,32 @@ async function withWallet(page: Page) {
 
 const browser = await chromium.launch();
 
+/**
+ * Any Content-Security-Policy the browser refuses to obey fails these checks.
+ *
+ * The policy is an allow-list of origins that were measured rather than guessed, and the way a
+ * missing one shows up in production is a button that does nothing. Here it shows up as a
+ * console message, which is the only cheap moment to find it.
+ */
+const cspViolations: string[] = [];
+const watchCsp = (page: Page) => {
+  page.on("console", (m) => {
+    const text = m.text();
+    if (
+      /Content Security Policy|Refused to (load|connect|execute|apply)/i.test(
+        text,
+      )
+    ) {
+      cspViolations.push(text.slice(0, 160));
+    }
+  });
+  return page;
+};
+
 // 1. No wallet means no request to the session endpoint. It used to ask on every cold load and
 //    take a 401 for an answer it could not have used.
 {
-  const page = await (await browser.newContext()).newPage();
+  const page = watchCsp(await (await browser.newContext()).newPage());
   const calls: string[] = [];
   page.on("request", (r) => {
     if (new URL(r.url()).pathname.startsWith("/api/session")) {
@@ -111,7 +134,7 @@ const browser = await chromium.launch();
 // 2. A session read that never answers must not blank the page. It used to render an empty div,
 //    which on a dark theme is a black screen and was permanent while the request hung.
 {
-  const page = await (await browser.newContext()).newPage();
+  const page = watchCsp(await (await browser.newContext()).newPage());
   await withWallet(page);
   await page.route("**/api/session*", () => {
     /* deliberately never fulfilled */
@@ -131,7 +154,7 @@ const browser = await chromium.launch();
 
 // 3. The other side of that: a signed-in wallet reloading must not see the gate flash past.
 {
-  const page = await (await browser.newContext()).newPage();
+  const page = watchCsp(await (await browser.newContext()).newPage());
   await withWallet(page);
   await page.goto(APP, { waitUntil: "networkidle" });
   await page
@@ -159,7 +182,7 @@ const browser = await chromium.launch();
     args: ["--block-third-party-cookies"],
   });
   const ctx = await strict.newContext();
-  const page = await ctx.newPage();
+  const page = watchCsp(await ctx.newPage());
   await withWallet(page);
   await page.goto(APP, { waitUntil: "networkidle" });
   await page
@@ -187,7 +210,7 @@ const browser = await chromium.launch();
 // 5. The front door leads with the mandate, not with a box offering to swap. This is the one a
 //    judge sees first, and it regressed once already by being the conversation.
 {
-  const page = await (await browser.newContext()).newPage();
+  const page = watchCsp(await (await browser.newContext()).newPage());
   await withWallet(page);
   await page.goto(APP, { waitUntil: "networkidle" });
   await page
@@ -278,7 +301,7 @@ const browser = await chromium.launch();
 //    on it. Checked separately because a summary linking to a page nobody can load is worse than
 //    no summary.
 {
-  const page = await (await browser.newContext()).newPage();
+  const page = watchCsp(await (await browser.newContext()).newPage());
   await withWallet(page);
   await page.goto(`${APP}/portfolio`, { waitUntil: "networkidle" });
   await page
@@ -320,7 +343,7 @@ const browser = await chromium.launch();
 // here; the page can only answer by asking Studio itself.
 {
   const ctx = await browser.newContext();
-  const page = await ctx.newPage();
+  const page = watchCsp(await ctx.newPage());
   await withWallet(page);
   await page.goto(`${APP}/`, { waitUntil: "domcontentloaded" });
   const verify = page.getByRole("button", { name: /verify wallet/i });
@@ -358,6 +381,12 @@ const browser = await chromium.launch();
     /What this wallet may spend/.test(text),
   );
 }
+
+check(
+  "no Content-Security-Policy violation anywhere",
+  cspViolations.length === 0,
+  cspViolations[0] ?? `${cspViolations.length}`,
+);
 
 await browser.close();
 if (failures.length) {
