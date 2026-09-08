@@ -118,7 +118,7 @@ Not a contract of ours, so it sits apart: a workflow registered in Chainlink's
 
 ```
 name          helico-production
-workflow id   003fbfdc48ddd69b017c6c3d55c4dce234d7620896faf06a8a659ba83fbedff0
+workflow id   002b3bc0bfea52d8d7b3a617fffdfa0d26c32d303c0c3bec713b3d9036ab0a05
 DON family    zone-a
 owner         0x6DCd7485aB17e0CBD0723b8435a35bb8d029439E   (the deployer)
 schedule      every 5 minutes
@@ -138,13 +138,40 @@ totalActiveWorkflowsByOwner(deployer)  → 1
 getWorkflowById(0x003fbfdc…)           → present, owner 0x6dcd7485…
 ```
 
-**Eleven secrets are in the Vault DON** under namespace `main`: the seven policy values, the
-agent key, and three model-router credentials. The policy is the strategy and is the reason the
-workflow is a *Confidential* one — node operators never see it.
+**One secret is in the Vault DON** under namespace `main` — `HELICO_VAULT`, a JSON document
+holding all eleven values: the seven policy numbers, the agent key, and three model-router
+credentials. The policy is the strategy and is the reason the workflow is a *Confidential* one —
+node operators never see it.
 
-**What it does today: it holds, every run, correctly.** No account has been opened on mainnet, so
-there is nothing to manage. The moment somebody opens one and calls `setAgent`, the enclave picks
-it up — no redeploy, because the account list comes from the subgraph.
+It is one item because the DON answers **one secret retrieval per execution**, which is not
+documented anywhere we could find and which every earlier deploy ran into. The measurement and
+the SDK evidence are in [`deploy-runbook.md`](deploy-runbook.md); created by
+[`0x5126f608…`](https://etherscan.io/tx/0x5126f6087ab8f874b03289add69d1afb4f3e73a283f7b80c1b050fa758c43dd8),
+0.0000339 ETH.
+
+**What it does today, corrected.** This section previously read *"it holds, every run,
+correctly."* That was not true when it was written, and the runs said so: every execution failed
+at secret retrieval, and a workflow that never reaches its own logic is not holding — it is
+erroring. The line described the code's intent rather than the deployment's behaviour, which is
+the one thing a deployment record must not do.
+
+What is true, from `cre execution list`:
+
+```
+13:50:02 UTC   SUCCESS
+13:45:02 UTC   SUCCESS    ← first run of the one-item binary
+13:40:01 UTC   FAILURE
+13:35:02 UTC   FAILURE
+13:30:02 UTC   FAILURE
+```
+
+Two in a row, which is what makes it a fix rather than a coincidence — the failures were
+deterministic across two runs of one binary, so a single success would have proved as little as
+a single failure did.
+
+So: it reaches its logic and holds, because no account has been opened on mainnet and there is
+nothing to manage. The moment somebody opens one and calls `setAgent`, the enclave picks it up —
+no redeploy, because the account list comes from the subgraph.
 
 ### The subgraph, v0.2.0
 
