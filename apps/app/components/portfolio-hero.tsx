@@ -4,13 +4,15 @@ import { useQuery } from "@tanstack/react-query";
 import { formatUnits } from "viem";
 import { useAccount, usePublicClient } from "wagmi";
 
-import { Glyph } from "@/components/glyph";
+import { GeneratedAvatar } from "@/components/generated-avatar";
 import { Card } from "@/components/kit";
+import { byDay, Sparkline } from "@/components/sparkline";
 import {
   type AccountState,
   configuredFactory,
   readAccount,
 } from "@/lib/account";
+import { readMovements } from "@/lib/mandates";
 
 const CHAIN_ID = 42161;
 const USDC = "0xaf88d065e77c8cC2239327C5EDb3A432268e5831" as const;
@@ -46,6 +48,15 @@ export function PortfolioHero() {
     },
   });
 
+  // The chart is Aqua movement, which is real; a value-over-time line would need a price feed and
+  // a history nobody is keeping, and inventing one is the thing this page refuses everywhere else.
+  const moves = useQuery({
+    enabled: Boolean(address),
+    queryKey: ["movements", address],
+    queryFn: () => readMovements(address as string),
+  });
+  const days = moves.data ? byDay(moves.data.timestamps) : [];
+
   const totals =
     data && data.kind !== "unconfigured"
       ? {
@@ -59,7 +70,9 @@ export function PortfolioHero() {
     <>
       <div className="flex flex-wrap items-center justify-between gap-3 py-6">
         <div className="flex items-center gap-3">
-          <Glyph name="bank" size={32} />
+          {/* Seeded on the address, so a wallet looks the same on every visit and two
+              wallets never look alike. */}
+          <GeneratedAvatar name={address ?? "helico"} size={36} />
           <h1 className="font-medium text-[19px] text-ink tracking-tight">
             {isConnected && address ? (
               <>
@@ -74,16 +87,25 @@ export function PortfolioHero() {
       </div>
 
       <Card>
-        <div className="text-[12.5px] text-soft">In your account</div>
-        <div className="tabular mt-1 font-medium text-[34px] text-ink tracking-tight">
-          {totals ? `${usdc(totals.total)} USDC` : "—"}
-        </div>
-        <div className="tabular mt-2 font-mono text-[11.5px] text-faint">
-          {totals
-            ? `${usdc(totals.idle)} liquid · ${usdc(totals.working)} working`
-            : factory
-              ? "reading the account…"
-              : "no account factory deployed yet, so there is nothing to total"}
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+          <div className="sm:w-[42%]">
+            <div className="text-[12.5px] text-soft">In your account</div>
+            <div className="tabular mt-1 font-medium text-[34px] text-ink tracking-tight">
+              {totals ? `${usdc(totals.total)} USDC` : "—"}
+            </div>
+            <div className="tabular mt-2 font-mono text-[11.5px] text-faint">
+              {totals
+                ? `${usdc(totals.idle)} liquid · ${usdc(totals.working)} working`
+                : factory
+                  ? "reading the account…"
+                  : "no account factory deployed yet, so there is nothing to total"}
+            </div>
+          </div>
+          <div className="min-w-0 flex-1">
+            {days.length > 0 ? (
+              <Sparkline days={days} label="Aqua movements per day" />
+            ) : null}
+          </div>
         </div>
       </Card>
     </>

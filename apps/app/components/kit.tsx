@@ -35,21 +35,31 @@ export function StatTile({
   value,
   note,
   tint,
+  icon,
 }: {
   name: string;
   value: string;
   note?: string;
   tint?: string;
+  icon?: ReactNode;
 }) {
   return (
-    <div className={cn("rounded-xl p-4", tint ?? "bg-shade")}>
-      <div className="text-[11.5px] text-soft">{name}</div>
-      <div className="tabular mt-1 font-medium text-[19px] text-ink tracking-tight">
-        {value}
+    <div
+      className={cn(
+        "flex items-start gap-3 rounded-xl p-4",
+        tint ?? "bg-shade",
+      )}
+    >
+      {icon ? <span className="mt-0.5 shrink-0">{icon}</span> : null}
+      <div className="min-w-0">
+        <div className="text-[11.5px] text-soft">{name}</div>
+        <div className="tabular mt-1 truncate font-medium text-[19px] text-ink tracking-tight">
+          {value}
+        </div>
+        {note ? (
+          <div className="tabular mt-1 text-[11px] text-faint">{note}</div>
+        ) : null}
       </div>
-      {note ? (
-        <div className="tabular mt-1 text-[11px] text-faint">{note}</div>
-      ) : null}
     </div>
   );
 }
@@ -60,9 +70,20 @@ export function StatTile({
  * Empty is an answer on this page rather than a failure — a wallet with no mandates is a fact,
  * and one only an indexer can state. So it gets a sentence rather than a dash.
  */
-export function Empty({ children }: { children: ReactNode }) {
+export function Empty({
+  children,
+  icon,
+}: {
+  children: ReactNode;
+  icon?: ReactNode;
+}) {
   return (
-    <div className="flex flex-col items-center gap-2 py-8 text-center">
+    <div className="flex flex-col items-center gap-3 py-10 text-center">
+      {icon ? (
+        <span className="flex size-10 items-center justify-center rounded-full bg-shade">
+          {icon}
+        </span>
+      ) : null}
       <p className="max-w-sm text-[12.5px] text-soft leading-relaxed">
         {children}
       </p>
@@ -117,6 +138,46 @@ export function NotDeployed({ children }: { children: ReactNode }) {
   return (
     <div className="rounded-xl border border-line border-dashed bg-shade p-4">
       <p className="text-[12px] text-soft leading-relaxed">{children}</p>
+    </div>
+  );
+}
+
+/**
+ * One asset, as the eye reads it: a mark, then what it is, then how much.
+ *
+ * The name sits *above* the number rather than beside it, so a column of these compares down the
+ * amounts without the labels getting in the way — the same reason the figures are tabular.
+ */
+export function AssetTile({
+  symbol,
+  value,
+  note,
+  tint,
+  mark,
+}: {
+  symbol: string;
+  value: string;
+  note?: string;
+  tint?: string;
+  mark?: ReactNode;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-3 rounded-xl p-4",
+        tint ?? "bg-shade",
+      )}
+    >
+      {mark ? <span className="shrink-0">{mark}</span> : null}
+      <div className="min-w-0">
+        <div className="text-[11.5px] text-soft">{symbol}</div>
+        <div className="tabular mt-0.5 truncate font-medium text-[17px] text-ink tracking-tight">
+          {value}
+        </div>
+        {note ? (
+          <div className="tabular mt-0.5 text-[11px] text-faint">{note}</div>
+        ) : null}
+      </div>
     </div>
   );
 }
