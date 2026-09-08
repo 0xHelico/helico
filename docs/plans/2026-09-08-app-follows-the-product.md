@@ -81,3 +81,37 @@ discovered.
 The account panel will say **"no factory deployed"** until one is, and the demo video should show
 that rather than a mock. A screen that fakes a deployed contract is the failure the rules name
 directly, and the empty state is a smaller cost than the claim.
+
+---
+
+## Addendum, 8 September: the shape is a dashboard
+
+Decided after looking at a portfolio page whose discipline is worth copying. The valuable part is
+not the layout — it is that **every list renders four states separately**: pending, error with a
+retry, empty with guidance, and data. "Not deployed" is a fifth, and a first-class one rather
+than a spinner that never resolves.
+
+That discipline is already in `lib/account.ts` from the first half. This extends it.
+
+`/` becomes: your account, then what may be done to it, then what you can ask. The explanatory
+sections stay below rather than being replaced — a visitor with no wallet still needs to be told
+what this is.
+
+| Section | Reads | Blocked on |
+|---|---|---|
+| Your account — total, liquid, working | the factory | a deployment |
+| **Your mandates — what the chain cannot list** | **the subgraph** | **nothing** |
+| What the agent may do | static, plus the account | a deployment |
+
+Exactly one of those needs nothing deployed, and it is the one that carries a track. That is what
+makes tonight's work possible at all, and it is why the mandate table is built first.
+
+### The address field
+
+The table defaults to the connected wallet. It also takes a typed address, because a judge with
+no Aqua position would otherwise see a correct and completely empty table, while the chain holds
+a maker with 48 live mandates that demonstrates the point immediately.
+
+This is a small widening of "your portfolio" into "this wallet's portfolio", and it is
+deliberate: the claim being made is *nothing on chain can list these*, which is true of any
+wallet and is more convincing when the reader picks the wallet.

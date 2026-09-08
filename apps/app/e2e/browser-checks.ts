@@ -206,8 +206,22 @@ const browser = await chromium.launch();
     "and it says so rather than inventing a balance",
     /No account factory is deployed yet/.test(text),
   );
+  // The panel that could not exist without an indexer. It renders for a wallet-less visitor too,
+  // because the claim is about any address rather than about theirs.
+  check(
+    "the mandates nobody can list are on the front door",
+    /What this wallet may spend/.test(text),
+  );
+  check(
+    "and it says why an indexer is the only way",
+    /no on-chain way to ask this/.test(text),
+  );
   check("the limits themselves", /The limits you set/.test(text));
   check("and the sentences it answers", /What you can ask it/.test(text));
+  check(
+    "which are the questions this product answers",
+    /What am I allowed to spend/.test(text),
+  );
   check("and which capabilities are not wired", /not wired yet/.test(text));
   check(
     "the composer is not on it",
@@ -232,7 +246,13 @@ const browser = await chromium.launch();
     `${operable} operable`,
   );
 
-  await page.getByRole("link", { name: /Swap/ }).first().click();
+  // Named for what the ask says rather than for the old product's verb. This was /Swap/ until
+  // the asks moved to the yield layer, and it would have gone on passing for the wrong reason
+  // had one of the new ones happened to contain the word.
+  await page
+    .getByRole("link", { name: /Read the split/ })
+    .first()
+    .click();
   await page.waitForTimeout(2000);
   check(
     "an ask opens the conversation",

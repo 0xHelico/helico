@@ -3,6 +3,7 @@ import { AccountPanel } from "@/components/account-panel";
 import { Asks, Grants } from "@/components/capabilities";
 import { PageHeader } from "@/components/chat/page-header";
 import { MandatePanel } from "@/components/mandate-panel";
+import { MandatesPanel } from "@/components/mandates-panel";
 
 export const metadata = { title: "Helico" };
 
@@ -52,6 +53,7 @@ export default function Page() {
               exists, and nothing here can send your money anywhere else.
             </p>
             <AccountPanel />
+            <MandatesPanel />
           </section>
 
           <section className="mt-12" id="mandate">
