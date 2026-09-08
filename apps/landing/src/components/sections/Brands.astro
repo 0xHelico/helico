@@ -26,6 +26,12 @@ const logoFor = (slug: string) => {
 	return key ? files[key] : null
 }
 const items = brands.map((b) => ({ ...b, logo: logoFor(b.slug) }))
+// The grid's lines are the container's grey showing through a 1px gap, and each white cell hides
+// the rest of it. A last row that does not fill leaves that grey as a block rather than a line, so
+// the row is completed with empty white cells. Four columns at full width and two below it, so a
+// multiple of four satisfies both.
+const shown = Math.min(items.length, SHOWN) + (items.length > SHOWN ? 1 : 0)
+const fillers = (4 - (shown % 4)) % 4
 ---
 
 <section class="wrap" aria-labelledby="brands-title">
@@ -42,6 +48,9 @@ const items = brands.map((b) => ({ ...b, logo: logoFor(b.slug) }))
 					<button type="button" data-brands-more aria-expanded="false">View More</button>
 				</li>
 			)}
+			{Array.from({ length: fillers }).map(() => (
+				<li class="brands__filler" aria-hidden="true"></li>
+			))}
 		</ul>
 	</div>
 </section>
