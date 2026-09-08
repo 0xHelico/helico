@@ -38,4 +38,9 @@ artifacts
 contracts/out
 contracts/cache
 contracts/lib
+# Written by `forge install`. It locks a directory that is not committed, against versions CI
+# pins by hand in the workflow, so committing it would be a second source of truth nothing reads.
+# Unanchored because the first one landed at the repo root, from an install run in the wrong
+# directory — there is no foundry project there at all.
+foundry.lock
 contracts/out-swapvm
