@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import { completionHttpRequest, completionRequest, describeForOwner, usableAnswer } from './ai'
+import {
+	completionHttpRequest,
+	completionRequest,
+	describeForOwner,
+	rayToPercent,
+	usableAnswer,
+} from './ai'
 
 /**
  * The guards, tested against what the router actually returned rather than against an idea of
@@ -103,59 +109,79 @@ describe('completionRequest', () => {
 })
 
 describe('describeForOwner', () => {
-	const mandate = {
-		rangeWidthTicks: 200,
-		minImprovementBps: 100,
-		cooldownSeconds: 3600,
-		minRetainedBps: 5000,
-		expiry: 1_800_000_000,
+	const venue = {
+		pool: '0x794a61358D6845594F94dc1DB02A252b5b4814aD',
+		asset: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
+	}
+	const policy = {
+		targetWorkingBps: 8_000,
+		minIdleAmount: 100_000_000n,
+		minMoveAmount: 25_000_000n,
+		minMoveBps: 50,
+		maxMoveAmount: 1_000_000_000_000n,
 	}
 	const state = {
-		tick: 94_703,
-		lpFee: 500,
-		liquidity: 93_189n,
-		tickLower: 93_270,
-		tickUpper: 93_470,
-		lastActionAt: 1_788_000_000,
+		idle: 1_000_000_000n,
+		supplied: 0n,
+		venueLiquidity: 29_318_183_885_841n,
+		supplyRateRay: 27_514_566_416_591_863_466_760_475n,
+	}
+	const split = {
+		total: 1_000_000_000n,
+		wantIdle: 200_000_000n,
+		wantWorking: 800_000_000n,
+		deadband: 25_000_000n,
 	}
 
 	test('hands the model the decision, so it explains rather than decides', () => {
-		const prompt = describeForOwner(
-			{ poolId: '0xpool' },
-			mandate,
-			state,
-			{
-				act: true,
-				params: { tickLower: 94_600, tickUpper: 94_800, amountIn: 33n, zeroForOne: false },
-			},
-			1_788_014_400,
-		)
-		expect(prompt).toContain('Decision: swap 33 of token1')
-		expect(prompt).toContain('mint [94600, 94800)')
-		expect(prompt).toContain('retain at least 50')
-		expect(prompt).toContain('Last move: 14400 s ago')
+		const prompt = describeForOwner(venue, policy, state, split, {
+			act: true,
+			params: { amount: 800_000_000n, supply: true },
+		})
+		expect(prompt).toContain('Decision: supply 800000000')
+		expect(prompt).toContain('paying 2.75%')
+		expect(prompt).toContain('80% of it should be working')
+		expect(prompt).toContain('target at 800000000 working and 200000000 idle')
+		expect(prompt).toContain('smallest move worth making 25000000')
+	})
+
+	test('names the other direction as a withdrawal, not as a negative supply', () => {
+		const prompt = describeForOwner(venue, policy, state, split, {
+			act: true,
+			params: { amount: 190_000_000n, supply: false },
+		})
+		expect(prompt).toContain('Decision: withdraw 190000000')
+		expect(prompt).not.toContain('supply 190000000')
 	})
 
 	test('says plainly when nothing happened, and why', () => {
-		const prompt = describeForOwner(
-			{ poolId: '0xpool' },
-			mandate,
-			state,
-			{ act: false, reason: 'cooldown' },
-			1_788_000_600,
-		)
-		expect(prompt).toContain('Decision: do nothing this run, because cooldown')
+		const prompt = describeForOwner(venue, policy, state, split, {
+			act: false,
+			reason: 'inside the deadband',
+		})
+		expect(prompt).toContain('Decision: do nothing this run, because inside the deadband')
 	})
 
-	test('does not pretend a position that never moved has a last move', () => {
-		const prompt = describeForOwner(
-			{ poolId: '0xpool' },
-			mandate,
-			{ ...state, lastActionAt: 0 },
-			{ act: false, reason: 'in range' },
-			1_788_000_600,
-		)
-		expect(prompt).toContain('Last move: never moved')
+	/**
+	 * The model is handed the deadband and the target, not just the balances, because "nothing
+	 * happened" is only explicable next to the number the move would have had to clear.
+	 */
+	test('carries the numbers a hold has to be justified against', () => {
+		const prompt = describeForOwner(venue, policy, state, split, {
+			act: false,
+			reason: 'inside the deadband',
+		})
+		expect(prompt).toContain('1000000000 idle')
+		expect(prompt).toContain('0 supplied')
+		expect(prompt).toContain('able to pay out 29318183885841')
+	})
+})
+
+describe('rayToPercent', () => {
+	test('reads a ray as a percentage, and rounds only the prose', () => {
+		expect(rayToPercent(27_514_566_416_591_863_466_760_475n)).toBe('2.75%')
+		expect(rayToPercent(10n ** 27n)).toBe('100%')
+		expect(rayToPercent(0n)).toBe('0%')
 	})
 })
 

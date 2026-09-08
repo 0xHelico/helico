@@ -5,23 +5,23 @@ const docs = 'https://docs.helico.site/docs'
 const faqs = [
 	{
 		q: 'What is Helico, in plain words?',
-		a: 'When you put money into a trading pool, it only earns while the price stays inside a band you chose. Prices drift, and then the money sits idle. Helico watches for that and moves your funds back into their band, under rules you write down once: which market, how wide, how often, how much must be kept. A contract checks every rule before anything moves, and blocks anything else.',
+		a: 'Money sitting in a wallet earns nothing, and money you have lent out cannot be spent. Helico keeps the split for you: an agent moves what is idle into a lending market you allow-listed, and pulls it back when you need it liquid. You write the terms down once — how much stays spendable, which markets, which agent. The account holding your money will not send it anywhere else, and that is a property of the code rather than a rule anybody could change.',
 	},
 	{
 		q: 'What do I need to start?',
-		a: 'A wallet, and funds already sitting in a supported market on the Arbitrum network. Helico does not create or hold them; it only moves what you already have, and only under your rules. One market at a time per wallet: to switch, you end the first yourself, so nothing is ever quietly dropped. Nothing is live yet, so today the honest answer is the code and a rehearsal on a snapshot of the market.',
+		a: 'A wallet and some stablecoins on the Arbitrum network. You get an account of your own, at an address that is known before it is deployed — so it can be funded before it exists, and what arrives there was always yours. Nothing is live yet, so today the honest answer is the code and a rehearsal on a snapshot of the market.',
 	},
 	{
 		q: 'Who holds my money?',
-		a: 'You do. Your funds stay in your wallet as a token that proves you own them. You give the contract permission to move them, not to keep them. A move takes your funds out, exchanges what is needed, and puts them straight back in your name. The contract holds the funds for one step and proves, before that step ends, that it kept none.',
+		a: 'An account that is yours and nobody else\'s — one contract per owner, not a pool everyone shares. It has a way out that no upgrade can remove: a function on the account itself that returns everything to you and answers to nobody else. And when it trades, the tokens go from your account to the buyer directly; the exchange keeps a ledger of what may be spent and never takes custody of anything.',
 	},
 	{
 		q: 'What can the automation do to it?',
-		a: 'One thing: propose a move inside your rules. It cannot pay itself, it cannot spend more than your funds released, and it cannot send anything anywhere but back to you or into the pool. A misbehaving automation could move you within your own rules, and nothing else.',
+		a: 'Two things: put idle money into a market you allow-listed, and take it back out. Neither of those calls has a place to put an address, so there is no instruction that would send your money elsewhere — it is not that the agent is refused, it is that the request cannot be expressed. An agent that was entirely taken over could move your money between the markets you chose, paying its own gas to do it, and nothing more.',
 	},
 	{
 		q: 'When does it do nothing?',
-		a: 'Most of the time. It waits while your cooldown runs, and whenever a move would not bring your funds meaningfully closer to the price, because every move costs a little. And the contract refuses any instruction that does not match the rules it holds for you.',
+		a: 'Most of the time. Interest accrues every block, so the split drifts constantly, and chasing it would mean a transaction every few minutes to move a rounding error. A move has to be worth making twice over: large enough that the gas is not most of it, and large enough to matter against the size of your account. Small accounts and large ones are stopped by different halves of that.',
 	},
 	{
 		q: 'What stays private?',
@@ -29,7 +29,7 @@ const faqs = [
 	},
 	{
 		q: 'Is it live? Is it audited?',
-		a: 'Neither, yet. It is built for Arbitrum One. The contract has a rehearsed deployment, and the whole flow has been run end to end on a snapshot of the real market: an automated decision moved a real position on a copy of the market and kept 94% of it working, and a second run correctly did nothing. That was a snapshot, not the live network, and the sealed environment was simulated. Twelve AI reviewers and then six more went over the contract; that is not a professional audit, and this page does not call it one.',
+		a: 'Neither, yet. It is built for Arbitrum One. The whole flow has been run end to end on a snapshot of the real market: an account was opened at an address predicted before it existed, real stablecoins were moved into the real lending market, and the decision came from the sealed environment. That was a snapshot, not the live network, and the sealed environment was simulated rather than real. Twelve AI reviewers and then six more went over the contracts; that is not a professional audit, and this page does not call it one.',
 	},
 ]
 ---

@@ -1,24 +1,25 @@
-import { encodeFunctionData, type Hex, parseAbiItem } from 'viem'
-import type { Authorisation } from './sign'
-
-const PARAMS =
-	'(address owner, int24 tickLower, int24 tickUpper, uint256 liquidityToMint, uint128 amount0Min, uint128 amount1Min, uint128 amount0Max, uint128 amount1Max, bool zeroForOne, uint256 amountIn, uint256 minAmountOut, uint256 deadline)'
+import { type Address, encodeFunctionData, type Hex } from 'viem'
+import { accountAbi, type IdleMoveParams } from './abi'
 
 /**
- * Calldata for the vault's signature entry point, so a relayer has nothing to encode. The
- * function name is the caller's until the vault fixes it.
+ * The call to make, so whoever carries it has nothing to encode.
+ *
+ * This is the whole output of a run that acts: one call, to the account, in the account's own
+ * ABI. There is no recipient in it to get wrong — `supplyIdle` credits `address(this)` and
+ * `withdrawIdle` returns to `address(this)` — so a relayer that alters this calldata can only
+ * change which permitted market the account's own money sits in, and cannot redirect any of it.
+ *
+ * The deadline in the params is not passed on: neither account function takes one, so it binds
+ * the enclave's statement in `sign.ts` and is not something the chain will enforce. Anyone
+ * carrying a stale move gets a move that is merely out of date, not one the account refuses.
  */
-export function encodeRecenterWithSignature(
-	functionName: string,
-	auth: Authorisation,
-	signature: Hex,
-): Hex {
-	const item = parseAbiItem(
-		`function ${functionName}(${PARAMS} p, bytes32 mandateHash, uint256 nonce, bytes signature)`,
-	)
-	return encodeFunctionData({
-		abi: [item],
-		functionName,
-		args: [auth.params, auth.mandateHash, auth.nonce, signature],
-	} as Parameters<typeof encodeFunctionData>[0])
+export function encodeIdleMove(params: IdleMoveParams): { to: Address; data: Hex } {
+	return {
+		to: params.account,
+		data: encodeFunctionData({
+			abi: accountAbi,
+			functionName: params.supply ? 'supplyIdle' : 'withdrawIdle',
+			args: [params.pool, params.asset, params.amount],
+		}),
+	}
 }

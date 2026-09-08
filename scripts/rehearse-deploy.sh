@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# NOTE (8 September): this rehearses the Uniswap v4 vault path, which the CRE workflow
+# no longer drives. CRE now moves idle capital into a lending market instead -- see
+# docs/plans/2026-09-08-cre-manages-idle-capital.md. Rehearsing that needs a deployed
+# HelicoAccount, a permitted Aave venue and USDC on the fork, and is not written yet.
+# Left working rather than deleted, because the vault is still deployed by Deploy.s.sol.
 # Rehearse the mainnet deployment against a local fork, end to end, through `run()`.
 #
 # The unit and fork tests call `Deploy.deploy(...)` directly. That is a different door from the

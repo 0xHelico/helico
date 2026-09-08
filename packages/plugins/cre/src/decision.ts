@@ -1,118 +1,117 @@
-import type { Mandate } from './mandate'
+import { BPS_DENOMINATOR, type IdlePolicy } from './policy'
 
-export type Range = { tickLower: number; tickUpper: number }
-
-export type Position = Range & {
-	/** Unix seconds of the last action the vault accepted; 0 when there was none. */
-	lastActionAt: number
+/** What the account is worth right now, and what the market is paying for it. */
+export type IdleBalances = {
+	/** The asset the account holds liquid, in the asset's own units. */
+	idle: bigint
+	/** What the same account has at the venue, read from the receipt token. */
+	supplied: bigint
+	/** Aave's `currentLiquidityRate`, a ray. Only ever a reason not to supply. */
+	supplyRateRay: bigint
 }
+
+export type HoldReason =
+	| 'policy expired'
+	| 'the account holds nothing to place'
+	| 'already at the target split'
+	| 'inside the deadband'
+	| 'the venue pays below the policy floor'
 
 export type Verdict =
+	| { act: false; reason: HoldReason }
 	| {
-			act: false
-			reason:
-				| 'mandate hash mismatch'
-				| 'mandate expired'
-				| 'cooldown'
-				| 'in range'
-				| `vault would reject: ${VaultRejection}`
+			act: true
+			/** True moves capital into the market, false brings it back. */
+			supply: boolean
+			amount: bigint
+			/**
+			 * Carried out of the decision because it has to be applied again after the move is
+			 * clamped to what the venue can actually do. See `index.ts`.
+			 */
+			deadband: bigint
 	  }
-	| { act: true; tickLower: number; tickUpper: number }
 
-/** The vault's own error names, so a hold can be traced to the line that would revert. */
-export type VaultRejection =
-	| 'TicksNotOrdered'
-	| 'TicksNotSpaced'
-	| 'RangeWidthMismatch'
-	| 'RangeOffMarket'
-	| 'NotEnoughImprovement'
-
-// Uniswap tick bounds. The vault must snap with the same rule or the two will disagree.
-const MIN_TICK = -887272
-const MAX_TICK = 887272
-const BPS = 10_000n
-
-/** Rounds to the nearest multiple of the spacing, clamped to the protocol's range. */
-export function nearestUsableTick(tick: number, tickSpacing: number): number {
-	const rounded = Math.round(tick / tickSpacing) * tickSpacing
-	if (rounded < MIN_TICK) return rounded + tickSpacing
-	if (rounded > MAX_TICK) return rounded - tickSpacing
-	return rounded
+export type TargetSplit = {
+	total: bigint
+	/** What the policy wants sitting liquid in the account. */
+	wantIdle: bigint
+	/** What it wants earning at the venue. */
+	wantWorking: bigint
+	/** Positive: supply this much. Negative: withdraw this much. Zero: already there. */
+	delta: bigint
+	/** The smallest move worth making at this size of account. */
+	deadband: bigint
 }
 
-// Solidity's int256 division truncates toward zero; Math.floor would differ on negative centres.
-const centreOf = (r: Range): number => Math.trunc((r.tickLower + r.tickUpper) / 2)
-const gapToCentre = (tick: number, r: Range): number => Math.abs(tick - centreOf(r))
-
-export type VaultCheck = {
-	tick: number
-	tickSpacing: number
-	current: Range
-	proposed: Range
-	mandate: Pick<Mandate, 'rangeWidthTicks' | 'minImprovementBps'>
-}
+const BPS = BigInt(BPS_DENOMINATOR)
+const max = (a: bigint, b: bigint): bigint => (a > b ? a : b)
+const min = (a: bigint, b: bigint): bigint => (a < b ? a : b)
 
 /**
- * Mirrors `HelicoVault._checkRange` check for check. Returns why the vault would revert, or
- * null when it would accept. The contract is the source of truth; keep the two in step.
+ * Where the policy says the two sides should sit, and how far off they are. Pure.
+ *
+ * The buffer is a floor under the idle side rather than a second target, so when
+ * `minIdleAmount` and `targetWorkingBps` disagree the buffer wins. That ordering is the whole
+ * reason this is not just a percentage: the account has to be able to cover a swap against its
+ * Aqua mandate out of what it holds, and a mandate that cannot be covered fails at the moment it
+ * is taken, which costs more than the yield that was missed by holding the buffer.
  */
-export function vaultRejects({
-	tick,
-	tickSpacing,
-	current,
-	proposed,
-	mandate,
-}: VaultCheck): VaultRejection | null {
-	if (proposed.tickLower >= proposed.tickUpper) return 'TicksNotOrdered'
-	if (proposed.tickLower % tickSpacing !== 0 || proposed.tickUpper % tickSpacing !== 0)
-		return 'TicksNotSpaced'
-	if (proposed.tickUpper - proposed.tickLower !== mandate.rangeWidthTicks)
-		return 'RangeWidthMismatch'
-	if (tick < proposed.tickLower || tick >= proposed.tickUpper) return 'RangeOffMarket'
-	const gapNow = BigInt(gapToCentre(tick, current))
-	const gapNext = BigInt(gapToCentre(tick, proposed))
-	if (gapNext >= gapNow) return 'NotEnoughImprovement'
-	if (gapNext * BPS > gapNow * (BPS - BigInt(mandate.minImprovementBps)))
-		return 'NotEnoughImprovement'
-	return null
+export function targetSplit(policy: IdlePolicy, { idle, supplied }: IdleBalances): TargetSplit {
+	const total = idle + supplied
+	const wantIdle = min(
+		total,
+		max(policy.minIdleAmount, total - (total * BigInt(policy.targetWorkingBps)) / BPS),
+	)
+	return {
+		total,
+		wantIdle,
+		wantWorking: total - wantIdle,
+		// `wantIdle` is clamped into [0, total], so this lands in [-supplied, idle]: a supply can
+		// never ask for more than the account holds, and a withdrawal never for more than it has
+		// at the venue. Neither bound needs to be applied again, and applying it would be code
+		// nothing can reach.
+		delta: idle - wantIdle,
+		deadband: max(policy.minMoveAmount, (total * BigInt(policy.minMoveBps)) / BPS),
+	}
 }
 
 export type DecisionInput = {
-	/** The pool's current tick. */
-	tick: number
-	tickSpacing: number
-	position: Position
-	mandate: Pick<Mandate, 'rangeWidthTicks' | 'minImprovementBps' | 'cooldownSeconds' | 'expiry'>
+	policy: IdlePolicy
+	balances: IdleBalances
 	/** Unix seconds. */
 	now: number
 }
 
 /**
- * Whether to re-centre, and where. Policy first (expired, cooling down, or still earning: hold),
- * then a range of the committed width centred on the tick, emitted only if the vault would
- * accept it. Pure.
+ * Whether to move idle capital, which way, and how much. Pure.
+ *
+ * **The deadband is the point of this function.** The target split is almost never exactly met —
+ * interest accrues every block, so `supplied` drifts upward continuously and a rule that
+ * corrected every difference would send a transaction on every run for a few basis points. Gas
+ * is paid per move and yield is earned per unit-second, so a correction that is smaller than
+ * what it costs to make is worse than doing nothing, and the only way to say that is a number
+ * the move has to clear before it happens.
+ *
+ * There is no cooldown here, and its absence is deliberate rather than forgotten: `HelicoAccount`
+ * stores no timestamp of its last move, so the enclave has nothing to read one from. What limits
+ * the rate instead is the cron schedule the workflow runs on, and the deadband — which, unlike a
+ * cooldown, gets *harder* to clear the closer the account already is to its target.
  */
-export function decideRecentre({
-	tick,
-	tickSpacing,
-	position,
-	mandate,
-	now,
-}: DecisionInput): Verdict {
-	if (now >= mandate.expiry) return { act: false, reason: 'mandate expired' }
-	if (position.lastActionAt > 0 && now < position.lastActionAt + mandate.cooldownSeconds) {
-		return { act: false, reason: 'cooldown' }
-	}
-	// A v4 position earns while tickLower <= tick < tickUpper.
-	if (tick >= position.tickLower && tick < position.tickUpper)
-		return { act: false, reason: 'in range' }
+export function decideIdleMove({ policy, balances, now }: DecisionInput): Verdict {
+	if (now >= policy.expiry) return { act: false, reason: 'policy expired' }
 
-	// Exact width by construction; only the lower edge is snapped.
-	const width = mandate.rangeWidthTicks
-	const tickLower = nearestUsableTick(tick - Math.floor(width / 2), tickSpacing)
-	const proposed = { tickLower, tickUpper: tickLower + width }
+	const split = targetSplit(policy, balances)
+	if (split.total === 0n) return { act: false, reason: 'the account holds nothing to place' }
+	if (split.delta === 0n) return { act: false, reason: 'already at the target split' }
 
-	const rejection = vaultRejects({ tick, tickSpacing, current: position, proposed, mandate })
-	if (rejection) return { act: false, reason: `vault would reject: ${rejection}` }
-	return { act: true, ...proposed }
+	const supply = split.delta > 0n
+	const amount = supply ? split.delta : -split.delta
+	if (amount < split.deadband) return { act: false, reason: 'inside the deadband' }
+	// Checked after the deadband so a rate that has fallen is not blamed for a move that was
+	// never going to happen. It gates supplying only: idle capital earns nothing at all, so a
+	// poor rate is a reason to stop adding, never a reason to come back out.
+	if (supply && balances.supplyRateRay < policy.minSupplyRateRay)
+		return { act: false, reason: 'the venue pays below the policy floor' }
+
+	return { act: true, supply, amount, deadband: split.deadband }
 }

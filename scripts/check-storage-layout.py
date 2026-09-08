@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail when HelicoVault's storage layout changes in a way an upgrade could not survive.
+"""Fail when an upgradeable contract's storage layout changes in a way an upgrade could not survive.
 
 The vault is UUPS behind a proxy, so its storage outlives its code. Inserting a variable in the
 middle shifts every slot after it, and the upgraded implementation then reads the wrong ones —
@@ -10,6 +10,14 @@ to slot 5. Nothing was deployed, so nothing broke, but nothing would have notice
 ran `fmt`, `build` and `test`, none of which sees a layout, and the only upgrade-test target is
 `VaultV2 is HelicoVault` — layout-identical by construction, so those tests can never detect a
 shift no matter how many are added.
+
+`HelicoAccount` is checked for the same reason and a sharper one. Its upgrades are immediate —
+the delay was removed for the hackathon — and its upgrader may act without the owner. So a
+shifted slot is not a mistake somebody notices before it lands. Shift `nonce` down and
+previously-spent signatures verify again, and `executeWithSignature` carries an arbitrary
+`target`, `value` and `data`; shift `permittedVenue` and the owner's allowlist answers for
+different addresses than the ones they permitted. `HostileAccount is HelicoAccount` in the test
+suite inherits the layout, so no test there can see any of it either.
 
     cd contracts && forge build
     python3 ../scripts/check-storage-layout.py          # verify
@@ -27,6 +35,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 CONTRACTS = ROOT / "contracts"
 SNAPSHOT = CONTRACTS / "storage-layout.txt"
+
+# Every contract whose storage outlives its code. A contract missing from here is not checked,
+# which is how `HelicoAccount` went unguarded while being the more dangerous of the two.
+UPGRADEABLE = ["HelicoVault", "HelicoAccount"]
 
 
 def _shape(type_name: str) -> str:
@@ -51,23 +63,29 @@ def current() -> str:
         print(build.stderr.strip() or "forge build failed")
         sys.exit(1)
 
-    out = subprocess.run(
-        ["forge", "inspect", "HelicoVault", "storage-layout", "--json"],
-        cwd=CONTRACTS,
-        capture_output=True,
-        text=True,
-    )
-    if out.returncode != 0:
-        print(out.stderr.strip() or "forge inspect failed")
-        sys.exit(1)
-    entries = json.loads(out.stdout)["storage"]
+    sections = []
+    for name in UPGRADEABLE:
+        out = subprocess.run(
+            ["forge", "inspect", name, "storage-layout", "--json"],
+            cwd=CONTRACTS,
+            capture_output=True,
+            text=True,
+        )
+        if out.returncode != 0:
+            print(out.stderr.strip() or f"forge inspect failed for {name}")
+            sys.exit(1)
+        entries = json.loads(out.stdout)["storage"]
+        sections.append((name, entries))
     # The compiler appends an AST id to every generated type name, and those shift whenever
     # anything about the compilation changes — a comment edit is enough. Keeping them would make
     # this warn on changes that move no slot, and a check that cries wolf is one people stop
     # reading. What matters for an upgrade is the slot, the offset, the name, and the shape.
-    lines = [
-        f"{e['slot']:>4}  {e['offset']:>2}  {e['label']}  {_shape(e['type'])}" for e in entries
-    ]
+    lines = []
+    for name, entries in sections:
+        lines.append(f"# {name}")
+        lines.extend(
+            f"{e['slot']:>4}  {e['offset']:>2}  {e['label']}  {_shape(e['type'])}" for e in entries
+        )
     return "\n".join(lines) + "\n"
 
 

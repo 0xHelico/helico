@@ -1,5 +1,19 @@
 # Chainlink CRE workflows
 
+> **The workflow's job changed on 8 September, and part of this directory has not caught up.**
+>
+> CRE used to re-centre a Uniswap v4 position through `HelicoVault`. It now decides how much of
+> an account's idle capital should be earning in a lending market and moves it — see
+> [`docs/plans/2026-09-08-cre-manages-idle-capital.md`](../../docs/plans/2026-09-08-cre-manages-idle-capital.md).
+>
+> `@helico/plugin-cre` is rewritten for that and its tests pass. **`rehearse.sh` is not**: it
+> still deploys the vault and drives the LP path, so it rehearses the route being retired.
+> Rehearsing the new one needs a deployed `HelicoAccount`, a permitted Aave venue and USDC on the
+> fork — not written yet, and said here rather than left for someone to discover mid-demo.
+>
+> The frontend still imports the retiring ABIs, which is why they are kept exported. That is
+> tracked in #175.
+
 The runnable CRE project. The workflow itself is
 [`@helico/plugin-cre`](../../packages/plugins/cre/); this directory is what the CRE CLI needs
 to compile, simulate and deploy it, plus a script that reproduces a whole run on a local fork.

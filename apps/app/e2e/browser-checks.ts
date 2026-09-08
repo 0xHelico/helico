@@ -198,6 +198,14 @@ const browser = await chromium.launch();
     "it lists the authority on offer",
     /What it may be allowed to do/.test(text),
   );
+  check("where the capital sits", /Where your capital sits/.test(text));
+  // The three empty states look alike from outside and one of them is a broken build. With no
+  // factory address configured, the panel has to say that rather than render a figure — a screen
+  // that invents a balance is the failure the rules name, and an empty one is the smaller cost.
+  check(
+    "and it says so rather than inventing a balance",
+    /No account factory is deployed yet/.test(text),
+  );
   check("the limits themselves", /The limits you set/.test(text));
   check("and the sentences it answers", /What you can ask it/.test(text));
   check("and which capabilities are not wired", /not wired yet/.test(text));

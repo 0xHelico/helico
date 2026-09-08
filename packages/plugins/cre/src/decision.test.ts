@@ -1,234 +1,209 @@
 import { describe, expect, test } from 'bun:test'
-import {
-	decideRecentre,
-	nearestUsableTick,
-	type VaultRejection,
-	type Verdict,
-	vaultRejects,
-} from './decision'
+import { decideIdleMove, type HoldReason, targetSplit, type Verdict } from './decision'
+import type { IdlePolicy } from './policy'
 
-const mandate = {
-	rangeWidthTicks: 1000,
-	minImprovementBps: 50,
-	cooldownSeconds: 3600,
-	expiry: 2_000,
-	minRetainedBps: 9000,
+/**
+ * Everything here is USDC, so six decimals: `100_000_000n` is 100 USDC. The policy wants 80% of
+ * the account working, never less than 100 USDC liquid, and refuses to move less than 25 USDC or
+ * less than 0.5% of the account.
+ */
+const usdc = (whole: number): bigint => BigInt(whole) * 1_000_000n
+
+const policy: IdlePolicy = {
+	targetWorkingBps: 8_000,
+	minIdleAmount: usdc(100),
+	minMoveAmount: usdc(25),
+	minMoveBps: 50,
+	minSupplyRateRay: 0n,
+	maxMoveAmount: usdc(1_000_000),
+	expiry: 2_000_000_000,
 }
-const position = { tickLower: 0, tickUpper: 1000, lastActionAt: 0 }
-const base = { tickSpacing: 10, position, mandate, now: 1_000 }
 
-describe('decideRecentre', () => {
-	test.each([
-		['holds once the mandate expired', { ...base, tick: 5_000, now: 2_000 }, 'mandate expired'],
-		[
-			'holds during the cooldown',
-			{ ...base, tick: 5_000, position: { ...position, lastActionAt: 900 } },
-			'cooldown',
-		],
-		['holds while in range (lower edge inclusive)', { ...base, tick: 0 }, 'in range'],
-		[
-			'holds while in range (upper edge exclusive, so 999 is inside)',
-			{ ...base, tick: 999 },
-			'in range',
-		],
-	])('%s', (_, input, reason) => {
-		expect(decideRecentre(input)).toEqual({ act: false, reason } as Verdict)
+const now = 1_700_000_000
+const rate = 27_514_566_416_591_863_466_760_475n // Aave USDC on Arbitrum, 8 September 2026: 2.75%
+const at = (idle: number, supplied: number) => ({
+	idle: usdc(idle),
+	supplied: usdc(supplied),
+	supplyRateRay: rate,
+})
+
+describe('targetSplit', () => {
+	test('splits the whole account, whichever side the capital starts on', () => {
+		for (const balances of [at(1_000, 0), at(0, 1_000), at(500, 500)]) {
+			const split = targetSplit(policy, balances)
+			expect(split.total).toBe(usdc(1_000))
+			expect(split.wantIdle + split.wantWorking).toBe(split.total)
+			expect(split.wantWorking).toBe(usdc(800))
+		}
 	})
 
-	test('re-centres on the tick with exactly the committed width, snapped to the spacing', () => {
-		expect(decideRecentre({ ...base, tick: 1_234 })).toEqual({
-			act: true,
-			tickLower: 730,
-			tickUpper: 1_730,
-		})
+	/**
+	 * The buffer is a floor and not a second target, so it wins. A policy asking for 99% working
+	 * on a 1,000 USDC account still leaves the 100 the owner said they need for a swap.
+	 */
+	test('the buffer beats the target share when the two disagree', () => {
+		const greedy = { ...policy, targetWorkingBps: 9_900 }
+		expect(targetSplit(greedy, at(1_000, 0)).wantIdle).toBe(usdc(100))
+		expect(targetSplit(greedy, at(1_000, 0)).wantWorking).toBe(usdc(900))
 	})
 
-	test('re-centres on the low side too', () => {
-		expect(decideRecentre({ ...base, tick: -60 })).toEqual({
-			act: true,
-			tickLower: -560,
-			tickUpper: 440,
-		})
+	/** An account smaller than its own buffer keeps all of it, rather than owing itself money. */
+	test('an account below the buffer wants everything idle and nothing working', () => {
+		const split = targetSplit(policy, at(40, 0))
+		expect(split.wantIdle).toBe(usdc(40))
+		expect(split.wantWorking).toBe(0n)
+		expect(split.delta).toBe(0n)
 	})
 
-	test('one tick past the upper edge is enough: the vault measures the gap to the centre, not the drift', () => {
-		expect(decideRecentre({ ...base, tick: 1_000 })).toEqual({
-			act: true,
-			tickLower: 500,
-			tickUpper: 1_500,
-		})
+	test('the deadband is the larger of the two floors, and grows with the account', () => {
+		expect(targetSplit(policy, at(1_000, 0)).deadband).toBe(usdc(25))
+		expect(targetSplit(policy, at(10_000_000, 0)).deadband).toBe(usdc(50_000))
 	})
 
-	test('holds when the vault would find the improvement too small', () => {
-		// A 99.99% shrink is only possible when the new centre lands exactly on the tick.
-		const strict = { ...mandate, minImprovementBps: 9_999 }
-		expect(decideRecentre({ ...base, tick: 1_234, mandate: strict })).toEqual({
-			act: false,
-			reason: 'vault would reject: NotEnoughImprovement',
-		})
-		expect(decideRecentre({ ...base, tick: 1_230, mandate: strict })).toEqual({
-			act: true,
-			tickLower: 730,
-			tickUpper: 1_730,
-		})
-	})
-
-	test('an odd width centres by flooring the half: spacing 1, width 3, tick 1234 gives [1233, 1236)', () => {
-		expect(
-			decideRecentre({
-				...base,
-				tick: 1_234,
-				tickSpacing: 1,
-				mandate: { ...mandate, rangeWidthTicks: 3 },
-			}),
-		).toEqual({ act: true, tickLower: 1_233, tickUpper: 1_236 })
-	})
-
-	test('the cooldown is over exactly at lastActionAt + cooldownSeconds', () => {
-		const now = 10_000
-		const live = { ...base, now, mandate: { ...mandate, expiry: 20_000 }, tick: 1_234 }
-		const acted = { ...position, lastActionAt: now - 3_600 }
-		expect(decideRecentre({ ...live, position: acted }).act).toBe(true)
-		expect(
-			decideRecentre({ ...live, position: { ...acted, lastActionAt: acted.lastActionAt + 1 } }),
-		).toEqual({
-			act: false,
-			reason: 'cooldown',
-		})
-	})
-
-	test('holds instead of emitting a width the vault would reject', () => {
-		expect(
-			decideRecentre({ ...base, tick: 5_000, mandate: { ...mandate, rangeWidthTicks: 1_005 } }),
-		).toEqual({
-			act: false,
-			reason: 'vault would reject: TicksNotSpaced',
-		})
-	})
-
-	test('every verdict it emits passes the vault, and it never holds when the vault would accept', () => {
-		let acted = 0
-		for (const tickSpacing of [1, 10, 60, 200]) {
-			for (const widthInSpacings of [1, 2, 3, 10]) {
-				const rangeWidthTicks = tickSpacing * widthInSpacings
-				for (const minImprovementBps of [0, 50, 5_000, 9_999]) {
-					const m = { ...mandate, rangeWidthTicks, minImprovementBps }
-					const current = { tickLower: -rangeWidthTicks, tickUpper: 0, lastActionAt: 0 }
-					for (let tick = -6_000; tick <= 6_000; tick += 7) {
-						const verdict = decideRecentre({
-							tick,
-							tickSpacing,
-							position: current,
-							mandate: m,
-							now: 1_000,
-						})
-						if (verdict.act) {
-							acted++
-							expect(
-								vaultRejects({ tick, tickSpacing, current, proposed: verdict, mandate: m }),
-							).toBeNull()
-						} else if (widthInSpacings >= 2 && minImprovementBps <= 5_000) {
-							const outside = tick < current.tickLower || tick >= current.tickUpper
-							if (outside)
-								throw new Error(
-									`false hold at tick ${tick}, spacing ${tickSpacing}, width ${rangeWidthTicks}: ${verdict.reason}`,
-								)
-						}
+	/**
+	 * The bound the rest of the code relies on: a supply can never ask for more than the account
+	 * holds and a withdrawal never for more than it has at the venue, by construction rather
+	 * than by a clamp somewhere later.
+	 */
+	test('the difference never exceeds the side it would come out of', () => {
+		for (const targetWorkingBps of [0, 1, 5_000, 9_999, 10_000]) {
+			for (const minIdleAmount of [0n, usdc(1), usdc(100), usdc(10_000)]) {
+				for (const idle of [0, 1, 99, 100, 5_000]) {
+					for (const supplied of [0, 1, 100, 7_000]) {
+						const p = { ...policy, targetWorkingBps, minIdleAmount }
+						const { delta } = targetSplit(p, at(idle, supplied))
+						expect(delta).toBeLessThanOrEqual(usdc(idle))
+						expect(-delta).toBeLessThanOrEqual(usdc(supplied))
 					}
 				}
 			}
 		}
-		expect(acted).toBeGreaterThan(10_000)
 	})
 })
 
-describe('vaultRejects', () => {
-	const m = { rangeWidthTicks: 1000, minImprovementBps: 50 }
-	const current = { tickLower: 0, tickUpper: 1000 }
-
-	test('accepts an improvement exactly at the threshold, as the vault does (<=, not <)', () => {
-		// gapNow = 1400 - 500 = 900; with 50% required, gapNext may be at most 450: centre 950 passes, 940 does not.
-		const half = { rangeWidthTicks: 1000, minImprovementBps: 5_000 }
-		expect(
-			vaultRejects({
-				tick: 1_400,
-				tickSpacing: 10,
-				current,
-				proposed: { tickLower: 450, tickUpper: 1_450 },
-				mandate: half,
-			}),
-		).toBeNull()
-		expect(
-			vaultRejects({
-				tick: 1_400,
-				tickSpacing: 10,
-				current,
-				proposed: { tickLower: 440, tickUpper: 1_440 },
-				mandate: half,
-			}),
-		).toBe('NotEnoughImprovement')
-	})
-
-	test('the upper edge is exclusive: a tick equal to tickUpper is off market', () => {
-		expect(
-			vaultRejects({
-				tick: 1_500,
-				tickSpacing: 10,
-				current,
-				proposed: { tickLower: 500, tickUpper: 1_500 },
-				mandate: m,
-			}),
-		).toBe('RangeOffMarket')
-		expect(
-			vaultRejects({
-				tick: 1_499,
-				tickSpacing: 10,
-				current,
-				proposed: { tickLower: 500, tickUpper: 1_500 },
-				mandate: m,
-			}),
-		).toBeNull()
-	})
-
+describe('decideIdleMove', () => {
 	test.each([
-		['unordered ticks', { tickLower: 1000, tickUpper: 1000 }, 'TicksNotOrdered'],
-		['ticks off the spacing', { tickLower: 1005, tickUpper: 2005 }, 'TicksNotSpaced'],
-		['wrong width', { tickLower: 1000, tickUpper: 1990 }, 'RangeWidthMismatch'],
-		[
-			'range that does not contain the tick',
-			{ tickLower: 1510, tickUpper: 2510 },
-			'RangeOffMarket',
-		],
-		['range no closer than the old one', { tickLower: 1000, tickUpper: 2000 }, null],
-	])('%s', (_, proposed, expected) => {
-		expect(vaultRejects({ tick: 1_500, tickSpacing: 10, current, proposed, mandate: m })).toBe(
-			expected as VaultRejection | null,
-		)
+		['the policy has expired', at(1_000, 0), 2_000_000_000, 'policy expired'],
+		['there is nothing to place', at(0, 0), now, 'the account holds nothing to place'],
+		['the split is already met', at(200, 800), now, 'already at the target split'],
+	] as [string, ReturnType<typeof at>, number, HoldReason][])(
+		'holds when %s',
+		(_, balances, when, reason) => {
+			expect(decideIdleMove({ policy, balances, now: when })).toEqual({
+				act: false,
+				reason,
+			} as Verdict)
+		},
+	)
+
+	test('supplies the excess when too much is sitting idle', () => {
+		expect(decideIdleMove({ policy, balances: at(1_000, 0), now })).toEqual({
+			act: true,
+			supply: true,
+			amount: usdc(800),
+			deadband: usdc(25),
+		})
 	})
 
-	test('centres truncate toward zero, as in Solidity', () => {
-		// The current centre is trunc(-3 / 2) = -1, where floor would give -2. At tick -1 the gap is
-		// already 0, so the proposal cannot improve on it; with floor it would look like a 1-tick gain.
-		expect(
-			vaultRejects({
-				tick: -1,
-				tickSpacing: 1,
-				current: { tickLower: -3, tickUpper: 0 },
-				proposed: { tickLower: -2, tickUpper: 0 },
-				mandate: { rangeWidthTicks: 2, minImprovementBps: 0 },
-			}),
-		).toBe('NotEnoughImprovement')
+	test('withdraws when the account has fallen below the buffer it needs to cover a swap', () => {
+		expect(decideIdleMove({ policy, balances: at(10, 990), now })).toEqual({
+			act: true,
+			supply: false,
+			amount: usdc(190),
+			deadband: usdc(25),
+		})
 	})
-})
 
-describe('nearestUsableTick', () => {
-	test.each([
-		[1_234, 10, 1_230],
-		[1_235, 10, 1_240],
-		[-65, 10, -60],
-		[-887_275, 10, -887_270],
-		[887_275, 10, 887_270],
-	])('rounds %d at spacing %d to %d', (tick, spacing, expected) => {
-		expect(nearestUsableTick(tick, spacing)).toBe(expected)
+	/**
+	 * The reason the deadband exists. Interest accrues every block, so `supplied` drifts upward
+	 * continuously and the split is almost never exactly met; without a floor the workflow would
+	 * send a transaction every run to correct a few dollars, and pay more in gas than the
+	 * correction is worth.
+	 */
+	test('holds on a drift smaller than the absolute floor', () => {
+		// 1,010 in total wants 202 idle, and 210 is held: an 8 USDC correction, below the 25 floor.
+		expect(decideIdleMove({ policy, balances: at(210, 800), now })).toEqual({
+			act: false,
+			reason: 'inside the deadband',
+		})
+	})
+
+	/**
+	 * The relative half, which only binds on a large account: 30,000 USDC clears the 25 USDC gas
+	 * bar many times over and is still only 0.3% of a ten-million account, which is not a
+	 * rebalance worth making.
+	 */
+	test('holds on a drift that clears the absolute floor but not the relative one', () => {
+		const balances = at(2_030_000, 7_970_000)
+		expect(decideIdleMove({ policy, balances, now })).toEqual({
+			act: false,
+			reason: 'inside the deadband',
+		})
+		expect(decideIdleMove({ policy: { ...policy, minMoveBps: 0 }, balances, now })).toEqual({
+			act: true,
+			supply: true,
+			amount: usdc(30_000),
+			deadband: usdc(25),
+		})
+	})
+
+	test('a move exactly at the deadband goes through: the floor is the smallest move allowed', () => {
+		// 1,031.25 in total wants 206.25 idle; holding 231.25 is a 25 USDC correction exactly.
+		const balances = { ...at(0, 0), idle: 231_250_000n, supplied: usdc(800) }
+		const verdict = decideIdleMove({ policy, balances, now })
+		expect(verdict).toEqual({ act: true, supply: true, amount: usdc(25), deadband: usdc(25) })
+		expect(decideIdleMove({ policy, balances: { ...balances, idle: 231_249_999n }, now })).toEqual({
+			act: false,
+			reason: 'inside the deadband',
+		})
+	})
+
+	describe('the rate floor', () => {
+		const strict = { ...policy, minSupplyRateRay: 30_000_000_000_000_000_000_000_000n } // 3%
+
+		test('stops capital going to a market paying less than the owner asked for', () => {
+			expect(decideIdleMove({ policy: strict, balances: at(1_000, 0), now })).toEqual({
+				act: false,
+				reason: 'the venue pays below the policy floor',
+			})
+		})
+
+		/** Idle capital earns nothing at all, so a poor rate is never a reason to come back out. */
+		test('never blocks a withdrawal', () => {
+			expect(decideIdleMove({ policy: strict, balances: at(10, 990), now })).toEqual({
+				act: true,
+				supply: false,
+				amount: usdc(190),
+				deadband: usdc(25),
+			})
+		})
+
+		test('lets a rate exactly at the floor through', () => {
+			const exact = { ...at(1_000, 0), supplyRateRay: strict.minSupplyRateRay }
+			expect(decideIdleMove({ policy: strict, balances: exact, now }).act).toBe(true)
+		})
+	})
+
+	test('every move it emits fits inside the side it comes out of', () => {
+		let acted = 0
+		for (const targetWorkingBps of [0, 2_500, 8_000, 10_000]) {
+			for (const minIdleAmount of [0n, usdc(100), usdc(5_000)]) {
+				for (const idle of [0, 30, 300, 3_000, 30_000]) {
+					for (const supplied of [0, 30, 300, 3_000, 30_000]) {
+						const p = { ...policy, targetWorkingBps, minIdleAmount }
+						const balances = at(idle, supplied)
+						const verdict = decideIdleMove({ policy: p, balances, now })
+						if (!verdict.act) continue
+						acted++
+						expect(verdict.amount).toBeGreaterThan(0n)
+						expect(verdict.amount).toBeLessThanOrEqual(
+							verdict.supply ? balances.idle : balances.supplied,
+						)
+						expect(verdict.amount).toBeGreaterThanOrEqual(verdict.deadband)
+					}
+				}
+			}
+		}
+		expect(acted).toBeGreaterThan(100)
 	})
 })

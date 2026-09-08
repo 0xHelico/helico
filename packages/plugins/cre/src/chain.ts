@@ -2,13 +2,13 @@ import { bytesToBase64, cre, ok, type TeeRuntime, text } from '@chainlink/cre-sd
 import {
 	type Address,
 	decodeFunctionResult,
-	encodeAbiParameters,
 	encodeFunctionData,
+	getAddress,
 	type Hex,
-	keccak256,
 	parseAbi,
+	zeroAddress,
 } from 'viem'
-import { positionManagerAbi, stateViewAbi, vaultAbi } from './abi'
+import { accountAbi, erc20Abi, lendingVenueAbi, receiptAbi, reserveDataAbi } from './abi'
 
 export type Call = { to: Address; data: Hex }
 
@@ -43,159 +43,159 @@ export function ethCallBatch(runtime: TeeRuntime<unknown>, rpcUrl: string, calls
 	})
 }
 
-export type PoolKey = {
-	currency0: Address
-	currency1: Address
-	fee: number
-	tickSpacing: number
-	hooks: Address
+export type Addresses = {
+	/** The `HelicoAccount` proxy whose capital this run is about. */
+	account: Address
+	/** The lending market. Must be one the owner allowlisted, which is read below, not assumed. */
+	pool: Address
+	/** The ERC-20 being placed. */
+	asset: Address
 }
 
-/** v4's canonical PoolId, and the value the vault hashes into the mandate. */
-export const poolIdOf = (key: PoolKey): Hex =>
-	keccak256(
-		encodeAbiParameters(
-			[
-				{ type: 'address' },
-				{ type: 'address' },
-				{ type: 'uint24' },
-				{ type: 'int24' },
-				{ type: 'address' },
-			],
-			[key.currency0, key.currency1, key.fee, key.tickSpacing, key.hooks],
-		),
-	)
-
-const signExtend24 = (x: bigint): number => Number(x >= 1n << 23n ? x - (1n << 24n) : x)
-
-/** v4 packs a position's range as `200 bits poolId | 24 tickUpper | 24 tickLower | 8 hasSubscriber`. */
-export const unpackPositionInfo = (info: bigint): { tickLower: number; tickUpper: number } => ({
-	tickLower: signExtend24((info >> 8n) & 0xffffffn),
-	tickUpper: signExtend24((info >> 32n) & 0xffffffn),
-})
-
-export type Addresses = { vault: Address; positionManager: Address; stateView: Address }
-
-export type ChainState = {
-	tokenId: bigint
-	lastActionAt: number
-	active: boolean
-	sqrtPriceX96: bigint
-	tick: number
-	/** The pool's current LP fee in pips; for a dynamic-fee pool this is the fee in force now. */
-	lpFee: number
-	/** The pool's active liquidity, what a swap trades against inside the current tick. */
-	poolLiquidity: bigint
-	liquidity: bigint
-	tickLower: number
-	tickUpper: number
-	poolKey: PoolKey
-	/** The vault's nonce for the owner, read only when the enclave signs. */
+export type AccountState = {
+	/** Who the account will currently accept an idle move from. Zero means nobody. */
+	agent: Address
+	/** Whether the owner still allows this market. */
+	venuePermitted: boolean
+	/** The asset the account holds liquid. */
+	idle: bigint
+	/** The receipt the market issues for this asset, asked of the market rather than the receipt. */
+	receipt: Address
+	/** What that receipt says it is for. Zero when the market does not list the asset. */
+	receiptAsset: Address
+	/** The account's position at the market, in the asset's units. */
+	supplied: bigint
+	/** What the market can pay out right now. */
+	venueLiquidity: bigint
+	/** Aave's `currentLiquidityRate`, a ray. */
+	supplyRateRay: bigint
+	/** The account's signature nonce, read only when the enclave signs. */
 	nonce?: bigint
 }
 
-/** Everything the decision needs, in two batches: the account and the pool, then the position. */
-export function readChainState(
+/**
+ * Everything the decision needs, in two batches.
+ *
+ * There are two and not one because of a rule the contracts state plainly: the market is asked
+ * which receipt it issues, never the receipt asked which market it belongs to. A forged receipt
+ * returns the real pool's address and passes the second check while failing the first, so the
+ * receipt's address has to come out of the first batch before its balance can be read in the
+ * second. When the market does not list the asset at all there is no receipt and no second
+ * batch; the caller holds on that.
+ */
+export function readAccountState(
 	runtime: TeeRuntime<unknown>,
 	rpcUrl: string,
-	{ vault, positionManager, stateView }: Addresses,
-	owner: Address,
-	poolId: Hex,
-	options: { withNonce?: boolean; noncesFunction?: string } = {},
-): ChainState {
-	const noncesAbi = parseAbi([
-		`function ${options.noncesFunction ?? 'nonces'}(address owner) view returns (uint256)`,
+	{ account, pool, asset }: Addresses,
+	options: { withNonce?: boolean; nonceFunction?: string } = {},
+): AccountState {
+	// `HelicoAccount.nonce` takes no argument, unlike the vault's `nonces(address)`: one account
+	// belongs to one owner, so there is nobody to ask about.
+	const nonceAbi = parseAbi([
+		`function ${options.nonceFunction ?? 'nonce'}() view returns (uint256)`,
 	])
 	const nonceCall = options.withNonce
-		? [{ to: vault, data: encodeFunctionData({ abi: noncesAbi, args: [owner] }) }]
+		? [{ to: account, data: encodeFunctionData({ abi: nonceAbi }) }]
 		: []
-	const [positionOf, lastActionAt, isActive, slot0, poolLiquidityHex, nonceHex] = ethCallBatch(
-		runtime,
-		rpcUrl,
-		[
+	const [agentHex, permittedHex, idleHex, receiptHex, liquidityHex, reserveHex, nonceHex] =
+		ethCallBatch(runtime, rpcUrl, [
+			{ to: account, data: encodeFunctionData({ abi: accountAbi, functionName: 'agent' }) },
 			{
-				to: vault,
-				data: encodeFunctionData({ abi: vaultAbi, functionName: 'positionOf', args: [owner] }),
-			},
-			{
-				to: vault,
-				data: encodeFunctionData({ abi: vaultAbi, functionName: 'lastActionAt', args: [owner] }),
-			},
-			{
-				to: vault,
-				data: encodeFunctionData({ abi: vaultAbi, functionName: 'isActive', args: [owner] }),
-			},
-			{
-				to: stateView,
-				data: encodeFunctionData({ abi: stateViewAbi, functionName: 'getSlot0', args: [poolId] }),
-			},
-			{
-				to: stateView,
+				to: account,
 				data: encodeFunctionData({
-					abi: stateViewAbi,
-					functionName: 'getLiquidity',
-					args: [poolId],
+					abi: accountAbi,
+					functionName: 'permittedVenue',
+					args: [pool],
+				}),
+			},
+			{
+				to: asset,
+				data: encodeFunctionData({ abi: erc20Abi, functionName: 'balanceOf', args: [account] }),
+			},
+			{
+				to: pool,
+				data: encodeFunctionData({
+					abi: lendingVenueAbi,
+					functionName: 'getReserveAToken',
+					args: [asset],
+				}),
+			},
+			{
+				to: pool,
+				data: encodeFunctionData({
+					abi: lendingVenueAbi,
+					functionName: 'getVirtualUnderlyingBalance',
+					args: [asset],
+				}),
+			},
+			{
+				to: pool,
+				data: encodeFunctionData({
+					abi: reserveDataAbi,
+					functionName: 'getReserveData',
+					args: [asset],
 				}),
 			},
 			...nonceCall,
-		],
-	) as [Hex, Hex, Hex, Hex, Hex, Hex | undefined]
-	const tokenId = decodeFunctionResult({
-		abi: vaultAbi,
-		functionName: 'positionOf',
-		data: positionOf,
+		]) as [Hex, Hex, Hex, Hex, Hex, Hex, Hex | undefined]
+
+	const receipt = decodeFunctionResult({
+		abi: lendingVenueAbi,
+		functionName: 'getReserveAToken',
+		data: receiptHex,
 	})
-	const [sqrtPriceX96, tick, , lpFee] = decodeFunctionResult({
-		abi: stateViewAbi,
-		functionName: 'getSlot0',
-		data: slot0,
+	const reserve = decodeFunctionResult({
+		abi: reserveDataAbi,
+		functionName: 'getReserveData',
+		data: reserveHex,
 	})
 
-	const [liquidityHex, poolAndInfo] = ethCallBatch(runtime, rpcUrl, [
-		{
-			to: positionManager,
-			data: encodeFunctionData({
-				abi: positionManagerAbi,
-				functionName: 'getPositionLiquidity',
-				args: [tokenId],
-			}),
-		},
-		{
-			to: positionManager,
-			data: encodeFunctionData({
-				abi: positionManagerAbi,
-				functionName: 'getPoolAndPositionInfo',
-				args: [tokenId],
-			}),
-		},
-	]) as [Hex, Hex]
-	const [poolKey, info] = decodeFunctionResult({
-		abi: positionManagerAbi,
-		functionName: 'getPoolAndPositionInfo',
-		data: poolAndInfo,
-	})
+	const listed = getAddress(receipt) !== zeroAddress
+	const [suppliedHex, receiptAssetHex] = listed
+		? (ethCallBatch(runtime, rpcUrl, [
+				{
+					to: receipt,
+					data: encodeFunctionData({
+						abi: receiptAbi,
+						functionName: 'balanceOf',
+						args: [account],
+					}),
+				},
+				{
+					to: receipt,
+					data: encodeFunctionData({
+						abi: receiptAbi,
+						functionName: 'UNDERLYING_ASSET_ADDRESS',
+					}),
+				},
+			]) as [Hex, Hex])
+		: [undefined, undefined]
 
 	return {
-		tokenId,
-		lastActionAt: Number(
-			decodeFunctionResult({ abi: vaultAbi, functionName: 'lastActionAt', data: lastActionAt }),
-		),
-		active: decodeFunctionResult({ abi: vaultAbi, functionName: 'isActive', data: isActive }),
-		sqrtPriceX96,
-		tick,
-		lpFee,
-		poolLiquidity: decodeFunctionResult({
-			abi: stateViewAbi,
-			functionName: 'getLiquidity',
-			data: poolLiquidityHex,
+		agent: decodeFunctionResult({ abi: accountAbi, functionName: 'agent', data: agentHex }),
+		venuePermitted: decodeFunctionResult({
+			abi: accountAbi,
+			functionName: 'permittedVenue',
+			data: permittedHex,
 		}),
-		liquidity: decodeFunctionResult({
-			abi: positionManagerAbi,
-			functionName: 'getPositionLiquidity',
+		idle: decodeFunctionResult({ abi: erc20Abi, functionName: 'balanceOf', data: idleHex }),
+		receipt,
+		receiptAsset: receiptAssetHex
+			? decodeFunctionResult({
+					abi: receiptAbi,
+					functionName: 'UNDERLYING_ASSET_ADDRESS',
+					data: receiptAssetHex,
+				})
+			: zeroAddress,
+		supplied: suppliedHex
+			? decodeFunctionResult({ abi: receiptAbi, functionName: 'balanceOf', data: suppliedHex })
+			: 0n,
+		venueLiquidity: decodeFunctionResult({
+			abi: lendingVenueAbi,
+			functionName: 'getVirtualUnderlyingBalance',
 			data: liquidityHex,
 		}),
-		...unpackPositionInfo(info),
-		poolKey,
-		nonce: nonceHex ? decodeFunctionResult({ abi: noncesAbi, data: nonceHex }) : undefined,
+		supplyRateRay: reserve.currentLiquidityRate,
+		nonce: nonceHex ? decodeFunctionResult({ abi: nonceAbi, data: nonceHex }) : undefined,
 	}
 }
