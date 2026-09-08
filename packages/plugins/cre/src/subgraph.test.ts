@@ -381,18 +381,49 @@ describe('the accounts the enclave manages', () => {
 		])
 	})
 
+	const NONE = `0x${'0'.repeat(40)}`
+
 	test('the note says where the list came from, both ways', () => {
-		expect(accountsNote([A], { known: false, reason: 'could not be reached' })).toBe(
+		expect(accountsNote([A], { known: false, reason: 'could not be reached' }, A)).toBe(
 			'1 account: config only, the subgraph could not be reached',
 		)
-		expect(accountsNote([A, B], { known: true, accounts: [B.toLowerCase()], complete: true })).toBe(
-			'2 accounts: 1 indexed plus the one in config',
+		expect(
+			accountsNote([A, B], { known: true, accounts: [B.toLowerCase()], complete: true }, A),
+		).toBe('2 accounts: 1 indexed plus the one in config')
+	})
+
+	/**
+	 * The case a length comparison gets wrong: an anchor the index also returned leaves the two
+	 * lists the same size, and inferring from that would deny the anchor on exactly the runs where
+	 * it was doing its job.
+	 */
+	test('an anchor the index also returned is still reported as an anchor', () => {
+		const both = { known: true as const, accounts: [A.toLowerCase()], complete: true }
+		expect(accountsNote([A.toLowerCase()], both, A)).toBe(
+			'1 account: 1 indexed plus the one in config',
+		)
+	})
+
+	test('with no anchor the note credits the index alone', () => {
+		const only = { known: true as const, accounts: [B.toLowerCase()], complete: true }
+		expect(accountsNote([B.toLowerCase()], only, NONE)).toBe('1 account: 1 indexed')
+	})
+
+	/**
+	 * No anchor and no index is the one configuration that manages nothing, and it says so rather
+	 * than reporting zero accounts as though that were a fleet.
+	 */
+	test('no anchor and an index that did not answer manages nothing, and says so', () => {
+		const down = { known: false as const, reason: 'could not be reached' }
+		expect(accountsToManage(NONE, down)).toEqual([])
+		expect(accountsNote([], down, NONE)).toBe(
+			'0 accounts: nothing to manage, the subgraph could not be reached',
 		)
 	})
 
 	test('a full page says there are more, because the run cannot see them', () => {
 		expect(
-			accountsNote([A, B], { known: true, accounts: [B.toLowerCase()], complete: false }),
+			accountsNote([A, B], { known: true, accounts: [B.toLowerCase()], complete: false }, A),
 		).toBe('2 accounts: 1 indexed plus the one in config; a full page, so there are more')
 	})
 })

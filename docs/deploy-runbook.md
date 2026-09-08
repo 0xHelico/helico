@@ -3,8 +3,13 @@
 Written before the deploy rather than during it, because the questions below are the kind that
 stop a deploy halfway and are cheapest to answer while nothing is at stake.
 
-Order matters for one reason: **CRE has nothing to read until an account exists.**
-`config.production.json` names an account, and the workflow's first act is to read its state.
+Order used to matter for one reason — *CRE has nothing to read until an account exists* — and it
+no longer does. The subgraph indexes `HelicoAccountFactory`, so the workflow discovers every
+account that has ever been opened and manages all of them. The workflow can be deployed before a
+single account exists; it will hold, say so, and start managing accounts the moment they appear.
+
+What that changes here: **step 2 is no longer a precondition for step 4.** It is still worth doing
+first, because an empty run proves less than a run with something in it.
 
 ## Four keys, four roles, split by blast radius
 
@@ -184,7 +189,7 @@ with a small amount before trusting it with a real one.
 
 | Field | Value |
 |---|---|
-| `account` | from step 2 |
+| `account` | **leave zero.** The workflow reads every account from the subgraph, so naming one here is not how an account gets managed — it is how one account stays managed when the index cannot answer. Set it only for an account a demo depends on |
 | `agent` | `0x84C3891a9693c891877aC474a90d17d29075fcAf`, the same address `setAgent` was given |
 | `pools` | `["0x794a61358D6845594F94dc1DB02A252b5b4814aD"]` |
 | `asset` | USDC, already correct |

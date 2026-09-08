@@ -87,6 +87,9 @@ export const MAX_BALANCE_ROWS = 1000
  */
 export const MAX_ACCOUNT_ROWS = 1000
 
+/** Config's way of saying it names no anchor. Not imported from viem: this file is pure. */
+const ZERO_ADDRESS = `0x${'0'.repeat(40)}`
+
 /**
  * Every account the factory has opened.
  *
@@ -214,8 +217,13 @@ export function readManagedAccounts(
  */
 export function accountsToManage(configured: string, discovered: ManagedAccounts): string[] {
 	const anchor = configured.toLowerCase()
-	const seen = new Set<string>([anchor])
-	const all = [anchor]
+	// The zero address means no anchor was set, which is the ordinary configuration: the index
+	// sees every account the factory opened, so naming one here is not how an account gets
+	// managed. Including it would have the run read state for an address with no code, decide
+	// about nothing, and count it in the fleet — three lies for the price of a default.
+	const anchored = anchor !== ZERO_ADDRESS
+	const seen = new Set<string>(anchored ? [anchor] : [])
+	const all = anchored ? [anchor] : []
 	if (discovered.known) {
 		for (const account of discovered.accounts) {
 			if (seen.has(account)) continue
@@ -227,13 +235,26 @@ export function accountsToManage(configured: string, discovered: ManagedAccounts
 }
 
 /** One line for the run log saying how many accounts were considered, and where the list came from. */
-export function accountsNote(managed: string[], discovered: ManagedAccounts): string {
+export function accountsNote(
+	managed: string[],
+	discovered: ManagedAccounts,
+	configured: string,
+): string {
 	const plural = managed.length === 1 ? '' : 's'
+	// Whether config named an anchor is read from config, not inferred from how many accounts
+	// came back. The inference is wrong in the case that matters most — an anchor the index also
+	// returned makes the two lists the same length, and the note would then say the anchor was
+	// not set on exactly the runs where it was doing its job.
+	const anchored = configured.toLowerCase() !== ZERO_ADDRESS
 	if (!discovered.known) {
-		return `${managed.length} account${plural}: config only, the subgraph ${discovered.reason}`
+		const source = anchored ? 'config only' : 'nothing to manage'
+		return `${managed.length} account${plural}: ${source}, the subgraph ${discovered.reason}`
 	}
 	const page = discovered.complete ? '' : '; a full page, so there are more'
-	return `${managed.length} account${plural}: ${discovered.accounts.length} indexed plus the one in config${page}`
+	const from = anchored
+		? `${discovered.accounts.length} indexed plus the one in config`
+		: `${discovered.accounts.length} indexed`
+	return `${managed.length} account${plural}: ${from}${page}`
 }
 
 /**

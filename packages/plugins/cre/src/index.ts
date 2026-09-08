@@ -76,8 +76,20 @@ export const configShape = {
 	agentKeySecretId: z.string().default('AGENT_KEY'),
 	/** The account's nonce getter. Takes no argument, unlike the vault's `nonces(address)`. */
 	nonceFunction: z.string().default('nonce'),
-	/** The `HelicoAccount` whose idle capital this workflow manages. */
-	account: hex(20),
+	/**
+	 * One `HelicoAccount` to manage regardless of what the index says, or the zero address.
+	 *
+	 * **Optional, and the zero address is the ordinary setting.** The accounts this run manages
+	 * come from the subgraph, which sees every account the factory has ever opened — so naming one
+	 * here is not how an account gets managed, it is how an account gets managed *even when the
+	 * index cannot answer*.
+	 *
+	 * Worth setting for exactly one account: the one a demo depends on, where a subgraph outage
+	 * turning into "the agent did nothing" is worse than the staleness of an address written by
+	 * hand. Everywhere else, leave it zero and let the index do its job — an account opened a
+	 * minute ago is then managed without anybody editing a file.
+	 */
+	account: hex(20).default(zeroAddress),
 	/**
 	 * The lending markets to choose between, in the owner's own order — which is what breaks a
 	 * tie between two paying the same. The account must already permit each of them; the enclave
@@ -413,7 +425,7 @@ export const onCronTrigger = async (runtime: TeeRuntime<Config>): Promise<string
 	//    blocks, and `subgraphUrl` may be empty, which is still a supported configuration.
 	const discovered = readManagedAccounts(runtime, config)
 	const managed = accountsToManage(config.account, discovered)
-	const fleet = config.subgraphUrl ? ` [${accountsNote(managed, discovered)}]` : ''
+	const fleet = config.subgraphUrl ? ` [${accountsNote(managed, discovered, config.account)}]` : ''
 
 	// 4. Decide for each of them, and act on one.
 	//
