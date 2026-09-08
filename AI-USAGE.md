@@ -991,6 +991,83 @@ READMEs.
   fail is not a guard, and enforcing a list with a known hole three days before the demo video
   would risk the one flow the submission depends on.
 
+### 2026-09-08 — the secret the DON would not serve, a full rehearsal, and deleting the vault
+
+- **Done:** the deployed CRE workflow had failed at secret retrieval on **every** run since it
+  went up. Fixed, redeployed, and running: `13:45:02 UTC SUCCESS`, then `13:50:02 UTC SUCCESS`,
+  against three failures before it. Then the whole workflow was rehearsed end to end on a fork of
+  Arbitrum One, and `HelicoVault` with the Uniswap v4 contracts was deleted — 21 files, 5,102
+  lines.
+
+- **AI's role:** Ghoza directed the work in conversation and made the calls that mattered — turn
+  the model on in the rehearsal, delete what will not ship, and (earlier) set the idle floor to
+  zero. Claude did the diagnosis, the code, and the measurements, and was corrected twice.
+
+- **The diagnosis, because the shape of the evidence is the whole answer.** Three hypotheses died
+  first: that the batch was too large (eleven and ten failed identically), that the namespace was
+  wrong (a run with it set explicitly failed the same way, and the error had been printing the
+  namespace all along), and that the manifest was incomplete (`workflow unchanged; re-deployment
+  skipped` proved it is not part of the deployed artifact). What identified it was splitting into
+  one call per secret — the shape Chainlink's own reference names for TypeScript — and watching
+  **call 0 succeed and call 1 fail**, twice, on one binary. The compiled SDK then closed it:
+
+  ```js
+  getSecret(request) { const c = this.getSecrets([secretRequest]) }   // a batch of one
+  const id = this.nextCallId; this.nextCallId++                       // inside getSecrets
+  ```
+
+  There is no separate singular path — every retrieval is a batch, and what separates them is the
+  callback id. That is the number production had been printing: `for call 0`, `for call 1`. Not
+  the first and second *secret*; the first and second *callback*. One is answered per execution.
+  So all eleven values now travel as one JSON item, unpacked inside the enclave.
+
+- **A test fake that refuses.** The fake runtime now refuses a second retrieval the way the DON
+  does. Without that, a change back to one-call-per-secret passes the suite and fails on chain —
+  the exact bug the new shape exists to prevent. Mutating the code back turns **68 tests red**.
+
+- **Two tests changed meaning rather than wording.** *"forwarder delivery never asks for the agent
+  key"* cannot be observed once one request carries everything; spelled that way it would pass
+  without anything happening. It now asserts what it was protecting — that a forwarder run needs
+  no key at all.
+
+- **Corrected, in public, after asserting it:** Claude reported that the model had misquoted a
+  policy figure by a factor of ten. It had not. The number was the effective threshold for that
+  account, not the constant it was compared against, and the arithmetic said so:
+  `max(minMove, total × minMoveBps / 10000)`. A guard built on that misreading was reverted rather
+  than kept with its reasoning patched. All six figures in the model's explanation were then
+  checked against their sources and all six were right.
+
+- **One mistake worth recording:** the script that packs the secrets was written with a default
+  path. It defaulted to the wrong file and packed test values, which would have uploaded cleanly —
+  valid JSON, all eleven ids present, and no component in the chain able to notice. It was caught
+  only because two runs differed by twelve bytes. The path is now a required argument, and the
+  script refuses a file that does not carry the marker identifying the right one.
+
+- **Found while deleting, and unrelated to the deletion:** `HelicoAccount`'s contract-level
+  docblock said upgrades were *"announced first, executable only after a delay, expiring after a
+  grace period"* and cancellable by the owner. `_authorizeUpgrade` does none of that, and its own
+  docblock 330 lines below said so plainly. The file asserted both, and the reassuring one was at
+  the top. Both now describe the code.
+
+- **Plans:** no plan file. The session ran from [#234](https://github.com/0xHelico/helico/issues/234),
+  opened before the work, and from conversation recorded here.
+
+- **Verified:** `bun test packages/plugins/cre` (244 pass), `forge build`, `forge test` (89 pass,
+  0 fail), `FOUNDRY_PROFILE=swapvm forge build`, `forge fmt --check`, `bun run check` /
+  `typecheck` / `test`, and five python checks including one repointed at `HelicoAccount` and
+  mutation-tested by flipping `executeBatch` to payable in the artifact and watching it fail.
+  Beyond the suites: **the full workflow on a fork of Arbitrum One with the model on** — 50,000
+  USDC funded, `SUPPLY 40,000` decided, EIP-712 signed, the call carried to the chain, working
+  balance `0 → 39,999,999,999` (Aave rounds the aToken down by one unit), and the agent ending the
+  run holding **0 USDC**. The simulator is not a TEE, so this shows the workflow compiles for the
+  CRE runtime, reads the chain, decides, signs, and that the signed call lands and moves capital.
+  It does not show DON authorisation or enclave attestation.
+
+- **A record corrected.** `docs/deployments.md` said the workflow *"holds, every run, correctly."*
+  Every run was failing at secret retrieval and never reached the logic that would have held. The
+  line described the code's intent rather than the deployment's behaviour, which is the one thing
+  a deployment record must not do. It now carries the execution list instead.
+
 <!--
 Template for the next entry:
 
