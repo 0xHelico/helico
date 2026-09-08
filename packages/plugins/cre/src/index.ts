@@ -163,7 +163,30 @@ export function decide(
 ): Outcome {
 	if (state.agent.toLowerCase() !== config.agent)
 		return { act: false, reason: 'the account has not nominated this agent' }
-	if (!state.venuePermitted) return { act: false, reason: 'the owner has not permitted this venue' }
+	// A revocation is an instruction, not a pause. If the owner has revoked this venue and the
+	// account still has a position in it, the useful thing to do is bring it home — holding beside
+	// it would leave the money exactly where the owner said they did not want it. The account
+	// permits precisely this: `withdrawIdle` is gated on `venueEverPermitted`, so the agent can
+	// still unwind a venue it can no longer supply.
+	//
+	// Nothing is read from the venue for this. The whole position comes out, sizing and deadband
+	// included, because a deadband exists to suppress moves that are not worth their gas and this
+	// one was asked for.
+	if (!state.venuePermitted) {
+		if (state.supplied === 0n)
+			return { act: false, reason: 'the owner has not permitted this venue' }
+		return {
+			act: true,
+			params: {
+				account: config.account as Address,
+				pool: config.pool as Address,
+				asset: config.asset as Address,
+				amount: state.supplied,
+				supply: false,
+				deadline: BigInt(now + config.deadlineSeconds),
+			},
+		}
+	}
 	if (state.receipt === zeroAddress)
 		return { act: false, reason: 'the venue does not list this asset' }
 	if (state.receiptAsset.toLowerCase() !== config.asset)

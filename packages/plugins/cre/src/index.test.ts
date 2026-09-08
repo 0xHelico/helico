@@ -239,7 +239,7 @@ describe('onCronTrigger', () => {
 			'HOLD (the account has not nominated this agent)',
 		],
 		[
-			'the owner took the venue off the allowlist',
+			'the owner took the venue off the allowlist, and nothing is sitting in it',
 			{ ...allIdle, permitted: false },
 			'HOLD (the owner has not permitted this venue)',
 		],
@@ -338,6 +338,25 @@ describe('onCronTrigger', () => {
 		const [, , p] = decodeReport(writes[0]?.report?.rawReport ?? new Uint8Array())
 		expect(p.supply).toBe(false)
 		expect(p.amount).toBe(usdc(190))
+	})
+
+	/**
+	 * A revocation is an instruction, not a pause. The table above has the same input with nothing
+	 * supplied, and that one holds — the difference between the two rows is the whole behaviour.
+	 */
+	test('unwinds the whole position when the owner revokes a venue it is sitting in', async () => {
+		const { result, writes } = await run({
+			idle: usdc(10),
+			supplied: usdc(990),
+			permitted: false,
+		})
+		expect(result).toBe(`WITHDRAW 990000000 tx 0x${'ab'.repeat(32)}`)
+		const [, , p] = decodeReport(writes[0]?.report?.rawReport ?? new Uint8Array())
+		expect(p.supply).toBe(false)
+		// All of it, not the split's 190. The deadband and the target split are for moves worth
+		// making; this one was asked for.
+		expect(p.amount).toBe(usdc(990))
+		expect(p.deadline).toBe(BigInt(now + 600))
 	})
 
 	/**
