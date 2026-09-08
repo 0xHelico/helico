@@ -41,6 +41,10 @@ jobs:
       # Nothing about a response says which headers it should have had, so this is the only place
       # the rule can be enforced before a deploy rather than after a measurement.
       - run: python3 scripts/check-nginx-headers.py
+      # The permalink checker validates snapshots, which stay true by construction. This is its
+      # blind spot: an ordinary relative link rots the moment a file moves, and #247 deleted 21
+      # files in one change. One link was already wrong when this was written.
+      - run: python3 scripts/check-doc-links.py
       # Runs every package's `test` script through Turborepo. A package without one is skipped,
       # so this step proves only what the packages define.
       - run: bun run test
