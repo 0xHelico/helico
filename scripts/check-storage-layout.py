@@ -74,7 +74,14 @@ def current() -> str:
         if out.returncode != 0:
             print(out.stderr.strip() or f"forge inspect failed for {name}")
             sys.exit(1)
-        entries = json.loads(out.stdout)["storage"]
+        # `forge inspect` prints resolver diagnostics to **stdout**, ahead of the JSON — the
+        # source-graph scanner walks every file under `lib/` and complains about imports that
+        # only resolve under another profile's remappings, even when nothing being inspected
+        # depends on them. Slicing from the first brace rather than parsing the whole stream is
+        # what stops a warning about somebody else's library from failing our upgrade check.
+        # The return code above is still what decides whether the command worked.
+        body = out.stdout[out.stdout.index("{"):] if "{" in out.stdout else out.stdout
+        entries = json.loads(body)["storage"]
         sections.append((name, entries))
     # The compiler appends an AST id to every generated type name, and those shift whenever
     # anything about the compilation changes — a comment edit is enough. Keeping them would make
