@@ -6,6 +6,14 @@ tags: ["product", "uniswap-v4", "chainlink-cre"]
 published_at: 2026-09-06T09:40:00Z
 ---
 
+> **Written before 8 September, and kept as a record.** Helico's agent no longer keeps a Uniswap
+> v4 position in range: it decides how much of an account's idle stablecoin should be earning in a
+> lending market the owner allow-listed, and swaps against a [1inch Aqua](https://1inch.io)
+> mandate. The `HelicoVault` described below was never deployed and has since been deleted. The
+> reasoning here is still the reasoning — a mandate the contract enforces, an enclave that decides,
+> and a way out nobody can block — and the contract it lands on is now `HelicoAccount`, live on
+> Arbitrum One. Nothing in this post is edited; only this note is added.
+
 A concentrated liquidity position on Uniswap v4 earns fees only while the market price sits inside its range. The moment the price leaves, the position stops earning and starts holding one token. Keeping it in range means moving it, and moving it means someone has to be trusted to do the moving.
 
 Helico's answer is to make that trust small and precise. You commit a **mandate**: seven fields that say exactly what a move may look like. A Chainlink CRE **enclave** watches the pool and decides when a move is worth it. A **vault** on the chain checks every field of the mandate before anything happens, and reverts anything that does not fit.

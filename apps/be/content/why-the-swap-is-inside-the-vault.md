@@ -6,6 +6,14 @@ tags: ["vault", "uniswap-v4", "design"]
 published_at: 2026-09-06T09:44:00Z
 ---
 
+> **Written before 8 September, and kept as a record.** Helico's agent no longer keeps a Uniswap
+> v4 position in range: it decides how much of an account's idle stablecoin should be earning in a
+> lending market the owner allow-listed, and swaps against a [1inch Aqua](https://1inch.io)
+> mandate. The `HelicoVault` described below was never deployed and has since been deleted. The
+> reasoning here is still the reasoning — a mandate the contract enforces, an enclave that decides,
+> and a way out nobody can block — and the contract it lands on is now `HelicoAccount`, live on
+> Arbitrum One. Nothing in this post is edited; only this note is added.
+
 An out-of-range position holds one token. If the price has moved above the range, the position is all of the quote token; below it, all of the base. That is not a bug in Uniswap, it is what concentrated liquidity means. It does, though, make re-centring harder than it looks.
 
 ## The measurement
