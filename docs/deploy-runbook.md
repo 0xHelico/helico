@@ -159,6 +159,17 @@ is proven, against a fork of this chain.
 > router has nothing at 34: the swap reverts on an out-of-range instruction, and the maker is
 > left with a live commitment against a strategy nobody can fill. The address printed above is
 > the one that goes into the frontend, the taker script, and the video.
+>
+> **It costs a transaction, not funds** — measured, not assumed, in
+> `test_ShippingToTheWrongRouterStrandsTheStrategyAndSpendsNothing`. The wrong router really does
+> hold a live commitment, and it can still spend none of it: the swap reverts before any transfer,
+> the wallet, the lending position and the other side of the pair are all untouched, and the taker
+> receives nothing. `dock` with the shipped token set takes the commitment back in one call.
+>
+> What it cannot do is be repaired in place. Aqua refuses to re-ship a strategy hash that already
+> has balances (`StrategiesMustBeImmutable`), and docking sets the per-token sentinel to 255
+> rather than back to zero — so that hash is spent for that app, permanently. Ship to the right
+> app instead; a different app is a different ledger key, and unaffected.
 
 ## What can be deployed before all of this
 

@@ -30,6 +30,8 @@ contract ForkSwapVMYieldCoverTest is Test {
     address constant AAVE_POOL = 0x794a61358D6845594F94dc1DB02A252b5b4814aD;
     address constant AUSDC = 0x724dc807b04555b71ed48a6896b6F41593b8C637;
     address constant USDC_WHALE = 0x47c031236e19d024b42f8AE6780E44A573170703;
+    /// @dev 1inch's own router. Here only to be shipped to by mistake, on purpose.
+    address constant CANONICAL_ROUTER = 0x111111338c5091E8440b67B168bAe16a668AC0De;
 
     uint256 constant COMMITTED_USDC = 43_000e6;
     uint256 constant SUPPLIED_USDC = 38_000e6;
@@ -116,7 +118,7 @@ contract ForkSwapVMYieldCoverTest is Test {
     }
 
     /// @dev One owner signature's worth of work: three approvals and the ship, in one batch.
-    function _shipInOneBatch(ISwapVM.Order memory order) private {
+    function _shipInOneBatch(ISwapVM.Order memory order, address app) private {
         address[] memory tokens = new address[](3);
         tokens[0] = USDC;
         tokens[1] = WETH;
@@ -131,8 +133,7 @@ contract ForkSwapVMYieldCoverTest is Test {
         calls[0] = Call(USDC, 0, abi.encodeCall(IERC20.approve, (AQUA, type(uint256).max)));
         calls[1] = Call(WETH, 0, abi.encodeCall(IERC20.approve, (AQUA, type(uint256).max)));
         calls[2] = Call(AUSDC, 0, abi.encodeCall(IERC20.approve, (AQUA, type(uint256).max)));
-        calls[3] =
-            Call(AQUA, 0, abi.encodeCall(IAqua.ship, (address(router), abi.encode(order), tokens, amounts)));
+        calls[3] = Call(AQUA, 0, abi.encodeCall(IAqua.ship, (app, abi.encode(order), tokens, amounts)));
 
         vm.prank(owner);
         HelicoAccount(payable(account)).executeBatch(calls);
@@ -166,7 +167,7 @@ contract ForkSwapVMYieldCoverTest is Test {
 
     function test_SwapVMSettlesOutOfCapitalStillEarningInAave() public onlyForked {
         ISwapVM.Order memory order = _order();
-        _shipInOneBatch(order);
+        _shipInOneBatch(order, address(router));
 
         uint256 liquidBefore = IERC20(USDC).balanceOf(account);
         uint256 suppliedBefore = IERC20(AUSDC).balanceOf(account);
@@ -195,7 +196,7 @@ contract ForkSwapVMYieldCoverTest is Test {
     ///      not return a worse number, it reverts, and every price the frontend asks for fails.
     function test_AQuoteIsAnsweredByAStaticCallAndMovesNothing() public onlyForked {
         ISwapVM.Order memory order = _order();
-        _shipInOneBatch(order);
+        _shipInOneBatch(order, address(router));
 
         uint256 suppliedBefore = IERC20(AUSDC).balanceOf(account);
 
@@ -211,7 +212,7 @@ contract ForkSwapVMYieldCoverTest is Test {
     ///      on every trade, and nothing about the swap's result would show it.
     function test_TheCoverDoesNothingWhenTheWalletAlreadyHasEnough() public onlyForked {
         ISwapVM.Order memory order = _order();
-        _shipInOneBatch(order);
+        _shipInOneBatch(order, address(router));
 
         uint256 suppliedBefore = IERC20(AUSDC).balanceOf(account);
 
@@ -224,5 +225,55 @@ contract ForkSwapVMYieldCoverTest is Test {
         assertLt(amountOut, 5_000e6, "this trade is small enough for the cash on hand");
         assertEq(IERC20(USDC).balanceOf(taker), amountOut, "the taker was still paid");
         assertEq(IERC20(AUSDC).balanceOf(account), suppliedBefore, "and the position was left alone");
+    }
+
+    /// @notice The mistake this deployment invites, measured rather than reasoned about: a maker
+    ///         ships a program carrying opcode 34 to 1inch's router instead of ours.
+    ///
+    /// @dev Aqua validates nothing about an app — `ship` writes ledger numbers for whatever
+    ///      address it is handed — so the mistake is silent at the moment it is made. What this
+    ///      test is for is the question that follows: does a live commitment against a router
+    ///      that cannot run the program put the maker's money at risk, or only strand it?
+    function test_ShippingToTheWrongRouterStrandsTheStrategyAndSpendsNothing() public onlyForked {
+        ISwapVM.Order memory order = _order();
+        _shipInOneBatch(order, CANONICAL_ROUTER);
+
+        uint256 liquidBefore = IERC20(USDC).balanceOf(account);
+        uint256 suppliedBefore = IERC20(AUSDC).balanceOf(account);
+        uint256 wethBefore = IERC20(WETH).balanceOf(account);
+
+        deal(WETH, taker, 5e18);
+        vm.startPrank(taker);
+        IERC20(WETH).approve(CANONICAL_ROUTER, type(uint256).max);
+        // No `expectRevert` with a selector: what matters is that it cannot complete, and
+        // pinning 1inch's internal error would make this test fail on their next release for a
+        // reason that is not ours.
+        vm.expectRevert();
+        ISwapVM(CANONICAL_ROUTER).swap(order, WETH, USDC, 5e18, _takerData());
+        vm.stopPrank();
+
+        assertEq(IERC20(USDC).balanceOf(account), liquidBefore, "no cash left the wallet");
+        assertEq(IERC20(AUSDC).balanceOf(account), suppliedBefore, "the lending position is untouched");
+        assertEq(IERC20(WETH).balanceOf(account), wethBefore, "and nothing was taken on the other side");
+        assertEq(IERC20(USDC).balanceOf(taker), 0, "the taker got nothing either");
+
+        // And the maker is not stuck with it. `dock` takes the exact token set that was shipped,
+        // which the account still knows, and the commitment is gone — so the cost of the mistake
+        // is one transaction, not a wallet the wrong router can draw on forever.
+        address[] memory tokens = new address[](3);
+        tokens[0] = USDC;
+        tokens[1] = WETH;
+        tokens[2] = AUSDC;
+
+        bytes32 orderHash = router.hash(order);
+        (uint248 committed,) = IAqua(AQUA).rawBalances(account, CANONICAL_ROUTER, orderHash, USDC);
+        assertEq(committed, COMMITTED_USDC, "the wrong router really did have a live commitment");
+
+        vm.prank(owner);
+        HelicoAccount(payable(account))
+            .execute(AQUA, 0, abi.encodeCall(IAqua.dock, (CANONICAL_ROUTER, orderHash, tokens)));
+
+        (uint248 afterDock,) = IAqua(AQUA).rawBalances(account, CANONICAL_ROUTER, orderHash, USDC);
+        assertEq(afterDock, 0, "and the owner took it back in one call");
     }
 }
