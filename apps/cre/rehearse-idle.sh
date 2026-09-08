@@ -34,13 +34,13 @@ for tool in anvil cast forge cre jq; do
 	command -v "$tool" >/dev/null || { echo "missing $tool"; exit 1; }
 done
 [ -f .env ] || { echo "no .env — cp .env.example .env first"; exit 1; }
-# An .env from before this workflow existed has the vault's MANDATE_* names and none of these,
-# and the CLI's complaint about it names one variable at a time. Checked here so the answer is
-# the whole list at once.
-MISSING=$(comm -23 \
-	<(grep -oE '^SECRET_IDLE_[A-Z_]+|^SECRET_AGENT_KEY' .env.example | sort -u) \
-	<(grep -oE '^SECRET_IDLE_[A-Z_]+|^SECRET_AGENT_KEY' .env | sort -u))
-[ -z "$MISSING" ] || { echo "your .env predates this workflow. Missing:"; echo "$MISSING"; exit 1; }
+# The workflow asks the Vault DON for ONE secret, HELICO_VAULT, holding every value as JSON —
+# the DON answers one retrieval per execution. So the rehearsal has to build that item too, and
+# building it is the same act as checking for it: the packer names any SECRET_* that is absent,
+# which an .env predating this workflow will have plenty of. Doing both here rather than checking
+# one list and packing another is deliberate — those two lists drifting is exactly the bug that
+# put an Anvil key into a production upload.
+python3 "$ROOT/scripts/pack-cre-vault.py" .env
 FORK_URL=${ARBITRUM_RPC_URL:-https://arb1.arbitrum.io/rpc}
 
 say() { printf '\n\033[1m== %s\033[0m\n' "$1"; }
