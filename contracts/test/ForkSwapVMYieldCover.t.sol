@@ -11,6 +11,7 @@ import {TakerTraitsLib} from "@1inch/swap-vm/libs/TakerTraits.sol";
 
 import {Call} from "../src/AccountAuth.sol";
 import {DeployAccountFactory} from "../script/DeployAccountFactory.s.sol";
+import {DeploySwapVMRouter} from "../script/DeploySwapVMRouter.s.sol";
 import {HelicoAccount} from "../src/HelicoAccount.sol";
 import {HelicoAccountFactory} from "../src/HelicoAccountFactory.sol";
 import {HelicoAquaSwapVMRouter} from "../src/swapvm/HelicoAquaSwapVMRouter.sol";
@@ -54,7 +55,9 @@ contract ForkSwapVMYieldCoverTest is Test {
         owner = makeAddr("swapvm-owner");
 
         (, factory) = new DeployAccountFactory().deploy(address(0xC2E));
-        router = new HelicoAquaSwapVMRouter(AQUA, WETH, address(this), "Helico SwapVM", "1");
+        // Through the deploy script rather than the constructor, so this suite exercises the
+        // door production uses — including the script's own checks on the addresses it pins.
+        router = new DeploySwapVMRouter().deploy(address(this));
 
         account = factory.accountFor(owner);
         factory.open(owner);

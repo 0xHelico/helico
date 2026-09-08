@@ -130,14 +130,44 @@ key must be the one whose address step 2 named as agent. Then deploy against
 nothing yet, the honest outcome is a hold — a workflow that supplies from an empty account would
 be the surprising result, not the reassuring one.
 
+## The SwapVM router
+
+Independent of everything above — CRE does not read it, and no account has to exist first.
+
+```bash
+cd contracts
+SWAPVM_RESCUER=<address> \
+FOUNDRY_PROFILE=swapvm forge script script/DeploySwapVMRouter.s.sol:DeploySwapVMRouter \
+  --rpc-url $ARBITRUM_RPC_URL --broadcast --private-key "$KEY"
+```
+
+**`FOUNDRY_PROFILE=swapvm` is not optional.** SwapVM needs the IR pipeline; the default profile
+does not compile these files at all, so without it the script is not there to run.
+
+`SWAPVM_RESCUER` is the only authority the router has: whoever may retrieve tokens stranded in
+it. Unset means nobody can, and stranded tokens stay stranded. It cannot touch a maker's funds —
+those move only through Aqua, keyed to the app a maker shipped to.
+
+**Record:** the router address. Then read the two lines the script prints after broadcasting: it
+checks that the router points at the canonical Aqua, and that it reports opcode 34, which is the
+number an off-chain program builder has to emit. What it cannot check is that opcode 34 is the
+instruction we mean — only a swap proves that, and `test/ForkSwapVMYieldCover.t.sol` is where it
+is proven, against a fork of this chain.
+
+> ⚠️ **Ship to this address, not to 1inch's.** A maker ships to an app address and Aqua keys
+> every balance by it. Ship a program containing opcode 34 to the canonical router and that
+> router has nothing at 34: the swap reverts on an out-of-range instruction, and the maker is
+> left with a live commitment against a strategy nobody can fill. The address printed above is
+> the one that goes into the frontend, the taker script, and the video.
+
 ## What can be deployed before all of this
 
 `HelicoMandateSwap` stands outside the chain above: CRE does not read it, and nothing still open
 changes its behaviour. The wrinkle this section used to carry is gone — #182 landed, so `main` is
 the source Arbiscan would verify against and it is not about to move underneath a verification.
 
-It is still the one contract that can be deployed while the account questions are open, because
-nothing above depends on it and it depends on nothing above.
+It and the SwapVM router are the two that can go out while the account questions are still open,
+because nothing above depends on either and neither depends on anything above.
 
 ## Do not deploy
 
