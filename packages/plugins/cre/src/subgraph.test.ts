@@ -28,7 +28,15 @@ const config = {
 	subgraphTimeoutSeconds: 20,
 }
 
-/** Helico's account on Arbitrum One is the maker in Aqua's ledger. */
+/**
+ * A maker address, used only to shape the request these tests assert on — no live call is made.
+ *
+ * It is deliberately not described as ours. The first version of this comment called it "Helico's
+ * account on Arbitrum One", which was wrong twice over: it is somebody else's, and it lives on the
+ * Aqua deployment 1inch stopped using. The live subgraph was serving that contract's history at the
+ * time, so a figure measured against it looked like verification and was not. A real maker on the
+ * canonical Aqua is `0xef9f7f4006fe95afede04f6916e72556a957ebbc`, with 11 active mandates.
+ */
 const MAKER = '0xd435ade7ea030f988c24eb87ba4a4ace31aa04a8'
 const USDC = '0xaf88d065e77c8cC2239327C5EDb3A432268e5831'
 
