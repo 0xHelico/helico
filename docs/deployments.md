@@ -6,11 +6,11 @@ asked about itself.
 
 ## 8 September 2026 — the accounts and the Aqua app
 
-| Contract | Address | Answers |
-|---|---|---|
-| `HelicoAccount` (implementation) | [`0x0842BB3f773A8Ee9732b229327b79CCB2Ce54847`](https://arbiscan.io/address/0x0842BB3f773A8Ee9732b229327b79CCB2Ce54847) | `UPGRADER()` → `0xaeE1F9d2…` |
-| `HelicoAccountFactory` | [`0x01CC7d9FE8da79B61bcc5d3f7e3f0433DCE7E081`](https://arbiscan.io/address/0x01CC7d9FE8da79B61bcc5d3f7e3f0433DCE7E081) | `IMPLEMENTATION()` → `0x0842BB3f…` |
-| `HelicoMandateSwap` | [`0xA16D313816247628DeB7d89DC7a3Cf4aDb5287Ed`](https://arbiscan.io/address/0xA16D313816247628DeB7d89DC7a3Cf4aDb5287Ed) | `AQUA()` → `0x1111113CCf…` |
+| Contract | Address | Answers | Source |
+|---|---|---|---|
+| `HelicoAccount` (implementation) | [`0x0842BB3f773A8Ee9732b229327b79CCB2Ce54847`](https://arbiscan.io/address/0x0842BB3f773A8Ee9732b229327b79CCB2Ce54847#code) | `UPGRADER()` → `0xaeE1F9d2…` | verified |
+| `HelicoAccountFactory` | [`0x01CC7d9FE8da79B61bcc5d3f7e3f0433DCE7E081`](https://arbiscan.io/address/0x01CC7d9FE8da79B61bcc5d3f7e3f0433DCE7E081#code) | `IMPLEMENTATION()` → `0x0842BB3f…` | verified |
+| `HelicoMandateSwap` | [`0xA16D313816247628DeB7d89DC7a3Cf4aDb5287Ed`](https://arbiscan.io/address/0xA16D313816247628DeB7d89DC7a3Cf4aDb5287Ed#code) | `AQUA()` → `0x1111113CCf…` | verified |
 
 ```
 HelicoAccount         tx 0xc9517828f595dc6e563b3702da51f70f9823497c3790b8fb8130a59ca5039163
@@ -33,6 +33,25 @@ predicts an address for an owner, opens it inside a state snapshot, compares, an
 snapshot. A counterfactual address that does not match what the factory produces would be a
 quiet lie, and it is checked at the moment of deployment rather than trusted.
 
+### Verified, and checked from the other side
+
+All three carry their source on Arbiscan. Read back from Etherscan's API rather than taken from
+`forge verify-contract`'s own report — a tool saying it succeeded is not the same claim as the
+explorer serving the source:
+
+```
+0x0842BB3f…  HelicoAccount         231,503 chars  v0.8.30+commit.73712a01  optimizer on, 200 runs
+0x01CC7d9F…  HelicoAccountFactory  194,621 chars  v0.8.30+commit.73712a01  optimizer on, 200 runs
+0xA16D3138…  HelicoMandateSwap      83,601 chars  v0.8.30+commit.73712a01  optimizer on, 200 runs
+```
+
+Compiler and optimizer settings match `foundry.toml`'s default profile, which is what makes the
+verification mean the bytecode came from the source in this repository rather than from something
+that merely compiles to the same thing.
+
+Verification needs `ETHERSCAN_API_KEY` in the source-of-truth `.env`. One key serves every chain
+on Etherscan's v2 API, so `--chain-id 42161` is all that points it at Arbiscan.
+
 ### Deliberately not deployed
 
 - **`HelicoVault` and the Uniswap v4 path.** CRE no longer drives it. See
@@ -43,10 +62,6 @@ quiet lie, and it is checked at the moment of deployment rather than trusted.
 
 ### Not done yet
 
-- **Arbiscan verification.** No `ETHERSCAN_API_KEY` in the environment. The bytecode is
-  reproducible from `main` at `54b298c` with the default profile; verifying it is a separate step
-  and worth doing before the video, because a verified contract is a judge clicking through to
-  the source rather than taking a screenshot's word for it.
 - **No account has been opened on mainnet.** The factory is live and permissionless; nothing has
   used it, and nothing holds anyone's funds. See [the runbook](deploy-runbook.md) for the two
   calls that prove a deployed account can be acted on and escaped from.
