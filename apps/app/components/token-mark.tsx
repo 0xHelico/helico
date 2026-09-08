@@ -46,37 +46,31 @@ const TEXT = {
 };
 
 /**
- * The blue disc, the gradient ring around it, and the dollar between two arcs.
+ * The blue disc, the dollar, and the two arcs around it.
  *
- * The ring is the part that identifies it at this size — the disc and the `$` alone are a dozen
- * dollar-stablecoins. SVG has no conic gradient, so the sweep is a linear one laid across the
- * same diagonal, which is indistinguishable at 24 pixels and is one element rather than twelve.
- *
- * The gradient id is fixed, not generated. Every instance draws the same three stops, so the
- * first definition in the document is the right one for all of them, and a per-instance id would
- * put a unique `<defs>` in the page for each row of a table.
+ * This is Circle's *native* USDC, which is the token this account holds — `0xaf88…5831`. The
+ * variant with a purple-to-teal ring is bridged USDC.e, a different contract we do not show, and
+ * drawing it here would put the wrong token's mark beside a real balance. That is the mistake
+ * `token()` in lib/mandates.ts refuses everywhere else, and a picture makes it just as
+ * confidently as a symbol does.
  */
 function Usdc({ size }: { size: number }) {
+  return <UsdcDisc label="USDC" size={size} />;
+}
+
+/** The disc on its own, so the Aave receipt can be drawn as this token wrapped. */
+function UsdcDisc({ label, size }: { label: string; size: number }) {
   return (
-    <Mark label="USDC" size={size}>
-      <defs>
-        <linearGradient id="usdc-ring" x1="0.15" x2="0.5" y1="0" y2="1">
-          <stop offset="0%" stopColor="#7b4bd0" />
-          <stop offset="45%" stopColor="#c8459d" />
-          <stop offset="100%" stopColor="#2ec4c4" />
-        </linearGradient>
-      </defs>
-      <Circle fill="url(#usdc-ring)" />
-      <circle cx="16" cy="16" fill="#fff" r="14.4" />
-      <circle cx="16" cy="16" fill="#2775ca" r="13.2" />
+    <Mark label={label} size={size}>
+      <Circle fill="#2775ca" />
       <path
-        d="M12.9 23.9a8.4 8.4 0 0 1 0-15.8M19.1 8.1a8.4 8.4 0 0 1 0 15.8"
+        d="M12.6 24.6a9.2 9.2 0 0 1 0-17.2M19.4 7.4a9.2 9.2 0 0 1 0 17.2"
         fill="none"
         stroke="#fff"
         strokeLinecap="round"
-        strokeWidth="1.7"
+        strokeWidth="1.8"
       />
-      <text {...TEXT} fontSize="12.5" x="16" y="20.4">
+      <text {...TEXT} fontSize="13" x="16" y="20.6">
         $
       </text>
     </Mark>
@@ -141,23 +135,35 @@ function Arb({ size }: { size: number }) {
 }
 
 /** Aave's receipt, in Aave's colour with the underlying's letter. */
-function AToken({ size, under }: { size: number; under: string }) {
+/**
+ * Aave's receipt: the underlying token's own mark, inside Aave's ring.
+ *
+ * The receipt is not a different asset — it is USDC at work — and a mark that shares nothing with
+ * USDC's says otherwise. This is how Aave draws its own aTokens, and it is the difference that
+ * matters here: same disc, so a reader sees one asset; a ring in Aave's colour, so they see which
+ * of its two states they are looking at.
+ */
+function AUsdc({ size }: { size: number }) {
   return (
-    <Mark label={`a${under}`} size={size}>
-      <circle {...RING} fill="#b6509e" />
-      <circle
-        cx="16"
-        cy="16"
-        fill="none"
-        r="11"
-        stroke="#fff"
-        strokeWidth="1.6"
-        opacity="0.55"
-      />
-      <text {...TEXT} fontSize="12" x="16" y="20.4">
-        {under[0]}
-      </text>
-    </Mark>
+    <span
+      aria-label="aUSDC"
+      className="relative inline-flex items-center justify-center"
+      role="img"
+      style={{ height: size, width: size }}
+    >
+      <svg
+        aria-hidden="true"
+        className="absolute inset-0"
+        height={size}
+        viewBox="0 0 32 32"
+        width={size}
+      >
+        <Circle fill="#b6509e" />
+      </svg>
+      <span className="relative">
+        <UsdcDisc label="aUSDC" size={Math.round(size * 0.74)} />
+      </span>
+    </span>
   );
 }
 
@@ -191,7 +197,7 @@ export function TokenMark({
     case "ARB":
       return <Arb size={size} />;
     case "aUSDC":
-      return <AToken size={size} under="USDC" />;
+      return <AUsdc size={size} />;
     default:
       return <Unknown size={size} />;
   }
