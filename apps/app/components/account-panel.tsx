@@ -4,7 +4,13 @@ import { useQuery } from "@tanstack/react-query";
 import { formatUnits } from "viem";
 import { useAccount, usePublicClient } from "wagmi";
 
-import { Glyph } from "@/components/glyph";
+import {
+  Card,
+  Loading,
+  NotDeployed,
+  SectionTitle,
+  StatTile,
+} from "@/components/kit";
 import {
   type AccountState,
   configuredFactory,
@@ -27,7 +33,7 @@ const usdc = (v: bigint) =>
     maximumFractionDigits: 2,
   });
 
-function Row({ label, value }: { label: string; value: string }) {
+function _Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-baseline justify-between gap-4">
       <span className="text-muted-foreground text-xs">{label}</span>
@@ -65,9 +71,12 @@ export function AccountPanel() {
   });
 
   const note = (text: string) => (
-    <div className="mt-5 rounded-2xl border border-dashed p-4">
-      <p className="text-muted-foreground text-xs leading-relaxed">{text}</p>
-    </div>
+    <Card className="mt-4">
+      <SectionTitle>Where your capital sits</SectionTitle>
+      <div className="mt-3">
+        <NotDeployed>{text}</NotDeployed>
+      </div>
+    </Card>
   );
 
   if (!factory) {
@@ -84,41 +93,51 @@ export function AccountPanel() {
     return note(`The chain did not answer: ${error.message.split("\n")[0]}`);
   }
   if (!data || data.kind === "unconfigured") {
-    return note("Reading…");
+    return (
+      <Card className="mt-4">
+        <SectionTitle>Where your capital sits</SectionTitle>
+        <Loading className="mt-3 h-28" />
+      </Card>
+    );
   }
 
   const bps = workingBps(data);
   const opened = data.kind === "open";
+  const total = data.idle + data.working;
 
   return (
-    <div className="mt-5 rounded-2xl border bg-card p-4">
-      <div className="flex items-start gap-4">
-        <span className="mt-0.5 shrink-0">
-          <Glyph name="bank" size={34} />
-        </span>
-        <div className="min-w-0 flex-1 space-y-2">
-          <Row label="Your account" value={short(data.address)} />
-          <Row label="Idle" value={`${usdc(data.idle)} USDC`} />
-          <Row label="Working" value={`${usdc(data.working)} USDC`} />
-          <Row
-            label="At work"
-            value={bps === null ? "—" : `${(bps / 100).toFixed(1)}%`}
-          />
-          <Row
-            label="Agent"
-            value={
-              hasAgent(data)
-                ? short((data as { agent: string }).agent)
-                : "none nominated"
-            }
-          />
-        </div>
+    <Card className="mt-4">
+      <SectionTitle>Where your capital sits</SectionTitle>
+
+      <div className="tabular mt-3 font-medium text-[32px] text-ink tracking-tight">
+        {usdc(total)} <span className="text-[16px] text-soft">USDC</span>
       </div>
-      <p className="mt-3.5 text-[10.5px] text-muted-foreground/70 leading-relaxed">
+      <div className="tabular mt-1 font-mono text-[11.5px] text-faint">
+        {short(data.address)} · {opened ? "open" : "not opened yet"}
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <StatTile name="Liquid" value={`${usdc(data.idle)} USDC`} />
+        <StatTile
+          name="Working"
+          note={bps === null ? undefined : `${(bps / 100).toFixed(1)}% at work`}
+          value={`${usdc(data.working)} USDC`}
+        />
+        <StatTile
+          name="Agent"
+          value={
+            hasAgent(data)
+              ? short((data as { agent: string }).agent)
+              : "none nominated"
+          }
+        />
+      </div>
+
+      <p className="mt-4 text-[11px] text-faint leading-relaxed">
         {opened
           ? "The agent may move capital between markets you allow-listed. Neither call it can make takes a recipient, so it cannot send anything anywhere but here."
-          : "Not opened yet — this address is what CREATE2 says it will be, and tokens sent to it now are still yours when it is."}
+          : "This address is what CREATE2 says it will be. Tokens sent to it now are still yours when it exists."}
       </p>
-    </div>
+    </Card>
   );
 }
