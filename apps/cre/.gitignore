@@ -1,2 +1,6 @@
 *.env
 .env
+
+# Build output from `cre workflow simulate`/`deploy`.
+binary.wasm.br.b64
+.cre_build_tmp.js

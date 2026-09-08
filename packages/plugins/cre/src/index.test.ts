@@ -925,7 +925,7 @@ describe('signature delivery', () => {
 		const { result, writes, reports, secretRequests } = await run(chain, signing, {
 			secrets: withKey,
 		})
-		expect(secretRequests).toContain('AGENT_KEY')
+		expect(secretRequests).toEqual(['HELICO_VAULT'])
 		expect(result.startsWith(`SUPPLY 800000000 to ${aave} {`)).toBe(true)
 		const auth = JSON.parse(result.slice(result.indexOf('{'))) as {
 			params: Record<string, string | boolean>
@@ -997,16 +997,24 @@ describe('signature delivery', () => {
 		)
 		expect(result).toBe('HOLD (the owner has not permitted this venue)')
 		expect(reports).toHaveLength(0)
-		expect(secretRequests).toContain('AGENT_KEY')
+		expect(secretRequests).toEqual(['HELICO_VAULT'])
 	})
 
-	test('forwarder delivery never asks the Vault DON for the agent key', async () => {
-		const { secretRequests } = await run(allIdle)
-		expect(secretRequests).not.toContain('AGENT_KEY')
+	/**
+	 * This used to assert that a forwarder run never *asked* for the agent key. One blob ended
+	 * that: a single request carries every value, so "did not ask" is no longer observable and
+	 * an assertion spelled that way would pass without anything happening. What still holds, and
+	 * is what the old test was protecting, is that a forwarder run needs no key at all — here
+	 * the vault genuinely has none.
+	 */
+	test('forwarder delivery needs no agent key in the vault', async () => {
+		const { result, secretRequests } = await run(allIdle)
+		expect(secretRequests).toEqual(['HELICO_VAULT'])
+		expect(result).not.toContain('signature')
 	})
 
-	test('refuses to sign without the key', async () => {
-		await expect(run(chain, signing)).rejects.toThrow('Secret AGENT_KEY is missing')
+	test('refuses to sign when the vault holds no key, and names which one', async () => {
+		await expect(run(chain, signing)).rejects.toThrow('HELICO_VAULT has no AGENT_KEY')
 	})
 
 	test('an account without a nonce fails loudly instead of signing against nothing', async () => {
@@ -1231,23 +1239,28 @@ describe('the secrets a TEE handler asks for', () => {
 	}
 
 	/**
-	 * Every production run failed on the batch form — `batch secret retrieval failed for 11
-	 * request(s)`, then `for 10` after chunking changed the count and nothing else. Chainlink's
-	 * reference for Confidential Workflows shows the singular form at the point of use, and
-	 * `SecretsProvider` exposes both, so nothing in the types chooses for you.
+	 * The count is the whole story, and it was measured three times. A batch of eleven failed:
+	 * `batch secret retrieval failed for 11 request(s)`. Chunked to ten it failed the same way,
+	 * the count being the only thing that changed. Split into one call per secret — the shape
+	 * Chainlink's Confidential Workflows reference names for TypeScript — the first call
+	 * succeeded and the second failed, identically, across two executions of one binary.
+	 *
+	 * One request of one item is the only shape all three measurements leave standing.
 	 */
-	test('asks for each secret on its own, never as a batch', async () => {
+	test('asks once, for one item', async () => {
 		const { secretRequests, secretBatches } = await run({ ...allIdle, nonce: 7n }, withModel, {
 			secrets: allKeys,
 		})
 
-		expect(secretRequests).toHaveLength(11)
-		expect(new Set(secretRequests).size).toBe(11)
-		// One request per secret is the shape under test: eleven requests of one, not one of
-		// eleven and not two of eight and three.
-		expect(secretBatches).toHaveLength(11)
-		for (const batch of secretBatches) expect(batch).toHaveLength(1)
-		expect(secretRequests).toContain('AGENT_KEY')
+		expect(secretRequests).toEqual(['HELICO_VAULT'])
+		expect(secretBatches).toHaveLength(1)
+		expect(secretBatches[0]).toHaveLength(1)
+	})
+
+	/** Packed, not dropped: every value still reaches the code that uses it. */
+	test('the one item carries all eleven values', async () => {
+		const { result } = await run({ ...allIdle, nonce: 7n }, withModel, { secrets: allKeys })
+		expect(result).toBeDefined()
 	})
 
 	test('every request names the namespace the secrets were created in', async () => {
@@ -1260,17 +1273,28 @@ describe('the secrets a TEE handler asks for', () => {
 	})
 
 	/**
-	 * A batch that fails names the count and not the secret, so eleven ids fail as one opaque
-	 * event. One at a time, the failure names the id — and `AGENT_KEY` failing is a different
-	 * sentence from `AI_API_KEY` failing.
+	 * The request count no longer moves with what the run needs. Eight values or eleven, it is
+	 * one request either way — which is the property that makes the deployment survive, since
+	 * two requests is already one too many.
 	 */
-	test('a run without the model asks for eight, and still one at a time', async () => {
-		const { secretRequests, secretBatches } = await run(
+	test('the request count does not grow with what the run needs', async () => {
+		const { secretBatches } = await run(
 			{ ...allIdle, nonce: 7n },
 			{ delivery: 'signature', chainId: 42_161 },
 			{ secrets: { ...secrets, AGENT_KEY: agentKey } },
 		)
-		expect(secretRequests).toHaveLength(8)
-		expect(secretBatches).toHaveLength(8)
+		expect(secretBatches).toHaveLength(1)
+	})
+
+	/**
+	 * A batch that failed named the count and not the secret, so eleven ids failed as one opaque
+	 * event. Unpacking the blob by name keeps that distinction: a missing `AGENT_KEY` is a
+	 * different sentence from a missing `AI_API_KEY`.
+	 */
+	test('a missing value names itself, not a count', async () => {
+		const { AI_API_KEY: _dropped, ...withoutOne } = allKeys
+		await expect(
+			run({ ...allIdle, nonce: 7n }, withModel, { secrets: withoutOne }),
+		).rejects.toThrow('HELICO_VAULT has no AI_API_KEY')
 	})
 })

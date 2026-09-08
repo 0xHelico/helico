@@ -422,28 +422,46 @@ function holdLine(judged: Judged[], fleet: string): string {
 }
 
 /**
- * Every secret the run needs, asked for one at a time.
+ * The one secret this workflow reads, holding every value the others used to be.
  *
- * **Not `getSecrets`, and that is the whole point.** The batch form is what every production run
- * failed on: `batch secret retrieval failed for 11 request(s)` — then `for 10`, after chunking
- * changed the count and nothing else. Chainlink's own reference for Confidential Workflows shows
- * the singular form at the point of use and says *"nothing declared upfront"*; the batch form
- * appears only in the non-TEE examples. `SecretsProvider` exposes both, so the type system does
- * not choose for you.
+ * **Measured, against the reference.** Chainlink's Confidential Workflows reference says to fetch
+ * several secrets with *"one call per secret"* in TypeScript. That cannot work here: the DON
+ * answers **one** secret retrieval per execution and refuses the rest. Two consecutive production
+ * runs failed identically at `call 1` while `call 0` succeeded, and before that a single batched
+ * call for ten failed outright. One call, one item, is the only shape both facts allow.
  *
- * The diagnostic gain stands even if the enclave turns out to accept batches. A batch that fails
- * names the count and not the secret, so eleven ids fail as one opaque event; one at a time, the
- * failure names the id, and `AGENT_KEY` failing is a different sentence from `AI_API_KEY` failing.
- * That distinction cost three wrong hypotheses to not have.
+ * So the eleven values travel as one JSON document. Nothing downstream changes: this returns the
+ * same record keyed by the same ids, and `policyFromSecrets` and the AI client cannot tell the
+ * difference.
+ *
+ * The agent key rides in the same document as the policy, which is worse hygiene than separating
+ * them and no worse exposure: the Vault DON releases both only into the enclave, and neither is
+ * ever anything but enclave-only. It is here because a limit forced it, not because it is better.
  */
+const VAULT_SECRET_ID = 'HELICO_VAULT'
+
 function readSecrets(
 	runtime: TeeRuntime<Config>,
 	ids: string[],
 	namespace: string,
 ): Record<string, { value: string }> {
+	const raw = runtime.getSecret({ id: VAULT_SECRET_ID, namespace }).result().value
+
+	let parsed: Record<string, unknown>
+	try {
+		parsed = JSON.parse(raw) as Record<string, unknown>
+	} catch {
+		throw new Error(`${VAULT_SECRET_ID} is not JSON`)
+	}
+
 	const all: Record<string, { value: string }> = {}
 	for (const id of ids) {
-		all[id] = runtime.getSecret({ id, namespace }).result()
+		const value = parsed[id]
+		// Named one at a time rather than as a count. A missing `AGENT_KEY` and a missing
+		// `AI_API_KEY` are different problems, and the count is what made three wrong hypotheses
+		// possible when the DON reported one.
+		if (typeof value !== 'string') throw new Error(`${VAULT_SECRET_ID} has no ${id}`)
+		all[id] = { value }
 	}
 	return all
 }

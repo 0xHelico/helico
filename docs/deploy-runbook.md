@@ -333,15 +333,58 @@ holds there.
 update, pause and delete it. The deployer — not the agent, whose key lives inside the enclave and
 must never sign a deploy, and not the upgrader, whose blast radius is account code.
 
-**`cre secrets create` refuses more than ten items in one payload, and `workflow.yaml` names
-exactly one.** Those two limits pull in opposite directions, and satisfying the first by splitting
-the file breaks the second: `SecretsPath` in the CLI is a single string, so a split manifest
-declares access to part of what the workflow asks for. The symptom is `secret not found` in the
-simulator and `relay quorum unreachable` in production — two messages for one cause.
+**The DON answers one secret retrieval per execution.** Not one *item* — one *request*. This is
+not documented anywhere we could find, and it cost a day; here is the whole measurement, because
+the shape of the evidence is what identifies the limit:
 
-So `secrets.yaml` is the manifest and carries all eleven, and it is **never uploaded**. The upload
-runs twice from `secrets-upload-policy.yaml` and `secrets-upload-ai.yaml`, which are subsets of it
-and exist for no other reason.
+| shape | result |
+|---|---|
+| eleven ids, one batched call | `batch secret retrieval failed for 11 request(s)` |
+| ten ids, one batched call | identical failure, only the count changed |
+| one call per secret (11 calls) | **call 0 succeeded**, call 1 failed — twice, same binary |
+
+The third row is the one that identifies it. Chainlink's Confidential Workflows reference names
+one-call-per-secret as the TypeScript shape (`references/confidential-workflows.md`, *"Fetch
+several secrets — one call per secret"*), so that shape is not a mistake, and its **first call was
+answered**. A limit that lets one request through and refuses the second is a limit on requests.
+
+The SDK confirms the reading rather than leaving it an inference. In the compiled runtime, the
+singular form is the batch form with one element, and each call takes the next callback id:
+
+```js
+getSecret(request) {
+  const secretRequest = request.$typeName ? request : create(SecretRequestSchema, request)
+  const getSecretsCall = this.getSecrets([secretRequest])   // a batch of one
+  …
+}
+// inside getSecrets:
+const id = this.nextCallId; this.nextCallId++
+```
+
+So there is no separate singular path to be preferred — every retrieval is a batch, and what
+distinguishes them is the callback id. That is the number our production logs were printing all
+along: `for call 0` succeeded, `for call 1` failed. Not the first and second *secret* — the first
+and second *callback*. One callback per execution is answered.
+
+Two hypotheses died on the way and are worth naming, because both felt conclusive. That the batch
+was merely too large: disproved when eleven and ten failed the same way. That the namespace was
+wrong: disproved by a run with `namespace: 'main'` set explicitly, which failed identically — and
+the error had been printing `(namespace: main)` all along.
+
+So all eleven values travel as **one item**, `HELICO_VAULT`, holding a JSON document, built by
+`scripts/pack-cre-vault.py` from `apps/cre/.env` and unpacked inside the enclave. One item is
+under ten, so the ten-item limit stops mattering and the subset upload files are gone.
+
+```bash
+python3 scripts/pack-cre-vault.py       # after changing any SECRET_* value
+python3 scripts/check-cre-secrets.py    # packed ids == ids the workflow reads
+cre secrets update secrets.yaml --target production-settlement
+```
+
+The agent key now shares a document with the policy. That is worse hygiene than keeping them
+apart and **not** worse exposure — the Vault DON releases the document only into the enclave, and
+neither value was ever anything but enclave-only. It is packed together because a measured limit
+forced it, not because it is better.
 
 **`cre workflow list` can say "No workflows found" about a workflow that is deployed and running.**
 It reads an indexer that lags. Do not conclude anything from it — ask the registry, which is the

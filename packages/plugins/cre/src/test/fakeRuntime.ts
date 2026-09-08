@@ -21,6 +21,9 @@ export type WriteReportCall = {
  * records what leaves the enclave, and fakes the DON's report and write path. Anything not
  * in the table fails loudly, so a test cannot pass on a read it did not model.
  */
+/** The one id the deployed workflow asks for. Restated here would be a second source of truth. */
+const VAULT_SECRET_ID = 'HELICO_VAULT'
+
 export function fakeRuntime(input: {
 	config: Config
 	secrets: Record<string, string>
@@ -132,18 +135,41 @@ export function fakeRuntime(input: {
 	}
 	const runtime = {
 		...don,
-		/** The singular form, which is what a TEE handler uses. */
+		/**
+		 * The Vault DON as production actually holds it: **one** secret, `HELICO_VAULT`, whose
+		 * value is the JSON of every value below. Tests still describe the values one by one,
+		 * because that is what the workflow reads; the packing is the fixture's job, as it is
+		 * the upload's.
+		 *
+		 * And it answers **once**. Two production executions of the same binary failed
+		 * identically at the second retrieval while the first succeeded, so a second call is
+		 * modelled as the failure it is. A fake that answered every call would let a change back
+		 * to one-call-per-secret pass here and fail on the DON, which is the exact bug this
+		 * shape exists to prevent.
+		 */
 		getSecret: (request: { id: string; namespace?: string }) => {
 			secretRequests.push(request.id)
 			secretBatches.push([{ ...request }])
+			if (secretBatches.length > 1) {
+				throw new Error(
+					`secret retrieval failed for ${request.id}: the DON answers one retrieval per execution`,
+				)
+			}
+			if (request.id !== VAULT_SECRET_ID) {
+				throw new Error(`secret retrieval failed for ${request.id}: no such secret`)
+			}
 			return {
 				result: () => ({
 					id: request.id,
 					namespace: request.namespace ?? 'main',
-					value: input.secrets[request.id] ?? '',
+					value: JSON.stringify(input.secrets),
 				}),
 			}
 		},
+		/**
+		 * Kept so a test can still prove the batch form is *not* used. It records and refuses,
+		 * because the batch is what the relay turned down: ten items in one call failed outright.
+		 */
 		getSecrets: (requests: { id: string }[]) => {
 			secretRequests.push(...requests.map((r) => r.id))
 			// The boundaries too, not only the ids. A flat list cannot tell one request for
@@ -151,15 +177,9 @@ export function fakeRuntime(input: {
 			// The whole request, not only the id: the namespace is the field that was empty, and a
 			// recording that dropped it could not have shown that.
 			secretBatches.push(requests.map((r) => ({ ...r })))
-			return {
-				result: () =>
-					Object.fromEntries(
-						requests.map((r) => [
-							r.id,
-							{ id: r.id, namespace: 'main', value: input.secrets[r.id] ?? '' },
-						]),
-					),
-			}
+			throw new Error(
+				`batch secret retrieval failed for ${requests.length} request(s): relay quorum unreachable`,
+			)
 		},
 		usingTheDons: () => don,
 	}
