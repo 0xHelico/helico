@@ -175,15 +175,34 @@ FOUNDRY_PROFILE=swapvm forge verify-contract $ADDR src/path/File.sol:Contract \
 
 python3 - <<'EOF'
 import json, glob
-bi = json.load(open(glob.glob('out-swapvm/build-info/*.json')[0]))
+
+CONTRACT = 'src/swapvm/HelicoAquaSwapVMRouter.sol'
+artifact = json.load(open(f'out-swapvm/{CONTRACT.split("/")[-1]}/HelicoAquaSwapVMRouter.json'))
+
+# Foundry keeps every build-info it has ever written, so the newest is not reliably yours and
+# `glob(...)[0]` is arbitrary. The artifact's `id` is its **source id**, and the build-info that
+# produced it is the one whose `source_id_to_path` maps that id back to this contract's own path.
+# Exact, and it does not depend on timestamps or on how many builds are lying around.
+wanted = str(artifact['id'])
+builds = []
+for f in glob.glob('out-swapvm/build-info/*.json'):
+    paths = json.load(open(f)).get('source_id_to_path', {})
+    if paths.get(wanted) == CONTRACT:
+        builds.append((f, paths))
+if len(builds) != 1:
+    raise SystemExit(f'expected one build-info for {CONTRACT}, found {len(builds)}')
+_, paths = builds[0]
+
 base = json.load(open('/tmp/base.json'))
-sources = {p: {'content': open(p, encoding='utf-8').read()}
-           for p in sorted(bi['source_id_to_path'].values())}
+sources = {p: {'content': open(p, encoding='utf-8').read()} for p in sorted(paths.values())}
 json.dump({'language': 'Solidity', 'sources': sources, 'settings': base['settings']},
           open('/tmp/full.json', 'w'))
 print('sources:', len(sources), 'was:', len(base['sources']))
 EOF
 ```
+
+If that raises, `forge clean` and rebuild: more than one match means two builds compiled the same
+file at the same source id, and neither is safe to guess between.
 
 **Then compile it locally before submitting anything.** This is the step that turns the next
 submission from a guess into a certainty, and it answers in seconds where Etherscan's queue takes
