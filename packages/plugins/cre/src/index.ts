@@ -353,7 +353,7 @@ function largestMove(judged: Judged[]): Judged | undefined {
 	let best: Judged | undefined
 	for (const candidate of judged) {
 		if (!candidate.outcome.act) continue
-		if (!best || !best.outcome.act) {
+		if (!best?.outcome.act) {
 			best = candidate
 			continue
 		}
