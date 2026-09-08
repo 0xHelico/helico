@@ -14,8 +14,18 @@ only shape all three measurements leave standing is one request carrying one ite
 So the eleven values travel as one JSON document under `SECRET_HELICO_VAULT`, and this script is
 what builds it. Run it after changing any `SECRET_*` value, then `cre secrets update`.
 
-VALUES ARE NEVER PRINTED. This reads `apps/cre/.env` and writes back to the same file. Nothing
-but ids and counts reaches stdout — the file is gitignored and stays that way.
+THE PATH IS AN ARGUMENT, AND DELIBERATELY NOT DEFAULTED. There are two .env files and they hold
+different things. `apps/cre/.env` carries the Anvil key for local rehearsals; the real values —
+every `SECRET_*` and the workflow owner's `CRE_ETH_PRIVATE_KEY` — live in the source-of-truth
+.env, which is the one every production `cre` command is handed with `-e`. Packing one file and
+uploading the other produces a blob of stale or fixture values that uploads without complaint.
+That already happened once: this script defaulted to `apps/cre/.env` and packed the Anvil agent
+key. So the path is required, and it must be the same file `-e` names.
+
+    python3 scripts/pack-cre-vault.py <source-of-truth>/.env
+
+VALUES ARE NEVER PRINTED. It reads that file and writes back to it. Nothing but ids and counts
+reaches stdout — the file is gitignored and stays that way.
 """
 
 import json
@@ -23,7 +33,6 @@ import re
 import sys
 from pathlib import Path
 
-ENV = Path(__file__).resolve().parent.parent / "apps" / "cre" / ".env"
 MANIFEST = Path(__file__).resolve().parent.parent / "apps" / "cre" / "secrets.yaml"
 PACKED = "SECRET_HELICO_VAULT"
 
@@ -53,9 +62,15 @@ def unquote(raw: str) -> str:
 
 
 def main() -> int:
-    if not ENV.exists():
-        print(f"missing {ENV}")
+    if len(sys.argv) != 2:
+        print(__doc__.strip().splitlines()[0])
+        print("usage: pack-cre-vault.py <path to the .env that `cre -e` is given>")
+        return 2
+    env_path = Path(sys.argv[1]).expanduser()
+    if not env_path.exists():
+        print(f"missing {env_path}")
         return 1
+    ENV = env_path
 
     lines = ENV.read_text().splitlines()
     env: dict[str, str] = {}
@@ -64,10 +79,16 @@ def main() -> int:
         if m and not line.lstrip().startswith("#"):
             env[m.group(1)] = unquote(m.group(2))
 
+    if "CRE_ETH_PRIVATE_KEY" not in env:
+        # The file that holds the secrets must be the file that holds the owner key, because it is
+        # one `-e` for both. A file with the secrets and no owner key is the wrong one.
+        print(f"{ENV} has no CRE_ETH_PRIVATE_KEY, so it is not the file `cre -e` is given")
+        return 1
+
     missing = [i for i in IDS if f"SECRET_{i}" not in env]
     if missing:
         # Named, not counted. A count is what made three wrong hypotheses possible.
-        print("not set in apps/cre/.env: " + ", ".join(missing))
+        print(f"not set in {ENV}: " + ", ".join(missing))
         return 1
 
     blob = {i: env[f"SECRET_{i}"] for i in IDS}

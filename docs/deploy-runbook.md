@@ -376,10 +376,21 @@ So all eleven values travel as **one item**, `HELICO_VAULT`, holding a JSON docu
 under ten, so the ten-item limit stops mattering and the subset upload files are gone.
 
 ```bash
-python3 scripts/pack-cre-vault.py       # after changing any SECRET_* value
-python3 scripts/check-cre-secrets.py    # packed ids == ids the workflow reads
-cre secrets update secrets.yaml --target production-settlement
+SOT=<source-of-truth>/.env
+python3 scripts/pack-cre-vault.py "$SOT"   # after changing any SECRET_* value
+python3 scripts/check-cre-secrets.py       # packed ids == ids the workflow reads
+cd apps/cre
+cre secrets update secrets.yaml -e "$SOT" --target production-settings --non-interactive --yes
 ```
+
+**Pack the same file `-e` names.** There are two `.env` files and they hold different things.
+`apps/cre/.env` carries the Anvil key and fixture values for local rehearsals; the real
+`SECRET_*` values and the owner's `CRE_ETH_PRIVATE_KEY` live in the source-of-truth `.env`, which
+is the one every production command is handed. Pack one and upload the other and the blob is
+fixture values, uploaded without a complaint — the CLI has no way to know. It happened here: the
+packer defaulted to `apps/cre/.env` and packed the Anvil agent key. The blobs differed by twelve
+bytes, which is the only reason it was noticed. The path is now a required argument, and the
+packer refuses a file with no `CRE_ETH_PRIVATE_KEY` in it, because that is the file `-e` wants.
 
 The agent key now shares a document with the policy. That is worse hygiene than keeping them
 apart and **not** worse exposure — the Vault DON releases the document only into the enclave, and
