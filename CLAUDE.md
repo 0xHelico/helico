@@ -347,13 +347,27 @@ costs one slot, not several.
 > holds what, and the skew is the part no published instruction has.
 >
 > Six fork tests hold it against the live ETH/USD feed and real USDC, including a stale feed
-> refusing the fill and the cap refusing rather than merely discouraging.
+> refusing the fill and the cap refusing rather than merely discouraging. Four more, added later
+> the same day, pay a fill out of the maker's Aave position rather than their wallet.
+>
+> **A second thing landed on 9 September, and it is about a position rather than a price.**
+> `concentrate` — 1inch's own instruction, opcode 18 in the table our router inherits — adds
+> virtual reserves so a constant product prices inside a band. Run with `AquaYieldCover` at 34 it
+> becomes a concentrated liquidity position whose capital earns in Aave between fills and is
+> unwound only when one needs it. Neither half knows about the other: `concentrate` has no idea
+> where the inventory is, and the cover has no idea it is quoting a band.
+>
+> It takes three instructions, `[18][17][34]`, and the two-instruction pairing is impossible
+> rather than worse — `concentrate` requires the swap amounts unset, the cover reads the amount
+> the swap computed. `ForkSwapVMConcentrateCover.t.sol` measures the working ordering, both
+> failing ones, and the band against no band at all: 10,183 USDC paid versus 8,600 from the same
+> account on the same trade. One number could not have told a working band from an absent one.
 >
 > **This still does not say the track qualifies, and no checklist line here claims it.** 1inch
 > declined to bless a design and called it general; whether an oracle-priced board with an
-> inventory brake is less general is their judgement, not ours. What changed is that the sentence
-> "the position our app implements is the example's position" is no longer true, and this file
-> should not go on saying it.
+> inventory brake, or a band that earns between fills, is less general is their judgement and not
+> ours. What changed is that the sentence "the position our app implements is the example's
+> position" is no longer true, and this file should not go on saying it.
 
 ### Finalist track (optional)
 

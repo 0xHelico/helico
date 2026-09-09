@@ -165,6 +165,21 @@ Six fork tests hold it to that, against the real feed and real USDC:
 inventory accumulates, the cap **refusing** rather than merely discouraging, the inventory bought
 back, a **stale feed refusing the fill**, and the spread being what the maker actually earns.
 
+Four more say the fill is paid out of the lending position rather than out of the wallet, which is
+the sentence at the top of this section and was the last part of it to become true
+([`ForkOracleBoardYield.t.sol`](contracts/test/ForkOracleBoardYield.t.sol)):
+
+```
+liquid before      500 USDC
+supplied before 29,500 USDC   (earning in Aave v3)
+paid to taker    2,493 USDC   ← larger than the wallet held
+supplied after  27,507 USDC
+```
+
+They also pin what it refuses: a fill the wallet covers never touches the market, the shipped
+receipt budget bounds what may be unwound, and **a maker carrying debt is refused** — unwinding
+collateral can liquidate them, and Aave's health checks do not run on our behalf.
+
 `FixedPriceBoard` in `contracts/test/` is the step between the two, kept as a test fixture rather
 than shipped: it proves a one-sided maker *can* provide liquidity on Aqua, and then proves why a
 fixed price is not enough — the price does not move no matter how much is taken, so a moving
@@ -194,6 +209,27 @@ supplied before 38,000 USDC   (earning in Aave v3)
 paid to taker    8,600 USDC   ← more than the wallet held
 supplied after  34,400 USDC   (3,600 unwound mid-swap, and no more)
 ```
+
+**And it composes with a concentrated band, which is the position rather than the plumbing.**
+`concentrate` is 1inch's own instruction — it adds virtual reserves so a constant product prices
+inside a price range. It has no idea where the inventory is. `_aquaYieldCoverXD` has no idea it is
+quoting a band. Run together they are a **concentrated liquidity position whose capital earns in
+Aave between fills and is unwound only when one needs it**, and nothing in the published
+instruction set expresses that
+([`ForkSwapVMConcentrateCover.t.sol`](contracts/test/ForkSwapVMConcentrateCover.t.sol)):
+
+```
+                 with the band   without it
+paid to taker    10,183 USDC      8,600 USDC
+```
+
+The right-hand column is the run above — the same account, the same trade, the band removed. One
+number could not have told a working band from an absent one, which is why the file measures both.
+
+It takes **three** instructions, and the two-instruction pairing is impossible rather than merely
+worse. `concentrate` requires `amountIn == 0 || amountOut == 0`, so it runs before any swap;
+`_aquaYieldCoverXD` reads `ctx.swap.amountOut` and returns when it is zero, so it runs after one.
+Both failing orderings are pinned in that file beside the working one.
 
 ### The Graph
 
