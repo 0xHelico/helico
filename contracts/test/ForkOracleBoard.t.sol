@@ -7,6 +7,7 @@ import {Aqua} from "@1inch/aqua/Aqua.sol";
 import {IAqua} from "@1inch/aqua/interfaces/IAqua.sol";
 
 import {HelicoOracleBoard, IHelicoOracleBoardCallback, IPriceFeed} from "../src/HelicoOracleBoard.sol";
+import {Venue} from "../src/HelicoMandateSwap.sol";
 
 /// @notice A maker holding only USDC, quoting from Chainlink, braking on its own inventory.
 ///
@@ -90,6 +91,9 @@ contract ForkOracleBoardTest is Test, IHelicoOracleBoardCallback {
             maxSkewBps: MAX_SKEW_BPS,
             baseCap: BASE_CAP,
             expiry: expiry,
+            // No venues: this file is about the price, and the wallet is the only source here.
+            // `ForkOracleBoardYield.t.sol` is the one that empties the wallet into Aave.
+            venues: new Venue[](0),
             app: address(board),
             salt: bytes32(uint256(1))
         });

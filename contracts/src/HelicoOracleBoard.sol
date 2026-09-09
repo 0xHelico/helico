@@ -2,8 +2,15 @@
 pragma solidity 0.8.30;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {AquaApp} from "@1inch/aqua/AquaApp.sol";
 import {IAqua} from "@1inch/aqua/interfaces/IAqua.sol";
+
+import {ILendingVenue} from "./ILendingVenue.sol";
+// The same struct `HelicoMandateSwap` uses, imported rather than redeclared: two definitions of
+// a venue would drift, and the one that drifted would be the one a maker had already shipped.
+// `receipt0` is the receipt for `quote`, `receipt1` the receipt for `base`.
+import {Venue} from "./HelicoMandateSwap.sol";
 
 /// @notice The taker's half of a fill: pay for what the board already handed over.
 /// @dev Four arguments rather than the eight `IHelicoMandateSwapCallback` carries. A taker that
@@ -79,6 +86,9 @@ contract HelicoOracleBoard is AquaApp {
     /// @param baseCap Base units at which the skew is full, and past which buying is refused.
     /// @param expiry First timestamp at which the board is dead.
     /// @param app Must be this contract, so a board cannot be replayed against another app.
+    /// @param venues Lending markets this board may unwind to cover a fill, with the receipt
+    ///        token each returns for each side. Empty means the wallet is the only source, which
+    ///        is the behaviour this app had before venues existed.
     /// @param salt Lets the same terms be shipped twice, since Aqua keys everything by hash.
     struct Board {
         address maker;
@@ -90,6 +100,7 @@ contract HelicoOracleBoard is AquaApp {
         uint256 maxSkewBps;
         uint256 baseCap;
         uint256 expiry;
+        Venue[] venues;
         address app;
         bytes32 salt;
     }
@@ -104,6 +115,11 @@ contract HelicoOracleBoard is AquaApp {
     error InsufficientOutputAmount(uint256 amountOut, uint256 amountOutMin);
     error IdenticalTokens(address token);
     error ZeroAmount();
+    error NoVenueCanCover(address token, uint256 deficit);
+    error MakerHasDebt(address maker, uint256 debt);
+    error ReceiptRetained(address receipt, uint256 held);
+    error UnwindFellShort(address token, uint256 held, uint256 needed);
+    error ReceiptAliasesReserve(address token);
 
     event Filled(
         address indexed maker, address indexed taker, bool takerSoldBase, uint256 amountIn, uint256 amountOut
@@ -172,10 +188,94 @@ contract HelicoOracleBoard is AquaApp {
     ) private {
         bytes32 hash = hashOf(board);
         address tokenIn = takerSellsBase ? board.base : board.quote;
+        address tokenOut = takerSellsBase ? board.quote : board.base;
 
-        AQUA.pull(board.maker, hash, takerSellsBase ? board.quote : board.base, amountOut, to);
+        _cover(board, hash, tokenOut, amountOut);
+        AQUA.pull(board.maker, hash, tokenOut, amountOut, to);
         IHelicoOracleBoardCallback(msg.sender).helicoOracleBoardCallback(tokenIn, amountIn, board.maker, hash);
         _safeCheckAquaPush(board.maker, hash, tokenIn, pushedBack + amountIn);
+    }
+
+    // ── settling out of a lending market ──────────────────────────────────────
+
+    /// @dev Top the maker's wallet up from a lending market, and only by what is missing.
+    ///
+    ///      **The wallet is spent first, always.** A maker with enough sitting idle never touches
+    ///      a market at all, so a market being paused or illiquid cannot break a fill that did not
+    ///      need it. That is not an optimisation — it is what keeps a dependency this app added
+    ///      from reaching fills that do not depend on it.
+    ///
+    ///      This is `HelicoMandateSwap._cover`, and it is here because the maker this app exists
+    ///      for is precisely the one whose capital is not in their wallet. A one-sided board
+    ///      without it quotes a price it cannot honour.
+    function _cover(Board calldata board, bytes32 hash, address tokenOut, uint256 amountOut) private {
+        if (board.venues.length == 0) return;
+
+        uint256 held = IERC20(tokenOut).balanceOf(board.maker);
+        if (held >= amountOut) return;
+        uint256 deficit = amountOut - held;
+
+        (uint256 index, address receipt) = _venueFor(board, hash, tokenOut, deficit);
+        _requireNoDebt(board.venues[index].pool, board.maker);
+
+        // What this contract held before the pull. Everything below is measured against it,
+        // because a receipt left here by any earlier call belongs to somebody else. This must
+        // stay a measurement: a maker-chosen pool is arbitrary code, called while this contract
+        // holds receipts, so it can reenter — and the accounting only closes because each frame
+        // measures its own starting point.
+        uint256 beforePull = IERC20(receipt).balanceOf(address(this));
+
+        AQUA.pull(board.maker, hash, receipt, deficit, address(this));
+
+        // A named amount, never a sweep. A sweep burns whatever this contract holds rather than
+        // what this fill pulled, which lets a small board redeem a large position that arrived
+        // here some other way.
+        ILendingVenue(board.venues[index].pool).withdraw(tokenOut, deficit, board.maker);
+
+        // Any receipt the burn did not consume goes home. Rounding is the usual cause and the
+        // amount is dust, but dust left here is dust the next caller can claim.
+        uint256 heldNow = IERC20(receipt).balanceOf(address(this));
+        if (heldNow > beforePull) {
+            SafeERC20.safeTransfer(IERC20(receipt), board.maker, heldNow - beforePull);
+            heldNow = IERC20(receipt).balanceOf(address(this));
+        }
+        require(heldNow == beforePull, ReceiptRetained(receipt, heldNow));
+
+        uint256 nowHeld = IERC20(tokenOut).balanceOf(board.maker);
+        require(nowHeld >= amountOut, UnwindFellShort(tokenOut, nowHeld, amountOut));
+    }
+
+    /// @dev The first venue that can actually pay this deficit. Three separate things must be
+    ///      true and the market's own liquidity is only one of them: a venue can be deep and
+    ///      still unable to pay *this* board, because the maker may hold no position there or the
+    ///      board may have no receipt budget left for it. Checking only the first turns a venue
+    ///      that cannot pay into the answer, ends the search, and strands a funded venue further
+    ///      down the list — while the failure arrives as an arithmetic panic from inside Aqua
+    ///      rather than as a refusal anyone can read. Skipping is what makes the list a list.
+    function _venueFor(Board calldata board, bytes32 hash, address tokenOut, uint256 deficit)
+        private
+        view
+        returns (uint256 index, address receipt)
+    {
+        bool quoteSide = tokenOut == board.quote;
+        for (uint256 i = 0; i < board.venues.length; i++) {
+            Venue calldata v = board.venues[i];
+            address r = quoteSide ? v.receipt0 : v.receipt1;
+            if (r == address(0)) continue;
+            if (ILendingVenue(v.pool).getVirtualUnderlyingBalance(tokenOut) < deficit) continue;
+            (uint248 budget,) = AQUA.rawBalances(board.maker, address(this), hash, r);
+            if (budget < deficit) continue;
+            if (IERC20(r).balanceOf(board.maker) < deficit) continue;
+            return (i, r);
+        }
+        revert NoVenueCanCover(tokenOut, deficit);
+    }
+
+    /// @dev Unwinding a position that backs a loan can liquidate the maker. Aave's own health
+    ///      checks do not run for us, so the refusal has to be here.
+    function _requireNoDebt(address pool, address maker) private view {
+        (, uint256 debt,,,,) = ILendingVenue(pool).getUserAccountData(maker);
+        require(debt == 0, MakerHasDebt(maker, debt));
     }
 
     // ── internals ─────────────────────────────────────────────────────────────
@@ -188,6 +288,14 @@ contract HelicoOracleBoard is AquaApp {
         // Both quotes must stay strictly inside the feed. A spread wider than the bend would
         // underflow the ask; a bend wider than the spread would put the bid below zero.
         require(board.spreadBps + board.maxSkewBps < BPS, SpreadTooWide(board.spreadBps, board.maxSkewBps));
+        // A receipt that is also one of the traded tokens makes the unwind spend the very reserve
+        // it is trying to top up, taking the ledger down twice for one fill.
+        for (uint256 i = 0; i < board.venues.length; i++) {
+            address r0 = board.venues[i].receipt0;
+            address r1 = board.venues[i].receipt1;
+            require(r0 != board.quote && r0 != board.base, ReceiptAliasesReserve(r0));
+            require(r1 != board.quote && r1 != board.base, ReceiptAliasesReserve(r1));
+        }
     }
 
     /// @dev The feed, rescaled to quote units per `1e18` of base.
