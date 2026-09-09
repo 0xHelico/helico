@@ -1437,6 +1437,23 @@ READMEs.
   the one worth fixing rather than deleting, because it would have passed forever without ever
   testing what it claimed.
 
+### 2026-09-09 — the check that would have caught the bug a day earlier
+
+- **Done:** added three assertions to `apps/app/e2e/production.ts`, which exercised the landing,
+  the dapp's gate, the security headers and the subgraph cache, and never once touched the chat.
+
+- **AI's role:** wrote them. The point is which failure they would have caught: #305 was live for a
+  day, and the production suite passed the whole time, because the one thing a judge types first
+  was the one thing nothing watched. One model call per run sends a message naming no token and no
+  amount, and asserts what it was read as, that the answer carries cards, and that every card is
+  pressable — a sentence to send or a screen to open, exactly one of the two.
+
+- **Verified:** 26 of 26 against the live deployment after the backend rolled out, and the two
+  messages from Ghoza's report answered from production rather than from a local build: `p` and
+  "bisa lp kah?" both come back as `about` with six cards. The browser was driven against
+  `app.helico.site` as well, because an API that answers correctly is not the same as a page that
+  draws it.
+
 <!--
 Template for the next entry:
 
