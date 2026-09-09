@@ -71,6 +71,7 @@ contract MorphoVenue is ERC20 {
 
     error WrongAsset(address asked, address expected);
     error NothingToSupply();
+    error DepositMintsNothing(uint256 amount);
     error NothingToWithdraw();
 
     event RateSampled(uint256 price, uint128 rateRay, uint256 window);
@@ -165,6 +166,18 @@ contract MorphoVenue is ERC20 {
         require(amount > 0, NothingToSupply());
 
         uint256 shares = amount * (totalSupply() + 1) / (totalAssets() + 1);
+        // A deposit that mints nothing is a deposit destroyed, and the `+1` offset does not stop
+        // it — it stops the *attack*, which is a different thing. Donate enough to a venue and an
+        // honest small deposit rounds to zero shares while `supply` returns happily. The donation
+        // is never profitable (a one-share holder can never own more than half the pool, so the
+        // donor loses more than the victim), but "nobody gains" is not "nobody loses".
+        //
+        // Found by @rifkyeasy on #317, measured on a fork rather than argued: 1 wei in, 30,000
+        // USDC donated, and a 1,000 USDC deposit came back with zero shares.
+        //
+        // `withdraw` needs no mirror of this: `previewWithdraw` rounds **up**, so it cannot burn
+        // zero for a non-zero amount.
+        require(shares > 0, DepositMintsNothing(amount));
 
         IERC20(ASSET).safeTransferFrom(msg.sender, address(this), amount);
         IERC20(ASSET).forceApprove(address(VAULT), amount);

@@ -219,6 +219,39 @@ contract ForkMorphoVenueTest is Test {
         emit log_named_uint("what 1:1 burns ", out);
     }
 
+    /// @dev The same hole as `ForkCompoundVenue`, in the venue that shares its share maths. Here
+    ///      the donation is an ordinary ERC-4626 deposit crediting the venue, which needs no
+    ///      special interface at all.
+    function test_ADepositThatWouldMintNothingIsRefused() public onlyForked {
+        address attacker = address(0xBAD);
+        address victim = address(0x71C);
+
+        vm.prank(USDC_WHALE);
+        USDC.transfer(attacker, 30_000e6 + 1);
+        vm.prank(USDC_WHALE);
+        USDC.transfer(victim, 1_000e6);
+
+        // Fresh, because the attack needs a first depositor and the venue in `setUp` is funded.
+        MorphoVenue empty = new MorphoVenue(VAULT);
+
+        vm.startPrank(attacker);
+        USDC.approve(address(empty), type(uint256).max);
+        empty.supply(address(USDC), 1, attacker, 0);
+        USDC.approve(address(VAULT), type(uint256).max);
+        VAULT.deposit(30_000e6, address(empty));
+        vm.stopPrank();
+
+        assertGt(empty.totalAssets(), 29_000e6, "the pool holds far more than its shares");
+
+        vm.startPrank(victim);
+        USDC.approve(address(empty), type(uint256).max);
+        vm.expectRevert(abi.encodeWithSelector(MorphoVenue.DepositMintsNothing.selector, 1_000e6));
+        empty.supply(address(USDC), 1_000e6, victim, 0);
+        vm.stopPrank();
+
+        assertEq(USDC.balanceOf(victim), 1_000e6, "the victim still has their money");
+    }
+
     // ── the rate, which is the part Morpho makes hard ─────────────────────────
 
     /// @dev Morpho publishes no rate, so this venue measures one. The assertion is a band rather
