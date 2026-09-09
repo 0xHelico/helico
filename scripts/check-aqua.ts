@@ -5,7 +5,7 @@
  *
  * This exists because "shared liquidity" is a phrase until you watch a wallet back three
  * positions at once and stay exactly as full as it started. Everything here goes through
- * `@helico/plugin-1inch` and 1inch's deployed SwapVM — no arithmetic of ours prices anything.
+ * `@helico/plugin-1inch` and 1inch's deployed SwapVM. No arithmetic of ours prices anything.
  *
  *     anvil --fork-url https://arb1.arbitrum.io/rpc --port 8549 --silent &
  *     bun scripts/check-aqua.ts
@@ -64,7 +64,7 @@ console.log(`fork of Arbitrum One at block ${await pub.getBlockNumber()}`)
 console.log(`aqua    ${aquaAddress(ARBITRUM_ONE)}`)
 console.log(`swapvm  ${swapVmAddress(ARBITRUM_ONE)}   (the app the strategies are shipped to)\n`)
 
-// Balance slots, found by probing: USDC 9, WETH 51. Fork-only — the same trick `deal` uses.
+// Balance slots, found by probing: USDC 9, WETH 51. Fork-only, the same trick `deal` uses.
 const WETH_HELD = 10n * ONE
 const USDC_HELD = 20_000n * 10n ** 6n
 
@@ -164,7 +164,7 @@ for (const s of shipped) {
 }
 console.log(
 	`\ncommitted       ${committed.reduce((a, b) => a + b, 0n)} WETH against ${w1} held` +
-		`  —  ${overCommitment(committed, w1)}%`,
+		`  ·  ${overCommitment(committed, w1)}%`,
 )
 
 console.log('\nand every one of them quotes, from the same money:')

@@ -39,7 +39,7 @@ const enclave = [
 	['Leaves', 'only the decision, signed with a key that never leaves the sealed environment'],
 ]
 const accountRows = [
-	['Admits', 'you, or the agent you named — and checks it on every call'],
+	['Admits', 'you, or the agent you named, checked on every call'],
 	['Refuses', 'any market you did not allow-list, and any caller you did not name'],
 	['Cannot', 'transfer, approve, add a market, or upgrade itself'],
 	['Has no recipient', 'both calls the agent can make end at this account; there is no address to redirect'],
@@ -48,7 +48,7 @@ const accountRows = [
 const evidence = [
 	['Deployed', 'the account factory, the Aqua app and the SwapVM router are live on Arbitrum One and verified'],
 	['Rehearsal', 'on a snapshot of the real market, the sealed program moved 40,000 of 50,000 USDC into real Aave v3'],
-	['Left behind', '10,000 held liquid, and the agent\'s own balance zero — a move that goes nowhere reads like one that worked'],
+	['Left behind', '10,000 held liquid, and the agent\'s own balance zero, because a move that goes nowhere reads like one that worked'],
 	['Through the app', 'opening an account, naming the agent and permitting a market, all checked against the chain rather than the screen'],
 	['Tests', `240+ automated tests, ${forkTests} of them on a snapshot of the real market, and 32 browser checks`],
 	['Caveats', 'the rehearsal is a snapshot, not the live network, and the sealed environment was simulated'],
@@ -127,7 +127,7 @@ const templates = [
 				))}
 			</div>
 		</div>
-		<p class="panel__caption">An example account, not a live one — but the contracts are deployed on Arbitrum One, and every rule above links to the line that enforces it.</p>
+		<p class="panel__caption">An example account, not a live one. The contracts are deployed on Arbitrum One, and every rule above links to the line that enforces it.</p>
 
 		<div class="split">
 			<div>
