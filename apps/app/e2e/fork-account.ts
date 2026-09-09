@@ -16,8 +16,15 @@
  *   NEXT_PUBLIC_ARBITRUM_RPC_URL=http://127.0.0.1:8545 NEXT_PUBLIC_BE_API_URL=http://localhost:8787 bun run start -p 3100 &
  *   bun run e2e/fork-account.ts
  */
+// biome-ignore-all lint/suspicious/noConsole: this script reports what the chain said
 import { chromium, type Page } from "playwright";
-import { createPublicClient, http, parseAbi, toHex } from "viem";
+import {
+  createPublicClient,
+  encodeFunctionData,
+  http,
+  parseAbi,
+  toHex,
+} from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { arbitrum } from "viem/chains";
 
@@ -40,6 +47,11 @@ const accountAbi = parseAbi([
   "function permittedVenue(address pool) view returns (bool)",
   "function owner() view returns (address)",
 ]);
+const erc20Abi = parseAbi([
+  "function balanceOf(address account) view returns (uint256)",
+  "function transfer(address to, uint256 value) returns (bool)",
+]);
+const USDC = "0xaf88d065e77c8cC2239327C5EDb3A432268e5831" as const;
 
 const failures: string[] = [];
 const check = (name: string, ok: boolean, detail = "") => {
@@ -58,7 +70,7 @@ if ((await chain.getChainId()) !== arbitrum.id) {
 const read = <T>(
   functionName: string,
   address: `0x${string}`,
-  abi: typeof factoryAbi | typeof accountAbi,
+  abi: typeof factoryAbi | typeof accountAbi | typeof erc20Abi,
   args: unknown[] = [],
 ) =>
   chain.readContract({
@@ -118,6 +130,45 @@ const wallet = `
   window.addEventListener('eip6963:requestProvider', announce);
   announce();
 })()`;
+
+/**
+ * Move USDC to `to` from an address that already holds it, using anvil's impersonation.
+ *
+ * A real `transfer`, not a balance written into storage. The difference matters here more than
+ * anywhere: `escape` sweeps a balance out, and an account funded by fiat storage writes would
+ * pass that test even if it could never have received the tokens in the first place.
+ */
+async function fundWithUsdc(to: `0x${string}`, value: bigint): Promise<bigint> {
+  // Aave's aUSDC contract, which custodies the pool's USDC reserve — around 28 million of it on
+  // any recent fork. It is a real holder rather than a balance invented in storage, and it is the
+  // same contract the account's own "working" side is a receipt from.
+  const whale = "0x724dc807b04555b71ed48a6896b6F41593b8C637";
+  const rpc = async (method: string, params: unknown[]) => {
+    const res = await fetch(FORK, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+    });
+    const body = await res.json();
+    if (body.error) throw new Error(`${method}: ${body.error.message}`);
+    return body.result;
+  };
+  await rpc("anvil_impersonateAccount", [whale]);
+  await rpc("anvil_setBalance", [whale, toHex(10n ** 18n)]);
+  await rpc("eth_sendTransaction", [
+    {
+      from: whale,
+      to: USDC,
+      data: encodeFunctionData({
+        abi: erc20Abi,
+        functionName: "transfer",
+        args: [to, value],
+      }),
+    },
+  ]);
+  await rpc("anvil_stopImpersonatingAccount", [whale]);
+  return read<bigint>("balanceOf", USDC, erc20Abi, [to]);
+}
 
 const browser = await chromium.launch();
 const page: Page = await (await browser.newContext()).newPage();
@@ -181,9 +232,41 @@ const text = (await page.locator("body").innerText()).trim();
 check("the page now shows the agent", /0x84C3|0x84c3/i.test(text));
 check("and stops saying the account is not open", !/not open yet/i.test(text));
 
+// 5. The escape hatch, which is the one path an upgrade cannot take away and until #266 had no
+//    button anywhere. The account is funded by a real transfer from a holder rather than by
+//    writing a balance into state: a sweep out of an account that could never have been paid in
+//    proves nothing about an account that can.
+const funded = await fundWithUsdc(account, 5_000_000n);
+check(
+  "the account holds USDC before the sweep",
+  funded === 5_000_000n,
+  `${funded}`,
+);
+
+const before = await read<bigint>("balanceOf", USDC, erc20Abi, [owner.address]);
+await page.goto(`${APP}/chat`, { waitUntil: "domcontentloaded" });
+await page.fill("textarea", "Take everything back to my wallet");
+await page.keyboard.press("Enter");
+const send = page.getByRole("button", { name: /send .* back to me/i });
+await send.waitFor({ timeout: 40_000 });
+check("saying it in the chat offers the sweep, not the revoke button", true);
+await send.click();
+await page.waitForTimeout(9000);
+
+const left = await read<bigint>("balanceOf", USDC, erc20Abi, [account]);
+const after = await read<bigint>("balanceOf", USDC, erc20Abi, [owner.address]);
+check("the sweep empties the account", left === 0n, `${left} left`);
+check(
+  "and the owner is up by exactly what it held",
+  after - before === 5_000_000n,
+  `${after - before}`,
+);
+
 await browser.close();
 if (failures.length) {
   console.error(`\n${failures.length} failed: ${failures.join(", ")}`);
   process.exit(1);
 }
-console.log("\nan account was opened, nominated and permitted through the app");
+console.log(
+  "\nan account was opened, nominated, permitted and emptied through the app",
+);

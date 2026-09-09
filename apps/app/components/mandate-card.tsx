@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { CHAIN_ID, totals, useAccountState } from "@/hooks/use-account-state";
 import {
   AAVE_V3_POOL,
+  ACCOUNT_TOKENS,
   accountReadAbi,
   accountWriteAbi,
   hasAgent,
@@ -31,12 +32,21 @@ const ZERO = "0x0000000000000000000000000000000000000000" as Address;
  * yet — set one on the mandate page"*, pointing at a form that page no longer has. A dead end at
  * the end of a question the front page invites you to ask.
  *
- * Both answers now come from what is actually deployed. **Status** is the account's own state plus
- * the mandates only an indexer can list — which is exactly what "what am I allowed to spend?"
+ * Every answer here comes from what is actually deployed. **Status** is the account's own state
+ * plus the mandates only an indexer can list — which is exactly what "what am I allowed to spend?"
  * means. **Revoke** removes the agent, which is what revoking authority is now: `setAgent(0)` is
  * owner-only, takes effect immediately, and can only ever remove.
+ *
+ * **Withdraw** is the escape hatch, and it is not the same thing as revoking. Until it existed the
+ * empty chat screen offered "Take everything back to my wallet" above a comment promising every
+ * sentence there could be answered — and that one went to `revoke`, which removes the agent and
+ * leaves every token where it was. Somebody asking for their money got agreement and no money.
  */
-export function MandateCard({ action }: { action: "status" | "revoke" }) {
+export function MandateCard({
+  action,
+}: {
+  action: "status" | "revoke" | "withdraw";
+}) {
   const { address, isConnected, chainId } = useAccount();
   const client = usePublicClient({ chainId: CHAIN_ID });
   const { data, refetch } = useAccountState();
@@ -69,6 +79,23 @@ export function MandateCard({ action }: { action: "status" | "revoke" }) {
         chainId: CHAIN_ID,
         functionName: "setAgent",
         args: [ZERO],
+      });
+      await client?.waitForTransactionReceipt({ hash });
+      await refetch();
+    },
+  });
+
+  // Both sides are named, because a contract cannot enumerate what it holds and an unnamed token
+  // is a token left behind. Native currency needs no naming — `escape` sweeps it either way.
+  const sweep = useMutation({
+    mutationFn: async () => {
+      if (!account) throw new Error("No account is open");
+      const hash = await writeContractAsync({
+        abi: accountWriteAbi,
+        address: account,
+        chainId: CHAIN_ID,
+        functionName: "escape",
+        args: [[ACCOUNT_TOKENS.idle, ACCOUNT_TOKENS.working]],
       });
       await client?.waitForTransactionReceipt({ hash });
       await refetch();
@@ -157,6 +184,54 @@ export function MandateCard({ action }: { action: "status" | "revoke" }) {
             })}
           </ul>
         </>
+      ) : null}
+
+      {action === "withdraw" ? (
+        <div className="mt-4 border-t pt-3">
+          {held && held.total > 0n ? (
+            <>
+              <p className="text-muted-foreground text-xs">
+                Everything goes to {short(address)} — the address this account
+                was built for. The call takes no recipient, so there is nowhere
+                else it can send.
+              </p>
+              {held.working > 0n ? (
+                <p className="mt-2 text-muted-foreground text-xs">
+                  {amount(held.working, 6)} of it is working, and comes back as
+                  Aave&rsquo;s receipt rather than as USDC. That token redeems
+                  at Aave for the asset whenever you want it.
+                </p>
+              ) : null}
+              {sweep.isSuccess ? (
+                <p className="mt-3 text-xs">
+                  Swept. A token that refuses to move would have stopped the
+                  rest, so if anything is still here, press it again.
+                </p>
+              ) : (
+                <Button
+                  className="mt-3"
+                  disabled={sweep.isPending}
+                  onClick={() => sweep.mutate()}
+                  size="sm"
+                  variant="destructive"
+                >
+                  {sweep.isPending
+                    ? "Sending…"
+                    : `Send ${amount(held.total, 6)} back to me`}
+                </Button>
+              )}
+              {sweep.error ? (
+                <p className="mt-2 text-destructive text-xs">
+                  {sweep.error.message.split("\n")[0]}
+                </p>
+              ) : null}
+            </>
+          ) : (
+            <p className="text-muted-foreground text-xs">
+              This account holds nothing, so there is nothing to send back.
+            </p>
+          )}
+        </div>
       ) : null}
 
       {action === "revoke" ? (
