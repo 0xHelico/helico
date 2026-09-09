@@ -30,7 +30,7 @@ func (s *Service) Model() string {
 // intent when the action is a swap. Needs names what is still missing, so a form can highlight
 // it rather than parse prose.
 //
-// Action is what the app renders on. It is always one of the four constants and never the
+// Action is what the app renders on. It is always one of the five constants and never the
 // model's own word, because a value the browser switches on is a value that has to be checked
 // here first.
 type Answer struct {
@@ -72,18 +72,28 @@ func (s *Service) Interpret(ctx context.Context, message string) (Answer, error)
 	// lies quietly.
 	action := strings.ToLower(strings.TrimSpace(d.Action))
 	switch action {
-	case ActionStatus, ActionRevoke, ActionAbout:
+	case ActionStatus, ActionRevoke, ActionAbout, ActionWithdraw:
 	default:
 		action = ActionSwap
 	}
 	read := Step{Call: "Client.ask", Detail: "read as " + action, OK: true}
 
-	// None of these three needs a parameter, so none goes near build: there is nothing from the
+	// None of these four needs a parameter, so none goes near build: there is nothing from the
 	// model to check, only a decision about which screen the person is asking for. The wallet
 	// still does the work, and revoking still costs a signature the person gives themselves.
 	switch action {
 	case ActionAbout:
 		return Answer{Action: ActionAbout, Reply: about(), Steps: []Step{read}}, nil
+	case ActionWithdraw:
+		return Answer{
+			Action: ActionWithdraw,
+			Reply: "This sends everything the account holds back to you. There is nowhere else it " +
+				"can go: the destination is the owner address fixed when the account was built, and " +
+				"the call takes no recipient. It lives in the proxy rather than in code that can be " +
+				"replaced, so no upgrade can take this door away. What is working comes back as " +
+				"Aave's receipt for it, which redeems there for the asset itself.",
+			Steps: []Step{read},
+		}, nil
 	case ActionStatus:
 		return Answer{
 			Action: ActionStatus,
@@ -135,10 +145,12 @@ func about() string {
 		"• Swap — name two tokens and an amount, and I build the intent. On " + chain.Name +
 		", in " + strings.Join(chain.Symbols(), ", ") + ".\n" +
 		"• Status — what your account holds, how much of it is working, how much is liquid.\n" +
-		"• Revoke — end the mandate. The agent can do nothing afterwards.\n\n" +
+		"• Revoke — end the mandate. The agent can do nothing afterwards.\n" +
+		"• Withdraw — send everything back to your own wallet, and nowhere else.\n\n" +
 		"Your account is yours: the agent may only move capital between markets you allow-listed, " +
-		"and neither call it can make takes a recipient. Anything I have no address or number for, " +
-		"I ask about rather than guess."
+		"and neither call it can make takes a recipient. The way out is not upgradeable — it sits " +
+		"in the proxy, so no change to the code can close it. Anything I have no address or number " +
+		"for, I ask about rather than guess."
 }
 
 // question prefers the model's own wording, and falls back to naming the gap.

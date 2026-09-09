@@ -42,6 +42,15 @@ const (
 	// reply is composed from the actions and the registry below, so it cannot describe a feature
 	// that is not here.
 	ActionAbout = "about"
+	// ActionWithdraw is the escape hatch, and it is deliberately not ActionRevoke.
+	//
+	// They are the two halves of getting out and a person means one of them specifically:
+	// revoking ends the agent's authority and moves nothing, while this moves everything and
+	// leaves the authority alone. Until it existed the app offered "Take everything back to my
+	// wallet" on its empty screen, the model had nowhere else to put that sentence, and someone
+	// asking for their money back was answered with "This ends the mandate" while every token
+	// stayed exactly where it was.
+	ActionWithdraw = "withdraw"
 )
 
 // Step is one check that ran, named after the function in this package that ran it. The chat
