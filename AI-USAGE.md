@@ -1143,6 +1143,93 @@ READMEs.
 - **The deployed workflow, meanwhile:** twenty consecutive `SUCCESS`, five minutes apart, holding
   correctly because no account exists on the live chain for it to manage.
 
+### 2026-09-09 — context for the chat, the door nobody could open, and a number that was the control
+
+- **Done:** the chat learned what Helico is and started showing the checks behind each answer; the
+  escape hatch — the one path an upgrade cannot remove — got a sentence, a button and a proof on a
+  fork; `api.helico.site` stopped being the only unhardened origin; and the README stopped
+  presenting a control measurement as its headline result.
+
+- **AI's role:** Ghoza directed with six short messages and made every call about scope. Claude did
+  the reading, the code and the measurements, was wrong twice in public, and had one of its own
+  pull requests closed in favour of a better one from Ghoza.
+
+- **Plan:** none of these has a file in `docs/plans/`. The design lived in the issues — #263, #266,
+  #272, #275 — and the ordering was not uniform, which is the part worth recording rather than
+  smoothing over. Checked against the commits:
+
+  | | issue | first commit | order |
+  |---|---|---|---|
+  | #266 escape hatch | 13:50 | 14:01 | design first, by 11 minutes |
+  | #272 API headers | 14:20 | 14:22 | design first |
+  | #275 README | 14:37 | 14:39 | design first |
+  | #263 chat context | 13:40:25 | 13:40:45 | **code first**, the issue written from what was found |
+
+- **The prompts, in full.** Translated, as the entries above do. This was the whole of the
+  direction:
+
+  > *"Please give it context about our app so it knows."*
+  > *"Could the reasoning/thinking tree be shown?"*
+  > *"Try looking deeper — it seems it can do LP too."* … *"Not Uniswap, 1inch Aqua."*
+  > *"And is there anything else Helico can do? If so, implement that as well."*
+  > *"Aqua has been tested by my friend and it is proven."*
+  > *"Check issues/PRs and continue."* (five times)
+
+- **The chat answered its own question back.** *"hi"* returned *"What can I help you with?"* because
+  the system prompt said only *"you decide which of three things a person is asking for"* — a
+  greeting had no action to fall into, landed on `swap` with every field empty, and what the person
+  read was the model's own `question` field. The fix is a fourth action whose reply is **composed in
+  Go**: a model handed a paragraph about the product offers to bridge and to borrow, and a partner
+  integration that does not work is a full disqualification. The reply asks the token registry for
+  its symbols instead of repeating them, so `tokens.go` stays the only list.
+
+- **The checks tree is the functions that actually ran**, appended inside `build` where the work
+  happens rather than assembled by a caller from the outcome — a list built from the result can name
+  a check that never executed. So a refusal ends on the check that refused it:
+  `Chain.Token "MOONCOIN" is not in the registry — refused`.
+
+- **`rg escape apps/ packages/` returned nothing.** The invariant `CLAUDE.md` calls the door nobody
+  can wall up had no button, no ABI entry and no sentence — while the empty chat screen had offered
+  *"Take everything back to my wallet"* above a comment promising every sentence there could be
+  answered. That sentence went to `revoke`, which removes the agent and moves no money. Someone
+  asking for their money got agreement and no money.
+
+- **Verified:** three Go tests pin `withdraw` against `revoke`; two more pin the API headers and
+  both go red when the one line adding the middleware is removed. `apps/app/e2e/fork-account.ts`
+  gained a fifth step and runs the whole path on a fork of Arbitrum One — twelve checks, the last
+  two reading the chain:
+
+  ```
+  ok  the account holds USDC before the sweep  — 5000000
+  ok  saying it in the chat offers the sweep, not the revoke button
+  ok  the sweep empties the account  — 0 left
+  ok  and the owner is up by exactly what it held  — 5000000
+  ```
+
+  The account is funded by a **real transfer** from Aave's aUSDC contract, not by writing a balance
+  into storage — a sweep out of an account that could never have been paid into proves nothing
+  about one that can, which is a mistake this repository has made before.
+
+  The API hardening was measured after deploying rather than after merging:
+  `e2e/production.ts` went from 20 checks to 23, all green, against the live sites.
+
+- **Wrong twice, in public.** Issue #265 proposed pairing SwapVM's `concentrate` with our
+  `AquaYieldCover` as a two-instruction program. Reading the sources rather than guessing,
+  `concentrate` requires the swap amounts **unset** and the cover reads the amount the swap
+  **computed** — so no two-instruction program holds both, and the composition is three. The issue
+  also worried that `_computeL` would race the cover for available balance; it does not, because
+  concentrate adds *virtual* reserves and never wanted the unwound inventory. Ghozza found both,
+  and the correction is the useful part of #274 rather than a footnote to it.
+
+  The second was a merge on a red `verify`. The gate printed the conclusions and merged anyway,
+  which is the fourth time in this repository. The pattern that actually gates is a count computed
+  and branched on in the same command, and it is now written into the review on #270.
+
+- **A pull request closed in favour of a better one.** #271 and #270 fixed the same broken test.
+  Ghoza's was thirty seconds older and added the half mine was missing — that every action the
+  backend *does* send is accepted. A refusal list on its own says nothing about whether anything
+  gets through.
+
 <!--
 Template for the next entry:
 
