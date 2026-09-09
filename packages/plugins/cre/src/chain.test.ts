@@ -30,7 +30,7 @@ const config = configSchema.parse({
 	delivery: 'forwarder',
 	chainSelectorName: 'ethereum-mainnet-arbitrum-1',
 	account: account.toLowerCase(),
-	pools: [AAVE_POOL.toLowerCase()],
+	pools: [{ address: AAVE_POOL.toLowerCase(), kind: 'rebasing' as const }],
 	asset: USDC.toLowerCase(),
 	agent: agent.toLowerCase(),
 	reportReceiver: zeroAddress,
@@ -95,6 +95,10 @@ const handlers = (markets: Record<string, Market>) => {
 		},
 		[sel('function getReserveData(address)')]: (_: Hex, to: string) =>
 			reserveData(at(to).receipt, at(to).rate),
+		// A share-priced receipt, priced deliberately far from par so a conversion that silently
+		// does nothing is visible rather than a rounding argument. Four underlying to the share.
+		[sel('function previewRedeem(uint256)')]: (data: Hex) =>
+			word(BigInt(`0x${data.slice(10)}`) * 4n),
 	}
 }
 
@@ -102,7 +106,12 @@ const aave = (receipt = AUSDC) => market(receipt, RATE, 29_318_183_885_841n)
 const other = market(OTHER_RECEIPT, OTHER_RATE, 4_000_000_000n)
 
 const read = (markets: Record<string, Market>, options: { withNonce?: boolean } = {}) => {
-	const pools = Object.keys(markets) as Address[]
+	// Every fixture market here is Aave-shaped, so they are all rebasing. The share-priced path
+	// has its own test below, which points a market at a receipt that answers `previewRedeem`.
+	const pools = Object.keys(markets).map((address) => ({
+		address: address as Address,
+		kind: 'rebasing' as const,
+	}))
 	const fake = fakeRuntime({
 		config: configSchema.parse({ ...config, pools }),
 		secrets: {},
@@ -124,6 +133,63 @@ const both = {
 	[OTHER_POOL.toLowerCase()]: other,
 }
 
+/** Like `read`, but the single market is declared share-priced rather than rebasing. */
+const readSharePriced = (markets: Record<string, Market>) => {
+	const pools = Object.keys(markets).map((address) => ({
+		address: address as Address,
+		kind: 'share-priced' as const,
+	}))
+	const fake = fakeRuntime({
+		config: configSchema.parse({ ...config, pools }),
+		secrets: {},
+		now: 1_700_000_000,
+		handlers: handlers(markets),
+	})
+	const state = readAccountState(
+		fake.runtime,
+		config.rpcUrl,
+		{ account: config.account as Address, pools, asset: config.asset as Address },
+		{},
+	)
+	return { state, ...fake }
+}
+
+describe('a share-priced venue', () => {
+	test('reports the position in the asset, not the share count', () => {
+		const { state } = readSharePriced(onlyAave())
+		const venue = state.venues[0]
+
+		// The receipt says 500; a share is worth four, so the position is 2,000. Reading the first
+		// number as the second is the bug this exists to stop, and it is the same
+		// one-receipt-is-one-underlying assumption `ReceiptMath.sol` removed from the contracts.
+		expect(venue?.receiptBalance).toBe(500_000_000n)
+		expect(venue?.supplied).toBe(2_000_000_000n)
+		expect(venue?.kind).toBe('share-priced')
+	})
+
+	test('a rebasing venue is not converted, and costs no extra call', () => {
+		const shared = readSharePriced(onlyAave())
+		const plain = read(onlyAave())
+
+		expect(plain.state.venues[0]?.supplied).toBe(500_000_000n)
+		expect(plain.state.venues[0]?.receiptBalance).toBe(500_000_000n)
+		// Two round trips for the rebasing case and three for the share-priced one: the conversion
+		// is paid for only where it is needed, so the single-Aave configuration this workflow
+		// shipped with is exactly as cheap as it was before venue kinds existed.
+		expect(plain.rpcRequests.length).toBe(2)
+		expect(shared.rpcRequests.length).toBe(3)
+	})
+
+	test('the conversion follows the receipt, not the market', () => {
+		// A second market with a different receipt: the fake answers 700 for anything that is not
+		// aUSDC, so a conversion keyed on the wrong address would report 2,000 here as well.
+		const { state, rpcRequests } = readSharePriced({ [OTHER_POOL.toLowerCase()]: other })
+		expect(state.venues[0]?.receiptBalance).toBe(700_000_000n)
+		expect(state.venues[0]?.supplied).toBe(2_800_000_000n)
+		expect(rpcRequests.length).toBe(3)
+	})
+})
+
 describe('readAccountState', () => {
 	test('reads both sides of the account, the market, and its rate', () => {
 		const { state } = read(onlyAave())
@@ -133,10 +199,12 @@ describe('readAccountState', () => {
 			venues: [
 				{
 					pool: AAVE_POOL.toLowerCase() as Address,
+					kind: 'rebasing',
 					venuePermitted: true,
 					receipt: getAddress(AUSDC),
 					receiptAsset: getAddress(USDC),
 					supplied: 500_000_000n,
+					receiptBalance: 500_000_000n,
 					venueLiquidity: 29_318_183_885_841n,
 					supplyRateRay: RATE,
 				},
