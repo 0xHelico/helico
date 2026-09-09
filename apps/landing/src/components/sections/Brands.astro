@@ -1,6 +1,6 @@
 ---
 import { Image } from 'astro:assets'
-// Protocols, chains, and tools this was built with. Not backers: Helico has none, and the
+// Protocols, chains, and tools this is built on. Not backers: Helico has none, and the
 // hackathon's prize sponsors are not that. Drop a logo at src/assets/brands/<slug>.svg
 // (png and webp work too) and it replaces the wordmark.
 const brands = [
@@ -8,9 +8,6 @@ const brands = [
 	{ slug: '1inch', name: '1inch Aqua' },
 	{ slug: 'thegraph', name: 'The Graph' },
 	{ slug: 'aave', name: 'Aave v3' },
-	{ slug: 'arbitrum', name: 'Arbitrum One' },
-	{ slug: 'robinhood', name: 'Robinhood Chain' },
-	{ slug: 'base', name: 'Base' },
 	{ slug: 'ethereum', name: 'Ethereum' },
 	{ slug: 'free-pi', name: 'FREE-PI' },
 	{ slug: 'one-dollar-audit', name: 'One Dollar Audit' },
@@ -36,7 +33,7 @@ const fillers = (4 - (shown % 4)) % 4
 
 <section class="wrap" aria-labelledby="brands-title">
 	<div class="section-card section-card--white brands" data-reveal>
-		<h2 id="brands-title">Built with</h2>
+		<h2 id="brands-title">Built on</h2>
 		<ul class="brands__grid" data-brands>
 			{items.map((b, i) => (
 				<li class:list={{ 'is-more': i >= SHOWN }} hidden={i >= SHOWN}>
