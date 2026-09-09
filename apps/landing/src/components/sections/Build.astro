@@ -1,7 +1,7 @@
 ---
 import { readFileSync } from 'node:fs'
 import { Code } from 'astro:components'
-import { forkTests, solidityTests } from '../../lib/solidity-tests'
+import { solidityTests } from '../../lib/solidity-tests'
 const repo = 'https://github.com/0xHelico/helico'
 // Reading about Helico goes to the docs site; looking at the code goes to GitHub.
 const docs = 'https://docs.helico.site/docs'
@@ -23,7 +23,7 @@ const packages = [
 		name: 'HelicoMandateSwap',
 		stat: String(solidityTests),
 		unit: 'tests',
-		copy: `An Aqua app of our own, live on Arbitrum One. The mandate is the strategy, and every refusal has a name. ${forkTests} of these run against the real Aqua on a fork of the real chain, and @helico/plugin-1inch builds the positions it files.`,
+		copy: 'An Aqua app of our own, live on Arbitrum One. The mandate is the strategy, and every refusal has a name.',
 		href: `${repo}/tree/main/contracts`,
 	},
 	{
@@ -61,7 +61,7 @@ const packages = [
 		<div class="split">
 			<div>
 				<h3>Open by default.</h3>
-				<p>The code above is the actual check our Aqua app runs, read from the source when this page is built. A maker names their own receipt token, so the contract asks the lending pool which receipt it issues instead of believing the token about itself. Every count below points at the code that proves it.</p>
+				<p>The code above is the actual check our Aqua app runs, read from the source when this page is built. Every count below points at the code that proves it.</p>
 			</div>
 			<a class="btn btn--secondary" href={`${docs}/builders`}>Docs for Builders</a>
 		</div>
