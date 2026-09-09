@@ -246,8 +246,8 @@ export function SwapCard({ intent }: { intent: Intent }) {
             {short ? (
               <p className="mt-3 text-destructive text-xs">
                 This wallet is {formatUnits(short, intent.tokenIn.decimals)}{" "}
-                {intent.tokenIn.symbol} short. Nothing is sent — the swap would
-                revert and cost you the gas to find out.
+                {intent.tokenIn.symbol} short. Nothing is sent, because the swap
+                would revert and cost you the gas to find out.
               </p>
             ) : null}
 

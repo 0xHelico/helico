@@ -80,7 +80,7 @@ export function MandatesPanel() {
     if (!maker) {
       return (
         <Empty>
-          Connect a wallet, or paste any address — this answers for every maker
+          Connect a wallet, or paste any address. This answers for every maker
           on the chain, not just ours.
         </Empty>
       );
@@ -98,9 +98,7 @@ export function MandatesPanel() {
     const data = mandates.data;
     if (data.rows.length === 0) {
       return (
-        <Empty>
-          No mandates for {short(maker)} — an answer, not a failure.
-        </Empty>
+        <Empty>No mandates for {short(maker)}. An answer, not a failure.</Empty>
       );
     }
     // The section is titled "what this wallet may spend", and a docked mandate spends nothing.
@@ -142,7 +140,7 @@ export function MandatesPanel() {
                   </td>
                   <td className="tabular max-w-[16rem] truncate py-2.5 pr-4 font-mono text-ink">
                     <span title={spendable(m) || undefined}>
-                      {spendable(m) || "—"}
+                      {spendable(m) || "none"}
                     </span>
                   </td>
                   <td className="tabular py-2.5 font-mono text-body">
@@ -177,7 +175,7 @@ export function MandatesPanel() {
         aria-label="Look up another address"
         className="mt-3 h-9 border-line font-mono text-[12px]"
         onChange={(e) => setTyped(e.target.value.trim())}
-        placeholder={`Any address — try ${short(EXAMPLE)}`}
+        placeholder={`Any address, try ${short(EXAMPLE)}`}
         value={typed}
       />
       {body()}
