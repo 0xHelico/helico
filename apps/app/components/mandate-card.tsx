@@ -10,7 +10,7 @@ import {
   useReadContract,
   useWriteContract,
 } from "wagmi";
-
+import { TokenMark } from "@/components/token-mark";
 import { Button } from "@/components/ui/button";
 import { CHAIN_ID, totals, useAccountState } from "@/hooks/use-account-state";
 import {
@@ -277,14 +277,14 @@ export function MandateCard({
  * Zero balances are dropped. A list of six zeroes is not a fuller answer than a sentence.
  */
 /**
- * Ether, to four decimals, and never as "0" when there is some.
+ * A balance, and never "0" when there is some.
  *
- * `amount()` shows two, which is right for a stablecoin and wrong here: a wallet holding 0.005
- * ETH would be told it holds nothing, and dust is still the difference between being able to
- * open an account and not.
+ * `amount()` truncates to two decimals, which is right in a mandates table and wrong for a
+ * wallet: 0.005 ETH and 0.004 USDC both come back as "0", and a person is told they hold nothing
+ * while holding the thing they were asking about. Four decimals, and a floor marker below that.
  */
-function ether(wei: bigint): string {
-  const n = Number(formatUnits(wei, 18));
+function held(value: bigint, decimals: number): string {
+  const n = Number(formatUnits(value, decimals));
   const shown = n.toLocaleString(undefined, { maximumFractionDigits: 4 });
   return shown === "0" ? "<0.0001" : shown;
 }
@@ -292,7 +292,7 @@ function ether(wei: bigint): string {
 function WalletInstead({ address }: { address: Address }) {
   const client = usePublicClient({ chainId: CHAIN_ID });
 
-  const held = useQuery({
+  const wallet = useQuery({
     enabled: Boolean(client && address),
     queryKey: ["wallet-balances", address],
     staleTime: 15_000,
@@ -312,12 +312,12 @@ function WalletInstead({ address }: { address: Address }) {
       ]);
       const rows: { symbol: string; text: string }[] = [];
       if (native > 0n) {
-        rows.push({ symbol: "ETH", text: ether(native) });
+        rows.push({ symbol: "ETH", text: held(native, 18) });
       }
       rest.forEach((value, i) => {
         const [, t] = erc20s[i];
         if (value > 0n) {
-          rows.push({ symbol: t.symbol, text: amount(value, t.decimals) });
+          rows.push({ symbol: t.symbol, text: held(value, t.decimals) });
         }
       });
       return rows;
@@ -331,19 +331,25 @@ function WalletInstead({ address }: { address: Address }) {
         wallet holds.
       </p>
 
-      {held.isPending ? (
+      {wallet.isPending ? (
         <p className="mt-3 flex items-center gap-2 text-muted-foreground text-xs">
           <Loader2 className="size-3 animate-spin" /> Reading it…
         </p>
-      ) : held.error ? (
+      ) : wallet.error ? (
         <p className="mt-3 text-muted-foreground text-xs">
           The chain did not answer.
         </p>
-      ) : held.data && held.data.length > 0 ? (
-        <ul className="tabular mt-2 font-mono text-[11.5px] text-muted-foreground">
-          {held.data.map((row) => (
-            <li key={row.symbol}>
-              {row.text} {row.symbol}
+      ) : wallet.data && wallet.data.length > 0 ? (
+        <ul className="mt-3 divide-y divide-border/50 border-border/50 border-y">
+          {wallet.data.map((row) => (
+            <li className="flex items-center gap-2.5 py-2" key={row.symbol}>
+              <TokenMark size={20} symbol={row.symbol} />
+              <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink">
+                {row.symbol}
+              </span>
+              <span className="tabular numeric shrink-0 text-[15px] text-ink">
+                {row.text}
+              </span>
             </li>
           ))}
         </ul>

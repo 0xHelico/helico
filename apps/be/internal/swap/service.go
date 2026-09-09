@@ -49,7 +49,15 @@ const maxMessage = 500
 
 // Interpret turns a message into an Answer. The model proposes; everything a caller sees about
 // tokens and amounts has been through build.
-func (s *Service) Interpret(ctx context.Context, message string) (Answer, error) {
+// maxPrior is how far back a sentence may reach. Six turns is three exchanges, which covers "and
+// make it two instead" and stops a caller from making this endpoint carry a transcript.
+const maxPrior = 6
+
+// maxPriorRunes bounds each one. A long earlier turn is the app's own composed reply, and nothing
+// after the first line of one changes what the next sentence means.
+const maxPriorRunes = 400
+
+func (s *Service) Interpret(ctx context.Context, message string, prior ...Turn) (Answer, error) {
 	message = strings.TrimSpace(message)
 	if message == "" {
 		return Answer{}, errors.New("say what you would like to swap")
@@ -61,7 +69,22 @@ func (s *Service) Interpret(ctx context.Context, message string) (Answer, error)
 		return Answer{}, ErrNotConfigured
 	}
 
-	d, err := s.client.ask(ctx, message)
+	if len(prior) > maxPrior {
+		prior = prior[len(prior)-maxPrior:]
+	}
+	trimmed := make([]Turn, 0, len(prior))
+	for _, t := range prior {
+		body := strings.TrimSpace(t.Body)
+		if body == "" {
+			continue
+		}
+		if utf8.RuneCountInString(body) > maxPriorRunes {
+			body = string([]rune(body)[:maxPriorRunes])
+		}
+		trimmed = append(trimmed, Turn{Role: t.Role, Body: body})
+	}
+
+	d, err := s.client.ask(ctx, message, trimmed)
 	if err != nil {
 		return Answer{}, err
 	}
@@ -131,7 +154,7 @@ func (s *Service) Interpret(ctx context.Context, message string) (Answer, error)
 	}, nil
 }
 
-// about says what this endpoint can do, and it is written here rather than by the model for the
+// about says what Helico does, and it is written here rather than by the model for the
 // same reason the swap confirmation is: a model given a paragraph about the product will offer a
 // feature the product does not have, and a chat that promises to bridge or to borrow is exactly
 // the kind of claim this submission cannot afford.
@@ -140,17 +163,21 @@ func (s *Service) Interpret(ctx context.Context, message string) (Answer, error)
 // sentence offers, and there is no second list to fall behind.
 func about() string {
 	chain := chains[0]
-	return "I read what you type and turn it into something you sign yourself. I hold no keys and " +
-		"move nothing.\n\n" +
+	return "Helico gives you an account only you own. An agent you name may move its idle capital " +
+		"into a lending market you allow-listed and pull it back, and it can do nothing else, " +
+		"because neither call it can make takes a recipient.\n\n" +
+		"Here in the chat:\n" +
 		"• Swap: name two tokens and an amount, and I build the intent. On " + chain.Name +
 		", in " + strings.Join(chain.Symbols(), ", ") + ".\n" +
-		"• Status: what your account holds, how much of it is working, how much is liquid.\n" +
+		"• Status: what your account holds, how much is working, how much is liquid.\n" +
 		"• Revoke: end the mandate. The agent can do nothing afterwards.\n" +
 		"• Withdraw: send everything back to your own wallet, and nowhere else.\n\n" +
-		"Your account is yours: the agent may only move capital between markets you allow-listed, " +
-		"and neither call it can make takes a recipient. The way out is not upgradeable, because it sits " +
-		"in the proxy, so no change to the code can close it. Anything I have no address or number " +
-		"for, I ask about rather than guess."
+		"On the other screens: open the account, name the agent and choose its markets on the " +
+		"front page; read your mandates and what has moved through them on your portfolio, " +
+		"which is the question the chain on its own cannot answer.\n\n" +
+		"Not yet, and I would rather say so than leave it out: providing liquidity as a maker, " +
+		"borrowing, more than one market at a time, and any chain but " + chain.Name + ".\n\n" +
+		"Anything I have no address or number for, I ask about rather than guess."
 }
 
 // question prefers the model's own wording, and falls back to naming the gap.

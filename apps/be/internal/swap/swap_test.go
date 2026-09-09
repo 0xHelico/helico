@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 func TestBaseUnits(t *testing.T) {
@@ -134,7 +135,7 @@ func TestAskReportsAStatusRatherThanAShape(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 	c := NewClient(srv.URL, "test-key", "test-model", 5*time.Second)
-	_, err := c.ask(context.Background(), "swap 1 ETH into USDC")
+	_, err := c.ask(context.Background(), "swap 1 ETH into USDC", nil)
 	if err == nil || !strings.Contains(err.Error(), "refused") {
 		t.Fatalf("err = %v, want the status reported", err)
 	}
@@ -361,9 +362,23 @@ func TestAboutOffersOnlyWhatTheRegistryHolds(t *testing.T) {
 			t.Errorf("the reply does not offer %s, which the registry holds", symbol)
 		}
 	}
-	for _, word := range []string{"bridge", "borrow", "lend", "yield"} {
-		if strings.Contains(strings.ToLower(got.Reply), word) {
-			t.Errorf("the reply offers %q, and no action behind it does that", word)
+	// A capability we do not have may be *named*, and must never be *offered*. Naming it is the
+	// point: somebody who asks "can you provide liquidity?" and gets four bullets that do not
+	// mention it reads that as evasion rather than as a no. So the check is where the word falls,
+	// not whether it appears — everything before "Not yet" is a thing Helico does.
+	offered, refused, split := strings.Cut(got.Reply, "Not yet")
+	if !split {
+		t.Fatal("the reply names nothing it cannot do, so a question about one gets silence")
+	}
+	for _, word := range []string{"bridge", "borrow", "perpetual", "liquidity as a maker"} {
+		if strings.Contains(strings.ToLower(offered), word) {
+			t.Errorf("%q is offered, and no action behind it does that", word)
+		}
+	}
+	// And the ones it does refuse have to be there, or the paragraph is decoration.
+	for _, word := range []string{"liquidity as a maker", "borrowing"} {
+		if !strings.Contains(strings.ToLower(refused), word) {
+			t.Errorf("the reply does not say it cannot do %q", word)
 		}
 	}
 }
@@ -491,5 +506,80 @@ func TestWithdrawNamesWhatMakesItSafe(t *testing.T) {
 		if !strings.Contains(strings.ToLower(got.Reply), want) {
 			t.Errorf("the reply does not mention %q: %q", want, got.Reply)
 		}
+	}
+}
+
+// Prior turns exist so that "make it two instead" has something to be about. They reach the model
+// and they reach nothing else: the registry still decides what a token is, so an earlier turn can
+// help fill a field and cannot help invent one.
+func TestPriorTurnsReachTheModelAndNothingElse(t *testing.T) {
+	var seen []map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Messages []map[string]any `json:"messages"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&in)
+		seen = in.Messages
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []map[string]any{
+			{"message": map[string]string{"role": "assistant", "content": `{"action":"swap","chain":"arbitrum","tokenIn":"ETH","tokenOut":"USDC","amount":"2"}`}},
+		}})
+	}))
+	t.Cleanup(srv.Close)
+
+	svc := New(NewClient(srv.URL, "test-key", "test-model", 5*time.Second))
+	got, err := svc.Interpret(context.Background(), "make it two instead",
+		Turn{Role: "user", Body: "swap 1 ETH into USDC"},
+		Turn{Role: "assistant", Body: "Swapping 1 ETH into USDC on Arbitrum One."},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(seen) != 4 {
+		t.Fatalf("the model saw %d messages, want system + two prior + the new one", len(seen))
+	}
+	if seen[0]["role"] != "system" || seen[3]["content"] != "make it two instead" {
+		t.Fatalf("the shape is wrong: %+v", seen)
+	}
+	if got.Intent == nil || got.Intent.AmountIn != "2" {
+		t.Fatalf("the answer did not carry the amount: %+v", got.Intent)
+	}
+}
+
+// A caller cannot make this endpoint hold a transcript, and an earlier turn cannot be a novel.
+func TestPriorTurnsAreBounded(t *testing.T) {
+	var seen int
+	var longest int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Messages []struct{ Content string } `json:"messages"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&in)
+		seen = len(in.Messages)
+		for _, m := range in.Messages[1 : len(in.Messages)-1] {
+			if n := utf8.RuneCountInString(m.Content); n > longest {
+				longest = n
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []map[string]any{
+			{"message": map[string]string{"role": "assistant", "content": `{"action":"status"}`}},
+		}})
+	}))
+	t.Cleanup(srv.Close)
+
+	prior := make([]Turn, 40)
+	for i := range prior {
+		prior[i] = Turn{Role: "user", Body: strings.Repeat("x", 5_000)}
+	}
+	if _, err := New(NewClient(srv.URL, "test-key", "m", 5*time.Second)).
+		Interpret(context.Background(), "status", prior...); err != nil {
+		t.Fatal(err)
+	}
+	if seen != maxPrior+2 {
+		t.Errorf("the model saw %d messages, want %d", seen, maxPrior+2)
+	}
+	if longest != maxPriorRunes {
+		t.Errorf("an earlier turn reached the model at %d runes, want %d", longest, maxPriorRunes)
 	}
 }

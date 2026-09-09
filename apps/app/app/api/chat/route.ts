@@ -9,9 +9,10 @@ const BE_API_URL = process.env.BE_API_URL ?? "https://api.helico.site";
 
 export async function POST(request: Request) {
   let message: unknown;
+  let history: unknown;
 
   try {
-    ({ message } = await request.json());
+    ({ message, history } = await request.json());
   } catch {
     return NextResponse.json(
       { error: 'send {"message": "…"}' },
@@ -32,7 +33,12 @@ export async function POST(request: Request) {
       // Carries the caller's address, so the backend rate-limits per visitor rather than
       // counting the whole app as one client. See lib/upstream.ts.
       headers: upstreamHeaders(request.headers),
-      body: JSON.stringify({ message }),
+      // What was already on screen. The backend bounds it and only ever hands it to the model:
+      // every token and amount still goes through the registry afterwards.
+      body: JSON.stringify({
+        message,
+        history: Array.isArray(history) ? history : [],
+      }),
       signal: AbortSignal.timeout(30_000),
     });
 

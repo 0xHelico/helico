@@ -323,13 +323,16 @@ func (a *api) swapIntent(w http.ResponseWriter, r *http.Request) {
 
 	var body struct {
 		Message string `json:"message"`
+		// What was already on screen. Optional, bounded by the service, and only ever a hint to
+		// the model: every token and amount still goes through the registry afterwards.
+		History []swap.Turn `json:"history"`
 	}
-	if err := json.NewDecoder(io.LimitReader(r.Body, 4<<10)).Decode(&body); err != nil {
+	if err := json.NewDecoder(io.LimitReader(r.Body, 16<<10)).Decode(&body); err != nil {
 		writeProblem(w, http.StatusBadRequest, "send {\"message\": \"…\"}")
 		return
 	}
 
-	answer, err := a.opt.Swap.Interpret(r.Context(), body.Message)
+	answer, err := a.opt.Swap.Interpret(r.Context(), body.Message, body.History...)
 	switch {
 	case errors.Is(err, swap.ErrNotConfigured):
 		writeProblem(w, http.StatusServiceUnavailable, "the swap conversation is off: BE_LLM_API_KEY is not set")

@@ -562,6 +562,15 @@ textarea:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
+/* A quantity, set in the face figures belong in rather than in body text. Pairs with `.tabular`
+   rather than replacing it: the two answer different questions, one about the shape of a digit
+   and one about whether the column holds still. */
+.numeric {
+  font-family: var(--font-numeric), Georgia, serif;
+  font-feature-settings: normal;
+  letter-spacing: 0;
+}
+
 /*
  * The chart reveals itself left to right, and the area under it fades in.
  *
