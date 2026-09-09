@@ -196,8 +196,8 @@ func (s *Service) Interpret(ctx context.Context, message string, prior ...Turn) 
 func about() (string, []Card) {
 	chain := chains[0]
 	reply := "Helico gives you an account only you own. An agent you name may move its idle capital " +
-		"into a lending market you allow-listed and pull it back, and it can do nothing else, " +
-		"because neither call it can make takes a recipient.\n\n" +
+		"between the lending markets you allow-listed and pull it back, and it can do nothing " +
+		"else, because neither call it can make takes a recipient.\n\n" +
 		"Not yet, and I would rather say so than leave it out: providing liquidity as a maker, " +
 		"borrowing, more than one market at a time, and any chain but " + chain.Name + ". Anything " +
 		"I have no address or number for, I ask about rather than guess."
@@ -223,6 +223,19 @@ func about() (string, []Card) {
 			Title: "Withdraw",
 			Body:  "Send everything back to your own wallet. The call takes no recipient, so there is nowhere else it can go.",
 			Try:   "Take everything back to my wallet",
+		},
+		{
+			// The product's own reason to exist, and it had no card until #330 — it survived as a
+			// clause in the paragraph above, so anyone reading the cards saw a swap app.
+			//
+			// "Compares" and not "spreads across": `decideIdleMove` clamps to the one market
+			// `bestPaying` returns, so a card promising several at once would describe a different
+			// product. That limit stays named in the "Not yet" line rather than quietly dropped.
+			Title: "Earn",
+			Body: "Idle USDC works while it waits, and the agent compares Aave v3, Compound v3 and a " +
+				"Morpho vault before it moves — three protocols, not three markets in one. It holds " +
+				"the best of them, and can do nothing else with your money.",
+			Href: "/",
 		},
 		{
 			Title: "Set your limits",
