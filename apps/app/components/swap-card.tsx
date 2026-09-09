@@ -163,7 +163,10 @@ export function SwapCard({ intent }: { intent: Intent }) {
   }
 
   return (
-    <div className="mt-3 rounded-xl border p-4">
+    // A confirm sheet, not a banner. The chat column is `max-w-4xl` and nothing on this card is
+    // that wide, so at full width the marks sit a hand's width from the amounts they belong to and
+    // every detail row ends in several hundred pixels of nothing.
+    <div className="mt-3 w-full max-w-md rounded-xl border p-4">
       {/* Two amounts stacked, each with its own mark, and nothing else at this size. The card used
           to lead with a row of symbols and then bury the number a person actually decides on
           seven rows down, between the token's full name and the size of its smallest unit. */}

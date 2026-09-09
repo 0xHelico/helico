@@ -1586,6 +1586,43 @@ READMEs.
 - **Verified:** both read off rendered pages in a browser against a fork of Arbitrum One — the
   badge with a real balance in it, and the swap card with a real quote from the pool.
 
+### 2026-09-10 — a card that promised something the page showed as blocked
+
+- **Done:** Ghoza followed the chat's own Earn card to the front page and hit two things at once:
+  *"kenapa malah redirect ke mandate?"* and then *"di mandate ke disable/block jadi gabisa di
+  enable gitu, terus suruh ngapain?"* Both were real, and the second was a bug rather than a
+  wording problem.
+
+- **AI's role:** reproduced it against production before touching anything, driving the live page
+  with a wallet connected on Arbitrum One and reading each control's disabled state out of the DOM:
+
+  ```
+  button  enabled   Nominate Helico's agent
+  switch  enabled   Permit Aave v3 on Arbitrum One
+  switch  DISABLED  Put idle capital to work        ← wired: true
+  ```
+
+  The two controls that grant the capability worked. The row describing it — the first thing on
+  the page, and the one the Earn card had just promised — was dead, because `canToggle` required
+  `data.kind === "open"`. Switching it **on** touches no account at all: the handler scrolls to
+  `#mandate`, where those two controls live. Only switching it off revokes, and that direction is
+  unreachable without an agent anyway because `checked` is false until there is one. So the gate
+  blocked the one direction a new owner could go. Same shape as #306.
+
+  The redirect was not a bug: the Earn card links to `/`, and the sidebar calls that page
+  "Mandate". But it landed at the top of a capability board with the controls further down, so the
+  card now points at `/#mandate` — the two switches that do the thing, rather than the row that
+  describes it.
+
+  Separately, the result cards filled the chat's `max-w-4xl` column, so the token marks sat a
+  hand's width from their amounts and every detail row ended in several hundred pixels of nothing.
+  A confirm sheet is narrow; they are capped now.
+
+- **Verified:** the switch states read out of the rebuilt page the same way they were read out of
+  production — `Put idle capital to work` enabled, and the five unwired rows still disabled, which
+  is the half that shows the fix is targeted rather than a blanket un-gating. The narrowed card was
+  read off a rendered page carrying a real quote.
+
 <!--
 Template for the next entry:
 

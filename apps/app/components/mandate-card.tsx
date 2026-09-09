@@ -135,7 +135,7 @@ export function MandateCard({
   );
 
   return (
-    <div className="mt-3 rounded-xl border p-4">
+    <div className="mt-3 w-full max-w-md rounded-xl border p-4">
       <p className="font-medium text-sm">
         {short(data.address)} · {nominated ? "agent nominated" : "no agent"}
       </p>
@@ -313,7 +313,7 @@ function WalletInstead({ address }: { address: Address }) {
   });
 
   return (
-    <div className="mt-3 rounded-xl border p-4">
+    <div className="mt-3 w-full max-w-md rounded-xl border p-4">
       <p className="text-muted-foreground text-xs">
         Your account is not open yet, so it holds nothing. This is what your
         wallet holds.
