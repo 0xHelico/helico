@@ -5,7 +5,7 @@
 	"scripts": {
 		"typecheck": "tsc --noEmit",
 		"simulate": "cre workflow simulate ./workflow --target staging-settings --env .env --trigger-index 0 --non-interactive",
-		"rehearse": "./rehearse.sh"
+		"rehearse": "./rehearse-idle.sh"
 	},
 	"dependencies": {
 		"@chainlink/cre-sdk": "1.19.1",
