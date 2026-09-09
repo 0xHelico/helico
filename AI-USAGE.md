@@ -1381,6 +1381,62 @@ READMEs.
   reason its passing means anything. Backend suite green, `tsc` and Biome clean, and every screen
   above read from a browser driven against the fork rather than from the diff.
 
+### 2026-09-09 — a mandate that leaves Solidity, and a deployment that was a day behind
+
+- **Done:** Ghoza reported that Helico can now do LP on Aqua, Earn on Aave and Compound, and
+  transfer, and that a teammate said "mandate" was no longer relevant. Asked to validate rather
+  than accept, three of the four turned out not to hold, and the check that settled it was the
+  deployed subgraph: `mandates(where: {app: "0xa16d…87ed"})` returns `[]`, while every mandate it
+  indexes belongs to 1inch's own apps. So no maker has ever shipped to our app.
+
+  Compound was the one worth catching. `ReceiptMath.SharePriced` handles a cToken-shaped receipt,
+  but only inside `HelicoMandateSwap` when unwinding a maker's position, and only against a mock —
+  no fork test names Compound. Meanwhile `HelicoAccount.supplyIdle` calls
+  `supply(address,uint256,address,uint16)`, which is Aave v3's signature; Comet's takes two
+  arguments. `ILendingVenue.sol` says so out loud: *"adding Compound or Morpho later"*. Claiming it
+  in the video is the category that costs a submission.
+
+  Then built the part that was genuinely missing. `@helico/plugin-1inch` had `shipCall`, hardcoded
+  to 1inch's SwapVM router, and no `SwapMandate` encoder anywhere — so the mandate half of the
+  1inch track had never left Foundry.
+
+- **AI's role:** wrote the encoder, the setup calldata, and the fork check. Two decisions are worth
+  recording.
+
+  The first is what the encoder is checked against. A `SwapMandate` encoded wrong by one field does
+  not revert: Aqua files a position under `keccak256` of the raw bytes, the app recomputes the hash
+  from the struct it is handed, and a mismatch means the ship succeeds and files under a hash
+  nobody looks up. A unit test of my encoder against my own decoder would pass either way, so the
+  real check is an `eth_call` to the contract's own `mandateHash` — and it runs first, with the
+  script refusing to continue if it disagrees.
+
+  The second is what that check found. It reverted, which a `pure` function cannot do, so the
+  selector had to be wrong: today's struct hashes to `0x5344635d` and the deployed bytecode
+  contains `0xbeb513da`. **`HelicoMandateSwap` on Arbitrum One is a day and a feature behind the
+  source in this repository** — it was deployed on 8 September, `ReceiptKind` widened `Venue` on 9
+  September. Nothing is broken; the deployment is simply older than the tests, and a mandate
+  written today would miss the function rather than fail loudly. That is now an assertion in the
+  script and a warning in `docs/deployments.md` and beside the address itself, rather than
+  something the next person rediscovers.
+
+  Not written: `contracts/script/DeployPayingTaker.s.sol`, which I had offered. `contracts/` is
+  ghozzza's, the redeploy is a bigger part of that task than the taker, and both are one issue for
+  them rather than a file from me.
+
+- **Verified:** seventeen checks against a fork of Arbitrum One, with real Aqua, real USDC, real
+  Aave v3 and real WETH. An account opened through the deployed factory, 2,000 USDC supplied to
+  Aave, a mandate shipped from the account through `executeBatch` with every byte built by the
+  plugin, the ledger read back under the account rather than the owner, and the wallet byte-identical
+  afterwards because shipping moves nothing. Then two fills: 0.1 WETH for 271.98 USDC out of the
+  wallet with Aave untouched, and 2 WETH for 1,758.13 USDC against 728.02 idle, which unwound the
+  position to 969.88. The second one is the product's own sentence, measured.
+
+  Three of those checks failed first and each failure was mine: a rounding tolerance one unit too
+  tight, a second fill sized before thinking about the curve — 0.4 WETH quotes *less* than 0.1 did
+  once the price has moved — and a check named for an unwind that had not happened. The last was
+  the one worth fixing rather than deleting, because it would have passed forever without ever
+  testing what it claimed.
+
 <!--
 Template for the next entry:
 
