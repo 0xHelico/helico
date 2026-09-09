@@ -2,7 +2,7 @@
 
 import { MessageContent } from "@/components/ai-elements/message";
 import { cn } from "@/lib/utils";
-import { SparklesIcon } from "./icons";
+import { AssistantMark } from "./assistant-mark";
 
 /**
  * One turn, in the template's own markup and classes rather than anything of ours: the user's
@@ -36,13 +36,7 @@ export function Turn({
             : "flex flex-col items-end gap-2",
         )}
       >
-        {isAssistant && (
-          <div className="flex h-[calc(13px*1.65)] shrink-0 items-center">
-            <div className="flex size-7 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground ring-1 ring-border/50">
-              <SparklesIcon size={13} />
-            </div>
-          </div>
-        )}
+        {isAssistant && <AssistantMark />}
         {isAssistant ? (
           <div className="flex min-w-0 flex-1 flex-col gap-2">{children}</div>
         ) : (
