@@ -127,36 +127,31 @@ const AQUA = aquaAddress(ARBITRUM_ONE)
 
 console.log(`\nAqua ${AQUA}\napp  ${APP}\n`)
 
-check(
-	'the 8 September deployment is still there',
-	((await pub.getCode({ address: APP })) ?? '0x').length > 2,
-	APP,
-)
-
-// And it is a version behind, which is a fact this script refuses to discover quietly.
-//
-// `ReceiptKind` landed on 9 September and widened `Venue` by a field, so the deployed app's
-// `mandateHash` takes a different tuple and answers to a different selector. Ship today's bytes
-// at that address and the call does not revert with a useful message — it misses the function
-// entirely. Everything below therefore runs against a fresh deployment of the source in this
-// repository, and the address above needs a redeploy before anything can ship to it for real.
 const deployedCode = (await pub.getCode({ address: APP })) ?? '0x'
-check(
-	'the deployed app predates ReceiptKind, so today’s mandate cannot be shipped to it',
-	!deployedCode.includes('5344635d'),
-	'redeploy needed before a real ship',
-)
+check('the app is deployed, so the rest of this means something', deployedCode.length > 2, APP)
 
-const appArtifact = await Bun.file(
-	'contracts/out/HelicoMandateSwap.sol/HelicoMandateSwap.json',
-).json()
-const appHash = await wal.deployContract({
-	abi: appArtifact.abi,
-	args: [aquaAddress(ARBITRUM_ONE)],
-	bytecode: appArtifact.bytecode.object as `0x${string}`,
-})
-const LIVE_APP = deployed(await pub.waitForTransactionReceipt({ hash: appHash }))
-console.log(`\nrunning against a fresh HelicoMandateSwap at ${LIVE_APP}\n`)
+// And it is the app this package can actually talk to, which the address alone does not say.
+//
+// The one this replaced could not have taken a mandate at all: `ReceiptKind` widened `Venue` on 9
+// September, and the old app answered `mandateHash` at `0xbeb513da` while today's struct hashes to
+// `0x5344635d`. A mandate sent there would not have reverted — it would have missed the function,
+// which is the failure that looks like nothing at all. So the selector is read out of the bytecode
+// before anything is shipped, and this script refuses rather than proceeds.
+const TAKES_TODAYS_MANDATE = '5344635d'
+check(
+	'and its bytecode carries the selector this package computes',
+	deployedCode.includes(TAKES_TODAYS_MANDATE),
+	`mandateHash(SwapMandate) → 0x${TAKES_TODAYS_MANDATE}`,
+)
+if (!deployedCode.includes(TAKES_TODAYS_MANDATE)) {
+	console.error('\nThat address cannot read a mandate this package encodes. Stopping.')
+	process.exit(1)
+}
+
+// The live app, not a fresh one. Until 10 September this script deployed its own copy, because the
+// deployed pair predated the struct — running against a contract nobody uses proved the encoder
+// and nothing about the deployment.
+const LIVE_APP = APP
 
 // ---------------------------------------------------------------------------------------------
 // 1. The bytes, held against the contract that will read them.

@@ -1500,6 +1500,31 @@ READMEs.
   state is not screenshotted because it no longer can differ — both call the same component, which
   is a stronger guarantee than a second picture.
 
+### 2026-09-10 — the warning that outlived the problem it described
+
+- **Done:** #325 replaced both Aqua apps on Arbitrum One, which is the redeploy #311 asked for. It
+  updated the address constant in `@helico/plugin-1inch`. It did not update the paragraph directly
+  above that constant, or the assertion in `scripts/check-mandate.ts` — both of which existed only
+  to describe the problem the redeploy had just fixed.
+
+- **AI's role:** noticed and rewrote them. The docblock said *"this address predates `ReceiptKind`
+  and cannot read a mandate encoded by `mandate.ts` … redeploy before shipping to it for real"*,
+  which after #325 is false about the address it sits on. The script asserted
+  `!deployedCode.includes('5344635d')` — a check that passes only while the deployment is broken,
+  so a working deployment would have turned it red and read as a regression.
+
+  The script now runs against the **live** app rather than deploying its own copy. That was the
+  right call in the day the deployed pair predated the struct and is the wrong one now: a check
+  against a contract nobody uses proves the encoder and nothing about the deployment. The selector
+  read is kept and inverted — the bytecode must carry `0x5344635d`, and the script stops rather
+  than proceeds if it does not.
+
+- **Verified:** 17 of 17 against `0xE56e2ACF…` on a fork of Arbitrum One, with real Aqua, real USDC
+  and real Aave v3, ending in a fill that wants 1,758 USDC against 728 idle and unwinds the
+  position to 969. Then the refusal was checked by pointing the same script at the superseded
+  `0xA16D3138…`, which failed on the selector and stopped — a guard that cannot fail is not a
+  guard, and this one was worth proving twice.
+
 <!--
 Template for the next entry:
 
