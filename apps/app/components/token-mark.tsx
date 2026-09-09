@@ -123,13 +123,49 @@ function Weth({ size }: { size: number }) {
   );
 }
 
-/** Arbitrum's nested chevrons. */
-function Arb({ size }: { size: number }) {
+/** Arbitrum's nested chevrons, which the token and the chain share. */
+function ArbitrumArt() {
   return (
-    <Mark label="ARB" size={size}>
+    <>
       <Circle fill="#213147" />
       <path d="m16 7 7.4 12.8-2.6 1.5L16 12.4l-4.8 8.9-2.6-1.5z" fill="#fff" />
       <path d="m16 17.4 3.6 6.3-3.6 2-3.6-2z" fill="#12aaff" />
+    </>
+  );
+}
+
+function Arb({ size }: { size: number }) {
+  return (
+    <Mark label="ARB" size={size}>
+      <ArbitrumArt />
+    </Mark>
+  );
+}
+
+/**
+ * The chain, drawn the same way its token is.
+ *
+ * Same artwork, different label, and the label is the point: a reader hearing "Arbitrum" beside a
+ * network row means the chain, and beside a balance means the token. Sharing the drawing is
+ * correct — Arbitrum uses one mark for both — but sharing the accessible name would say a chain
+ * is a token.
+ *
+ * Unknown chains get nothing rather than a guess. A wrong network mark on a transaction someone
+ * is about to sign is worse than no mark at all.
+ */
+export function ChainMark({
+  chainId,
+  size = 16,
+}: {
+  chainId: number;
+  size?: number;
+}) {
+  if (chainId !== 42161) {
+    return null;
+  }
+  return (
+    <Mark label="Arbitrum One" size={size}>
+      <ArbitrumArt />
     </Mark>
   );
 }

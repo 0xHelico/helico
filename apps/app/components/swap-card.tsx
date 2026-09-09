@@ -10,6 +10,7 @@ import {
   useSendTransaction,
   useSwitchChain,
 } from "wagmi";
+import { ChainMark, TokenMark } from "@/components/token-mark";
 import { Button } from "@/components/ui/button";
 import { explorerTx, SLIPPAGE_BPS } from "@/lib/chain";
 import type { Intent } from "@/lib/intent";
@@ -140,17 +141,30 @@ export function SwapCard({ intent }: { intent: Intent }) {
 
   return (
     <div className="mt-3 rounded-xl border p-4">
-      <div className="flex items-center gap-3 font-medium text-base">
-        <span>
-          {intent.amountIn} {intent.tokenIn.symbol}
+      {/* The two tokens, drawn. `TokenMark` is the portfolio's, so the same asset carries the same
+          mark on the screen that reports it and on the one that spends it. */}
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="flex items-center gap-2">
+          <TokenMark size={24} symbol={intent.tokenIn.symbol} />
+          <span className="font-medium text-base">
+            {intent.amountIn} {intent.tokenIn.symbol}
+          </span>
         </span>
-        <ArrowRight className="size-4 text-muted-foreground" />
-        <span>{intent.tokenOut.symbol}</span>
+        <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
+        <span className="flex items-center gap-2">
+          <TokenMark size={24} symbol={intent.tokenOut.symbol} />
+          <span className="font-medium text-base">
+            {intent.tokenOut.symbol}
+          </span>
+        </span>
       </div>
 
       <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-muted-foreground text-xs">
         <dt>Network</dt>
-        <dd>{intent.chain}</dd>
+        <dd className="flex items-center gap-1.5">
+          <ChainMark chainId={intent.chainId} size={14} />
+          {intent.chain}
+        </dd>
         <dt>Giving</dt>
         <dd>
           {intent.tokenIn.name} · {intent.amountInWei} of its smallest unit
@@ -169,7 +183,9 @@ export function SwapCard({ intent }: { intent: Intent }) {
         {plan.data ? (
           <>
             <dt>Pool</dt>
-            <dd>{plan.data.pool.key.fee / 10_000}% fee tier, no hook</dd>
+            <dd>
+              Uniswap v4 · {plan.data.pool.key.fee / 10_000}% fee tier, no hook
+            </dd>
             <dt>You get</dt>
             <dd>
               about {formatUnits(plan.data.amountOut, intent.tokenOut.decimals)}{" "}

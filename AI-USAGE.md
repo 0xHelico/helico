@@ -1454,6 +1454,36 @@ READMEs.
   `app.helico.site` as well, because an API that answers correctly is not the same as a page that
   draws it.
 
+### 2026-09-09 — marks on the swap card, and naming the pool it uses
+
+- **Done:** Ghoza asked why the chat's swap goes through Uniswap when the submission pivoted away
+  from it, and asked for chain and token logos.
+
+- **AI's role:** checked the first before changing anything, because the answer decides whether the
+  second is polish or camouflage. The swap is Uniswap v4 through `@helico/plugin-uniswap`, and it
+  is the only swap a browser wallet can do today: `HelicoMandateSwap` is maker-side, it needs a
+  mandate somebody shipped, and `IHelicoMandateSwapCallback` means a taker has to be a contract. So
+  it is not a leftover, and #125 kept the v4 code tested on purpose — what the pivot removed was
+  the claim, not the code.
+
+  The card said "Pool — 0.05% fee tier, no hook" and never said whose pool. In a submission whose
+  tracks are Chainlink, 1inch and The Graph, that is the one line a reader wants stated rather than
+  inferred, so it now reads "Uniswap v4 · 0.05% fee tier, no hook".
+
+  Then the marks. `TokenMark` already drew every token in the registry and the portfolio used it;
+  the swap card rendered the same tokens as bare symbols. `ChainMark` is new and shares Arbitrum's
+  artwork with the ARB token deliberately — Arbitrum uses one mark for both — but carries its own
+  accessible name, because sharing the label would say a chain is a token. An unknown chain gets
+  nothing rather than a guess: a wrong network mark on a transaction someone is about to sign is
+  worse than no mark.
+
+- **Verified:** driven in a browser against a fork of Arbitrum One, with the marks, the chain row
+  and the named pool read off the rendered page. The account e2e was re-run and passed 13 of 13,
+  which is what catches a shared component broken by a refactor. One failure on the way was the
+  fixture rather than the code: the local fake model classified the withdrawal sentence as `about`,
+  so the sweep button never appeared — the fake learned the other four actions, and the run went
+  green without the app changing.
+
 <!--
 Template for the next entry:
 
