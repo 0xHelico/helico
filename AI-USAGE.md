@@ -1484,6 +1484,22 @@ READMEs.
   so the sweep button never appeared — the fake learned the other four actions, and the run went
   green without the app changing.
 
+### 2026-09-09 — Helico's own mark in the chat
+
+- **Done:** the assistant's avatar was still the chat template's `SparklesIcon` in a grey plate,
+  on every answer and every waiting state. It is now `brand/mark-lavender.webp`, the product's own
+  mark.
+
+- **AI's role:** wrote it. The block was copy-pasted into `turn.tsx` and `thinking-message.tsx`,
+  so it came out into one `AssistantMark` on the way — a mark that differs between waiting and
+  answered is two assistants, and neither file would have said so. The plate and the ring went
+  with it: the asset is a solid lavender tile with its own rounded corners, so a background and a
+  border draw a second edge just outside the first.
+
+- **Verified:** read off a rendered page in a browser against a fork, not off the diff. The waiting
+  state is not screenshotted because it no longer can differ — both call the same component, which
+  is a stronger guarantee than a second picture.
+
 <!--
 Template for the next entry:
 
