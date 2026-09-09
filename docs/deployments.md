@@ -111,6 +111,38 @@ trying rather than assume a bad deploy:
 - a clean `FOUNDRY_PROFILE=swapvm forge build` from `main` reproduces the deployed creation
   bytecode, checked by deleting `out-swapvm` and rebuilding.
 
+## 9 September 2026 — the oracle board
+
+A second Aqua app, beside `HelicoMandateSwap` rather than replacing it. It exists for the maker
+who holds **one** token: their USDC earns in a lending market, and a fill is settled out of it.
+The constant-product app cannot quote them at all — its price *is* the ratio of two balances, so a
+zero side has no price.
+
+| Contract | Address | Checked | Source |
+|---|---|---|---|
+| `HelicoOracleBoard` | [`0xeb480C0994A34a81a49C3250C45a9e96eac0C760`](https://arbiscan.io/address/0xeb480C0994A34a81a49C3250C45a9e96eac0C760#code) | `AQUA()` → `0x1111113CCf…`, 15,747 hex of code | verified, first attempt |
+
+```
+tx     0x9f93a95a553e98453fd04fdad83bc55839cb53e85f130a1faf5698c7d3ac3a17
+gas    1,763,931
+cost   0.0000353 ETH
+```
+
+The deploy script refuses a chain that is not 42161, refuses an Aqua that does not answer
+`rawBalances`, and refuses a feed that does not answer or answers zero — a board quoting zero
+hands its inventory away, so that check is at deploy rather than at first fill. It printed the
+feed's live answer, `251792069162` at 8 decimals, so the number was compared against a price a
+person knows rather than taken on trust.
+
+**The feed is not deployed with it.** A board names its own, so this one deployment serves every
+pair Chainlink covers. `ETH_USD_FEED` in the script is
+[`0x639Fe6ab…ba612`](https://arbiscan.io/address/0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612),
+whose `description()` answers `"ETH / USD"` — read from the chain before it was written down.
+
+**Nothing has shipped a board to it yet.** The contract holds no state of its own; every board
+lives in Aqua's ledger keyed by its hash, so an empty deployment is the expected resting state
+rather than a sign that something is missing.
+
 ## 8 September 2026 — the CRE workflow, and the subgraph it reads
 
 Not a contract of ours, so it sits apart: a workflow registered in Chainlink's

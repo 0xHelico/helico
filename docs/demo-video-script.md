@@ -45,8 +45,8 @@ in the video, the other would have given away a requirement we meet.
 
 | | State on 9 September, measured |
 |---|---|
-| **Deployed, read back from the chain** | Four contracts. `HelicoAccountFactory` `0x01CC7d9F…E081` (3,883 bytes), `HelicoAccount` implementation `0x0842BB3f…4847` (8,779), `HelicoMandateSwap` `0xA16D3138…87Ed` (7,707), `HelicoAquaSwapVMRouter` `0xb8c9f14d…c3be` (18,863). The router answers `AQUA_YIELD_COVER_OPCODE()` → **34**, which is the sentence about the added instruction being *on chain* rather than in a file |
-| **Still not deployed** | `HelicoOracleBoard`. It was built after the 8 September table and has no row there. Its evidence is fork evidence — say so if it appears on screen |
+| **Deployed, read back from the chain** | Five contracts as of 9 September. `HelicoAccountFactory` `0x01CC7d9F…E081` (3,883 bytes), `HelicoAccount` implementation `0x0842BB3f…4847` (8,779), `HelicoMandateSwap` `0xA16D3138…87Ed` (7,707), `HelicoAquaSwapVMRouter` `0xb8c9f14d…c3be` (18,863), `HelicoOracleBoard` `0xeb480C09…C760`. The router answers `AQUA_YIELD_COVER_OPCODE()` → **34**, which is the sentence about the added instruction being *on chain* rather than in a file |
+| **Deployed since the 8 September table** | `HelicoOracleBoard` `0xeb480C09…C760` (verified), the second Aqua app — priced from Chainlink, braked by its own inventory, for a maker holding **one** token. **Nothing has shipped a board to it**, so it is a deployed contract with no positions on it. Say *deployed and verified*; do not say anyone is using it |
 | **The workflow is not the simulator** | The deployed workflow runs on Chainlink's DON. See the split rule under *What must not be said* — this is the row that changed what is sayable |
 | The four sites | `helico.site`, `app.helico.site`, `api.helico.site/healthz` 200, `docs.helico.site` 308. `bun run --filter @helico/app prod` is now **23 checks** and passes, including the API's own headers |
 | **New shot available — the escape hatch** | It had no button at all this morning. Typing *"take everything back to my wallet"* into the chat now offers the sweep, and pressing it empties the account to the owner. For the 2:50 shot this is the product doing the safest thing it can do, on camera, rather than a test asserting it |
@@ -267,8 +267,11 @@ End on the repo URL. No outro music.
 ## What must not be said
 
 - **"Deployed", "live", or "in production"** about anything that is not — check each one on the
-  day, because this list changes as things land. As of 9 September four contracts are on Arbitrum
-  One and `HelicoOracleBoard` is not; the router is, and its opcode reads back from the chain
+  day, because this list changes as things land. As of 9 September **five** contracts are on
+  Arbitrum One — the fifth, `HelicoOracleBoard`, landed that morning. The router is among them and
+  its opcode reads back from the chain. What is still not deployable-and-used is a different
+  sentence: nothing has shipped a board to the oracle app, so *"deployed"* is true of it and
+  *"in use"* is not
 - **"Audited"** — twelve AI agents reviewed the contracts, and that is not an audit
 - **"Runs in a TEE"** — and this rule is now two rules, because the two things it covered came
   apart on 8 September. **The local rehearsal** (`rehearse-idle.sh`, which is what the footage
