@@ -2,7 +2,7 @@
 
 import { NATIVE, planSwap, type SwapStep } from "@helico/plugin-uniswap";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ArrowRight, Check, Loader2 } from "lucide-react";
+import { ArrowDown, Check, Loader2 } from "lucide-react";
 import { erc20Abi, formatUnits, type Hex } from "viem";
 import {
   useAccount,
@@ -13,6 +13,7 @@ import {
 import { ChainMark, TokenMark } from "@/components/token-mark";
 import { Button } from "@/components/ui/button";
 import { explorerTx, SLIPPAGE_BPS } from "@/lib/chain";
+import { amountFloor, amountShort } from "@/lib/format";
 import type { Intent } from "@/lib/intent";
 import { shortfall } from "@/lib/intent";
 
@@ -41,6 +42,28 @@ function amountOf(wei: string): bigint | null {
   } catch {
     return null;
   }
+}
+
+/** One side of the swap: the amount at reading size, its mark beside it. */
+function Side({ amount, symbol }: { amount: string; symbol: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <span className="font-medium text-[19px] text-foreground tracking-tight">
+        {amount}
+      </span>
+      <TokenMark size={30} symbol={symbol} />
+    </div>
+  );
+}
+
+/** The price, as one number a person can hold in their head. */
+function rate(intent: Intent, out: bigint): string | null {
+  const given = Number(intent.amountIn);
+  if (!Number.isFinite(given) || given <= 0) {
+    return null;
+  }
+  const got = Number(formatUnits(out, intent.tokenOut.decimals));
+  return (got / given).toLocaleString(undefined, { maximumFractionDigits: 4 });
 }
 
 export function SwapCard({ intent }: { intent: Intent }) {
@@ -141,62 +164,53 @@ export function SwapCard({ intent }: { intent: Intent }) {
 
   return (
     <div className="mt-3 rounded-xl border p-4">
-      {/* The two tokens, drawn. `TokenMark` is the portfolio's, so the same asset carries the same
-          mark on the screen that reports it and on the one that spends it. */}
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="flex items-center gap-2">
-          <TokenMark size={24} symbol={intent.tokenIn.symbol} />
-          <span className="font-medium text-base">
-            {intent.amountIn} {intent.tokenIn.symbol}
-          </span>
-        </span>
-        <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
-        <span className="flex items-center gap-2">
-          <TokenMark size={24} symbol={intent.tokenOut.symbol} />
-          <span className="font-medium text-base">
-            {intent.tokenOut.symbol}
-          </span>
-        </span>
+      {/* Two amounts stacked, each with its own mark, and nothing else at this size. The card used
+          to lead with a row of symbols and then bury the number a person actually decides on
+          seven rows down, between the token's full name and the size of its smallest unit. */}
+      <div className="space-y-2">
+        <Side
+          amount={`${intent.amountIn} ${intent.tokenIn.symbol}`}
+          symbol={intent.tokenIn.symbol}
+        />
+        <ArrowDown className="size-4 text-muted-foreground" />
+        <Side
+          amount={
+            plan.data
+              ? `${amountShort(plan.data.amountOut, intent.tokenOut.decimals)} ${intent.tokenOut.symbol}`
+              : intent.tokenOut.symbol
+          }
+          symbol={intent.tokenOut.symbol}
+        />
       </div>
 
-      <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-muted-foreground text-xs">
+      <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-5 gap-y-1.5 border-t pt-3 text-muted-foreground text-xs">
+        {plan.data ? (
+          <>
+            <dt>Rate</dt>
+            <dd>
+              1 {intent.tokenIn.symbol} ={" "}
+              {rate(intent, plan.data.amountOut) ?? "—"}{" "}
+              {intent.tokenOut.symbol}
+            </dd>
+            {/* Floored rather than rounded: this is the number the swap guarantees, and rounding
+                it up would promise four ten-thousandths the fill does not owe. */}
+            <dt>At worst</dt>
+            <dd>
+              {amountFloor(plan.data.minAmountOut, intent.tokenOut.decimals)}{" "}
+              {intent.tokenOut.symbol}, or it does not fill (
+              {SLIPPAGE_BPS / 100}% slippage)
+            </dd>
+          </>
+        ) : null}
         <dt>Network</dt>
         <dd className="flex items-center gap-1.5">
           <ChainMark chainId={intent.chainId} size={14} />
           {intent.chain}
         </dd>
-        <dt>Giving</dt>
-        <dd>
-          {intent.tokenIn.name} · {intent.amountInWei} of its smallest unit
-        </dd>
-        <dt>Receiving</dt>
-        <dd>{intent.tokenOut.name}</dd>
-        {balance.data !== undefined ? (
-          <>
-            <dt>You hold</dt>
-            <dd className={short ? "text-destructive" : undefined}>
-              {formatUnits(balance.data, intent.tokenIn.decimals)}{" "}
-              {intent.tokenIn.symbol}
-            </dd>
-          </>
-        ) : null}
         {plan.data ? (
           <>
-            <dt>Pool</dt>
-            <dd>
-              Uniswap v4 · {plan.data.pool.key.fee / 10_000}% fee tier, no hook
-            </dd>
-            <dt>You get</dt>
-            <dd>
-              about {formatUnits(plan.data.amountOut, intent.tokenOut.decimals)}{" "}
-              {intent.tokenOut.symbol}
-            </dd>
-            <dt>At worst</dt>
-            <dd>
-              {formatUnits(plan.data.minAmountOut, intent.tokenOut.decimals)}{" "}
-              {intent.tokenOut.symbol}, or it does not fill (
-              {SLIPPAGE_BPS / 100}% slippage)
-            </dd>
+            <dt>Route</dt>
+            <dd>Uniswap v4 · {plan.data.pool.key.fee / 10_000}% fee tier</dd>
           </>
         ) : null}
       </dl>
@@ -261,7 +275,7 @@ export function SwapCard({ intent }: { intent: Intent }) {
 
             {short ? (
               <p className="mt-3 text-destructive text-xs">
-                This wallet is {formatUnits(short, intent.tokenIn.decimals)}{" "}
+                This wallet is {amountShort(short, intent.tokenIn.decimals)}{" "}
                 {intent.tokenIn.symbol} short. Nothing is sent, because the swap
                 would revert and cost you the gas to find out.
               </p>

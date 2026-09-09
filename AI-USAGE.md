@@ -1554,6 +1554,37 @@ READMEs.
   a fork. Both guards were checked by breaking them: the staking word list fails on a poisoned
   title, and the new assertion that the answer names Earn, Aave, Compound and Morpho fails if the
   card is dropped. A test that only passes is not evidence that the thing it describes is there.
+### 2026-09-10 — two cards that said too much, in the wrong shape
+
+- **Done:** Ghoza pointed at the wallet balances — *"kelebaran aja si jadi susah diliat"* — and at
+  the swap card, and gave a wallet's confirm sheet as the shape he wanted. Both were fair.
+
+- **AI's role:** rewrote both, and moved one function so there is one of it.
+
+  The balances were full-width rows with a `flex-1` between the symbol and the amount, so pairing
+  `USDT` with `0.0113` meant crossing the whole card, three times. They are badges now — mark,
+  symbol and number in one pill, wrapping — because a balance is a short fact and reads better as
+  one piece.
+
+  The swap card had seven rows before the button and the number a person decides on was sixth,
+  between the token's full name and the size of its smallest unit. It leads with the two amounts
+  at reading size now, and four facts under them: rate, worst case, network, route. What went was
+  genuinely redundant rather than merely long — the smallest-unit figure is already in the checks
+  tree directly above, `Receiving` repeated the header, and `You hold` only matters when it is
+  short, which the warning below already says.
+
+  Two smaller things fell out. The shortfall warning printed eighteen decimals; it uses the same
+  short formatter now. And the wallet card's footer still said *"Open the account and this answers
+  for it instead"* — there has been no separate opening step since #306, so it says "Set a limit".
+
+  One deliberate piece of care: `At worst` is floored rather than rounded. It is the number the
+  swap guarantees, and rounding 245.470356 up to 245.4704 promises four ten-thousandths the fill
+  does not owe. Nobody is harmed by that size of error and it is still the wrong direction on a
+  screen somebody signs, so `amountFloor` sits beside `amountShort` in `lib/format.ts` — which is
+  where the formatter moved to, rather than being copied into a second file.
+
+- **Verified:** both read off rendered pages in a browser against a fork of Arbitrum One — the
+  badge with a real balance in it, and the swap card with a real quote from the pool.
 
 <!--
 Template for the next entry:

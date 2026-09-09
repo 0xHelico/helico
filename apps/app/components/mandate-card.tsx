@@ -3,7 +3,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
-import { type Address, erc20Abi, formatUnits } from "viem";
+import { type Address, erc20Abi } from "viem";
 import {
   useAccount,
   usePublicClient,
@@ -20,6 +20,7 @@ import {
   accountWriteAbi,
   hasAgent,
 } from "@/lib/account";
+import { amountShort as held } from "@/lib/format";
 import { amount, readMandates, token, WALLET_TOKENS } from "@/lib/mandates";
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
@@ -276,19 +277,6 @@ export function MandateCard({
  *
  * Zero balances are dropped. A list of six zeroes is not a fuller answer than a sentence.
  */
-/**
- * A balance, and never "0" when there is some.
- *
- * `amount()` truncates to two decimals, which is right in a mandates table and wrong for a
- * wallet: 0.005 ETH and 0.004 USDC both come back as "0", and a person is told they hold nothing
- * while holding the thing they were asking about. Four decimals, and a floor marker below that.
- */
-function held(value: bigint, decimals: number): string {
-  const n = Number(formatUnits(value, decimals));
-  const shown = n.toLocaleString(undefined, { maximumFractionDigits: 4 });
-  return shown === "0" ? "<0.0001" : shown;
-}
-
 function WalletInstead({ address }: { address: Address }) {
   const client = usePublicClient({ chainId: CHAIN_ID });
 
@@ -340,14 +328,21 @@ function WalletInstead({ address }: { address: Address }) {
           The chain did not answer.
         </p>
       ) : wallet.data && wallet.data.length > 0 ? (
-        <ul className="mt-3 divide-y divide-border/50 border-border/50 border-y">
+        // Badges rather than rows. These were full-width lines with a `flex-1` between the symbol
+        // and the amount, which pinned the number to the far edge — so pairing `USDT` with its
+        // balance meant crossing the whole card, three times. A balance is a short fact and reads
+        // better as one piece.
+        <ul className="mt-3 flex flex-wrap gap-2">
           {wallet.data.map((row) => (
-            <li className="flex items-center gap-2.5 py-2" key={row.symbol}>
-              <TokenMark size={20} symbol={row.symbol} />
-              <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink">
+            <li
+              className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/40 py-1 pr-2.5 pl-1"
+              key={row.symbol}
+            >
+              <TokenMark size={18} symbol={row.symbol} />
+              <span className="text-[12px] text-muted-foreground">
                 {row.symbol}
               </span>
-              <span className="tabular numeric shrink-0 text-[15px] text-ink">
+              <span className="tabular numeric text-[13.5px] text-ink">
                 {row.text}
               </span>
             </li>
@@ -359,11 +354,13 @@ function WalletInstead({ address }: { address: Address }) {
         </p>
       )}
 
+      {/* Not "open the account": there is no separate opening step since #306, which made the
+          first limit an owner sets deploy it and removed the button that used to. */}
       <p className="mt-3 text-muted-foreground text-xs">
         <Link className="underline underline-offset-2" href="/">
-          Open the account
+          Set a limit
         </Link>{" "}
-        and this answers for it instead.{" "}
+        and this answers for the account instead.{" "}
         <Link className="underline underline-offset-2" href="/portfolio">
           Your portfolio
         </Link>{" "}
