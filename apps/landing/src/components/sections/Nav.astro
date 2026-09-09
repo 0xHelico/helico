@@ -2,6 +2,7 @@
 import { solidityTests } from '../../lib/solidity-tests'
 import { Image } from 'astro:assets'
 import logoNav from '../../assets/logo-nav.webp'
+import logoEthGlobal from '../../assets/ethglobal.png'
 const repo = 'https://github.com/0xHelico/helico'
 // Reading about Helico goes to the docs site; looking at the code goes to GitHub.
 const docs = 'https://docs.helico.site/docs'
@@ -79,10 +80,25 @@ const menus: Menu[] = [
 
 <header class="nav" data-nav>
 	<div class="wrap nav__inner">
-		<a class="nav__brand" href="/" aria-label="Helico, back to top">
-			<Image src={logoNav} alt="" width={28} height={28} densities={[1, 2]} />
-			<span>helico</span>
-		</a>
+		<div class="nav__left">
+			<a class="nav__brand" href="/" aria-label="Helico, back to top">
+				<Image src={logoNav} alt="" width={28} height={28} densities={[1, 2]} />
+				<span>helico</span>
+			</a>
+			{/* Where this was built, not who backs it — Helico has no backers. Kept quiet and
+			    subordinate to the wordmark so it reads as provenance rather than co-branding, and
+			    hidden on narrow screens where the two would compete for the same line. */}
+			<a
+				class="nav__event"
+				href="https://ethglobal.com/events/ethonline2026"
+				target="_blank"
+				rel="noreferrer"
+				title="Built at ETHOnline 2026"
+			>
+				<span class="nav__event-rule" aria-hidden="true"></span>
+				<Image src={logoEthGlobal} alt="ETHGlobal" height={16} densities={[1, 2]} />
+			</a>
+		</div>
 		<div class="nav__right">
 			<nav class="nav__links" aria-label="Primary">
 				{menus.map((m) => (
@@ -273,6 +289,39 @@ const menus: Menu[] = [
 		display: flex;
 		align-items: center;
 		gap: 1rem;
+	}
+	.nav__left {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.6rem;
+		min-width: 0;
+	}
+	.nav__event {
+		display: none;
+		align-items: center;
+		gap: 0.6rem;
+		/* Muted, and lifted back to full on hover: it is a fact about the project, not a call
+		   to action, so it should be readable without pulling the eye off the wordmark. */
+		opacity: 0.72;
+		transition: opacity 0.2s ease;
+	}
+	.nav__event:hover,
+	.nav__event:focus-visible {
+		opacity: 1;
+	}
+	.nav__event-rule {
+		width: 1px;
+		height: 18px;
+		background: var(--line, #e9e9e7);
+	}
+	.nav__event img {
+		height: 16px;
+		width: auto;
+	}
+	@media (min-width: 640px) {
+		.nav__event {
+			display: inline-flex;
+		}
 	}
 	.nav__brand {
 		display: inline-flex;
