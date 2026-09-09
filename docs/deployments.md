@@ -4,6 +4,69 @@ Arbitrum One, chain id 42161. Every address below was read back from the chain a
 broadcast, not copied from a script's output — the third column is what the contract answers when
 asked about itself.
 
+## 9 September 2026 — two venues outside Aave, and the two apps that can now reach them
+
+The enclave compares markets and moves capital to the best one, and until today every market it
+could compare was Aave-shaped — which makes it a market picker rather than a yield optimiser.
+These two answer `ILendingVenue` on behalf of Compound v3 and of any ERC-4626 vault.
+
+| Contract | Address | Answers | Source |
+|---|---|---|---|
+| `CompoundVenue` | [`0xB7B7DD5ff9cCf35D1AE3283F485b261B962a58a6`](https://arbiscan.io/address/0xB7B7DD5ff9cCf35D1AE3283F485b261B962a58a6#code) | `symbol()` → `hcUSDC`, `UNDERLYING_ASSET_ADDRESS()` → USDC | verified |
+| `MorphoVenue` | [`0xD7fC33eeaB4113d784402880B524B95e92A29b5A`](https://arbiscan.io/address/0xD7fC33eeaB4113d784402880B524B95e92A29b5A#code) | `symbol()` → `hmUSDC`, `UNDERLYING_ASSET_ADDRESS()` → USDC | verified |
+| `HelicoMandateSwap` | [`0xE56e2ACF431D80fbBb3192CD264138629F4f2a0d`](https://arbiscan.io/address/0xE56e2ACF431D80fbBb3192CD264138629F4f2a0d#code) | `AQUA()` → `0x1111113CCf…` | verified |
+| `HelicoOracleBoard` | [`0xF0aB4fF02ab557eC7abAE4697b279301643222A9`](https://arbiscan.io/address/0xF0aB4fF02ab557eC7abAE4697b279301643222A9#code) | `AQUA()` → `0x1111113CCf…`, feed answered `247996000000` at 8 decimals | verified |
+
+**The last two supersede** `0xA16D3138…87Ed` and `0xeb480C09…C760`, which both predate
+`ReceiptKind` and cannot take a mandate or a board carrying today's `Venue`. That was checked
+against the deployed bytecode rather than reasoned about:
+
+```
+old mandate swap   contains beb513da   today's mandateHash is 5344635d   → absent
+old oracle board   contains 972fa952   today's hashOf      is 9918148b   → absent
+new mandate swap   contains 5344635d
+new oracle board   contains 9918148b
+```
+
+Neither of the superseded pair had ever been used — `eth_getLogs` on both returns **zero events**
+from their deploy block to head — so nothing was stranded and no maker had to move.
+
+### What makes a venue reachable, and none of it happened at deploy
+
+A deployed venue is inert. Three more things are needed before the enclave can use one, and they
+are deliberately not part of this deploy:
+
+- the owner calls `permitVenue` for each address — the account refuses any market it was not told about
+- `config.production.json` names them with `kind: "share-priced"`, since both issue shares whose
+  price drifts upward rather than balances that grow
+- the workflow is redeployed, because config travels with the binary
+
+Until all three, the account reaches Aave and nothing else, and the submission must not say
+otherwise.
+
+```
+CompoundVenue      tx 0xfe8a3a9ad56758eaecaaec6251ab35ed499ef448ed48e23a5aa93a825453db8f
+MorphoVenue        tx 0xdaa80f542ae23e1d490cd1373feae36d38db645cdadc41ca1cfb584c6e0416c7
+                   both together   gas 3,229,004   cost 0.0000647 ETH
+HelicoMandateSwap  redeploy
+HelicoOracleBoard  redeploy
+```
+
+**Deployer** `0x6DCd7485aB17e0CBD0723b8435a35bb8d029439E`, balance `0.0077045` → `0.0075673`.
+All four cost **0.000137 ETH** together, at around 0.02 gwei.
+
+### The check that mattered most, and it was at deploy rather than at first use
+
+The deploy script reads `baseToken()` off Comet and `asset()` off the vault and refuses unless
+both answer the **same** USDC the Aave venue uses. Arbitrum carries exactly the trap that check
+exists for: `cUSDCv3` is native USDC and `cUSDCev3` is the bridged `USDC.e`. A venue over the
+wrong one would deploy cleanly, answer every read, and make the enclave compare positions
+denominated in two different tokens as though they were one — with nothing reverting.
+
+It also asserts, after the broadcast, that each venue answers Aave's `UNDERLYING_ASSET_ADDRESS()`
+spelling and names **itself** as its own receipt. Both are load-bearing: `_requireReceiptFor` in
+either Aqua app refuses a venue that fails the first, and `_cover` cannot burn without the second.
+
 ## 8 September 2026 — the accounts and the Aqua app
 
 | Contract | Address | Answers | Source |
