@@ -40,7 +40,7 @@ const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
  * worst a compromised agent does is move the owner's money between the owner's own places.
  */
 export function AccountControls() {
-  const { address, isConnected, chainId } = useAccount();
+  const { isConnected, chainId } = useAccount();
   const client = usePublicClient({ chainId: CHAIN_ID });
   const { data, refetch } = useAccountState();
   const { writeContractAsync } = useWriteContract();

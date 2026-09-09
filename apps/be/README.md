@@ -43,7 +43,7 @@ a deployment is unaffected by a file it never has.
 | `GET /healthz` | | `{"status":"ok"}` |
 | `GET /api/session/nonce` · `POST` · `GET` · `DELETE /api/session` | | sign in with a wallet signature, ask who you are, sign out |
 | `GET`/`POST`/`DELETE /api/chats…` | session | conversations, scoped to the wallet that owns them |
-| `POST /api/swap/intent` | | `{reply, intent, needs}`; `503` with no model |
+| `POST /api/swap/intent` | | `{reply, action, intent, needs, steps}`; `503` with no model |
 | `POST /api/graph` | | a cached subgraph read — same body and JSON as Studio, `X-Cache: hit\|miss` |
 | `GET /api/posts` · `GET /api/posts/{slug}` | | the blog, keyset-paginated, `ETag` and `304` |
 | `PUT` · `DELETE /api/posts/{slug}` | bearer | write the blog |

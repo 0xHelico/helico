@@ -20,15 +20,32 @@ export type Intent = {
 };
 
 /**
+ * One check `apps/be` ran, named after the function that ran it.
+ *
+ * These are collected where the work happens rather than composed from the outcome, which is the
+ * only reason showing them is worth anything: a tree that says `Chain.Token ✓` is a lookup that
+ * returned, and a refusal ends on the check that refused rather than on a sentence about it.
+ */
+export type Step = { call: string; detail: string; ok: boolean };
+
+/**
  * What a turn produced, as stored on the message.
  *
  * A swap keeps the shape it always had, so conversations written before the chat could do
  * anything else still render. The other actions carry no parameters — there is nothing to check
  * and nothing to sign until the person presses the button — so the name is the whole record.
+ *
+ * Steps ride along on whichever of those it is, and on neither when the turn only asked a
+ * question. They go in this field rather than in a column of their own so that a reloaded
+ * conversation redraws the same tree, which is what `chat.Message` already promises about the
+ * rest of the turn.
  */
 export type TurnAction = { action: "status" | "revoke" };
 
-export type TurnResult = Intent | TurnAction;
+export type TurnResult =
+  | (Intent & { steps?: Step[] })
+  | (TurnAction & { steps?: Step[] })
+  | { steps: Step[] };
 
 /** A swap is the one with a chain on it. Nothing else the backend returns has one. */
 export function isIntent(value: unknown): value is Intent {

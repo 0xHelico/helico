@@ -16,6 +16,7 @@ import { Greeting } from "@/components/chat/greeting";
 import { ModelPicker } from "@/components/chat/model-picker";
 import { PageHeader } from "@/components/chat/page-header";
 import { HISTORY_KEY } from "@/components/chat/sidebar-history";
+import { Steps } from "@/components/chat/steps";
 import { SuggestedActions } from "@/components/chat/suggested-actions";
 import { ThinkingMessage } from "@/components/chat/thinking-message";
 import { Turn } from "@/components/chat/turn";
@@ -23,7 +24,12 @@ import { MandateCard } from "@/components/mandate-card";
 import { SwapCard } from "@/components/swap-card";
 import { useHelicoSession } from "@/hooks/use-helico-session";
 import { api, type SwapConfig } from "@/lib/api";
-import { isIntent, isTurnAction, type TurnResult } from "@/lib/intent";
+import {
+  isIntent,
+  isTurnAction,
+  type Step,
+  type TurnResult,
+} from "@/lib/intent";
 import { cn } from "@/lib/utils";
 
 type ChatTurn = {
@@ -153,12 +159,25 @@ export function Chat({ conversationId }: { conversationId?: string }) {
         const body = await res.json();
         const reply = body.reply ?? body.error ?? "Something went wrong.";
         // A swap stores its intent, as it always has. An action stores its name, in the same
-        // field, so a reloaded conversation shows the same card instead of a bare sentence.
-        const result: TurnResult | null =
+        // field, so a reloaded conversation shows the same card instead of a bare sentence. The
+        // checks the backend ran ride along on whichever of those it is, and alone when the turn
+        // produced neither — a question and a refusal are exactly the turns whose tree is worth
+        // keeping, so storing it only beside a card would drop it where it matters most.
+        const steps: Step[] | undefined = Array.isArray(body.steps)
+          ? body.steps
+          : undefined;
+        const produced =
           body.intent ??
           (body.action === "status" || body.action === "revoke"
             ? { action: body.action }
             : null);
+        const result: TurnResult | null =
+          produced || steps
+            ? ({
+                ...(produced ?? {}),
+                ...(steps ? { steps } : {}),
+              } as TurnResult)
+            : null;
         setTurns((t) => [
           ...t,
           {
@@ -212,6 +231,9 @@ export function Chat({ conversationId }: { conversationId?: string }) {
             <div className="mx-auto flex min-h-full min-w-0 max-w-4xl flex-col gap-5 px-2 py-6 md:gap-7 md:px-4">
               {turns.map((turn) => (
                 <Turn from={turn.from} key={turn.id}>
+                  {turn.intent?.steps ? (
+                    <Steps steps={turn.intent.steps} />
+                  ) : null}
                   <p className="whitespace-pre-wrap text-[13px] leading-[1.65]">
                     {turn.text}
                   </p>
