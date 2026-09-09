@@ -5,7 +5,6 @@
 	"exports": {
 		".": "./src/index.ts",
 		"./abi": "./src/abi.ts",
-		"./mandate": "./src/mandate.ts",
 		"./policy": "./src/policy.ts"
 	},
 	"scripts": {
