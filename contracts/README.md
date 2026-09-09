@@ -22,11 +22,28 @@ That maker holds **one** token. Their USDC sits in a lending market earning, and
 out of it mid-swap by the SwapVM instruction. `HelicoMandateSwap` refuses to quote them, and is
 right to: its price *is* the ratio of two balances, so a zero side has no price at all.
 
-|  | quotes a one-sided maker | brakes itself |
-|---|---|---|
-| `HelicoMandateSwap` — constant product | no | yes, for free |
-| a fixed price — `test/FixedPriceBoard.sol` | yes | no |
-| `HelicoOracleBoard` | yes | yes |
+|  | quotes a one-sided maker | brakes itself | settles out of a lending position |
+|---|---|---|---|
+| `HelicoMandateSwap` — constant product | no | yes, for free | yes |
+| a fixed price — `test/FixedPriceBoard.sol` | yes | no | no |
+| `HelicoOracleBoard` | yes | yes | yes |
+
+The last column was empty here for a day, and the gap mattered more than it looks: the maker this
+app exists for is exactly the one whose capital is **not** in their wallet. Without the unwind the
+board quotes a price nobody can be paid. `_cover` is now here too — the same one
+`HelicoMandateSwap` carries rather than a second version of it — so the wallet is spent first,
+only the shortfall is unwound, and the receipt is pulled through Aqua so the budget stays a number
+the maker shipped and `dock` destroys.
+
+Measured on a fork, the maker holding a 500 USDC float with everything else supplied to Aave v3:
+
+```
+loose before      500 USDC
+supplied before   29,500
+paid to taker     2,493        larger than the wallet held
+supplied after    27,507       the position paid the difference
+loose after       0
+```
 
 The price comes from Chainlink; the brake comes from Aqua's own ledger:
 
@@ -63,6 +80,13 @@ bid, half full     2451.218836    bent by half the skew
 What it does **not** do: it has no view on whether the feed is right. A feed manipulated inside
 its heartbeat is a loss here exactly as it is for anything else quoting from one, and the spread
 is the only cushion.
+
+### Two guards that came with the unwind
+
+- **A maker with debt is refused.** Unwinding collateral can liquidate them, and Aave's own health
+  checks do not run for us, so the refusal has to be ours.
+- **A receipt that aliases a traded token is refused** at check time, because the unwind would
+  spend the very reserve it is topping up — taking the ledger down twice for one fill.
 
 ### One thing a one-sided maker has to do that is easy to miss
 
