@@ -19,15 +19,13 @@
 > script exercises the choice with a list of one. Choosing between several, and the round-trip bar
 > a migration has to clear, are covered by the unit tests rather than by this script.
 >
-> `rehearse.sh` is the old one and still drives the vault path. Kept working rather than deleted,
-> because `Deploy.s.sol` still deploys the vault.
->
 > **If your `.env` predates 8 September it has the vault's `MANDATE_*` names and none of the
 > `IDLE_*` ones.** `rehearse-idle.sh` checks and names the whole missing list; the CRE CLI names
 > one variable at a time.
 >
-> The frontend still imports the retiring ABIs, which is why they are kept exported. That is
-> tracked in #175.
+> The vault-era rehearsal is gone. `rehearse.sh` called `Deploy.s.sol` and `Rehearse.s.sol`,
+> both deleted with `HelicoVault` in #247, so it had not been runnable since — and the README
+> was still telling people to run it.
 
 The runnable CRE project. The workflow itself is
 [`@helico/plugin-cre`](../../packages/plugins/cre/); this directory is what the CRE CLI needs
@@ -41,19 +39,20 @@ unit tests can cover the enclave's decision without the CLI in the loop.
 ```bash
 bun install
 cp apps/cre/.env.example apps/cre/.env
-cd apps/cre && ./rehearse.sh
+cd apps/cre && ./rehearse-idle.sh
 ```
 
-`rehearse.sh` needs `anvil`, `cast`, `forge`, `cre` and `jq`, and about two minutes. It forks
-Arbitrum One on `127.0.0.1:8546`, deploys the vault onto the fork pointed at the mock
-forwarder, funds an owner, mints a position whose range sits below the market so it holds one
-token, commits a mandate, writes the vault's address and the mandate hash into
-`workflow/config.staging.json`, and runs the workflow twice.
+`rehearse-idle.sh` needs `anvil`, `cast`, `forge`, `cre`, `jq` and `python3`, and about two
+minutes. It forks Arbitrum One on `127.0.0.1:8546`, deploys the account factory onto the fork,
+opens an owner an account, funds it with real USDC taken from a whale, permits Aave v3, packs the
+secrets, runs the workflow, and carries the statement it signs to the chain as the agent.
 
-It rewrites `workflow/config.staging.json` in place. `git checkout` restores it.
+It rewrites `workflow/config.staging.json` in place and restores it from a copy on exit — not
+with `git checkout`, which would also revert anything else you had changed in that file.
 
-To simulate without the fork setup — useful once a vault exists somewhere — fill in
-`workflow/config.staging.json` yourself and run `bun run --filter @helico/cre simulate`.
+There is a larger one a level up: `scripts/rehearse-end-to-end.sh` does the same thing but opens
+the account **through the app's own interface** rather than with `cast`, which is the path a
+person actually takes.
 
 ## What a run proves, and what it does not
 
@@ -71,15 +70,17 @@ It does **not** prove authorisation by a decentralised oracle network. The simul
 — it says so itself when it runs, and names the enclave it would use in production. It is also a
 fork, not a live network.
 
-**`rehearse.sh`** is the older script and still drives the Uniswap v4 vault path, which the
-workflow no longer touches. Kept working rather than deleted, because `Deploy.s.sol` still
-deploys the vault.
+**A larger rehearsal lives a level up.** `scripts/rehearse-end-to-end.sh` runs the same path but
+opens the account **through the app's own interface** rather than with `cast` — connect, open,
+nominate, permit — which is the route a person actually takes, and the one a claim about the
+product being usable rests on.
 
 ## ⚠️ A transaction hash is not evidence here
 
-This section is about **forwarder delivery**, which `rehearse.sh` uses and the idle-capital
-workflow does not — it signs instead. The rule generalises anyway, and `rehearse-idle.sh` applies
-it for a different reason: it checks the account's balances rather than the transaction, because a
+This section is about **forwarder delivery**, which the deployed workflow does not use — it signs
+instead, and `delivery: signature` is what `config.production.json` names. It is kept because the
+forwarder path still exists in the code and the rule below generalises. `rehearse-idle.sh` applies
+that rule for a different reason: it checks the account's balances rather than the transaction, because a
 call that succeeds and moves nothing is indistinguishable from one that worked.
 
 `KeystoneForwarder` calls the receiver inside a `try`. **If `onReport` reverts, the forwarder
@@ -105,10 +106,10 @@ That check is what found [#78](https://github.com/0xHelico/helico/issues/78).
 | `secrets.yaml` | Vault DON secret ids. The idle-capital policy, the agent key, and the model's two auth layers |
 | `workflow/workflow.yaml` | Workflow name and artefact paths per target |
 | `workflow/main.ts` | The entry point. Four lines around `@helico/plugin-cre` |
-| `workflow/config.staging.json` | Public config for the fork. Rewritten by `rehearse.sh` |
-| `workflow/config.production.json` | Public config for Arbitrum One. Vault and owner to be filled after a deployment |
+| `workflow/config.staging.json` | Public config for the fork. Rewritten in place by `rehearse-idle.sh`, and restored from a copy on exit |
+| `workflow/config.production.json` | Public config for Arbitrum One. `account` stays zero: the fleet is discovered from the subgraph |
 | `.env.example` | The private half of the mandate, and the keys. Copy to `.env`, which is gitignored |
-| `rehearse.sh` | The whole run, end to end |
+| `rehearse-idle.sh` | The whole run, end to end, on a fork |
 
 ## What is confidential, and what is not
 
@@ -141,9 +142,19 @@ The Confidential Workflow must run a meaningful part of the application, not a t
 The enclave makes the only decision the product has: whether and where to move the position.
 
 Evidence may be *"either a Confidential Workflow simulation using the CRE CLI or a live
-deployment on the CRE network"* — the simulation qualifies, which is what `rehearse.sh`
-produces. A deployment additionally needs Confidential Workflows beta access, which is a
-Chainlink gate, not a hackathon requirement.
+deployment on the CRE network"*. **We have both**, and this paragraph said only the first for a
+day after the second was true.
+
+The simulation is what `rehearse-idle.sh` produces. The deployment is `helico-production`,
+registered in Chainlink's `WorkflowRegistry 2.0.0` on Ethereum mainnet and executing on DON
+family `zone-a` every five minutes, reading a Vault DON secret before it does anything else —
+consecutive `SUCCESS` in `cre execution list` since 13:45 UTC on 8 September.
+
+What is still not ours to say is *"it runs in a TEE"*. The handler is registered with
+`handlerInTee` and the runs complete, and Chainlink's own description is that execution completes
+only after DON consensus verifies the enclave's attestations. We have not read an attestation
+document, so that is an inference from their mechanism rather than a measurement of ours — and
+`docs/demo-video-script.md` splits the two sentences for exactly that reason.
 
 ## Official references
 
