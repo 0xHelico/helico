@@ -2,11 +2,15 @@
 
 import { useMutation } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
-import { type Address, getAddress } from "viem";
+import { useEffect } from "react";
+import { type Address, encodeFunctionData, getAddress } from "viem";
 import {
   useAccount,
+  useCapabilities,
   usePublicClient,
   useReadContract,
+  useSendCalls,
+  useWaitForCallsStatus,
   useWriteContract,
 } from "wagmi";
 
@@ -79,6 +83,58 @@ export function AccountControls() {
     },
   });
 
+  // Both limits in one confirmation, on wallets that can do it.
+  //
+  // Not `executeBatch`. That runs each call as the *account*, and both setters are
+  // `msg.sender != owner()` reverts, so a batch cannot administer the account it runs on. Proved
+  // on a fork rather than reasoned about: `CallFailed(0xBCb6c913…)` naming the account's own
+  // address, while the same batch against an external target returns fine (#289).
+  //
+  // EIP-5792 batches at the wallet instead, so every call keeps the owner as `msg.sender` and
+  // both setters pass. A wallet without it falls through to the two controls below, which is
+  // exactly today's behaviour, so this can only remove confirmations and never add a failure.
+  const capabilities = useCapabilities({ query: { enabled: isConnected } });
+  const canBatch =
+    capabilities.data?.[CHAIN_ID]?.atomic?.status === "supported" ||
+    capabilities.data?.[CHAIN_ID]?.atomic?.status === "ready";
+
+  const send = useSendCalls();
+  const batch = useWaitForCallsStatus({ id: send.data?.id });
+
+  // The batch does not go through `writeContractAsync`, so nothing else refetches for it. Without
+  // this the two limits below stay reading "none" against an account that has both.
+  const batched = batch.data?.status;
+  useEffect(() => {
+    if (batched === "success") {
+      void refetch();
+      void venue.refetch();
+    }
+  }, [batched, refetch, venue.refetch]);
+
+  const setUp = () => {
+    if (!account) return;
+    send.sendCalls({
+      calls: [
+        {
+          to: account,
+          data: encodeFunctionData({
+            abi: accountWriteAbi,
+            functionName: "setAgent",
+            args: [HELICO_AGENT as Address],
+          }),
+        },
+        {
+          to: account,
+          data: encodeFunctionData({
+            abi: accountWriteAbi,
+            functionName: "permitVenue",
+            args: [AAVE_V3_POOL as Address, true],
+          }),
+        },
+      ],
+    });
+  };
+
   const nominated = data ? hasAgent(data) : false;
   const isOurs =
     data?.kind === "open" &&
@@ -102,9 +158,39 @@ export function AccountControls() {
     <Card className="mt-4">
       {opened ? null : (
         <p className="mt-3 text-[11.5px] text-faint">
-          Not open yet — open it above and these go live.
+          Not open yet. Open it above and these go live.
         </p>
       )}
+
+      {/* Only for the state a stranger is actually in: open, and configured for nothing. The
+          moment either limit is set, the two controls below are the better answer, because
+          changing one of them later should not touch the other. */}
+      {canWrite && canBatch && !(nominated || permitted) ? (
+        <div className="mb-4 rounded-2xl border border-line bg-shade p-4">
+          <p className="font-medium text-[13px] text-ink">
+            Set both limits at once
+          </p>
+          <p className="mt-1 text-[11.5px] text-soft">
+            Your wallet can send them together, so this is one confirmation
+            rather than two. Nothing here can move money.
+          </p>
+          <Button
+            className="mt-3"
+            disabled={send.isPending || batch.isLoading}
+            onClick={setUp}
+            size="sm"
+          >
+            {send.isPending || batch.isLoading
+              ? "Setting up…"
+              : "Nominate the agent and permit Aave"}
+          </Button>
+          {send.error ? (
+            <p className="mt-2 text-[11px] text-destructive">
+              {send.error.message.split("\n")[0]}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2">
         <Limit
