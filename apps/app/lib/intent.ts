@@ -28,6 +28,15 @@ export type Intent = {
  */
 export type Step = { call: string; detail: string; ok: boolean };
 
+/** One panel of an answer the backend chose to draw rather than write out. */
+export type Card = {
+  title: string;
+  body: string;
+  try?: string;
+  href?: string;
+  tags?: string[];
+};
+
 /**
  * What a turn produced, as stored on the message.
  *
@@ -38,14 +47,14 @@ export type Step = { call: string; detail: string; ok: boolean };
  * Steps ride along on whichever of those it is, and on neither when the turn only asked a
  * question. They go in this field rather than in a column of their own so that a reloaded
  * conversation redraws the same tree, which is what `chat.Message` already promises about the
- * rest of the turn.
+ * rest of the turn. Cards travel the same way and for the same reason: an answer drawn as four
+ * panels should still be four panels after a reload, not the paragraph it replaced.
  */
 export type TurnAction = { action: "status" | "revoke" | "withdraw" };
 
-export type TurnResult =
-  | (Intent & { steps?: Step[] })
-  | (TurnAction & { steps?: Step[] })
-  | { steps: Step[] };
+type Extras = { steps?: Step[]; cards?: Card[] };
+
+export type TurnResult = (Intent & Extras) | (TurnAction & Extras) | Extras;
 
 /** A swap is the one with a chain on it. Nothing else the backend returns has one. */
 export function isIntent(value: unknown): value is Intent {

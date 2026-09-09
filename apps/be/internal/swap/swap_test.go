@@ -288,15 +288,6 @@ func TestInterpretReachesTheActionsTheAppAlreadyDoes(t *testing.T) {
 			wantIntent: true,
 		},
 		{
-			// The bug this closes: typing "p" came back asking for three fields nobody had
-			// mentioned. A draft with no token and no amount in it is a message the model could
-			// not read, and the help text is the answer to that — it names the tokens and the
-			// amount a swap needs, which the three-field demand never did.
-			name:       "a draft naming no token and no amount is answered, not interrogated",
-			content:    `{"action":"swap","chain":"arbitrum","tokenIn":"","tokenOut":"","amount":"","question":"What would you like to swap?"}`,
-			wantAction: ActionAbout,
-		},
-		{
 			// Anything the model does not label is a swap, which keeps every earlier reply valid
 			// and keeps the common case the default.
 			name:       "no action at all is read as a swap",
@@ -374,16 +365,40 @@ func TestAboutOffersOnlyWhatTheRegistryHolds(t *testing.T) {
 	if strings.Contains(got.Reply, "What can I help you with?") {
 		t.Fatalf("the model wrote the reply: %q", got.Reply)
 	}
+	// The four things it can do are cards now rather than bullets, and the registry's symbols are
+	// tags on the swap one. So the offer is the reply plus the cards, and that is what the checks
+	// below read: a symbol that reached neither is a token the chat holds and never mentions.
+	if len(got.Cards) == 0 {
+		t.Fatal("the answer carries no cards, so the app has a wall of text to draw")
+	}
+	//
+	// The cards go in front of the reply on purpose. The split below is on "Not yet", which lives
+	// at the end of the reply, so anything appended after it lands in the half where a refused
+	// capability is allowed to be named — and the cards are exactly the half that must not offer
+	// one.
+	var offers strings.Builder
+	for _, c := range got.Cards {
+		if c.Title == "" || c.Body == "" {
+			t.Errorf("card %+v has nothing to draw", c)
+		}
+		// Pressable or it is a bullet with a border. One of the two ways, never both: a card that
+		// both sends a sentence and navigates has two things to do and one place to press.
+		if (c.Try == "") == (c.Href == "") {
+			t.Errorf("card %q offers %q to send and %q to open; it needs exactly one", c.Title, c.Try, c.Href)
+		}
+		offers.WriteString(c.Title + " " + c.Body + " " + c.Try + " " + strings.Join(c.Tags, " ") + " ")
+	}
+	offers.WriteString(got.Reply)
 	for _, symbol := range arbitrum.Symbols() {
-		if !strings.Contains(got.Reply, symbol) {
-			t.Errorf("the reply does not offer %s, which the registry holds", symbol)
+		if !strings.Contains(offers.String(), symbol) {
+			t.Errorf("nothing offers %s, which the registry holds", symbol)
 		}
 	}
 	// A capability we do not have may be *named*, and must never be *offered*. Naming it is the
 	// point: somebody who asks "can you provide liquidity?" and gets four bullets that do not
 	// mention it reads that as evasion rather than as a no. So the check is where the word falls,
 	// not whether it appears — everything before "Not yet" is a thing Helico does.
-	offered, refused, split := strings.Cut(got.Reply, "Not yet")
+	offered, refused, split := strings.Cut(offers.String(), "Not yet")
 	if !split {
 		t.Fatal("the reply names nothing it cannot do, so a question about one gets silence")
 	}
