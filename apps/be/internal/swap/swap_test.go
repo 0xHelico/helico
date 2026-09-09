@@ -288,6 +288,15 @@ func TestInterpretReachesTheActionsTheAppAlreadyDoes(t *testing.T) {
 			wantIntent: true,
 		},
 		{
+			// The bug this closes: typing "p" came back asking for three fields nobody had
+			// mentioned. A draft with no token and no amount in it is a message the model could
+			// not read, and the help text is the answer to that — it names the tokens and the
+			// amount a swap needs, which the three-field demand never did.
+			name:       "a draft naming no token and no amount is answered, not interrogated",
+			content:    `{"action":"swap","chain":"arbitrum","tokenIn":"","tokenOut":"","amount":"","question":"What would you like to swap?"}`,
+			wantAction: ActionAbout,
+		},
+		{
 			// Anything the model does not label is a swap, which keeps every earlier reply valid
 			// and keeps the common case the default.
 			name:       "no action at all is read as a swap",
@@ -299,8 +308,16 @@ func TestInterpretReachesTheActionsTheAppAlreadyDoes(t *testing.T) {
 			// A model that invents an action must not reach a screen. Falling through to the swap
 			// path means it is checked by build and refused there, rather than switched on.
 			name:       "an invented action does not reach a screen of its own",
-			content:    `{"action":"drain","chain":"arbitrum","tokenIn":"","tokenOut":"","amount":"","question":""}`,
+			content:    `{"action":"drain","chain":"arbitrum","tokenIn":"ETH","tokenOut":"USDC","amount":"1","question":""}`,
 			wantAction: ActionSwap,
+			wantIntent: true,
+		},
+		{
+			// The same invention with nothing in it reaches the help text rather than a demand for
+			// three fields. Either way the word the model made up buys it nothing.
+			name:       "an invented action with an empty draft reaches the help text",
+			content:    `{"action":"drain","chain":"arbitrum","tokenIn":"","tokenOut":"","amount":"","question":""}`,
+			wantAction: ActionAbout,
 		},
 	}
 

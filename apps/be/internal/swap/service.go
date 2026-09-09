@@ -99,6 +99,17 @@ func (s *Service) Interpret(ctx context.Context, message string, prior ...Turn) 
 	default:
 		action = ActionSwap
 	}
+	// A sentence that named no token and no amount did not ask for a swap. The model answers with
+	// one of five actions, so anything it could not read lands on the default above — typing "p"
+	// was reaching the swap path and coming back demanding three fields the person had never
+	// mentioned, which is the chat inventing a request on their behalf.
+	//
+	// The help text answers both readings of an empty draft. Someone who typed nonsense is told
+	// what this can do, and someone who typed "I want to swap" is told a swap needs two tokens and
+	// an amount, and which tokens there are — more than the three-field demand gave them.
+	if action == ActionSwap && strings.TrimSpace(d.TokenIn) == "" && strings.TrimSpace(d.TokenOut) == "" && strings.TrimSpace(d.Amount) == "" {
+		action = ActionAbout
+	}
 	read := Step{Call: "Client.ask", Detail: "read as " + action, OK: true}
 
 	// None of these four needs a parameter, so none goes near build: there is nothing from the

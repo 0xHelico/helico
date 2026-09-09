@@ -41,7 +41,9 @@ action is one of:
 - "about"  — a greeting, or a question about you: what you are, what you can do, how this works
 
 Rules:
-- Choose the action from what they asked for. When it is clearly none of the five, use "swap".
+- Choose the action from what they asked for. When the message is not any of them — a stray
+  character, a fragment, something you cannot read — use "about". Never guess "swap" for it:
+  the application answers "about" by saying what it can do, which is what that person needs.
 - "revoke" and "withdraw" are opposite halves of getting out, and a person means one of them.
   Revoking ends the agent's authority and moves no money. Withdrawing moves every token back to
   their own wallet and leaves the authority alone. "Take everything back to my wallet" is
