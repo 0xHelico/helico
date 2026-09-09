@@ -23,15 +23,8 @@ const packages = [
 		name: 'HelicoMandateSwap',
 		stat: String(solidityTests),
 		unit: 'tests',
-		copy: `An Aqua app of our own, live on Arbitrum One. The mandate is the strategy, and every refusal has a name. ${forkTests} of these run against the real Aqua on a fork of the real chain.`,
+		copy: `An Aqua app of our own, live on Arbitrum One. The mandate is the strategy, and every refusal has a name. ${forkTests} of these run against the real Aqua on a fork of the real chain, and @helico/plugin-1inch builds the positions it files.`,
 		href: `${repo}/tree/main/contracts`,
-	},
-	{
-		name: '@helico/plugin-1inch',
-		stat: '22',
-		unit: 'tests',
-		copy: 'Builds the concentrated position Aqua files under a hash. Aqua moves no tokens when one opens.',
-		href: `${repo}/tree/main/packages/plugins/1inch`,
 	},
 	{
 		name: '@helico/plugin-thegraph',
