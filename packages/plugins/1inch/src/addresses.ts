@@ -34,6 +34,30 @@ export function swapVmAddress(chainId: number): `0x${string}` {
 	return a.toString().toLowerCase() as `0x${string}`
 }
 
+/**
+ * `HelicoMandateSwap`, which is an Aqua app of ours rather than one of 1inch's.
+ *
+ * Shipping to it is how a mandate reaches an app that can read one. Aqua validates nothing about
+ * the app it is handed, so a mandate shipped to the SwapVM router instead is bytes nobody can
+ * interpret and a position nobody can fill.
+ *
+ * Written down rather than read from an SDK because there is no SDK to read it from: it is our
+ * own deployment, recorded in `docs/deployments.md` and verified on Arbitrum One.
+ *
+ * ⚠️ **This address predates `ReceiptKind` and cannot read a mandate encoded by `mandate.ts`.**
+ * It was deployed on 8 September; `Venue` gained a field on 9 September and `SwapMandate` became
+ * a different tuple. `scripts/check-mandate.ts` reads the deployed bytecode back and asserts the
+ * mismatch rather than trusting this comment. Redeploy before shipping to it for real.
+ */
+export function mandateSwapAddress(chainId: number): `0x${string}` {
+	const known: Record<number, `0x${string}`> = {
+		[ARBITRUM_ONE]: '0xA16D313816247628DeB7d89DC7a3Cf4aDb5287Ed',
+	}
+	const a = known[chainId]
+	if (!a) throw new Error(`No HelicoMandateSwap deployment for chain ${chainId}`)
+	return a
+}
+
 /** Chains this package has been exercised on. Arbitrum One is the one with tests behind it. */
 export const ARBITRUM_ONE = 42161
 export const BASE = 8453

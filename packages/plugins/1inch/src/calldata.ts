@@ -30,6 +30,10 @@ export function shipCall(
 	strategy: `0x${string}`,
 	tokens: `0x${string}`[],
 	amounts: bigint[],
+	// Which app the position is filed under. Defaults to 1inch's SwapVM router, which is what a
+	// `concentrate` strategy prices on; pass `HelicoMandateSwap` to ship a mandate instead. It is
+	// last and optional because the two callers that predate mandates mean the default.
+	app: `0x${string}` = swapVmAddress(chainId),
 ): Call {
 	if (tokens.length !== amounts.length)
 		throw new Error('tokens and amounts must be the same length')
@@ -38,7 +42,7 @@ export function shipCall(
 		data: encodeFunctionData({
 			abi: AQUA_ABI,
 			functionName: 'ship',
-			args: [swapVmAddress(chainId), strategy, tokens, amounts],
+			args: [app, strategy, tokens, amounts],
 		}),
 	}
 }

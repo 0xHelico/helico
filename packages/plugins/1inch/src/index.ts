@@ -13,5 +13,6 @@
  */
 export * from './addresses'
 export * from './calldata'
+export * from './mandate'
 export * from './price'
 export * from './strategy'
