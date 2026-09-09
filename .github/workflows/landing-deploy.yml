@@ -72,7 +72,34 @@ jobs:
           trap 'rm -f deploy_key known_hosts' EXIT
           printf '%s\n' "$VPS_DEPLOY_KEY" > deploy_key
           printf '%s\n' "$VPS_KNOWN_HOSTS" > known_hosts
-          # The server's forced command waits for a new container to answer before it
-          # returns, so a deploy that never came up fails this step rather than passing.
+          # `ServerAliveInterval` because this connection has dropped mid-deploy: on 9 September
+          # it died after four and a half minutes with `client_loop: send disconnect: Broken
+          # pipe`, and the workflow called a deploy that had succeeded a failure.
+          #
+          # The exit code is deliberately not the verdict any more. It answers "did the
+          # connection survive long enough to hear back", which is a different question from
+          # "is the new build serving" — and the two come apart in both directions. `|| true`
+          # hands the decision to the step below, which asks the site.
+          ETAG_BEFORE=$(curl -sI https://helico.site/ | tr -d '\r' | awk 'tolower($1)=="etag:"{print $2}')
+          echo "etag before: ${ETAG_BEFORE:-none}"
           ssh -i deploy_key -o UserKnownHostsFile=known_hosts -o StrictHostKeyChecking=yes \
-            -o BatchMode=yes "$VPS_USER@$VPS_HOST" landing
+            -o BatchMode=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=40 \
+            "$VPS_USER@$VPS_HOST" landing || echo "ssh returned $? — the site decides, not this"
+          echo "ETAG_BEFORE=$ETAG_BEFORE" >> "$GITHUB_ENV"
+
+      # This is the check. An old build keeps its old ETag, so it cannot pass if the deploy did
+      # not happen — which is the property the SSH exit code was standing in for and never had.
+      - name: The site is serving a new build
+        env:
+          ETAG_BEFORE: ${{ env.ETAG_BEFORE }}
+        run: |
+          for i in $(seq 1 60); do
+            now=$(curl -sI https://helico.site/ | tr -d '\r' | awk 'tolower($1)=="etag:"{print $2}')
+            if [ -n "$now" ] && [ "$now" != "$ETAG_BEFORE" ]; then
+              echo "serving a new build after ${i}0s: $ETAG_BEFORE -> $now"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "helico.site still serves $ETAG_BEFORE after ten minutes"
+          exit 1
