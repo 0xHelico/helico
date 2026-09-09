@@ -293,9 +293,14 @@ End on the repo URL. No outro music.
   answer back. Say *"the enclave decides, and a model explains it"*
 - **"It finds the best yield across protocols"** — half true, so say the half that is. It *does*
   compare live rates across the markets the owner permitted and move to the best when the gap
-  clears a round-trip bar. Those markets are Aave-family only; Compound and Morpho need an
-  adapter and are blocked on a receipt-conversion assumption. Say *"across the markets you
-  permitted"*, not *"across protocols"*. `0xHelico/helico#179`
+  clears a round-trip bar. Those markets are Aave-family only, and the reason is the interface:
+  `ILendingVenue` carries Aave v3's own signatures — `supply(asset, amount, onBehalfOf,
+  referralCode)`, `getVirtualUnderlyingBalance`, `getReserveAToken` — which neither Compound v3
+  nor Morpho answers. **One half of that blocker is gone as of #296** and the other is not, so do
+  not say either the old sentence or a new one: a share-priced receipt now converts correctly, but
+  no adapter exists, nothing calls Compound, and `git grep` finds no Compound address anywhere in
+  this repository. Say *"across the markets you permitted"*, not *"across protocols"*.
+  `0xHelico/helico#179`
 - **"The Graph tells the agent what to work on"** — no. What is true, and sayable: *the workflow
   asks The Graph how much the maker's mandates could demand, and sizes the liquid buffer to it.*
   It still reads the account's own balances over RPC. The distinction is small and a judge who
