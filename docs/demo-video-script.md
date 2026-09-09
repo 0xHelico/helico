@@ -293,13 +293,23 @@ End on the repo URL. No outro music.
   answer back. Say *"the enclave decides, and a model explains it"*
 - **"It finds the best yield across protocols"** — half true, so say the half that is. It *does*
   compare live rates across the markets the owner permitted and move to the best when the gap
-  clears a round-trip bar. Those markets are Aave-family only, and the reason is the interface:
-  `ILendingVenue` carries Aave v3's own signatures — `supply(asset, amount, onBehalfOf,
-  referralCode)`, `getVirtualUnderlyingBalance`, `getReserveAToken` — which neither Compound v3
-  nor Morpho answers. **One half of that blocker is gone as of #296** and the other is not, so do
-  not say either the old sentence or a new one: a share-priced receipt now converts correctly, but
-  no adapter exists, nothing calls Compound, and `git grep` finds no Compound address anywhere in
-  this repository. Say *"across the markets you permitted"*, not *"across protocols"*.
+  clears a round-trip bar.
+
+  **The reason the wider claim is unsayable changed on 9 September and the sentence did not, so
+  read this rather than remembering it.** It used to be that Compound and Morpho could not be
+  reached at all: `ILendingVenue` carries Aave v3's own signatures and neither protocol answers
+  them.
+
+  That is no longer why. `CompoundVenue` and `MorphoVenue` are in the repository, and a fork test
+  drives one account across Aave, Compound and Morpho with the three rates landing in one unit —
+  274, 287 and 404 basis points. What is true instead, and the only part that matters on camera:
+  **neither venue is deployed, and no configuration names one.** On Arbitrum One today the account
+  reaches Aave and nothing else.
+
+  So the line stays and its reason does not. Say *"across the markets you permitted"*, never
+  *"across protocols"* — the second is a claim about a deployment that does not exist, which is
+  disqualification reason 2 rather than a wording preference. If the venues are deployed before
+  the take, this row is rewritten again rather than dropped.
   `0xHelico/helico#179`
 - **"The Graph tells the agent what to work on"** — no. What is true, and sayable: *the workflow
   asks The Graph how much the maker's mandates could demand, and sizes the liquid buffer to it.*
