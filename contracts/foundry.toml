@@ -11,7 +11,12 @@ via_ir = false
 # when custom-error arguments are evaluated — which `HelicoMandateSwap` has a documented case
 # depending on. So the default profile does not see those files at all; `[profile.swapvm]` below
 # is what builds and tests them.
-skip = ["src/swapvm/**", "script/DeploySwapVMRouter.s.sol", "test/ForkSwapVMYieldCover.t.sol"]
+skip = [
+    "src/swapvm/**",
+    "script/DeploySwapVMRouter.s.sol",
+    "test/ForkSwapVMYieldCover.t.sol",
+    "test/ForkSwapVMConcentrateCover.t.sol",
+]
 # Emit the storage layout into every artifact, so `forge inspect` can always answer and
 # `scripts/check-storage-layout.py` never reports a stale cache as a mystery.
 extra_output = ["storageLayout"]
