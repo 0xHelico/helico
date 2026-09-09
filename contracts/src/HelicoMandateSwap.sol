@@ -9,6 +9,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 
 import {IHelicoMandateSwapCallback} from "./IHelicoMandateSwapCallback.sol";
 import {ILendingVenue, IReceiptToken} from "./ILendingVenue.sol";
+import {ReceiptKind, ReceiptMath} from "./ReceiptMath.sol";
 
 /// @notice The rules a maker commits to when handing an agent the right to trade their wallet.
 ///
@@ -32,6 +33,11 @@ struct Venue {
     address pool;
     address receipt0;
     address receipt1;
+    /// @dev Whether one receipt unit is one underlying unit. `Rebasing` for an Aave aToken, which
+    ///      is every venue this has pointed at so far; `SharePriced` for an ERC-4626 share or a
+    ///      cToken, where it is not, and the gap is two orders of magnitude rather than a
+    ///      rounding error. Per venue rather than per receipt: both sides come from one protocol.
+    ReceiptKind kind;
 }
 
 struct SwapMandate {
@@ -273,7 +279,7 @@ contract HelicoMandateSwap is AquaApp {
         if (held >= amountOut) return;
         uint256 deficit = amountOut - held;
 
-        (uint256 index, address receipt) = _venueFor(mandate, hash, tokenOut, deficit);
+        (uint256 index, address receipt, uint256 shares) = _venueFor(mandate, hash, tokenOut, deficit);
         _requireNoDebt(mandate.venues[index].pool, mandate.maker);
 
         // What this contract held before the pull. Everything below is measured against it,
@@ -287,7 +293,9 @@ contract HelicoMandateSwap is AquaApp {
         // frame refuses a balance that is legitimately there.
         uint256 beforePull = IERC20(receipt).balanceOf(address(this));
 
-        AQUA.pull(mandate.maker, hash, receipt, deficit, address(this));
+        // `shares` of the receipt, `deficit` of the underlying. The same number for an aToken
+        // and not for anything share-priced, which is the whole point of the conversion.
+        AQUA.pull(mandate.maker, hash, receipt, shares, address(this));
 
         // A named amount, never `type(uint256).max`. A sweep burns whatever this contract holds
         // rather than what this swap pulled, which lets a small mandate redeem a large position
@@ -323,7 +331,7 @@ contract HelicoMandateSwap is AquaApp {
         if (mandate.venues.length == 0) return;
         uint256 held = IERC20(tokenOut).balanceOf(mandate.maker);
         if (held >= amountOut) return;
-        (uint256 index,) = _venueFor(mandate, hash, tokenOut, amountOut - held);
+        (uint256 index,,) = _venueFor(mandate, hash, tokenOut, amountOut - held);
         _requireNoDebt(mandate.venues[index].pool, mandate.maker);
     }
 
@@ -347,10 +355,13 @@ contract HelicoMandateSwap is AquaApp {
     ///      First rather than best, deliberately: the maker chose the order when they shipped,
     ///      and a contract that re-ranks them would be making a decision nobody authorised. An
     ///      off-chain agent that wants a different preference ships a different order.
+    /// @dev Returns the receipt **and** what this deficit costs in it, because the two are the
+    ///      same number only for a rebasing receipt. Every comparison below that was written
+    ///      against `deficit` was comparing a receipt balance to an underlying amount.
     function _venueFor(SwapMandate calldata mandate, bytes32 hash, address tokenOut, uint256 deficit)
         private
         view
-        returns (uint256 index, address receipt)
+        returns (uint256 index, address receipt, uint256 shares)
     {
         bool zeroSide = tokenOut == mandate.token0;
         for (uint256 i = 0; i < mandate.venues.length; i++) {
@@ -364,11 +375,14 @@ contract HelicoMandateSwap is AquaApp {
             // search, and strands a funded venue further down the list — while the failure
             // arrives as an arithmetic panic from inside Aqua rather than as a refusal anyone
             // can read. Skipping is what makes the list a list.
+            // Liquidity stays in underlying: it asks whether the market can pay out this much of
+            // the token, which has nothing to do with what the receipt is worth.
             if (ILendingVenue(v.pool).getVirtualUnderlyingBalance(tokenOut) < deficit) continue;
+            uint256 cost = ReceiptMath.sharesFor(v.kind, r, deficit);
             (uint248 budget,) = AQUA.rawBalances(mandate.maker, address(this), hash, r);
-            if (budget < deficit) continue;
-            if (IERC20(r).balanceOf(mandate.maker) < deficit) continue;
-            return (i, r);
+            if (budget < cost) continue;
+            if (IERC20(r).balanceOf(mandate.maker) < cost) continue;
+            return (i, r, cost);
         }
         revert NoVenueCanCover(tokenOut, deficit);
     }

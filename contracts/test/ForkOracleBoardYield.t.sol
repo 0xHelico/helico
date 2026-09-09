@@ -8,6 +8,7 @@ import {IAqua} from "@1inch/aqua/interfaces/IAqua.sol";
 
 import {HelicoOracleBoard, IHelicoOracleBoardCallback, IPriceFeed} from "../src/HelicoOracleBoard.sol";
 import {Venue} from "../src/HelicoMandateSwap.sol";
+import {ReceiptKind} from "../src/ReceiptMath.sol";
 import {ILendingVenue} from "../src/ILendingVenue.sol";
 
 /// @notice `borrow` is deliberately absent from `ILendingVenue` — the app never borrows, and an
@@ -94,7 +95,9 @@ contract ForkOracleBoardYieldTest is Test, IHelicoOracleBoardCallback {
         v = new Venue[](1);
         // receipt0 is the receipt for `quote` (aUSDC); receipt1 for `base`, and there is none —
         // this maker never intends to lend the ETH they buy.
-        v[0] = Venue({pool: address(POOL), receipt0: address(AUSDC), receipt1: address(0)});
+        v[0] = Venue({
+            pool: address(POOL), receipt0: address(AUSDC), receipt1: address(0), kind: ReceiptKind.Rebasing
+        });
     }
 
     function _board() internal view returns (HelicoOracleBoard.Board memory) {
