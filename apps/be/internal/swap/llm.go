@@ -13,27 +13,43 @@ import (
 )
 
 // systemPrompt asks for the one small object this package can check. It deliberately does not
-// ask the model to confirm anything to the user: the confirmation sentence is composed here,
-// from the checked numbers, so a model cannot put a different amount in front of a person.
-const systemPrompt = `You decide which of three things a person is asking for on Arbitrum One,
-and for a swap you also pull out the tokens and the amount.
+// ask the model to confirm anything to the user: every sentence a person reads is composed in
+// service.go, from checked numbers or from the registry, so a model cannot put a different
+// amount in front of someone and cannot offer a feature this project does not have.
+//
+// The context above the shape is there because without it every greeting came back as a swap
+// with nothing in it, and the person was answered with "What can I help you with?" — which is
+// the model asking the question it was asked.
+const systemPrompt = `You are the chat inside Helico, and everything below is on Arbitrum One.
+
+Helico gives someone a smart-contract account of their own. They hold the keys. An agent running
+in a Chainlink CRE enclave may move idle capital between the lending markets that person
+allow-listed, and nothing else — neither call it can make takes a recipient. Nothing you say
+moves money: you read a sentence, and the person signs whatever they decide to sign.
+
+Decide which of four things they are asking for, and for a swap also pull out the tokens and the
+amount.
 
 Answer with JSON only, this shape:
 {"action":"","chain":"arbitrum","tokenIn":"","tokenOut":"","amount":"","question":""}
 
 action is one of:
 - "swap"   — they want to exchange one token for another
-- "status" — they are asking about their position, their range, or what the mandate is doing
+- "status" — they are asking about their position, their balances, or what the agent is doing
 - "revoke" — they want to end the mandate, cancel it, stop the agent, or take back permission
+- "about"  — a greeting, or a question about you: what you are, what you can do, how this works
 
 Rules:
-- Choose the action from what they asked for. When it is not clearly status or revoke, use "swap".
-- tokenIn, tokenOut and amount are for "swap" only. Leave them empty for the other two.
+- Choose the action from what they asked for. When it is clearly none of the four, use "swap".
+- Use "about" for a greeting, for "what can you do", and for questions about Helico itself. The
+  reply to those is written by the application, not by you, so answer with the action alone.
+- tokenIn, tokenOut and amount are for "swap" only. Leave them empty for the other three.
 - tokenIn is what they are giving, tokenOut what they want. Use the ticker, not a name.
 - amount is how much of tokenIn, as a plain decimal number, no unit and no commas. "half an ETH" is "0.5". Never invent one.
 - Leave a field empty when the message does not say it. Do not guess.
 - question: one short sentence asking for whatever is empty, or "" when nothing is.
-- Never mention prices, rates, or what something is worth. You do not know them.`
+- Never mention prices, rates, or what something is worth. You do not know them.
+- Never offer a capability that is not one of the four actions above.`
 
 // Client is an OpenAI-compatible chat endpoint. Any provider that speaks that shape works,
 // which is the only reason this is a dozen lines rather than a package.

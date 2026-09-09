@@ -56,7 +56,7 @@ func TestBaseUnits(t *testing.T) {
 }
 
 func TestBuildAcceptsWhatTheRegistryKnows(t *testing.T) {
-	got, err := build(draft{Chain: "arbitrum", TokenIn: "eth", TokenOut: "usd coin", Amount: "0.5"})
+	got, _, err := build(draft{Chain: "arbitrum", TokenIn: "eth", TokenOut: "usd coin", Amount: "0.5"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestBuildRefusesWhatItCannotCheck(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			_, err := build(c.d)
+			_, _, err := build(c.d)
 			if err == nil {
 				t.Fatal("want an error")
 			}
@@ -98,7 +98,7 @@ func TestBuildRefusesWhatItCannotCheck(t *testing.T) {
 
 func TestBuildNamesOnlyTheFieldThatFailed(t *testing.T) {
 	// A bad amount should not tell a form that the tokens are wrong too.
-	_, err := build(draft{TokenIn: "ETH", TokenOut: "USDC", Amount: "0,5"})
+	_, _, err := build(draft{TokenIn: "ETH", TokenOut: "USDC", Amount: "0,5"})
 	if err == nil {
 		t.Fatal("a comma should be refused")
 	}
@@ -141,7 +141,7 @@ func TestAskReportsAStatusRatherThanAShape(t *testing.T) {
 }
 
 func TestBuildNamesWhatIsMissing(t *testing.T) {
-	_, err := build(draft{TokenIn: "ETH"})
+	_, _, err := build(draft{TokenIn: "ETH"})
 	var needs *ErrNeeds
 	if !errors.As(err, &needs) {
 		t.Fatalf("err = %v, want ErrNeeds", err)
@@ -251,7 +251,7 @@ func TestInterpretBoundsTheMessage(t *testing.T) {
 	}
 }
 
-// The conversation reaches three things now, and which one it reached is decided here rather
+// The conversation reaches four things now, and which one it reached is decided here rather
 // than in the browser. These are the answers the app switches its screen on.
 func TestInterpretReachesTheActionsTheAppAlreadyDoes(t *testing.T) {
 	cases := []struct {
@@ -264,6 +264,11 @@ func TestInterpretReachesTheActionsTheAppAlreadyDoes(t *testing.T) {
 			name:       "revoking the mandate needs no parameters and gets no intent",
 			content:    `{"action":"revoke","chain":"","tokenIn":"","tokenOut":"","amount":"","question":""}`,
 			wantAction: ActionRevoke,
+		},
+		{
+			name:       "a greeting is answered by the application, not by the model",
+			content:    `{"action":"about","chain":"","tokenIn":"","tokenOut":"","amount":"","question":"What can I help you with?"}`,
+			wantAction: ActionAbout,
 		},
 		{
 			name:       "asking about the position is the same shape",
@@ -315,7 +320,7 @@ func TestInterpretReachesTheActionsTheAppAlreadyDoes(t *testing.T) {
 // The two parameterless actions must not be able to carry a token or an amount out of the model.
 // Nothing downstream reads them for these actions today, and this is what keeps that true.
 func TestAParameterlessActionCarriesNoIntent(t *testing.T) {
-	for _, action := range []string{ActionRevoke, ActionStatus} {
+	for _, action := range []string{ActionRevoke, ActionStatus, ActionAbout} {
 		t.Run(action, func(t *testing.T) {
 			content := `{"action":"` + action + `","chain":"arbitrum","tokenIn":"ETH","tokenOut":"USDC","amount":"999999","question":""}`
 			got, err := New(fakeModel(t, 200, content)).Interpret(context.Background(), "stop it")
@@ -329,5 +334,113 @@ func TestAParameterlessActionCarriesNoIntent(t *testing.T) {
 				t.Fatalf("%s asked for %v, and needs nothing", action, got.Needs)
 			}
 		})
+	}
+}
+
+// The reply to "what can you do" is composed here rather than by the model, so it can only ever
+// offer what this package implements. The check is that it names the registry rather than a list
+// written beside it — a second list is the one that goes stale.
+func TestAboutOffersOnlyWhatTheRegistryHolds(t *testing.T) {
+	got, err := New(fakeModel(t, 200, `{"action":"about","question":"What can I help you with?"}`)).
+		Interpret(context.Background(), "apa yang bisa kamu lakukan")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The model's own question must not be what the person reads: it is the sentence that made
+	// this necessary in the first place.
+	if strings.Contains(got.Reply, "What can I help you with?") {
+		t.Fatalf("the model wrote the reply: %q", got.Reply)
+	}
+	for _, symbol := range arbitrum.Symbols() {
+		if !strings.Contains(got.Reply, symbol) {
+			t.Errorf("the reply does not offer %s, which the registry holds", symbol)
+		}
+	}
+	for _, word := range []string{"bridge", "borrow", "lend", "yield"} {
+		if strings.Contains(strings.ToLower(got.Reply), word) {
+			t.Errorf("the reply offers %q, and no action behind it does that", word)
+		}
+	}
+}
+
+// The tree is the checks that ran, so a refusal has to end on the check that refused. A list
+// assembled from the outcome could name a step that never executed, which is the failure this
+// test exists to catch.
+func TestStepsAreTheChecksThatActuallyRan(t *testing.T) {
+	cases := []struct {
+		name      string
+		content   string
+		wantCalls []string
+		wantLast  bool
+	}{
+		{
+			name:      "a swap that works records every check",
+			content:   `{"action":"swap","chain":"arbitrum","tokenIn":"ETH","tokenOut":"USDC","amount":"0.5"}`,
+			wantCalls: []string{"Client.ask", "LookupChain", "Chain.Token", "Chain.Token", "baseUnits"},
+			wantLast:  true,
+		},
+		{
+			name:      "an unknown token stops at the lookup that refused it",
+			content:   `{"action":"swap","chain":"arbitrum","tokenIn":"ETH","tokenOut":"MOONCOIN","amount":"1"}`,
+			wantCalls: []string{"Client.ask", "LookupChain", "Chain.Token", "Chain.Token"},
+		},
+		{
+			name:      "a bad amount reaches baseUnits and no further",
+			content:   `{"action":"swap","chain":"arbitrum","tokenIn":"ETH","tokenOut":"USDC","amount":"0,5"}`,
+			wantCalls: []string{"Client.ask", "LookupChain", "Chain.Token", "Chain.Token", "baseUnits"},
+		},
+		{
+			name:      "an action with no parameters runs one check, because one is all there is",
+			content:   `{"action":"revoke"}`,
+			wantCalls: []string{"Client.ask"},
+			wantLast:  true,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, err := New(fakeModel(t, 200, c.content)).Interpret(context.Background(), "do the thing")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(got.Steps) != len(c.wantCalls) {
+				t.Fatalf("steps = %+v, want %d of them", got.Steps, len(c.wantCalls))
+			}
+			for i, want := range c.wantCalls {
+				if got.Steps[i].Call != want {
+					t.Errorf("step %d is %q, want %q", i, got.Steps[i].Call, want)
+				}
+			}
+			last := got.Steps[len(got.Steps)-1]
+			if last.OK != c.wantLast {
+				t.Errorf("the last step %q is ok=%v, want %v", last.Call, last.OK, c.wantLast)
+			}
+			for i, s := range got.Steps {
+				if strings.TrimSpace(s.Detail) == "" {
+					t.Errorf("step %d (%s) says nothing", i, s.Call)
+				}
+			}
+		})
+	}
+}
+
+// The address in a step comes from the registry, and it is the one thing in an intent a model
+// could not have chosen. Showing a shortened one is only worth doing if it is that address.
+func TestStepsCarryTheRegistrysAddress(t *testing.T) {
+	got, err := New(fakeModel(t, 200, `{"action":"swap","chain":"arbitrum","tokenIn":"ETH","tokenOut":"USDC","amount":"0.5"}`)).
+		Interpret(context.Background(), "swap it")
+	if err != nil {
+		t.Fatal(err)
+	}
+	usdc, _ := arbitrum.Token("USDC")
+	head, tail := usdc.Address[:6], usdc.Address[len(usdc.Address)-4:]
+	var found bool
+	for _, s := range got.Steps {
+		if s.Call == "Chain.Token" && strings.Contains(s.Detail, head) && strings.Contains(s.Detail, tail) {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("no step carries %s…%s; steps were %+v", head, tail, got.Steps)
 	}
 }
