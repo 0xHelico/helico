@@ -1,8 +1,7 @@
 "use client";
 
-import { useMutation } from "@tanstack/react-query";
-import { type Address, formatUnits } from "viem";
-import { useAccount, usePublicClient, useWriteContract } from "wagmi";
+import { formatUnits } from "viem";
+import { useAccount } from "wagmi";
 
 import { Glyph } from "@/components/glyph";
 import {
@@ -14,14 +13,8 @@ import {
   StatTile,
 } from "@/components/kit";
 import { TokenMark } from "@/components/token-mark";
-import { Button } from "@/components/ui/button";
-import { CHAIN_ID, useAccountState } from "@/hooks/use-account-state";
-import {
-  configuredFactory,
-  factoryAbi,
-  hasAgent,
-  workingBps,
-} from "@/lib/account";
+import { useAccountState } from "@/hooks/use-account-state";
+import { configuredFactory, hasAgent, workingBps } from "@/lib/account";
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 const usdc = (v: bigint) =>
@@ -45,34 +38,22 @@ function _Row({ label, value }: { label: string; value: string }) {
  * one thing here worth leading with, and the reason the panel shows an address next to the words
  * "not opened yet" rather than showing nothing.
  *
+ * It reports and does not act. Opening used to be a button here, and it is now the first limit
+ * the owner sets on the front page: `open` has no access control and returns the existing address
+ * rather than reverting, so the write that needs an account can just make one, and a separate
+ * transaction to deploy an empty contract is a step nobody gained anything by taking.
+ *
  * Three states are rendered separately on purpose. A build with no factory address and an owner
  * who has never transacted both amount to "nothing here", and telling them apart is the
  * difference between a missing environment variable and a new user.
  */
 export function AccountPanel() {
-  const { address, isConnected, chainId } = useAccount();
-  const client = usePublicClient({ chainId: CHAIN_ID });
+  const { isConnected } = useAccount();
   const factory = configuredFactory();
-  const { writeContractAsync } = useWriteContract();
 
   // One read for the page. The hero and the summary ask for the same key, so react-query
   // answers all three from a single set of calls rather than three of everything.
-  const { data, error, refetch } = useAccountState();
-
-  const openAccount = useMutation({
-    mutationFn: async () => {
-      if (!(factory && client && address)) throw new Error("nothing to open");
-      const hash = await writeContractAsync({
-        abi: factoryAbi,
-        address: factory,
-        args: [address as Address],
-        chainId: CHAIN_ID,
-        functionName: "open",
-      });
-      await client.waitForTransactionReceipt({ hash });
-      await refetch();
-    },
-  });
+  const { data, error } = useAccountState();
 
   const note = (text: string) => (
     <Card className="mt-4">
@@ -146,30 +127,8 @@ export function AccountPanel() {
           ? hasAgent(data)
             ? "Both calls the agent can make end here. It has no way to send anything anywhere else."
             : "Nobody is nominated, so nothing here moves without you."
-          : "This address is what CREATE2 says it will be. Tokens sent now are yours when it exists."}
+          : "This address is what CREATE2 says it will be. Tokens sent now are yours when it exists, and setting a limit on the front page builds it."}
       </p>
-
-      {opened ? null : (
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <Button
-            disabled={openAccount.isPending || chainId !== CHAIN_ID}
-            onClick={() => openAccount.mutate()}
-            size="sm"
-          >
-            {openAccount.isPending ? "Opening…" : "Open this account"}
-          </Button>
-          <span className="text-[11px] text-faint">
-            {chainId === CHAIN_ID
-              ? "One transaction. It grants nothing and takes nothing."
-              : "Switch to Arbitrum One to open it."}
-          </span>
-        </div>
-      )}
-      {openAccount.error ? (
-        <p className="mt-2 text-[11px] text-neg">
-          {openAccount.error.message.split("\n")[0]}
-        </p>
-      ) : null}
     </Card>
   );
 }

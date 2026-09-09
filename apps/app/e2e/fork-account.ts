@@ -188,14 +188,21 @@ await page
   .getByRole("heading", { name: /limits it works inside/ })
   .waitFor({ timeout: 30_000 });
 
-// 1. Open it, from the portfolio page, which is where the account panel lives.
-await page.goto(`${APP}/portfolio`, { waitUntil: "domcontentloaded" });
-const open = page.getByRole("button", { name: /open this account/i });
-await open.waitFor({ timeout: 30_000 });
-await open.click();
-await page.waitForTimeout(9000);
+// 1. Nominate the agent, from the limits panel on the front page. Nothing has opened the
+//    account: this is the whole point of the step, because the first limit an owner sets is what
+//    deploys it. On every build before this one the button below was disabled until a separate
+//    press on the portfolio page had deployed the account, so this step could not have run at all.
 check(
-  "pressing Open this account opens it on chain",
+  "the account does not exist before the owner sets anything",
+  (await read<boolean>("isOpen", FACTORY, factoryAbi, [owner.address])) ===
+    false,
+);
+const nominate = page.getByRole("button", { name: /nominate/i });
+await nominate.waitFor({ timeout: 30_000 });
+await nominate.click();
+await page.waitForTimeout(18_000);
+check(
+  "nominating an agent opens the account on the way through",
   (await read<boolean>("isOpen", FACTORY, factoryAbi, [owner.address])) ===
     true,
 );
@@ -204,20 +211,13 @@ check(
   (await read<string>("owner", account, accountAbi)).toLowerCase() ===
     owner.address.toLowerCase(),
 );
-
-// 2. Nominate the agent, from the limits panel on the front page.
-await page.goto(`${APP}/`, { waitUntil: "domcontentloaded" });
-const nominate = page.getByRole("button", { name: /nominate/i });
-await nominate.waitFor({ timeout: 30_000 });
-await nominate.click();
-await page.waitForTimeout(9000);
 check(
   "nominating puts Helico's agent on the account",
   (await read<string>("agent", account, accountAbi)).toLowerCase() ===
     AGENT.toLowerCase(),
 );
 
-// 3. Permit the market, from the page.
+// 2. Permit the market, from the same page.
 const venue = page.getByRole("switch", { name: /permit aave/i });
 await venue.waitFor({ timeout: 30_000 });
 await venue.click();
@@ -227,12 +227,15 @@ check(
   (await read<boolean>("permittedVenue", account, accountAbi, [AAVE])) === true,
 );
 
-// 4. And the page says what the chain says.
+// 3. And the page says what the chain says.
 const text = (await page.locator("body").innerText()).trim();
 check("the page now shows the agent", /0x84C3|0x84c3/i.test(text));
-check("and stops saying the account is not open", !/not open yet/i.test(text));
+check(
+  "and stops saying the account is not deployed",
+  !/not deployed yet/i.test(text),
+);
 
-// 5. The escape hatch, which is the one path an upgrade cannot take away and until #266 had no
+// 4. The escape hatch, which is the one path an upgrade cannot take away and until #266 had no
 //    button anywhere. The account is funded by a real transfer from a holder rather than by
 //    writing a balance into state: a sweep out of an account that could never have been paid in
 //    proves nothing about an account that can.

@@ -23,6 +23,8 @@ import {
   AAVE_V3_POOL,
   accountReadAbi,
   accountWriteAbi,
+  configuredFactory,
+  factoryAbi,
   HELICO_AGENT,
   hasAgent,
 } from "@/lib/account";
@@ -44,10 +46,11 @@ const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
  * worst a compromised agent does is move the owner's money between the owner's own places.
  */
 export function AccountControls() {
-  const { isConnected, chainId } = useAccount();
+  const { address, isConnected, chainId } = useAccount();
   const client = usePublicClient({ chainId: CHAIN_ID });
   const { data, refetch } = useAccountState();
   const { writeContractAsync } = useWriteContract();
+  const factory = configuredFactory();
 
   const account =
     data && data.kind !== "unconfigured"
@@ -64,6 +67,29 @@ export function AccountControls() {
     query: { enabled: Boolean(account && opened) },
   });
 
+  /**
+   * The account is opened by the first thing its owner does with it, not by a button they have to
+   * find first.
+   *
+   * `open` has no access control on chain and returns the existing address rather than reverting
+   * when there is one, so this is safe to put in front of every write: it costs one transaction
+   * the first time and is skipped every time after. Both setters below revert for a caller that
+   * is not the owner, and the account's owner is fixed at construction from the address passed
+   * here — so opening on someone's behalf hands them an account and grants nobody anything.
+   */
+  const openFirst = async () => {
+    if (opened || !(factory && client && address)) return;
+    const hash = await writeContractAsync({
+      abi: factoryAbi,
+      address: factory,
+      args: [address as Address],
+      chainId: CHAIN_ID,
+      functionName: "open",
+    });
+    await client.waitForTransactionReceipt({ hash });
+    await refetch();
+  };
+
   // One mutation for both writes. They differ by a function name and its arguments, and two
   // near-identical hooks would be two places to forget the receipt wait.
   const write = useMutation({
@@ -72,6 +98,7 @@ export function AccountControls() {
       args: readonly [Address] | readonly [Address, boolean];
     }) => {
       if (!(account && client)) throw new Error("no account");
+      await openFirst();
       const hash = await writeContractAsync({
         abi: accountWriteAbi,
         address: account,
@@ -115,6 +142,20 @@ export function AccountControls() {
     if (!account) return;
     send.sendCalls({
       calls: [
+        // Opening comes first and only when it is needed, so a wallet that can batch turns a new
+        // account and both its limits into a single confirmation.
+        ...(opened || !(factory && address)
+          ? []
+          : [
+              {
+                to: factory,
+                data: encodeFunctionData({
+                  abi: factoryAbi,
+                  functionName: "open",
+                  args: [address as Address],
+                }),
+              },
+            ]),
         {
           to: account,
           data: encodeFunctionData({
@@ -142,7 +183,10 @@ export function AccountControls() {
     getAddress(data.agent) === getAddress(HELICO_AGENT);
   const permitted = venue.data === true;
   const onChain = chainId === CHAIN_ID;
-  const canWrite = Boolean(account && opened && isConnected && onChain);
+  // Not gated on `opened` any more. The account does not have to exist before someone may say
+  // what it permits: the write opens it on the way through, and until they set one of these there
+  // is nothing to deploy an account for.
+  const canWrite = Boolean(account && factory && isConnected && onChain);
 
   if (!isConnected) {
     return (
@@ -157,8 +201,9 @@ export function AccountControls() {
   return (
     <Card className="mt-4">
       {opened ? null : (
-        <p className="mt-3 text-[11.5px] text-faint">
-          Not open yet. Open it above and these go live.
+        <p className="mb-4 text-[11.5px] text-faint">
+          Your account is not deployed yet. Setting either of these deploys it
+          first, in the same step.
         </p>
       )}
 
@@ -168,11 +213,11 @@ export function AccountControls() {
       {canWrite && canBatch && !(nominated || permitted) ? (
         <div className="mb-4 rounded-2xl border border-line bg-shade p-4">
           <p className="font-medium text-[13px] text-ink">
-            Set both limits at once
+            {opened ? "Set both limits at once" : "Open it and set both limits"}
           </p>
           <p className="mt-1 text-[11.5px] text-soft">
-            Your wallet can send them together, so this is one confirmation
-            rather than two. Nothing here can move money.
+            Your wallet can send these together, so this is one confirmation for
+            all of it. Nothing here can move money.
           </p>
           <Button
             className="mt-3"
@@ -182,7 +227,9 @@ export function AccountControls() {
           >
             {send.isPending || batch.isLoading
               ? "Setting up…"
-              : "Nominate the agent and permit Aave"}
+              : opened
+                ? "Nominate the agent and permit Aave"
+                : "Open, nominate the agent, permit Aave"}
           </Button>
           {send.error ? (
             <p className="mt-2 text-[11px] text-destructive">
