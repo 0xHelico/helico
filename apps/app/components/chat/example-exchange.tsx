@@ -84,7 +84,7 @@ export function ExampleExchange() {
 
             <p className="text-muted-foreground text-xs leading-relaxed">
               The addresses come from a registry committed to the repository,
-              not from the model — it can ask a question or be refused, but it
+              not from the model. It can ask a question or be refused, but it
               cannot invent a token. What is missing from this recording is the
               price: that is quoted against what your wallet actually holds, at
               the moment you ask, which is why the app wants a wallet before it
@@ -96,7 +96,7 @@ export function ExampleExchange() {
               disabled
               type="button"
             >
-              Signing happens in your wallet — nothing to press here
+              Signing happens in your wallet. Nothing to press here
             </button>
           </div>
         </DialogContent>

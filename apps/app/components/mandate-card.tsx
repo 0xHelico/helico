@@ -191,7 +191,7 @@ export function MandateCard({
           {held && held.total > 0n ? (
             <>
               <p className="text-muted-foreground text-xs">
-                Everything goes to {short(address)} — the address this account
+                Everything goes to {short(address)}, the address this account
                 was built for. The call takes no recipient, so there is nowhere
                 else it can send.
               </p>

@@ -103,7 +103,7 @@ func (s *Service) Interpret(ctx context.Context, message string) (Answer, error)
 	case ActionRevoke:
 		return Answer{
 			Action: ActionRevoke,
-			Reply:  "This ends the mandate. The agent can do nothing afterwards, and you sign it yourself — nobody has to agree.",
+			Reply:  "This ends the mandate. The agent can do nothing afterwards, and you sign it yourself. Nobody has to agree.",
 			Steps:  []Step{read},
 		}, nil
 	}
@@ -142,13 +142,13 @@ func about() string {
 	chain := chains[0]
 	return "I read what you type and turn it into something you sign yourself. I hold no keys and " +
 		"move nothing.\n\n" +
-		"• Swap — name two tokens and an amount, and I build the intent. On " + chain.Name +
+		"• Swap: name two tokens and an amount, and I build the intent. On " + chain.Name +
 		", in " + strings.Join(chain.Symbols(), ", ") + ".\n" +
-		"• Status — what your account holds, how much of it is working, how much is liquid.\n" +
-		"• Revoke — end the mandate. The agent can do nothing afterwards.\n" +
-		"• Withdraw — send everything back to your own wallet, and nowhere else.\n\n" +
+		"• Status: what your account holds, how much of it is working, how much is liquid.\n" +
+		"• Revoke: end the mandate. The agent can do nothing afterwards.\n" +
+		"• Withdraw: send everything back to your own wallet, and nowhere else.\n\n" +
 		"Your account is yours: the agent may only move capital between markets you allow-listed, " +
-		"and neither call it can make takes a recipient. The way out is not upgradeable — it sits " +
+		"and neither call it can make takes a recipient. The way out is not upgradeable, because it sits " +
 		"in the proxy, so no change to the code can close it. Anything I have no address or number " +
 		"for, I ask about rather than guess."
 }

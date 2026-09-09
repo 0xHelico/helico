@@ -161,7 +161,7 @@ export function AppSidebar({ address }: { address: `0x${string}` }) {
         </SidebarContent>
         <SidebarFooter className="border-t border-sidebar-border pt-2 pb-3">
           {/* One state, not three. Connecting and signing happen in ConnectGate, which stands in
-              front of this whole tree — by the time the sidebar exists, both are done. */}
+              front of this whole tree, so by the time the sidebar exists both are done. */}
           <SidebarUserNav address={address} />
         </SidebarFooter>
         <SidebarRail />
