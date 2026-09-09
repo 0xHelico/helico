@@ -33,6 +33,19 @@ import {IComet} from "./IComet.sol";
 ///      between. Aave gets that because its Pool owns the aToken. This gets it by **being** the
 ///      token — `_burn(msg.sender, ...)` needs nobody's permission.
 ///
+///      **Why not simply pull `cUSDCv3` itself**, which is the first thing to try and the question
+///      this design should answer out loud. Compound v3 has no separate receipt contract — the
+///      Comet market *is* the position — but that position is a transferable ERC-20 all the same
+///      (`totalSupply`, `balanceOf`, `allowance` and `transfer` all answer on Arbitrum One), so
+///      Aqua could move it. Two things stop it, and neither is the absence of a token:
+///
+///        1. Comet reverts on `UNDERLYING_ASSET_ADDRESS()`. `_requireReceiptFor` calls that on the
+///           receipt, so the venue is refused before any arithmetic runs.
+///        2. Burn authority. With `cUSDCv3` as the receipt, the app would hold the Comet position
+///           and this adapter would have to spend it — but `withdrawTo` acts on **its own** balance,
+///           so it would need `comet.allow(adapter, true)` from the app, and the deployed app has
+///           no call that could grant it.
+///
 ///      **Share-priced, deliberately.** Shares are fixed and the backing grows, so a share redeems
 ///      more of the asset over time and `ReceiptKind.SharePriced` converts through `previewWithdraw`.
 ///      A rebasing receipt was the alternative and is worse here: it needs an index of its own, and
