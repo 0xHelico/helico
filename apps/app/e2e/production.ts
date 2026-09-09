@@ -173,6 +173,39 @@ const open = async (url: string): Promise<{ page: Page; text: string }> => {
     graph.headers.get("x-cache") ?? "(none)",
   );
 
+  // The chat, which nothing here watched until #314 — and the one thing a judge types first.
+  //
+  // One model call. The message names no token and no amount, which is the shape that reached the
+  // swap path until #305 and came back demanding three fields nobody had mentioned. Both halves of
+  // the fix are asserted: what it was read as, and that the answer carries the cards the app draws
+  // instead of the paragraph they replaced.
+  const asked = await fetch(`${API}/api/swap/intent`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message: "p" }),
+  });
+  const answer2 = (await asked.json()) as {
+    action?: string;
+    cards?: { title?: string; try?: string; href?: string }[];
+  };
+  check(
+    "a message naming nothing is answered, not interrogated",
+    asked.ok && answer2.action === "about",
+    `${asked.status} · ${answer2.action ?? "(none)"}`,
+  );
+  const cards = answer2.cards ?? [];
+  check(
+    "and the answer comes back as cards",
+    cards.length > 0,
+    cards.map((c) => c.title).join(", ") || "(none)",
+  );
+  // Pressable or it is a bordered bullet. The app renders a card with neither as plain text, so
+  // one that arrives with neither is a card nobody can use.
+  check(
+    "every card offers a sentence to send or a screen to open",
+    cards.length > 0 && cards.every((c) => Boolean(c.try) !== Boolean(c.href)),
+  );
+
   // The allow-list is what stops it being an open proxy onto our own quota.
   const refused = await fetch(`${API}/api/graph`, {
     method: "POST",
