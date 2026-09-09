@@ -185,6 +185,24 @@ than shipped: it proves a one-sided maker *can* provide liquidity on Aqua, and t
 fixed price is not enough — the price does not move no matter how much is taken, so a moving
 market converts the whole position at yesterday's number.
 
+Until 9 September none of that could be reached from outside Solidity: nothing could encode a
+`SwapMandate`, so the mandate half of this track lived entirely in Foundry.
+[`packages/plugins/1inch/src/mandate.ts`](packages/plugins/1inch/src/mandate.ts) encodes one, and
+[`scripts/check-mandate.ts`](scripts/check-mandate.ts) runs the whole path from TypeScript against
+a fork of Arbitrum One — the encoder held against the contract's own `mandateHash` first, because
+Aqua files a position under the hash of the raw bytes and an encoding wrong by one field ships
+successfully and files under a hash nobody looks up.
+
+```
+0.1 WETH → 271.98 USDC   paid from the wallet, Aave untouched
+2.0 WETH → 1,758.13 USDC wanted, 728.02 idle → the position unwound to 969.88
+```
+
+That is the sentence the product is built on, measured rather than asserted: the capital that
+earns is the capital the mandate spends. What is still missing is a taker on Arbitrum One —
+`agent` names a contract and an EOA can never be one — so no mandate has been shipped to the live
+app yet.
+
 **Powered by SwapVM — © Degensoft Ltd 2025.** [`contracts/src/swapvm/`](contracts/src/swapvm/) is
 a redeployment of Degensoft's `AquaSwapVMRouter` with one instruction added. Their VM, transfer
 phase, Aqua accounting and every published instruction are unchanged; the addition is opcode 34,

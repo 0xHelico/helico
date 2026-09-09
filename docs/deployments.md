@@ -12,6 +12,18 @@ asked about itself.
 | `HelicoAccountFactory` | [`0x01CC7d9FE8da79B61bcc5d3f7e3f0433DCE7E081`](https://arbiscan.io/address/0x01CC7d9FE8da79B61bcc5d3f7e3f0433DCE7E081#code) | `IMPLEMENTATION()` → `0x0842BB3f…` | verified |
 | `HelicoMandateSwap` | [`0xA16D313816247628DeB7d89DC7a3Cf4aDb5287Ed`](https://arbiscan.io/address/0xA16D313816247628DeB7d89DC7a3Cf4aDb5287Ed#code) | `AQUA()` → `0x1111113CCf…` | verified |
 
+> ⚠️ **`HelicoMandateSwap` is one feature behind the source in this repository, and cannot
+> take a mandate written today.** `ReceiptKind` landed on 9 September in `423edd9` and widened
+> `Venue` by a field, so `SwapMandate` is a different tuple now: the deployed app answers
+> `mandateHash` at selector `0xbeb513da` and today's struct hashes to `0x5344635d`. The bytecode
+> at that address contains the first and not the second, which is asserted rather than assumed —
+> `scripts/check-mandate.ts` reads the code back and fails if it ever stops being true.
+>
+> Nothing is wrong with what is deployed; it is simply older than the tests. But a mandate
+> shipped to it today would not revert, it would miss the function, so **this needs redeploying
+> before anything ships to it for real**. `check-mandate.ts` deploys the current source onto a
+> fork and runs the whole path against it, so the redeploy is the only step that is missing.
+
 ```
 HelicoAccount         tx 0xc9517828f595dc6e563b3702da51f70f9823497c3790b8fb8130a59ca5039163
                       block 502,979,387   gas 1,963,574
