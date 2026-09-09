@@ -49,7 +49,14 @@ describe("telling a stored turn's two shapes apart", () => {
   // `isTurnAction`, because a test that computes its expectation from the code under test agrees
   // with that code however wrong it is.
   test("an action the backend never sends is refused", () => {
-    for (const action of ["drain", "transfer", "swap", "sweep", "approve", ""]) {
+    for (const action of [
+      "drain",
+      "transfer",
+      "swap",
+      "sweep",
+      "approve",
+      "",
+    ]) {
       expect(isTurnAction({ action })).toBe(false);
     }
   });
