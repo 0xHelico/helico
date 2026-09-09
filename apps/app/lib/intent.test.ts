@@ -19,7 +19,7 @@ describe("telling a stored turn's two shapes apart", () => {
   });
 
   test("an action is an action and not an intent", () => {
-    for (const action of ["status", "revoke"]) {
+    for (const action of ["status", "revoke", "withdraw"]) {
       expect(isTurnAction({ action })).toBe(true);
       expect(isIntent({ action })).toBe(false);
     }
@@ -40,10 +40,15 @@ describe("telling a stored turn's two shapes apart", () => {
     }
   });
 
-  // The backend decides the action and only ever sends the three it checked. A name that arrived
+  // The backend decides the action and only ever sends the ones it checked. A name that arrived
   // from anywhere else must not reach a card — this is the second place that is enforced.
+  //
+  // `withdraw` moved out of this list when it became real, and moving it was the point: the list
+  // is an allow-list, so a name is refused until something behind it exists. `swap` stays here
+  // because a swap is stored as an intent and never as an action, so an action saying "swap"
+  // came from somewhere that is not this backend.
   test("an action the backend never sends is refused", () => {
-    for (const action of ["drain", "withdraw", "transfer", "swap"]) {
+    for (const action of ["drain", "transfer", "swap", "escape", "upgrade"]) {
       expect(isTurnAction({ action })).toBe(false);
     }
   });
