@@ -53,7 +53,7 @@ export function StatTile({
       {icon ? <span className="mt-0.5 shrink-0">{icon}</span> : null}
       <div className="min-w-0">
         <div className="text-[11.5px] text-soft">{name}</div>
-        <div className="tabular mt-1 truncate font-medium text-[19px] text-ink tracking-tight">
+        <div className="tabular mt-1 truncate font-medium text-[15px] text-ink tracking-tight">
           {value}
         </div>
         {note ? (
@@ -171,7 +171,7 @@ export function AssetTile({
       {mark ? <span className="shrink-0">{mark}</span> : null}
       <div className="min-w-0">
         <div className="text-[11.5px] text-soft">{symbol}</div>
-        <div className="tabular mt-0.5 truncate font-medium text-[17px] text-ink tracking-tight">
+        <div className="tabular mt-0.5 truncate font-medium text-[15px] text-ink tracking-tight">
           {value}
         </div>
         {note ? (

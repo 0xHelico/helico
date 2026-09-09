@@ -107,6 +107,15 @@ const KNOWN: Record<string, { symbol: string; decimals: number }> = {
   },
 };
 
+/**
+ * The ERC-20s this app can name, for reading a wallet rather than the account.
+ *
+ * The same table `token()` answers from, exposed as a list because a balance read needs to
+ * iterate it. `aUSDC` is in it deliberately: after an escape the receipt sits in the wallet, and
+ * a list that could not name it would show the owner an address instead of their own money.
+ */
+export const WALLET_TOKENS = KNOWN;
+
 export function token(address: string): {
   symbol: string;
   decimals: number | null;
