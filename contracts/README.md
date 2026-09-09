@@ -1,7 +1,11 @@
 # Contracts
 
-Four contracts ship, and one idea sits behind all of them: a user commits to rules, and an agent
-may act only inside them.
+Four things ship, and one idea sits behind all of them: a user commits to rules, and an agent may
+act only inside them.
+
+They occupy **five addresses** on Arbitrum One, because the account is an implementation plus a
+factory and the proxies are deployed one per owner. Both counts are correct and they are not the
+same count — [`docs/deployments.md`](../docs/deployments.md) lists the addresses.
 
 - **`HelicoAccount`**, with `HelicoAccountProxy` and `HelicoAccountFactory` — one account per
   owner, holding that owner's capital. The agent may only move it between lending markets the
@@ -10,7 +14,6 @@ may act only inside them.
   wallet, through [1inch Aqua](https://github.com/1inch/aqua).
 - **`HelicoAquaSwapVMRouter`**, in [`src/swapvm/`](src/swapvm/) — a 1inch SwapVM instruction that
   settles a swap out of capital still earning in a lending market.
-
 - **`HelicoOracleBoard`** — a second Aqua app, priced from Chainlink and braked by its own
   inventory, for the maker who holds one token. Deployed 9 September at
   [`0xeb480C09…C760`](https://arbiscan.io/address/0xeb480C0994A34a81a49C3250C45a9e96eac0C760#code).

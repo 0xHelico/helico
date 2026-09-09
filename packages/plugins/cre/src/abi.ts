@@ -109,55 +109,17 @@ export type IdleMoveParams = {
 	deadline: bigint
 }
 
-// ─── The Uniswap v4 path, on its way out ─────────────────────
-// CRE stopped re-centring LP ranges on 8 September and moved to the yield layer
-// (`docs/plans/2026-09-08-cre-manages-idle-capital.md`). Nothing above this line reads anything
-// below it, and no part of the enclave's decision touches these any more.
+// ─── One leftover from the Uniswap v4 path ───────────────────
+// CRE stopped re-centring LP ranges on 8 September and moved to the yield layer. `HelicoVault`
+// itself was deleted in #247, and with it `vaultAbi`, the `Mandate` tuple and everything in
+// `mandate.ts` that mirrored `setMandate`'s reverts — an ABI for a contract that does not exist
+// is worse than a missing one, because it typechecks.
 //
-// They are still exported because `apps/app` still imports them — `lib/vault.ts` takes
-// `vaultAbi` and `mandate-panel.tsx` and `e2e/fork-fixture.ts` take `positionManagerAbi` — and
-// the frontend migration is #175, which lands after this. Delete this section with that issue,
-// not before: removing it early breaks the app's typecheck and buys nothing.
-
-/** The `Mandate` struct as the vault declares it, field for field and width for width. */
-const MANDATE_TUPLE =
-	'(bytes32 poolId, uint16 rangeWidthTicks, uint16 minImprovementBps, uint32 cooldownSeconds, uint128 maxLiquidity, uint64 expiry, uint16 minRetainedBps)'
-
-/**
- * What a person's wallet calls on `HelicoVault`, and what the app reads back.
- *
- * The errors matter as much as the functions: without them a rejected `setMandate` reaches the
- * user as an unreadable revert, when the contract went to the trouble of saying exactly which
- * rule was broken.
- */
-export const vaultAbi = parseAbi([
-	'function positionOf(address owner) view returns (uint256)',
-	'function lastActionAt(address owner) view returns (uint64)',
-	'function isActive(address owner) view returns (bool)',
-	'function nonces(address owner) view returns (uint256)',
-	`function mandateOf(address owner) view returns (${MANDATE_TUPLE})`,
-	`function setMandate(uint256 tokenId, ${MANDATE_TUPLE} m)`,
-	'function revoke()',
-	// The three the vault was initialised with. An app given an address can read these and check
-	// they are the chain's real v4 deployment, which is the difference between 'someone typed an
-	// address' and 'this is a Helico vault on Arbitrum One'.
-	'function positionManager() view returns (address)',
-	'function stateView() view returns (address)',
-	'function poolManager() view returns (address)',
-	'event MandateSet(address indexed owner, uint256 indexed tokenId, bytes32 mandateHash)',
-	'event Revoked(address indexed owner, uint256 indexed tokenId)',
-	'error NotPositionOwner()',
-	'error MandateInactive()',
-	'error MandateExpired()',
-	'error MandateAlreadyActive(uint256 tokenId)',
-	'error PoolNotPermitted()',
-	'error RangeWidthZero()',
-	'error RangeWidthNotSpaced()',
-	'error MaxLiquidityZero()',
-	'error ImprovementOutOfRange()',
-	'error RetentionOutOfRange()',
-	'error CooldownZero()',
-])
+// `positionManagerAbi` stays, and only because one thing still reads it:
+// `apps/app/e2e/fork-fixture.ts` builds a v4 position for the app's fork fixtures. When that
+// fixture goes, this goes with it. That sentence is checkable — `rg positionManagerAbi` — which
+// is the difference between this note and the one it replaces, which named three consumers and
+// two of them had already gone.
 
 export const positionManagerAbi = parseAbi([
 	'function getPositionLiquidity(uint256 tokenId) view returns (uint128)',
