@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { Instrument_Serif, Inter } from "next/font/google";
 import { headers } from "next/headers";
 import type { ReactNode } from "react";
 import { Toaster } from "sonner";
@@ -10,6 +10,16 @@ import { HelicoSessionProvider } from "@/hooks/use-helico-session";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
+
+// The face figures are set in, so a balance reads as a quantity rather than as body text. The
+// reference for this pairing is ABC Arizona, which is commercial and cannot ship from a public
+// repository; Instrument Serif is the closest thing we can, and the landing already loads it, so
+// the two sites read as one product. Swapping in licensed files is this one line.
+const numeric = Instrument_Serif({
+  subsets: ["latin"],
+  weight: "400",
+  variable: "--font-numeric",
+});
 
 const TITLE = "Helico | Your Funds, on Autopilot";
 const DESCRIPTION =
@@ -66,7 +76,7 @@ export default async function RootLayout({
   const collapsed = cookies?.includes("sidebar_state=false") ?? false;
 
   return (
-    <html className={inter.variable} lang="en">
+    <html className={`${inter.variable} ${numeric.variable}`} lang="en">
       <body className="antialiased">
         {/* Light only. Nothing sets `.dark`, so the `dark:` utilities in the chat compile
             and never match — see the note in globals.css. */}

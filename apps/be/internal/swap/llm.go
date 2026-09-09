@@ -57,6 +57,31 @@ Rules:
 - Never mention prices, rates, or what something is worth. You do not know them.
 - Never offer a capability that is not one of the five actions above.`
 
+// Turn is one earlier exchange, as the app already has it on screen.
+type Turn struct {
+	Role string `json:"role"`
+	Body string `json:"body"`
+}
+
+// history builds the request's messages: the prompt, what was already said, then the new
+// sentence.
+//
+// It exists so that "make it two instead" has something to be about. Nothing about the checking
+// changes: the model still answers with one small object and `build` still refuses anything the
+// registry does not hold, so a prior turn can help it fill a field and cannot help it invent one.
+func history(prior []Turn, message string) []chatMessage {
+	out := make([]chatMessage, 0, len(prior)+2)
+	out = append(out, chatMessage{Role: "system", Content: systemPrompt})
+	for _, t := range prior {
+		role := "user"
+		if t.Role == "assistant" {
+			role = "assistant"
+		}
+		out = append(out, chatMessage{Role: role, Content: t.Body})
+	}
+	return append(out, chatMessage{Role: "user", Content: message})
+}
+
 // Client is an OpenAI-compatible chat endpoint. Any provider that speaks that shape works,
 // which is the only reason this is a dozen lines rather than a package.
 type Client struct {
@@ -117,7 +142,7 @@ type chatResponse struct {
 
 // ask sends the message and returns the draft the model produced. Anything the model says that
 // is not the expected JSON is an error here rather than a guess further down.
-func (c *Client) ask(ctx context.Context, message string) (draft, error) {
+func (c *Client) ask(ctx context.Context, message string, prior []Turn) (draft, error) {
 	if !c.Configured() {
 		return draft{}, ErrNotConfigured
 	}
@@ -125,10 +150,7 @@ func (c *Client) ask(ctx context.Context, message string) (draft, error) {
 	body := chatRequest{
 		Model:       c.Model,
 		Temperature: 0,
-		Messages: []chatMessage{
-			{Role: "system", Content: systemPrompt},
-			{Role: "user", Content: message},
-		},
+		Messages:    history(prior, message),
 	}
 	body.ResponseFormat.Type = "json_object"
 

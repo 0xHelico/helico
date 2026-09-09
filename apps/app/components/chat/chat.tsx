@@ -61,6 +61,9 @@ export function Chat({ conversationId }: { conversationId?: string }) {
   // question, because the answer has not been written yet — lands after the answer arrives and
   // wipes it off the screen.
   const hydrated = useRef<string | undefined>(undefined);
+  // The scroller, so a new turn can be brought into view. Without this the page stayed where it
+  // was and a reply arrived below the fold, which reads as nothing having happened.
+  const scroller = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -154,7 +157,12 @@ export function Chat({ conversationId }: { conversationId?: string }) {
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: text }),
+          // Every turn already on screen, oldest first. Without it "make it two instead" is a
+          // sentence about nothing, because each request used to arrive on its own.
+          body: JSON.stringify({
+            message: text,
+            history: turns.map((t) => ({ role: t.from, body: t.text })),
+          }),
         });
         const body = await res.json();
         const reply = body.reply ?? body.error ?? "Something went wrong.";
@@ -204,8 +212,61 @@ export function Chat({ conversationId }: { conversationId?: string }) {
         setBusy(false);
       }
     },
-    [busy, mutate, session.ready],
+    // `turns` is here because the request carries them. It is the value from before this
+    // message was pushed, which is exactly what history means.
+    [busy, mutate, session.ready, turns],
   );
+
+  // Follow the bottom, and keep following while the answer grows.
+  //
+  // Scrolling once when a turn appears is not enough: a card that reads the chain finishes after
+  // the scroll and pushes the reply back under the fold, which is the state this was reported in.
+  // So a ResizeObserver watches the content and follows every time it gets taller.
+  //
+  // What decides whether to follow is the reader's **intent**, not their position. Position was
+  // the first attempt and it does not work: a smooth scroll is still animating when the card
+  // resizes, so the measurement lands mid-flight and reads as somebody who scrolled away. A wheel
+  // or a drag is unambiguous, and a programmatic scroll produces neither.
+  const stick = useRef(true);
+  const settled = useRef(false);
+
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const release = () => {
+      stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 8;
+    };
+    el.addEventListener("wheel", release, { passive: true });
+    el.addEventListener("touchmove", release, { passive: true });
+    return () => {
+      el.removeEventListener("wheel", release);
+      el.removeEventListener("touchmove", release);
+    };
+  }, []);
+
+  useEffect(() => {
+    const el = scroller.current;
+    const content = el?.firstElementChild;
+    // Nothing to follow on an empty screen, where the greeting sits centred instead.
+    if (!el || !content || (turns.length === 0 && !busy)) return;
+
+    // A new turn is a reason to come back, whatever was being read before it.
+    stick.current = true;
+    const follow = () => {
+      el.scrollTo({
+        top: el.scrollHeight,
+        behavior: settled.current ? "smooth" : "auto",
+      });
+      settled.current = true;
+    };
+
+    follow();
+    const watch = new ResizeObserver(() => {
+      if (stick.current) follow();
+    });
+    watch.observe(content);
+    return () => watch.disconnect();
+  }, [turns.length, busy]);
 
   const handleSubmit = useCallback(
     (message: PromptInputMessage) => {
@@ -229,7 +290,10 @@ export function Chat({ conversationId }: { conversationId?: string }) {
               <Greeting />
             </div>
           ) : null}
-          <div className="absolute inset-0 touch-pan-y overflow-y-auto">
+          <div
+            className="absolute inset-0 touch-pan-y overflow-y-auto"
+            ref={scroller}
+          >
             <div className="mx-auto flex min-h-full min-w-0 max-w-4xl flex-col gap-5 px-2 py-6 md:gap-7 md:px-4">
               {turns.map((turn) => (
                 <Turn from={turn.from} key={turn.id}>
