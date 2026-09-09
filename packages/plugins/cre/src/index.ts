@@ -12,7 +12,7 @@ import { type Address, encodeAbiParameters, type Hex, zeroAddress } from 'viem'
 import { z } from 'zod'
 import { type IdleMoveParams, idleMoveParamsAbi } from './abi'
 import { AI_SECRET_IDS, describeForOwner, explain } from './ai'
-import { type AccountState, readAccountState } from './chain'
+import { type AccountState, type Pool, readAccountState } from './chain'
 import { decideIdleMove, targetSplit } from './decision'
 import { type IdlePolicy, POLICY_SECRET_IDS, policyFromSecrets, policyHash } from './policy'
 import { encodeIdleMove } from './relay'
@@ -131,7 +131,26 @@ export const configShape = {
 	 * one that cannot is not skipped, it fails the run, because a view missing a market's rate
 	 * would pick the best of the rest and call it the best.
 	 */
-	pools: z.array(hex(20)).min(1),
+	pools: z
+		.array(
+			z.object({
+				address: hex(20),
+				/**
+				 * How this market's receipt expresses its value, mirroring `ReceiptKind` in
+				 * `contracts/src/ReceiptMath.sol`. `rebasing` is an Aave aToken, whose balance is already
+				 * the position; `share-priced` is a Compound or Morpho venue, whose balance is a share
+				 * count that has to be converted before anything treats it as an amount of asset.
+				 *
+				 * Defaulted rather than required, because every configuration written before share-priced
+				 * venues existed named Aave markets and naming them again would be a migration for no
+				 * reason. Getting it wrong in the other direction — calling a share-priced venue rebasing —
+				 * under-reports the position rather than over-reporting it, so the default is the safe way
+				 * round as well as the compatible one.
+				 */
+				kind: z.enum(['rebasing', 'share-priced']).default('rebasing'),
+			}),
+		)
+		.min(1),
 	/** The ERC-20 being placed. */
 	asset: hex(20),
 	/**
@@ -206,7 +225,10 @@ export const configSchema = z
 	// A market named twice is read twice and then compared against itself, which is a rate gap of
 	// zero dressed up as a choice. Refused here rather than deduplicated, because the two readings
 	// of a repeated address — a typo, or a market meant to count double — are not the same wish.
-	.refine((c) => new Set(c.pools).size === c.pools.length, {
+	// By address, not by entry. `pools` became objects when venue kinds arrived, and `new Set` over
+	// objects compares references — so this guard would have kept its shape, kept its message, and
+	// stopped refusing anything at all.
+	.refine((c) => new Set(c.pools.map((p) => p.address)).size === c.pools.length, {
 		message: 'pools must not repeat a market',
 	})
 export type Config = z.infer<typeof configSchema>
@@ -353,7 +375,7 @@ function evaluate(
 		config.rpcUrl,
 		{
 			account: account as Address,
-			pools: config.pools as Address[],
+			pools: config.pools as Pool[],
 			asset: config.asset as Address,
 		},
 		{ withNonce: signs, nonceFunction: config.nonceFunction },

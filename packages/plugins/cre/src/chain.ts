@@ -7,7 +7,14 @@ import {
 	parseAbi,
 	zeroAddress,
 } from 'viem'
-import { accountAbi, erc20Abi, lendingVenueAbi, receiptAbi, reserveDataAbi } from './abi'
+import {
+	accountAbi,
+	erc20Abi,
+	lendingVenueAbi,
+	receiptAbi,
+	reserveDataAbi,
+	sharePricedReceiptAbi,
+} from './abi'
 
 export type Call = { to: Address; data: Hex }
 
@@ -51,10 +58,26 @@ export type Addresses = {
 	 * these reads fails the whole run, because a view missing one market's rate is a view that
 	 * would pick the best of the rest and call it the best.
 	 */
-	pools: Address[]
+	pools: Pool[]
 	/** The ERC-20 being placed. */
 	asset: Address
 }
+
+/**
+ * How a market's receipt expresses what it is worth, which decides how its balance is read.
+ *
+ * Mirrors `ReceiptKind` in `contracts/src/ReceiptMath.sol` deliberately, and for the reason that
+ * file gives: two definitions of what a receipt means would drift, and the one that drifted would
+ * be the one somebody's capital was already sitting behind.
+ *
+ * - `rebasing` — an Aave aToken. The balance grows and is already the position, in the asset's units.
+ * - `share-priced` — a Compound or Morpho venue. The balance is a share count that stays put while
+ *   its price rises, so it has to be converted before anything compares it to an amount of asset.
+ */
+export type ReceiptKind = 'rebasing' | 'share-priced'
+
+/** One market the owner permitted, and what kind of receipt it hands back. */
+export type Pool = { address: Address; kind: ReceiptKind }
 
 /** One market, as this account sees it. */
 export type VenueState = {
@@ -65,8 +88,23 @@ export type VenueState = {
 	receipt: Address
 	/** What that receipt says it is for. Zero when the market does not list the asset. */
 	receiptAsset: Address
-	/** The account's position at this market, in the asset's units. */
+	/** How this market's receipt expresses its value, carried through from the config. */
+	kind: ReceiptKind
+	/**
+	 * The account's position at this market, **in the asset's units** — which for a share-priced
+	 * receipt is not what `balanceOf` returned. Everything downstream compares this to amounts of
+	 * asset and passes it to `withdrawIdle`, which takes an amount of asset, so the conversion has
+	 * to happen here or not at all.
+	 */
 	supplied: bigint
+	/**
+	 * The raw receipt balance, before conversion. Equal to `supplied` for a rebasing receipt.
+	 *
+	 * Kept because the two are different questions and only one of them is an amount of money: a
+	 * check on whether the position is empty wants this, and anything sizing a withdrawal wants
+	 * `supplied`.
+	 */
+	receiptBalance: bigint
 	/** What this market can pay out right now. */
 	venueLiquidity: bigint
 	/** Aave's `currentLiquidityRate`, a ray. */
@@ -127,11 +165,11 @@ export function readAccountState(
 				data: encodeFunctionData({
 					abi: accountAbi,
 					functionName: 'permittedVenue',
-					args: [pool],
+					args: [pool.address],
 				}),
 			},
 			{
-				to: pool,
+				to: pool.address,
 				data: encodeFunctionData({
 					abi: lendingVenueAbi,
 					functionName: 'getReserveAToken',
@@ -139,7 +177,7 @@ export function readAccountState(
 				}),
 			},
 			{
-				to: pool,
+				to: pool.address,
 				data: encodeFunctionData({
 					abi: lendingVenueAbi,
 					functionName: 'getVirtualUnderlyingBalance',
@@ -147,7 +185,7 @@ export function readAccountState(
 				}),
 			},
 			{
-				to: pool,
+				to: pool.address,
 				data: encodeFunctionData({
 					abi: reserveDataAbi,
 					functionName: 'getReserveData',
@@ -169,7 +207,8 @@ export function readAccountState(
 			at + VENUE_READS,
 		) as [Hex, Hex, Hex, Hex]
 		return {
-			pool,
+			pool: pool.address,
+			kind: pool.kind,
 			venuePermitted: decodeFunctionResult({
 				abi: accountAbi,
 				functionName: 'permittedVenue',
@@ -222,24 +261,65 @@ export function readAccountState(
 	// so one address names one seat.
 	const seatOf = new Map(listed.map((venue, seat) => [venue.pool, seat]))
 
+	// The receipt balances, still in whatever units the receipt counts in.
+	const raw = partial.map((venue) => {
+		const seat = seatOf.get(venue.pool)
+		if (seat === undefined) return { ...venue, receiptBalance: 0n, receiptAsset: zeroAddress }
+		const [balanceHex, receiptAssetHex] = second.slice(seat * 2, seat * 2 + 2) as [Hex, Hex]
+		return {
+			...venue,
+			receiptBalance: decodeFunctionResult({
+				abi: receiptAbi,
+				functionName: 'balanceOf',
+				data: balanceHex,
+			}),
+			receiptAsset: decodeFunctionResult({
+				abi: receiptAbi,
+				functionName: 'UNDERLYING_ASSET_ADDRESS',
+				data: receiptAssetHex,
+			}),
+		}
+	})
+
+	// A third batch, and only when something actually needs converting. A rebasing receipt is
+	// already denominated in the asset, and a share-priced venue holding nothing has nothing to
+	// convert — so the common single-Aave configuration still costs two round trips, exactly as
+	// it did before share-priced venues existed.
+	//
+	// The receipt is asked rather than the arithmetic repeated here. `previewRedeem` is a handful
+	// of lines and copying them would work today; what it would not do is stay equal to the
+	// contract that actually burns the shares.
+	const needsConverting = raw.filter((v) => v.kind === 'share-priced' && v.receiptBalance > 0n)
+	const third = needsConverting.length
+		? ethCallBatch(
+				runtime,
+				rpcUrl,
+				needsConverting.map(
+					(venue): Call => ({
+						to: venue.receipt,
+						data: encodeFunctionData({
+							abi: sharePricedReceiptAbi,
+							functionName: 'previewRedeem',
+							args: [venue.receiptBalance],
+						}),
+					}),
+				),
+			)
+		: []
+	const convertedAt = new Map(needsConverting.map((venue, seat) => [venue.pool, seat]))
+
 	return {
 		agent: decodeFunctionResult({ abi: accountAbi, functionName: 'agent', data: agentHex }),
 		idle: decodeFunctionResult({ abi: erc20Abi, functionName: 'balanceOf', data: idleHex }),
-		venues: partial.map((venue) => {
-			const seat = seatOf.get(venue.pool)
-			if (seat === undefined) return { ...venue, supplied: 0n, receiptAsset: zeroAddress }
-			const [suppliedHex, receiptAssetHex] = second.slice(seat * 2, seat * 2 + 2) as [Hex, Hex]
+		venues: raw.map((venue) => {
+			const seat = convertedAt.get(venue.pool)
+			if (seat === undefined) return { ...venue, supplied: venue.receiptBalance }
 			return {
 				...venue,
 				supplied: decodeFunctionResult({
-					abi: receiptAbi,
-					functionName: 'balanceOf',
-					data: suppliedHex,
-				}),
-				receiptAsset: decodeFunctionResult({
-					abi: receiptAbi,
-					functionName: 'UNDERLYING_ASSET_ADDRESS',
-					data: receiptAssetHex,
+					abi: sharePricedReceiptAbi,
+					functionName: 'previewRedeem',
+					data: third[seat] as Hex,
 				}),
 			}
 		}),

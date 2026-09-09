@@ -85,7 +85,7 @@ const config: Config = {
 	agentKeySecretId: 'AGENT_KEY',
 	nonceFunction: 'nonce',
 	account: account.toLowerCase(),
-	pools: [AAVE_POOL.toLowerCase()],
+	pools: [{ address: AAVE_POOL.toLowerCase(), kind: 'rebasing' as const }],
 	asset: USDC.toLowerCase(),
 	agent: agent.toLowerCase(),
 	reportReceiver: '0x3333333333333333333333333333333333333333',
@@ -244,7 +244,12 @@ const two = (
 		{ pool: OTHER_POOL, receipt: OTHER_RECEIPT, ...other },
 	],
 })
-const bothPools: Partial<Config> = { pools: [AAVE_POOL.toLowerCase(), OTHER_POOL] }
+const bothPools: Partial<Config> = {
+	pools: [
+		{ address: AAVE_POOL.toLowerCase(), kind: 'rebasing' },
+		{ address: OTHER_POOL, kind: 'rebasing' },
+	],
+}
 
 /** 1,000 USDC sitting idle and nothing working: 800 of it should be at the market. */
 const allIdle: Chain = one(usdc(1_000), 0n)
@@ -261,8 +266,13 @@ describe('configSchema', () => {
 	})
 
 	test('lowercases hex values so a checksummed config compares equal to what the chain returns', () => {
-		const parsed = configSchema.parse({ ...config, pools: [AAVE_POOL], asset: USDC, agent })
-		expect(parsed.pools).toEqual([aave])
+		const parsed = configSchema.parse({
+			...config,
+			pools: [{ address: AAVE_POOL, kind: 'rebasing' }],
+			asset: USDC,
+			agent,
+		})
+		expect(parsed.pools).toEqual([{ address: aave, kind: 'rebasing' }])
 		expect(parsed.asset).toBe(USDC.toLowerCase())
 		expect(parsed.agent).toBe(agent.toLowerCase())
 	})
@@ -289,9 +299,15 @@ describe('configSchema', () => {
 	 * so neither is guessed at.
 	 */
 	test('refuses the same market twice, however it was cased', () => {
-		expect(() => configSchema.parse({ ...config, pools: [AAVE_POOL, aave] })).toThrow(
-			'pools must not repeat a market',
-		)
+		expect(() =>
+			configSchema.parse({
+				...config,
+				pools: [
+					{ address: AAVE_POOL, kind: 'rebasing' },
+					{ address: aave, kind: 'rebasing' },
+				],
+			}),
+		).toThrow('pools must not repeat a market')
 	})
 })
 

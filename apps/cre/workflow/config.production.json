@@ -5,7 +5,7 @@
 	"chainId": 42161,
 	"chainSelectorName": "ethereum-mainnet-arbitrum-1",
 	"account": "0x0000000000000000000000000000000000000000",
-	"pools": ["0x794a61358D6845594F94dc1DB02A252b5b4814aD"],
+	"pools": [{ "address": "0x794a61358D6845594F94dc1DB02A252b5b4814aD", "kind": "rebasing" }],
 	"asset": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
 	"agent": "0x84C3891a9693c891877aC474a90d17d29075fcAf",
 	"reportReceiver": "0x0000000000000000000000000000000000000000",

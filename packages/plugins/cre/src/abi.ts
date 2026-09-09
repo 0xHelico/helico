@@ -43,6 +43,21 @@ export const receiptAbi = parseAbi([
 ])
 
 /**
+ * The one extra question a share-priced receipt has to answer.
+ *
+ * An Aave aToken rebases: the balance is already denominated in the underlying, so `balanceOf` is
+ * the position and nothing further is needed. A Compound or Morpho venue issues shares whose price
+ * drifts upward, so its `balanceOf` is a share count and reading it as a position is wrong by
+ * whatever the market has earned — silently, and in the direction that under-reports.
+ *
+ * `previewRedeem` is asked of the receipt rather than reimplemented here, so the conversion the
+ * enclave uses is the one the contract will actually apply.
+ */
+export const sharePricedReceiptAbi = parseAbi([
+	'function previewRedeem(uint256 shares) view returns (uint256)',
+])
+
+/**
  * The lending market, mirroring `ILendingVenue` — the same four functions the account itself
  * calls, so the enclave and the contract cannot end up describing different markets.
  *
