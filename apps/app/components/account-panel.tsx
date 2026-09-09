@@ -116,14 +116,14 @@ export function AccountPanel() {
 
       <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <AssetTile
-          mark={<TokenMark symbol="USDC" />}
+          mark={<TokenMark size={22} symbol="USDC" />}
           note="liquid"
           symbol="USDC"
           tint="bg-[#eef3fb]"
           value={usdc(data.idle)}
         />
         <AssetTile
-          mark={<TokenMark symbol="aUSDC" />}
+          mark={<TokenMark size={22} symbol="aUSDC" />}
           note={
             bps === null ? "working" : `working · ${(bps / 100).toFixed(1)}%`
           }
@@ -132,7 +132,7 @@ export function AccountPanel() {
           value={usdc(data.working)}
         />
         <StatTile
-          icon={<Glyph name="wings" size={24} />}
+          icon={<Glyph name="wings" size={22} />}
           name="Agent"
           note={hasAgent(data) ? "nominated" : "nobody may move it"}
           value={
