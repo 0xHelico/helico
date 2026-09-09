@@ -118,6 +118,29 @@ const open = async (url: string): Promise<{ page: Page; text: string }> => {
   }
 }
 
+// ── and what the API sends, which is the origin the session cookie lives on ───
+{
+  const { headers: h } = await headers(`${API}/healthz`);
+  // The one that is a real problem rather than hygiene: several routes put caller-supplied text
+  // into a JSON body, and a response sniffed into a document runs on the origin holding the
+  // session cookie.
+  check(
+    "the API refuses to be sniffed",
+    h.get("x-content-type-options") === "nosniff",
+    h.get("x-content-type-options") ?? "missing",
+  );
+  check(
+    "and says it is not a document",
+    (h.get("content-security-policy") ?? "").includes("default-src 'none'"),
+    h.get("content-security-policy") ?? "(none)",
+  );
+  check(
+    "and sends no referrer",
+    h.get("referrer-policy") === "no-referrer",
+    h.get("referrer-policy") ?? "missing",
+  );
+}
+
 // ── the backend, including the cache the dapp falls back from ─────────────────
 {
   const health = await fetch(`${API}/healthz`).then(
