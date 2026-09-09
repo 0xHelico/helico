@@ -1263,6 +1263,73 @@ READMEs.
   repository's `AI-USAGE.md` and `plans/` opened to confirm they exist and say the same thing this
   entry says.
 
+### 2026-09-09 — the afternoon: two surfaces that said the opposite of the truth, and a box that kept dying
+
+- **Done:** the landing and the documentation site stopped claiming nothing was live; the chat
+  learned to answer for the product rather than for itself, to carry its own history, and to
+  follow its own replies down the page; and the VPS was diagnosed and its two fixable causes
+  fixed.
+
+- **AI's role:** Ghoza directed by screenshot, mostly in single sentences. Claude did the reading,
+  the code, the measurement, and was wrong twice in ways the measurements caught.
+
+- **Plan:** none in `docs/plans/`. The design lived in issues #275, #281, #284, #289 and #103, and
+  the ordering held for those — each was written before its code, unlike #263 this morning.
+
+- **The prompts, in full.** Translated, as the entries above do:
+
+  > *"Make the language on the landing and docs less AI, more general and human, and no em dashes."*
+  > *"Remove Base and Robinhood from Built with, change Built with to Built on, add the ETHGlobal logo top left."* … *"Remove Arbitrum too."* … *"Not in the nav next to the logo, delete the ETHGlobal in the nav."*
+  > *"In Built in the Open, focus on the Aqua code."* … *"Only show three cards."*
+  > *"This is too long"* (twice, about copy I had lengthened).
+  > *"The UI is ugly, can there be a token logo then the token name then the balance, and the number font in Arizona."*
+  > *"Still answer it — show the balance and the token list, do not just tell me to go and check."*
+  > *"When sending a message the view should follow the new one down, not stay at the top."*
+  > *"Previous messages should be context for the next one."*
+  > *"Helico can do lots of things, why only Swap, Status, Revoke and Withdraw?"*
+  > *"Check why the VPS went down earlier."* … *"Fix it so it does not happen again."*
+
+- **Both public surfaces said "nothing is live yet"** while five contracts answered on Arbitrum One.
+  It survived in six documentation pages including `llms-txt.mdx`, which instructs anything quoting
+  the docs to repeat the caveat — so an assistant reading us would have told somebody the project
+  had deployed nothing. Understating is not the safe direction; it is as false as an overclaim and
+  nobody re-reads a modest sentence looking for errors. The landing's headline number was worse
+  than stale: "94% kept working" measured Uniswap v4 range re-centring, a path CRE left on
+  8 September.
+
+- **56 em dashes went, and one stayed.** `Powered by SwapVM — © Degensoft Ltd 2025` is the
+  attribution their licence requires verbatim. Two were inside code blocks because
+  `scripts/check-aqua.ts` **prints** one; that was fixed at the source rather than at the quote, so
+  the docs still match what the script outputs.
+
+- **"Can you provide liquidity?" got four bullets that did not mention liquidity.** The reply
+  listed what the chat reaches; the question was what Helico does. It now names the other screens
+  and ends with what it cannot do at all. The test guarding it searched for forbidden words, which
+  blocked the honest version — naming a thing you cannot do requires saying its name — and now
+  checks where the word falls instead.
+
+- **Wrong twice, and the measurements are what said so.** `executeBatch` cannot reach the account's
+  own owner-only functions, because the batch runs each call **as the account**; proved on a fork
+  after nearly shipping a button built on the opposite assumption, which moved #291 to EIP-5792.
+  And the chat's autoscroll was written twice against scroll **position** before the third version
+  used the reader's **intent**: a smooth scroll is still animating when a card resizes, so a
+  position check lands mid-flight and reads as somebody who scrolled away. 327 of 447, twice, then
+  447 of 447.
+
+- **The VPS was stopped mid-build again**, and the journal proves it came from outside: the log
+  ends mid-sentence with zero OOM kills and zero panics in the whole boot. Two of our
+  contributions were fixable and are fixed — three deploy workflows shared one queue instead of
+  three, and the deploy script now reclaims cache above 70% and refuses above 92%. The age-filtered
+  reclaim freed 0B against 7.9 GB reclaimable, which is why it escalates; the unfiltered pass took
+  the disk from 87% to 78%. What is not fixed needs Coolify write access: every deploy builds the
+  image **twice**, once in Actions and once on the box, and only the second one can crash it.
+
+- **Verified:** every claim above read from the thing rather than remembered. `eth_getCode` and
+  `eth_call` for the deployments, `journalctl -b -1` for the crash, `docker ps --format` for what
+  the containers actually run, and a browser driven against a fork of Arbitrum One for each UI
+  change, with the scroll position and the history length read out of the page. Production checked
+  after deploying rather than after merging: 23 of 23.
+
 <!--
 Template for the next entry:
 
