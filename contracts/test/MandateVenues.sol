@@ -103,3 +103,102 @@ contract MockLendingPool is ILendingVenue {
         return (0, debtOf[user], 0, 0, 0, type(uint256).max);
     }
 }
+
+/// @notice A receipt whose unit is not the underlying's unit — an ERC-4626 share, or a cToken.
+///
+/// @dev The shape `ReceiptMath.SharePriced` exists for. One share redeems for `rate / 1e18` of
+///      the underlying, so a seasoned market has a rate well above par and a cToken-like one sits
+///      far below it. `previewWithdraw` answers *"how many shares must burn to release exactly
+///      this many assets"* and rounds **up**, which is what ERC-4626 requires and the direction
+///      that keeps a withdrawal from falling one wei short.
+contract MockSharePricedReceipt is ERC20 {
+    address public immutable UNDERLYING;
+    address public immutable POOL;
+
+    /// @dev Underlying per share, 1e18-scaled. `2e18` means one share is worth two underlying.
+    uint256 public rate;
+
+    constructor(string memory symbol_, address underlying_, address pool_, uint256 rate_)
+        ERC20(symbol_, symbol_)
+    {
+        UNDERLYING = underlying_;
+        POOL = pool_;
+        rate = rate_;
+    }
+
+    function UNDERLYING_ASSET_ADDRESS() external view returns (address) {
+        return UNDERLYING;
+    }
+
+    function setRate(uint256 rate_) external {
+        rate = rate_;
+    }
+
+    /// @dev Ceiling division, deliberately. Rounding down here is the failure mode this whole
+    ///      change exists to avoid: burn one share too few and the withdrawal is short.
+    function previewWithdraw(uint256 assets) external view returns (uint256) {
+        return (assets * 1e18 + rate - 1) / rate;
+    }
+
+    function mint(address to, uint256 shares) external {
+        require(msg.sender == POOL, "only pool");
+        _mint(to, shares);
+    }
+
+    function burn(address from, uint256 shares) external {
+        require(msg.sender == POOL, "only pool");
+        _burn(from, shares);
+    }
+}
+
+/// @notice A market that issues a share-priced receipt.
+///
+/// @dev Everything is the Aave shape except the arithmetic: `withdraw(asset, amount, to)` still
+///      takes the amount in **underlying**, and burns whatever number of shares that costs. An
+///      app that pulled `amount` of the receipt and handed it here would be burning the wrong
+///      number, which is exactly what `ReceiptMath` stops.
+contract MockSharePricedPool is ILendingVenue {
+    mapping(address asset => MockSharePricedReceipt) public receiptFor;
+    mapping(address user => uint256) public debtOf;
+
+    function list(address asset, string memory symbol, uint256 rate)
+        external
+        returns (MockSharePricedReceipt receipt)
+    {
+        receipt = new MockSharePricedReceipt(symbol, asset, address(this), rate);
+        receiptFor[asset] = receipt;
+    }
+
+    function supply(address asset, uint256 amount, address onBehalfOf, uint16) external {
+        SafeERC20.safeTransferFrom(IERC20(asset), msg.sender, address(this), amount);
+        MockSharePricedReceipt r = receiptFor[asset];
+        r.mint(onBehalfOf, r.previewWithdraw(amount));
+    }
+
+    function setDebt(address user, uint256 debt) external {
+        debtOf[user] = debt;
+    }
+
+    function withdraw(address asset, uint256 amount, address to) external returns (uint256) {
+        MockSharePricedReceipt r = receiptFor[asset];
+        r.burn(msg.sender, r.previewWithdraw(amount));
+        SafeERC20.safeTransfer(IERC20(asset), to, amount);
+        return amount;
+    }
+
+    function getReserveAToken(address asset) external view returns (address) {
+        return address(receiptFor[asset]);
+    }
+
+    function getVirtualUnderlyingBalance(address asset) external view returns (uint128) {
+        return uint128(IERC20(asset).balanceOf(address(this)));
+    }
+
+    function getUserAccountData(address user)
+        external
+        view
+        returns (uint256, uint256, uint256, uint256, uint256, uint256)
+    {
+        return (0, debtOf[user], 0, 0, 0, type(uint256).max);
+    }
+}

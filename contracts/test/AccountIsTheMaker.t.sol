@@ -6,6 +6,7 @@ import {Test} from "forge-std/Test.sol";
 import {Aqua} from "@1inch/aqua/Aqua.sol";
 import {IAqua} from "@1inch/aqua/interfaces/IAqua.sol";
 
+import {ReceiptKind} from "../src/ReceiptMath.sol";
 import {Call} from "../src/AccountAuth.sol";
 import {HelicoAccount} from "../src/HelicoAccount.sol";
 import {HelicoAccountFactory} from "../src/HelicoAccountFactory.sol";
@@ -138,7 +139,9 @@ contract AccountIsTheMakerTest is Test {
     function _mandate() private view returns (SwapMandate memory) {
         Venue[] memory vs = new Venue[](1);
         // `receipt0` is the receipt for token0, and token0 is USDC here.
-        vs[0] = Venue({pool: address(pool), receipt0: address(aUsdc), receipt1: address(0)});
+        vs[0] = Venue({
+            pool: address(pool), receipt0: address(aUsdc), receipt1: address(0), kind: ReceiptKind.Rebasing
+        });
         return SwapMandate({
             maker: account,
             token0: address(usdc),

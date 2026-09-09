@@ -72,6 +72,18 @@ contract AquaYieldCover {
 
         uint256 deficit = needed - held;
 
+        // **This instruction is Aave-shaped, deliberately, and cannot be otherwise.** It takes one
+        // argument — the pool — and asks the pool which receipt it issues. A share-priced receipt
+        // would need `deficit` converted before the pull, and the conversion needs to know the
+        // receipt's kind, which is a fact no `getReserveAToken` can answer. The two Aqua apps
+        // carry that as a field on `Venue` and convert through `ReceiptMath`; a program byte has
+        // nowhere to put one.
+        //
+        // So the limit is the argument list, not an oversight. Widening it means new args and a
+        // new router deployment, and the router is what carries our added instruction on chain
+        // today. `getReserveAToken` reverting is what keeps a non-Aave venue out: the require
+        // above refuses before any of this runs.
+        //
         // The receipt lands here rather than at the maker because `withdraw` burns it from
         // `msg.sender`. It leaves in the same call; the assertion below is what proves it.
         uint256 beforePull = IERC20(receipt).balanceOf(address(this));

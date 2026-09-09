@@ -11,6 +11,7 @@ import {ILendingVenue} from "./ILendingVenue.sol";
 // a venue would drift, and the one that drifted would be the one a maker had already shipped.
 // `receipt0` is the receipt for `quote`, `receipt1` the receipt for `base`.
 import {Venue} from "./HelicoMandateSwap.sol";
+import {ReceiptKind, ReceiptMath} from "./ReceiptMath.sol";
 
 /// @notice The taker's half of a fill: pay for what the board already handed over.
 /// @dev Four arguments rather than the eight `IHelicoMandateSwapCallback` carries. A taker that
@@ -215,7 +216,7 @@ contract HelicoOracleBoard is AquaApp {
         if (held >= amountOut) return;
         uint256 deficit = amountOut - held;
 
-        (uint256 index, address receipt) = _venueFor(board, hash, tokenOut, deficit);
+        (uint256 index, address receipt, uint256 shares) = _venueFor(board, hash, tokenOut, deficit);
         _requireNoDebt(board.venues[index].pool, board.maker);
 
         // What this contract held before the pull. Everything below is measured against it,
@@ -225,7 +226,9 @@ contract HelicoOracleBoard is AquaApp {
         // measures its own starting point.
         uint256 beforePull = IERC20(receipt).balanceOf(address(this));
 
-        AQUA.pull(board.maker, hash, receipt, deficit, address(this));
+        // `shares` of the receipt, `deficit` of the underlying — the same number only when the
+        // receipt rebases. See `ReceiptMath`.
+        AQUA.pull(board.maker, hash, receipt, shares, address(this));
 
         // A named amount, never a sweep. A sweep burns whatever this contract holds rather than
         // what this fill pulled, which lets a small board redeem a large position that arrived
@@ -255,18 +258,21 @@ contract HelicoOracleBoard is AquaApp {
     function _venueFor(Board calldata board, bytes32 hash, address tokenOut, uint256 deficit)
         private
         view
-        returns (uint256 index, address receipt)
+        returns (uint256 index, address receipt, uint256 shares)
     {
         bool quoteSide = tokenOut == board.quote;
         for (uint256 i = 0; i < board.venues.length; i++) {
             Venue calldata v = board.venues[i];
             address r = quoteSide ? v.receipt0 : v.receipt1;
             if (r == address(0)) continue;
+            // Liquidity stays in underlying; the budget and the maker's holding are in receipt
+            // units, and comparing those against `deficit` was the bug this conversion removes.
             if (ILendingVenue(v.pool).getVirtualUnderlyingBalance(tokenOut) < deficit) continue;
+            uint256 cost = ReceiptMath.sharesFor(v.kind, r, deficit);
             (uint248 budget,) = AQUA.rawBalances(board.maker, address(this), hash, r);
-            if (budget < deficit) continue;
-            if (IERC20(r).balanceOf(board.maker) < deficit) continue;
-            return (i, r);
+            if (budget < cost) continue;
+            if (IERC20(r).balanceOf(board.maker) < cost) continue;
+            return (i, r, cost);
         }
         revert NoVenueCanCover(tokenOut, deficit);
     }

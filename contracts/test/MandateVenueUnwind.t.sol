@@ -6,6 +6,7 @@ import {Test, stdError} from "forge-std/Test.sol";
 import {Aqua} from "@1inch/aqua/Aqua.sol";
 import {IAqua} from "@1inch/aqua/interfaces/IAqua.sol";
 
+import {ReceiptKind} from "../src/ReceiptMath.sol";
 import {HelicoMandateSwap, SwapMandate, Venue} from "../src/HelicoMandateSwap.sol";
 import {MockLendingPool, MockReceipt} from "./MandateVenues.sol";
 import {PayingTaker, TestToken} from "./MandateTakers.sol";
@@ -131,8 +132,15 @@ contract MandateVenueUnwindTest is Test {
         pool.setDebt(maker, 50_000e18);
 
         Venue[] memory vs = new Venue[](2);
-        vs[0] = Venue({pool: address(dry), receipt0: address(0), receipt1: address(dryReceipt)});
-        vs[1] = Venue({pool: address(pool), receipt0: address(0), receipt1: address(receiptB)});
+        vs[0] = Venue({
+            pool: address(dry),
+            receipt0: address(0),
+            receipt1: address(dryReceipt),
+            kind: ReceiptKind.Rebasing
+        });
+        vs[1] = Venue({
+            pool: address(pool), receipt0: address(0), receipt1: address(receiptB), kind: ReceiptKind.Rebasing
+        });
 
         SwapMandate memory m = _mandate(vs, "debt-second-venue");
         _ship(m, address(receiptB), SUPPLIED);
@@ -156,8 +164,15 @@ contract MandateVenueUnwindTest is Test {
         second.supply(address(tokenB), SUPPLIED, maker, 0);
 
         Venue[] memory vs = new Venue[](2);
-        vs[0] = Venue({pool: address(pool), receipt0: address(0), receipt1: address(receiptB)});
-        vs[1] = Venue({pool: address(second), receipt0: address(0), receipt1: address(secondReceipt)});
+        vs[0] = Venue({
+            pool: address(pool), receipt0: address(0), receipt1: address(receiptB), kind: ReceiptKind.Rebasing
+        });
+        vs[1] = Venue({
+            pool: address(second),
+            receipt0: address(0),
+            receipt1: address(secondReceipt),
+            kind: ReceiptKind.Rebasing
+        });
 
         SwapMandate memory m = _mandate(vs, "fallback");
 
@@ -250,7 +265,7 @@ contract MandateVenueUnwindTest is Test {
 
     function _venues(address pool_, address receipt1) private pure returns (Venue[] memory vs) {
         vs = new Venue[](1);
-        vs[0] = Venue({pool: pool_, receipt0: address(0), receipt1: receipt1});
+        vs[0] = Venue({pool: pool_, receipt0: address(0), receipt1: receipt1, kind: ReceiptKind.Rebasing});
     }
 
     function _mandate(Venue[] memory venues, bytes32 salt) private view returns (SwapMandate memory) {
