@@ -394,6 +394,15 @@ func TestAboutOffersOnlyWhatTheRegistryHolds(t *testing.T) {
 			t.Errorf("nothing offers %s, which the registry holds", symbol)
 		}
 	}
+
+	// Earning is the product, and it survived as a clause in a paragraph until #330 while six cards
+	// described everything around it. Naming the three protocols here is what stops the card being
+	// quietly reduced to "a lending market" again, which is what it said when there was one.
+	for _, named := range []string{"Earn", "Aave", "Compound", "Morpho"} {
+		if !strings.Contains(offers.String(), named) {
+			t.Errorf("the answer never mentions %q, and that is what this product does", named)
+		}
+	}
 	// A capability we do not have may be *named*, and must never be *offered*. Naming it is the
 	// point: somebody who asks "can you provide liquidity?" and gets four bullets that do not
 	// mention it reads that as evasion rather than as a no. So the check is where the word falls,
@@ -402,7 +411,10 @@ func TestAboutOffersOnlyWhatTheRegistryHolds(t *testing.T) {
 	if !split {
 		t.Fatal("the reply names nothing it cannot do, so a question about one gets silence")
 	}
-	for _, word := range []string{"bridge", "borrow", "perpetual", "liquidity as a maker"} {
+	// `staking` is on this list because it was asked for and does not exist: nothing in
+	// `contracts/src`, `apps` or `packages` stakes anything, so a card offering it would be a
+	// partner integration that is not there — the category the rules disqualify rather than deduct.
+	for _, word := range []string{"bridge", "borrow", "perpetual", "liquidity as a maker", "staking", "stake "} {
 		if strings.Contains(strings.ToLower(offered), word) {
 			t.Errorf("%q is offered, and no action behind it does that", word)
 		}

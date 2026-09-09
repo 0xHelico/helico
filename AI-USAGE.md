@@ -1525,6 +1525,36 @@ READMEs.
   `0xA16D3138…`, which failed on the selector and stopped — a guard that cannot fail is not a
   guard, and this one was worth proving twice.
 
+### 2026-09-10 — the card for the thing the product is
+
+- **Done:** Ghoza asked where Earn, staking and LP were in the chat's own answer. One of the three
+  was a real gap; adding the other two would have been the disqualifying kind of claim.
+
+- **AI's role:** checked each before writing anything.
+
+  **Earn** was genuinely missing and it is the product. It survived as a clause in the opening
+  paragraph while six cards described everything around it, so a reader scanning them saw a swap
+  app with a portfolio. It is worth saying properly now because it changed: three markets are
+  configured for the deployed workflow, and the third is a Morpho vault, so the enclave compares
+  **across protocols** rather than inside one family.
+
+  What the card does not say is that it holds several at once. `decision.ts` takes `bestPaying` and
+  `decideIdleMove` clamps to the one it picks, so "more than one market at a time" stays in the
+  "Not yet" line where it already was.
+
+  **Staking** does not exist. `grep -rli "staking|stake("` across `contracts/src`, `apps` and
+  `packages` returns nothing, so a card for it would be a partner integration that is not there.
+  That is now a test rather than a decision: `staking` joined the words the about-answer may name
+  but never offer, and poisoning the Earn card's title with it turns the suite red.
+
+  **LP** is reachable on a fork and unreachable in the product — no maker screen, no taker on
+  Arbitrum One — so it stays in "Not yet" until #320 and #311 land.
+
+- **Verified:** the seven cards read off the API and then off a rendered page in a browser against
+  a fork. Both guards were checked by breaking them: the staking word list fails on a poisoned
+  title, and the new assertion that the answer names Earn, Aave, Compound and Morpho fails if the
+  card is dropped. A test that only passes is not evidence that the thing it describes is there.
+
 <!--
 Template for the next entry:
 
