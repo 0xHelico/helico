@@ -40,11 +40,30 @@ describe("telling a stored turn's two shapes apart", () => {
     }
   });
 
-  // The backend decides the action and only ever sends the three it checked. A name that arrived
+  // The backend decides the action and only ever sends the ones it checked. A name that arrived
   // from anywhere else must not reach a card — this is the second place that is enforced.
+  //
+  // `withdraw` was on this list until it became real. A refusal list is the one kind of list that
+  // goes stale silently in the *safe* direction first — the guard kept working, the test simply
+  // described a world with three actions in it. Kept as a list rather than derived from
+  // `isTurnAction`, because a test that computes its expectation from the code under test agrees
+  // with that code however wrong it is.
   test("an action the backend never sends is refused", () => {
-    for (const action of ["drain", "withdraw", "transfer", "swap"]) {
+    for (const action of [
+      "drain",
+      "transfer",
+      "swap",
+      "sweep",
+      "approve",
+      "",
+    ]) {
       expect(isTurnAction({ action })).toBe(false);
+    }
+  });
+
+  test("and every action it does send is accepted", () => {
+    for (const action of ["status", "revoke", "withdraw"]) {
+      expect(isTurnAction({ action })).toBe(true);
     }
   });
 });
