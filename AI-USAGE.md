@@ -1230,6 +1230,39 @@ READMEs.
   backend *does* send is accepted. A refusal list on its own says nothing about whether anything
   gets through.
 
+### 2026-09-09 — the documentation site, recorded here because the product links to it
+
+- **Done:** `docs.helico.site` is a separate Next.js application living in `0xHelico/docs`, built
+  on 6 September from the `tailwind-variants-docs` template and rebranded for Helico — nineteen
+  documentation pages written from this repository's READMEs and plans, plus a `Dockerfile` and a
+  deploy workflow. It is linked from the landing in seven components (`Hero`, `Nav`, `Footer`,
+  `Faq`, `Build`, `Verified`, `Enforcement`) and from the dapp's connect gate, so a reader of this
+  submission arrives there by following the product.
+
+- **AI's role:** all of it, under Ghoza's direction — *"build the docs from this template, change
+  everything to fit Helico, take the metadata from the landing, deploy it to the VPS with CI/CD on
+  docs.helico.site with certbot."* Every factual sentence is taken from this repository's own
+  documentation, and the caveats travel with the claims.
+
+- **Why this entry exists at all.** That repository keeps its own `AI-USAGE.md` and
+  `plans/2026-09-06-docs-site.md`, in this file's format — but it is **private**, by Ghoza's
+  decision, and it is not one of the repositories connected to the ETHGlobal dashboard. The
+  connected repository is `0xHelico/helico`, which is public, so the rule about connected
+  repositories is satisfied. The rule about **AI attribution** is a different one: it asks where AI
+  was used and with what instructions. A site the product links to eight times, written entirely by
+  AI, had no record anywhere a reader of this submission could reach. That is the gap this closes,
+  and publishing the repository is not required to close it.
+
+- **What is public and what is not.** The documentation itself is published verbatim at
+  `docs.helico.site` — nothing written about Helico is hidden. What stays unpublished is the
+  site's own rendering code: roughly 117 KB of TypeScript against 48 KB of MDX, which is the
+  template, not anything Helico does.
+
+- **Verified:** read rather than remembered. The language split from `gh repo view 0xHelico/docs`;
+  the eight link sites from `grep -rn docs.helico.site` in this repository; and the private
+  repository's `AI-USAGE.md` and `plans/` opened to confirm they exist and say the same thing this
+  entry says.
+
 <!--
 Template for the next entry:
 
