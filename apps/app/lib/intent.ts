@@ -40,7 +40,7 @@ export type Step = { call: string; detail: string; ok: boolean };
  * conversation redraws the same tree, which is what `chat.Message` already promises about the
  * rest of the turn.
  */
-export type TurnAction = { action: "status" | "revoke" };
+export type TurnAction = { action: "status" | "revoke" | "withdraw" };
 
 export type TurnResult =
   | (Intent & { steps?: Step[] })
@@ -58,7 +58,7 @@ export function isTurnAction(value: unknown): value is TurnAction {
     return false;
   }
   const { action } = value as { action: unknown };
-  return action === "status" || action === "revoke";
+  return action === "status" || action === "revoke" || action === "withdraw";
 }
 
 /**

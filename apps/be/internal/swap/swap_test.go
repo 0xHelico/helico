@@ -251,7 +251,7 @@ func TestInterpretBoundsTheMessage(t *testing.T) {
 	}
 }
 
-// The conversation reaches four things now, and which one it reached is decided here rather
+// The conversation reaches five things now, and which one it reached is decided here rather
 // than in the browser. These are the answers the app switches its screen on.
 func TestInterpretReachesTheActionsTheAppAlreadyDoes(t *testing.T) {
 	cases := []struct {
@@ -264,6 +264,11 @@ func TestInterpretReachesTheActionsTheAppAlreadyDoes(t *testing.T) {
 			name:       "revoking the mandate needs no parameters and gets no intent",
 			content:    `{"action":"revoke","chain":"","tokenIn":"","tokenOut":"","amount":"","question":""}`,
 			wantAction: ActionRevoke,
+		},
+		{
+			name:       "asking for the money back reaches the escape hatch, not the revoke screen",
+			content:    `{"action":"withdraw","chain":"","tokenIn":"","tokenOut":"","amount":"","question":""}`,
+			wantAction: ActionWithdraw,
 		},
 		{
 			name:       "a greeting is answered by the application, not by the model",
@@ -320,7 +325,7 @@ func TestInterpretReachesTheActionsTheAppAlreadyDoes(t *testing.T) {
 // The two parameterless actions must not be able to carry a token or an amount out of the model.
 // Nothing downstream reads them for these actions today, and this is what keeps that true.
 func TestAParameterlessActionCarriesNoIntent(t *testing.T) {
-	for _, action := range []string{ActionRevoke, ActionStatus, ActionAbout} {
+	for _, action := range []string{ActionRevoke, ActionStatus, ActionAbout, ActionWithdraw} {
 		t.Run(action, func(t *testing.T) {
 			content := `{"action":"` + action + `","chain":"arbitrum","tokenIn":"ETH","tokenOut":"USDC","amount":"999999","question":""}`
 			got, err := New(fakeModel(t, 200, content)).Interpret(context.Background(), "stop it")
@@ -442,5 +447,49 @@ func TestStepsCarryTheRegistrysAddress(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("no step carries %s…%s; steps were %+v", head, tail, got.Steps)
+	}
+}
+
+// Revoking and withdrawing are the two halves of getting out, and answering one with the other is
+// the failure this test exists for: until `withdraw` existed the app offered "Take everything back
+// to my wallet" on its empty screen, the sentence had nowhere to go but `revoke`, and a person
+// asking for their money was told the mandate had ended while every token stayed where it was.
+func TestWithdrawAndRevokeAreNotEachOther(t *testing.T) {
+	withdraw, err := New(fakeModel(t, 200, `{"action":"withdraw"}`)).Interpret(context.Background(), "take everything back to my wallet")
+	if err != nil {
+		t.Fatal(err)
+	}
+	revoke, err := New(fakeModel(t, 200, `{"action":"revoke"}`)).Interpret(context.Background(), "stop the agent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if withdraw.Action == revoke.Action {
+		t.Fatal("the two reach the same screen")
+	}
+	if withdraw.Reply == revoke.Reply {
+		t.Fatal("the two say the same thing")
+	}
+	// Each has to describe what it does, because the whole mistake is a person reading one and
+	// believing the other happened.
+	if !strings.Contains(strings.ToLower(withdraw.Reply), "back to you") {
+		t.Errorf("withdraw does not say the money comes back: %q", withdraw.Reply)
+	}
+	if strings.Contains(strings.ToLower(revoke.Reply), "wallet") {
+		t.Errorf("revoke talks about a wallet, and it moves nothing: %q", revoke.Reply)
+	}
+}
+
+// The escape hatch's two properties are the reason it is safe to offer in a sentence, so the
+// sentence has to carry them: there is one destination and it was fixed at construction, and the
+// path lives somewhere an upgrade cannot reach.
+func TestWithdrawNamesWhatMakesItSafe(t *testing.T) {
+	got, err := New(fakeModel(t, 200, `{"action":"withdraw"}`)).Interpret(context.Background(), "get me out")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"no recipient", "nowhere else", "proxy", "receipt"} {
+		if !strings.Contains(strings.ToLower(got.Reply), want) {
+			t.Errorf("the reply does not mention %q: %q", want, got.Reply)
+		}
 	}
 }

@@ -3,3 +3,6 @@ data/
 
 # Local configuration: the deployment sets variables instead.
 .env
+
+# `bun run build` compiles here. 17 MB that rebuilds in seconds.
+bin/

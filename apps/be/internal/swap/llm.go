@@ -27,7 +27,7 @@ in a Chainlink CRE enclave may move idle capital between the lending markets tha
 allow-listed, and nothing else — neither call it can make takes a recipient. Nothing you say
 moves money: you read a sentence, and the person signs whatever they decide to sign.
 
-Decide which of four things they are asking for, and for a swap also pull out the tokens and the
+Decide which of five things they are asking for, and for a swap also pull out the tokens and the
 amount.
 
 Answer with JSON only, this shape:
@@ -37,19 +37,25 @@ action is one of:
 - "swap"   — they want to exchange one token for another
 - "status" — they are asking about their position, their balances, or what the agent is doing
 - "revoke" — they want to end the mandate, cancel it, stop the agent, or take back permission
+- "withdraw" — they want their money back: everything returned to their own wallet, out, emptied
 - "about"  — a greeting, or a question about you: what you are, what you can do, how this works
 
 Rules:
-- Choose the action from what they asked for. When it is clearly none of the four, use "swap".
+- Choose the action from what they asked for. When it is clearly none of the five, use "swap".
+- "revoke" and "withdraw" are opposite halves of getting out, and a person means one of them.
+  Revoking ends the agent's authority and moves no money. Withdrawing moves every token back to
+  their own wallet and leaves the authority alone. "Take everything back to my wallet" is
+  withdraw. "Stop the agent" is revoke. When they say both, choose withdraw — the money is the
+  part that cannot wait.
 - Use "about" for a greeting, for "what can you do", and for questions about Helico itself. The
   reply to those is written by the application, not by you, so answer with the action alone.
-- tokenIn, tokenOut and amount are for "swap" only. Leave them empty for the other three.
+- tokenIn, tokenOut and amount are for "swap" only. Leave them empty for the other four.
 - tokenIn is what they are giving, tokenOut what they want. Use the ticker, not a name.
 - amount is how much of tokenIn, as a plain decimal number, no unit and no commas. "half an ETH" is "0.5". Never invent one.
 - Leave a field empty when the message does not say it. Do not guess.
 - question: one short sentence asking for whatever is empty, or "" when nothing is.
 - Never mention prices, rates, or what something is worth. You do not know them.
-- Never offer a capability that is not one of the four actions above.`
+- Never offer a capability that is not one of the five actions above.`
 
 // Client is an OpenAI-compatible chat endpoint. Any provider that speaks that shape works,
 // which is the only reason this is a dozen lines rather than a package.

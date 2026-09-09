@@ -168,7 +168,9 @@ export function Chat({ conversationId }: { conversationId?: string }) {
           : undefined;
         const produced =
           body.intent ??
-          (body.action === "status" || body.action === "revoke"
+          (body.action === "status" ||
+          body.action === "revoke" ||
+          body.action === "withdraw"
             ? { action: body.action }
             : null);
         const result: TurnResult | null =

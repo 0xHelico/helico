@@ -33,6 +33,11 @@ export const accountReadAbi = parseAbi([
 export const accountWriteAbi = parseAbi([
   "function setAgent(address agent_)",
   "function permitVenue(address pool, bool allowed)",
+  // On the proxy rather than the implementation, which is the whole point of it: code may be
+  // replaced entirely, this path may not. There is no recipient parameter — the destination is
+  // the owner address fixed at construction — so there is no version of this call that sends
+  // anywhere else, and nothing an upgrade could do would add one.
+  "function escape(address[] tokens)",
 ]);
 
 /**
