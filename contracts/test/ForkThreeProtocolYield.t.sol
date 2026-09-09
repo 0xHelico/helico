@@ -97,7 +97,10 @@ contract ForkThreeProtocolYieldTest is Test {
         HelicoAccount(payable(account)).supplyIdle(address(morpho), address(USDC), PARK);
         vm.stopPrank();
 
-        assertApproxEqAbs(AUSDC.balanceOf(account), PARK, 1, "Aave holds a third");
+        // A few units of slack, not one. Aave credits slightly less than was supplied and how much
+        // less depends on its liquidity index at whatever block the fork lands on — so an exact
+        // figure here is a test pinned to a moment, and it failed the first time the block moved.
+        assertApproxEqAbs(AUSDC.balanceOf(account), PARK, 10, "Aave holds a third");
         assertApproxEqAbs(compound.previewRedeem(compound.balanceOf(account)), PARK, 2, "Compound a third");
         assertApproxEqAbs(morpho.previewRedeem(morpho.balanceOf(account)), PARK, 2, "Morpho a third");
         assertEq(USDC.balanceOf(account), FUNDED - 3 * PARK, "and the wallet holds the remainder");
@@ -112,7 +115,7 @@ contract ForkThreeProtocolYieldTest is Test {
     function test_TheAgentCanMoveCapitalBetweenProtocols() public onlyForked {
         vm.prank(agent);
         HelicoAccount(payable(account)).supplyIdle(AAVE_POOL, address(USDC), PARK);
-        assertApproxEqAbs(AUSDC.balanceOf(account), PARK, 1, "it starts in Aave");
+        assertApproxEqAbs(AUSDC.balanceOf(account), PARK, 10, "it starts in Aave");
 
         // The receipt balance, not the amount supplied. See the test below for why those are two
         // different numbers, and why sizing a move from the second one is how a mover strands
@@ -146,7 +149,12 @@ contract ForkThreeProtocolYieldTest is Test {
         vm.prank(agent);
         HelicoAccount(payable(account)).supplyIdle(AAVE_POOL, address(USDC), PARK);
 
-        assertEq(AUSDC.balanceOf(account), PARK - 1, "one unit short, and this is the whole point");
+        // Short, and that is the whole point. **Not** "short by one": the first version asserted
+        // exactly `PARK - 1` and went red the moment the fork advanced to a block where Aave's
+        // index rounded two units away instead. The claim is the direction, not the distance.
+        uint256 credited = AUSDC.balanceOf(account);
+        assertLt(credited, PARK, "Aave credits less than was supplied");
+        assertGt(credited, PARK - 100, "and only barely less, so this is rounding rather than a loss");
 
         vm.prank(agent);
         vm.expectRevert(abi.encodeWithSignature("NotEnoughAvailableUserBalance()"));
