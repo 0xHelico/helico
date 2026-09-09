@@ -1,5 +1,11 @@
 # CRE execution evidence — 7 September 2026
 
+> **The script this records no longer exists.** `apps/cre/rehearse.sh` rehearsed the Uniswap v4
+> vault path, which CRE stopped driving on 8 September; `HelicoVault` and the two scripts the
+> rehearsal called were deleted in #247, and the script itself in the change that added this note.
+> The transcript below is kept as the record of a run that happened — it cannot be reproduced from
+> this repository, and `apps/cre/rehearse-idle.sh` is the one that can.
+
 Chainlink's prize asks for a successful execution shown through a CRE CLI simulation or a live
 deployment. This is the simulation, recorded from `apps/cre/rehearse.sh` — the script in this
 repository, not a throwaway project outside it, which is what issue #21 was opened about.
