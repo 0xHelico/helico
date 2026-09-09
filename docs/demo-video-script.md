@@ -37,6 +37,23 @@ that exists, and #22 asks for a full-length take by **11 September** rather than
 A shot that has to fall back is not a weaker video. A shot that claims something untrue ends the
 submission.
 
+### Pre-flight, re-run 9 September
+
+The table below supersedes the 8 September one wherever they disagree. Two rows moved in opposite
+directions, which is the pair worth reading rather than skimming: one would have put a false claim
+in the video, the other would have given away a requirement we meet.
+
+| | State on 9 September, measured |
+|---|---|
+| **Deployed, read back from the chain** | Four contracts. `HelicoAccountFactory` `0x01CC7d9F…E081` (3,883 bytes), `HelicoAccount` implementation `0x0842BB3f…4847` (8,779), `HelicoMandateSwap` `0xA16D3138…87Ed` (7,707), `HelicoAquaSwapVMRouter` `0xb8c9f14d…c3be` (18,863). The router answers `AQUA_YIELD_COVER_OPCODE()` → **34**, which is the sentence about the added instruction being *on chain* rather than in a file |
+| **Still not deployed** | `HelicoOracleBoard`. It was built after the 8 September table and has no row there. Its evidence is fork evidence — say so if it appears on screen |
+| **The workflow is not the simulator** | The deployed workflow runs on Chainlink's DON. See the split rule under *What must not be said* — this is the row that changed what is sayable |
+| The four sites | `helico.site`, `app.helico.site`, `api.helico.site/healthz` 200, `docs.helico.site` 308. `bun run --filter @helico/app prod` is now **23 checks** and passes, including the API's own headers |
+| **New shot available — the escape hatch** | It had no button at all this morning. Typing *"take everything back to my wallet"* into the chat now offers the sweep, and pressing it empties the account to the owner. For the 2:50 shot this is the product doing the safest thing it can do, on camera, rather than a test asserting it |
+| **New shot available — the checks tree** | Each answer now shows the functions that ran to produce it. A refusal ending on `Chain.Token "MOONCOIN" is not in the registry — refused` says more in five seconds than the same refusal as prose |
+| **New line available — 1inch** | A concentrated band paid out of a lending position: **10,183 USDC against 8,600 with the band removed**, same account, same trade ([`ForkSwapVMConcentrateCover.t.sol`](../contracts/test/ForkSwapVMConcentrateCover.t.sol)). Fork evidence, so say *"measured on a fork"* |
+| The account | **Still none opened on mainnet.** `eth_getLogs` on the factory returns zero. The caveat from the 8th is unchanged and is still the honest sentence |
+
 ### Pre-flight, re-run 8 September
 
 Checked so the first take is not spent discovering these. Re-check on the day — the point of the
@@ -202,6 +219,12 @@ Speak over the run. Cut the waiting, never speed it up.
 >
 > Docking the mandate ends it, needs nobody's permission, and nothing we run can block it.
 
+*Screen: the chat. Type "take everything back to my wallet".*
+
+> And you can leave whenever you like. This is the product, not a test: the sweep sends every
+> token to one address — the one this account was built for — and the call takes no recipient, so
+> there is no version of it that sends anywhere else.
+
 *Screen: `test_AnUpgradeCannotTakeTheAccountOrDeleteTheWayOut`, and its `[PASS]` line.*
 
 > And the way out cannot be removed by us either. Every owner's contract can have its code
@@ -219,8 +242,10 @@ Speak over the run. Cut the waiting, never speed it up.
 > Every guard in this contract was deleted one at a time to check a test noticed. Eleven of
 > eleven did.
 >
-> The enclave ran through the simulator, not a real TEE, and Chainlink's own criteria accept
-> that. Every number in this video is in the repository with the command that reproduces it.
+> The run you just watched went through the simulator, not a real TEE. The deployed workflow is
+> a different thing — it registers a confidential handler and executes on Chainlink's DON every
+> five minutes, and it is holding rather than acting because no account exists yet for it to
+> manage. Every number in this video is in the repository with the command that reproduces it.
 
 End on the repo URL. No outro music.
 
@@ -242,9 +267,22 @@ End on the repo URL. No outro music.
 ## What must not be said
 
 - **"Deployed", "live", or "in production"** about anything that is not — check each one on the
-  day, because this list changes as things land
+  day, because this list changes as things land. As of 9 September four contracts are on Arbitrum
+  One and `HelicoOracleBoard` is not; the router is, and its opcode reads back from the chain
 - **"Audited"** — twelve AI agents reviewed the contracts, and that is not an audit
-- **"Runs in a TEE"** — it runs in the simulator, which announces that it is not a TEE
+- **"Runs in a TEE"** — and this rule is now two rules, because the two things it covered came
+  apart on 8 September. **The local rehearsal** (`rehearse-idle.sh`, which is what the footage
+  shows) runs in the **simulator**, which prints that it is not a TEE, and against a **fork**.
+  Never call that a TEE. **The deployed workflow** is a different thing: `helico-production` is
+  registered in Chainlink's `WorkflowRegistry 2.0.0` on Ethereum mainnet and executes on DON
+  `zone-a` every five minutes, reading a Vault DON secret, with consecutive `SUCCESS` in
+  `cre execution list`.
+
+  So do not say *"nothing runs in a TEE"* either — that is now an understatement that hands away
+  the Chainlink track's first requirement. The provable sentence is **"the deployed workflow
+  registers `handlerInTee` and runs on Chainlink's DON"**. Saying *"it runs in a TEE"* as our own
+  claim is still wrong: that is Chainlink's claim about their infrastructure, not a measurement
+  of ours
 - **Anything about Uniswap being one of our tracks** — it is not, and the video should not imply
   a fourth
 - **"The AI decides where your money goes"** — it does not. A model turns the verdict into a
