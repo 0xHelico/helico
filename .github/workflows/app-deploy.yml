@@ -18,8 +18,16 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: app-deploy
-  cancel-in-progress: true
+  # One queue for all three, not one each. Three separate groups meant a merge touching the
+  # app, the API and the landing started three Docker builds on the same VPS at once, and
+  # concurrent builds are what stops that VM: on 9 September its journal ended mid-build with no
+  # OOM, no panic and no shutdown sequence, which is the hypervisor killing it (#103).
+  #
+  # `cancel-in-progress: false` because these are different applications sharing a queue. The
+  # landing must wait for the app rather than cancel it, and cancelling a deploy that is already
+  # replacing a container is how a half-deployed service happens.
+  group: vps-deploy
+  cancel-in-progress: false
 
 permissions:
   contents: read

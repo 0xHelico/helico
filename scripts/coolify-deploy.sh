@@ -40,6 +40,41 @@ container() {
 	fi
 }
 
+# Give the build room before asking for one.
+#
+# Coolify builds on this box rather than pulling the image CI already publishes, so every deploy
+# is a `bun install` and a compile here. On 9 September the disk was at 84% with 6.8 GB of
+# reclaimable build cache, and the VM was stopped mid-build (#103). A full disk does not cause
+# that on its own, but building on one is the worst version of it.
+#
+# Reclaimable cache only: `builder prune` never touches a running container, an image in use, or
+# a volume. Other applications share this host and their data is not ours to decide about.
+disk() { df --output=pcent / | tr -dc '0-9'; }
+
+used="$(disk)"
+if [ "${used:-0}" -ge 70 ]; then
+	echo "$app: disk at ${used}%, reclaiming build cache first"
+	# Age first, because a warm cache is worth keeping when it costs nothing. It often frees
+	# nothing here: this box builds all day, so almost every entry is younger than two days —
+	# measured on 9 September, when `until=48h` returned 0B against 7.9 GB of reclaimable cache.
+	docker builder prune --force --filter 'until=48h' 2>&1 | tail -1
+	if [ "$(disk)" -ge 70 ]; then
+		# Everything not in use, then. A cold cache costs one slower build; a full disk costs
+		# every application on the host.
+		docker builder prune --force 2>&1 | tail -1
+	fi
+	echo "$app: disk now at $(disk)%"
+fi
+
+# And refuse rather than start one that will not fit. A deploy that fails here leaves the running
+# container serving; a build that fills the disk takes the box down with every other application
+# on it.
+used="$(disk)"
+if [ "${used:-0}" -ge 92 ]; then
+	echo "$app: disk at ${used}%, refusing to build. Free space and deploy again." >&2
+	exit 3
+fi
+
 before="$(container)"
 
 curl --fail --silent --show-error -X POST \
