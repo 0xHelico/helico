@@ -5,31 +5,31 @@ const docs = 'https://docs.helico.site/docs'
 const faqs = [
 	{
 		q: 'What is Helico, in plain words?',
-		a: 'Money sitting in a wallet earns nothing, and money you have lent out cannot be spent. Helico keeps the split for you: an agent moves what is idle into a lending market you allow-listed, and pulls it back when you need it liquid. You write the terms down once — how much stays spendable, which markets, which agent. The account holding your money will not send it anywhere else, and that is a property of the code rather than a rule anybody could change.',
+		a: 'Money sitting in a wallet earns nothing. Money you have lent out cannot be spent. Helico keeps the balance between the two: an agent moves idle funds into a lending market you allow-listed, and pulls them back when you need cash. You set the terms once. How much stays spendable, which markets it may use, and which agent may act. The account holding your money cannot send it anywhere else, because the code has no way to.',
 	},
 	{
 		q: 'What do I need to start?',
-		a: 'A wallet and some stablecoins on the Arbitrum network. You get an account of your own, at an address that is known before it is deployed — so it can be funded before it exists, and what arrives there was always yours. Five contracts are deployed on Arbitrum One with their source verified, and nobody has opened an account yet — so today the honest answer is the code, the deployments, and a rehearsal on a snapshot of the market.',
+		a: 'A wallet and some stablecoins on Arbitrum. You get an account of your own at an address that is known before it is built, so you can fund it before it exists, and whatever arrives there was always yours. Five contracts are deployed on Arbitrum One with their source published. Nobody has opened an account yet, so what we can show you today is the code, those deployments, and a rehearsal on a copy of the market.',
 	},
 	{
 		q: 'Who holds my money?',
-		a: 'An account that is yours and nobody else\'s — one contract per owner, not a pool everyone shares. It has a way out that no upgrade can remove: a function on the account itself that returns everything to you and answers to nobody else. And when it trades, the tokens go from your account to the buyer directly; the exchange keeps a ledger of what may be spent and never takes custody of anything.',
+		a: 'An account that is yours and nobody else\'s. One contract per owner, not a pool everyone shares. It has a way out that no upgrade can remove: a function on the account that sends everything back to you and answers to nobody else. When it trades, the tokens go from your account to the buyer directly. The exchange keeps a record of what may be spent and never holds anything itself.',
 	},
 	{
 		q: 'What can the automation do to it?',
-		a: 'Two things: put idle money into a market you allow-listed, and take it back out. Neither of those calls has a place to put an address, so there is no instruction that would send your money elsewhere — it is not that the agent is refused, it is that the request cannot be expressed. An agent that was entirely taken over could move your money between the markets you chose, paying its own gas to do it, and nothing more.',
+		a: 'Two things. Put idle money into a market you allow-listed, and take it back out. Neither call has anywhere to put an address, so there is no way to write an instruction that sends your money somewhere else. An agent that was completely taken over could shuffle your money between the markets you chose, paying its own gas to do it, and nothing more.',
 	},
 	{
 		q: 'When does it do nothing?',
-		a: 'Most of the time. Interest accrues every block, so the split drifts constantly, and chasing it would mean a transaction every few minutes to move a rounding error. A move has to be worth making twice over: large enough that the gas is not most of it, and large enough to matter against the size of your account. Small accounts and large ones are stopped by different halves of that.',
+		a: 'Most of the time. Interest builds every block, so the balance drifts constantly, and chasing it would mean a transaction every few minutes to move a rounding error. A move has to be worth making twice over: big enough that gas is not most of it, and big enough to matter against the size of your account. Small accounts and large ones are stopped by different halves of that.',
 	},
 	{
 		q: 'What stays private?',
-		a: 'How the decision is made. The program that decides runs inside a sealed environment: whose funds it watches, when it looks, and how it sizes a move never leave it. The rules themselves are public on the chain, so anyone can check that a move followed them.',
+		a: 'How the decision is made. The program that decides runs inside a sealed environment. Whose funds it watches, when it looks, and how it sizes a move never leave that environment. The rules themselves are public on the chain, so anyone can check that a move followed them.',
 	},
 	{
 		q: 'Is it live? Is it audited?',
-		a: 'Neither, yet. It is built for Arbitrum One. The whole flow has been run end to end on a snapshot of the real market: an account was opened at an address predicted before it existed, real stablecoins were moved into the real lending market, and the decision came from the sealed environment. That was a snapshot, not the live network, and the sealed environment was simulated rather than real. Twelve AI reviewers and then six more went over the contracts; that is not a professional audit, and this page does not call it one.',
+		a: 'Live, but not audited, and nobody is using it yet. Five contracts are deployed on Arbitrum One with their source published, and the program that decides runs on Chainlink\'s network every five minutes. Nobody has opened an account, so it has nothing to manage and holds on every run. The whole flow has been run end to end on a copy of the real market: an account opened at an address predicted before it existed, real stablecoins moved into the real lending market, and the decision made inside the sealed environment. That copy was not the live network, and that sealed environment was simulated. Twelve AI reviewers went over the contracts, then six more. That is not a professional audit, and this page does not call it one.',
 	},
 ]
 ---

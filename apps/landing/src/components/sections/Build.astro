@@ -5,11 +5,13 @@ import { forkTests, solidityTests } from '../../lib/solidity-tests'
 const repo = 'https://github.com/0xHelico/helico'
 // Reading about Helico goes to the docs site; looking at the code goes to GitHub.
 const docs = 'https://docs.helico.site/docs'
-// Read from the account's source at build time, so the page shows the function as this checkout
-// has it. `withdrawIdle` is the one worth showing: it is the rule that revoking a market closes
-// the way in and leaves the way out open, which is the difference between a limit and a trap.
-const source = readFileSync(new URL('../../../../../contracts/src/HelicoAccount.sol', import.meta.url), 'utf8')
-const from = source.indexOf('    function withdrawIdle(')
+// Read from the Aqua app's source at build time, so the page shows the function as this
+// checkout has it. `_requireReceiptFor` is the one worth showing: a receipt token is an address
+// the maker writes into their own mandate, so anything it says about itself is something they
+// could have made up. Asking the pool which receipt it issues is the only direction that cannot
+// be faked, and four lines is the whole of it.
+const source = readFileSync(new URL('../../../../../contracts/src/HelicoMandateSwap.sol', import.meta.url), 'utf8')
+const from = source.indexOf('    function _requireReceiptFor(')
 const to = source.indexOf('\n    }\n', from) + '\n    }'.length
 const check = source.slice(from, to).replace(/^ {4}/gm, '')
 // The real line number of the first line in this checkout, for the gutter. The link below
@@ -17,6 +19,20 @@ const check = source.slice(from, to).replace(/^ {4}/gm, '')
 // be pinned to another (#74).
 const startLine = source.slice(0, from).split('\n').length
 const packages = [
+	{
+		name: 'HelicoMandateSwap',
+		stat: String(solidityTests),
+		unit: 'tests',
+		copy: `An Aqua app of our own, live on Arbitrum One. The mandate is the strategy, and every refusal has a name. ${forkTests} of these run against the real Aqua on a fork of the real chain.`,
+		href: `${repo}/tree/main/contracts`,
+	},
+	{
+		name: '@helico/plugin-1inch',
+		stat: '22',
+		unit: 'tests',
+		copy: 'Builds the concentrated position Aqua files under a hash. Aqua moves no tokens when one opens.',
+		href: `${repo}/tree/main/packages/plugins/1inch`,
+	},
 	{
 		name: '@helico/plugin-thegraph',
 		stat: '28',
@@ -26,17 +42,10 @@ const packages = [
 	},
 	{
 		name: '@helico/plugin-cre',
-		stat: '242',
+		stat: '227',
 		unit: 'tests',
 		copy: 'Decides, sizes, and signs inside the enclave. The key never leaves it.',
 		href: `${repo}/tree/main/packages/plugins/cre`,
-	},
-	{
-		name: 'HelicoAccount',
-		stat: String(solidityTests),
-		unit: 'tests',
-		copy: `One account per owner, live on Arbitrum One. It admits you or the agent you named, and nobody else. ${forkTests} of these run on a fork of the real chain.`,
-		href: `${repo}/tree/main/contracts`,
 	},
 ]
 ---
@@ -45,21 +54,21 @@ const packages = [
 	<div class="section-card center" data-reveal>
 		<span class="eyebrow">For builders</span>
 		<h2 class="headline" id="build-title">Built in the Open</h2>
-		<p class="lede">Every line is public: the contract, the program that decides, and the tests for both.</p>
+		<p class="lede">Every line is public: the Aqua app, the program that decides, and the tests for both.</p>
 		<div class="actions">
 			<a class="btn btn--primary" href={repo}>See the Code</a>
 			<a class="btn btn--secondary" href={`${repo}/tree/main/docs/plans`}>Read the Plans</a>
 		</div>
 
 		<figure class="code" style={`--start:${startLine - 1}`}>
-			<figcaption>For builders · contracts/src/HelicoAccount.sol · <code>withdrawIdle</code> · <a href={`${repo}/blob/main/contracts/src/HelicoAccount.sol`}>open on GitHub ↗</a></figcaption>
+			<figcaption>For builders · contracts/src/HelicoMandateSwap.sol · <code>_requireReceiptFor</code> · <a href={`${repo}/blob/main/contracts/src/HelicoMandateSwap.sol`}>open on GitHub ↗</a></figcaption>
 			<Code code={check} lang="solidity" theme="dark-plus" />
 		</figure>
 
 		<div class="split">
 			<div>
 				<h3>Open by default.</h3>
-				<p>The code above is the actual check the contract runs, read from the source when this page is built. Every count below points at the code that proves it.</p>
+				<p>The code above is the actual check our Aqua app runs, read from the source when this page is built. A maker names their own receipt token, so the contract asks the lending pool which receipt it issues instead of believing the token about itself. Every count below points at the code that proves it.</p>
 			</div>
 			<a class="btn btn--secondary" href={`${docs}/builders`}>Docs for Builders</a>
 		</div>
