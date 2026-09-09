@@ -163,7 +163,7 @@ export function Sparkline({
             {ticks.map((v) => (
               <div key={v}>
                 <span
-                  className="tabular -translate-y-1/2 absolute left-0 w-6 text-right text-[10px] text-faint leading-none"
+                  className="tabular -translate-y-1/2 absolute left-0 w-7 text-right text-[11px] text-faint leading-none"
                   style={{ top: `${pct(v, max)}%` }}
                 >
                   {v}
@@ -176,7 +176,7 @@ export function Sparkline({
             ))}
             {plot}
           </div>
-          <div className="mt-2 flex justify-between pl-8 text-[10.5px] text-faint">
+          <div className="tabular mt-2 flex justify-between pl-8 text-[11px] text-faint">
             {dateLabels(days, 5).map((d) => (
               <span key={d}>{d}</span>
             ))}
@@ -185,7 +185,7 @@ export function Sparkline({
       ) : (
         <>
           <div className="mt-2">{plot}</div>
-          <div className="mt-1 flex justify-between text-[10.5px] text-faint">
+          <div className="tabular mt-1 flex justify-between text-[11px] text-faint">
             <span>{days[0]?.date}</span>
             <span>{days[days.length - 1]?.date}</span>
           </div>
