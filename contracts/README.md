@@ -1,6 +1,6 @@
 # Contracts
 
-Three contracts ship, and one idea sits behind all of them: a user commits to rules, and an agent
+Four contracts ship, and one idea sits behind all of them: a user commits to rules, and an agent
 may act only inside them.
 
 - **`HelicoAccount`**, with `HelicoAccountProxy` and `HelicoAccountFactory` — one account per
@@ -11,11 +11,14 @@ may act only inside them.
 - **`HelicoAquaSwapVMRouter`**, in [`src/swapvm/`](src/swapvm/) — a 1inch SwapVM instruction that
   settles a swap out of capital still earning in a lending market.
 
-A fourth, **`HelicoOracleBoard`**, is written and tested but **not deployed**. See below.
+- **`HelicoOracleBoard`** — a second Aqua app, priced from Chainlink and braked by its own
+  inventory, for the maker who holds one token. Deployed 9 September at
+  [`0xeb480C09…C760`](https://arbiscan.io/address/0xeb480C0994A34a81a49C3250C45a9e96eac0C760#code).
 
 ## HelicoOracleBoard
 
-Built 9 September, **not deployed**. A second Aqua app, sitting beside `HelicoMandateSwap` rather
+Built and deployed 9 September —
+[`0xeb480C09…C760`](https://arbiscan.io/address/0xeb480C0994A34a81a49C3250C45a9e96eac0C760#code), verified. A second Aqua app, sitting beside `HelicoMandateSwap` rather
 than replacing it, and it exists because of a maker the first one cannot serve.
 
 That maker holds **one** token. Their USDC sits in a lending market earning, and a fill is settled
