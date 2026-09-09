@@ -200,3 +200,55 @@ func TestGzipAndCORS(t *testing.T) {
 		t.Error("an unknown origin must not be allowed")
 	}
 }
+
+// Every response carries them, whatever it is. The value of a header that hardens an origin is
+// that there is no path through the service that forgets it — a 404, a refusal, a preflight and
+// an ordinary answer all leave through the same middleware, so all four are checked rather than
+// one representative.
+func TestEveryResponseIsHardened(t *testing.T) {
+	srv := newServer(t, token)
+	want := map[string]string{
+		"X-Content-Type-Options":  "nosniff",
+		"Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+		"Referrer-Policy":         "no-referrer",
+	}
+
+	cases := []struct {
+		name    string
+		method  string
+		path    string
+		headers map[string]string
+	}{
+		{"an ordinary answer", http.MethodGet, "/api/posts", nil},
+		{"a 404", http.MethodGet, "/nothing-here", nil},
+		{"a refusal", http.MethodDelete, "/api/posts/absent", nil},
+		{"a CORS preflight", http.MethodOptions, "/api/session", map[string]string{
+			"Origin": "http://localhost:4321", "Access-Control-Request-Method": "POST",
+		}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			res, _ := do(t, c.method, srv.URL+c.path, nil, c.headers)
+			defer res.Body.Close()
+			for header, value := range want {
+				if got := res.Header.Get(header); got != value {
+					t.Errorf("%s = %q, want %q (status %d)", header, got, value, res.StatusCode)
+				}
+			}
+		})
+	}
+}
+
+// A compressed response has to keep them. gzipper wraps the ResponseWriter and writes its own
+// headers, which is exactly the shape that drops somebody else's.
+func TestCompressionKeepsTheHardening(t *testing.T) {
+	srv := newServer(t, token)
+	res, _ := do(t, http.MethodGet, srv.URL+"/api/posts", nil, map[string]string{
+		"Accept-Encoding": "gzip",
+	})
+	defer res.Body.Close()
+	if got := res.Header.Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Errorf("X-Content-Type-Options = %q on a gzip request", got)
+	}
+}

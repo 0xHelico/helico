@@ -131,6 +131,29 @@ var gzipPool = sync.Pool{New: func() any { return gzip.NewWriter(nil) }}
 
 // gzipper compresses JSON responses of at least gzipMinBytes when the client accepts it. It
 // buffers the first kilobyte to decide, so small bodies go out untouched.
+// secureHeaders is what a JSON API on its own origin should say about itself.
+//
+// `nosniff` is the one that is a real problem rather than hygiene. Every route here answers JSON
+// or problem+json, and several put caller-supplied text into the body — a conversation title, a
+// message, the detail on a refusal. A browser that sniffs one of those into a document runs it on
+// **this** origin, which is the origin the session cookie is scoped to. The response is not a
+// document today only because the browser guesses right, and nothing in it says it must.
+//
+// The policy is inert on a JSON response and exactly right on the one that gets sniffed anyway.
+// `default-src 'none'` is safe because no route here serves HTML, an image, or a download.
+//
+// Outside cors and gzipper in the chain, so a preflight carries these too and compression cannot
+// drop them.
+func secureHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
+		h.Set("Referrer-Policy", "no-referrer")
+		next.ServeHTTP(w, r)
+	})
+}
+
 func gzipper(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {

@@ -120,6 +120,7 @@ func New(svc *blog.Service, opt Options) http.Handler {
 		h = http.TimeoutHandler(h, opt.RequestTimeout, `{"type":"about:blank","title":"Service Unavailable","status":503,"detail":"request timed out"}`)
 	}
 	h = logging(opt.Logger)(h)
+	h = secureHeaders(h)
 	h = requestID(h)
 	h = recoverer(opt.Logger)(h)
 	return h
