@@ -3,7 +3,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
-import type { Address } from "viem";
+import { type Address, erc20Abi, formatUnits } from "viem";
 import {
   useAccount,
   usePublicClient,
@@ -20,7 +20,7 @@ import {
   accountWriteAbi,
   hasAgent,
 } from "@/lib/account";
-import { amount, readMandates, token } from "@/lib/mandates";
+import { amount, readMandates, token, WALLET_TOKENS } from "@/lib/mandates";
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 const ZERO = "0x0000000000000000000000000000000000000000" as Address;
@@ -123,15 +123,7 @@ export function MandateCard({
     );
   }
   if (data.kind === "unopened") {
-    return (
-      <Note>
-        Your account is not open yet.{" "}
-        <Link className="underline underline-offset-2" href="/">
-          Open it
-        </Link>
-        , and this can answer.
-      </Note>
-    );
+    return <WalletInstead address={address} />;
   }
 
   const held = totals(data);
@@ -270,6 +262,107 @@ export function MandateCard({
           )}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * What the wallet holds, when the account holds nothing because it does not exist.
+ *
+ * "Open it and this can answer" was a dead end at the end of a question somebody asked. The
+ * account is empty, but the question was about money and the wallet has an answer, so it gives
+ * that one and says which it is. The two are never confused: this reads the wallet, and every
+ * other number on this card reads the account.
+ *
+ * Zero balances are dropped. A list of six zeroes is not a fuller answer than a sentence.
+ */
+/**
+ * Ether, to four decimals, and never as "0" when there is some.
+ *
+ * `amount()` shows two, which is right for a stablecoin and wrong here: a wallet holding 0.005
+ * ETH would be told it holds nothing, and dust is still the difference between being able to
+ * open an account and not.
+ */
+function ether(wei: bigint): string {
+  const n = Number(formatUnits(wei, 18));
+  const shown = n.toLocaleString(undefined, { maximumFractionDigits: 4 });
+  return shown === "0" ? "<0.0001" : shown;
+}
+
+function WalletInstead({ address }: { address: Address }) {
+  const client = usePublicClient({ chainId: CHAIN_ID });
+
+  const held = useQuery({
+    enabled: Boolean(client && address),
+    queryKey: ["wallet-balances", address],
+    staleTime: 15_000,
+    queryFn: async () => {
+      if (!client) throw new Error("no client");
+      const erc20s = Object.entries(WALLET_TOKENS);
+      const [native, ...rest] = await Promise.all([
+        client.getBalance({ address }),
+        ...erc20s.map(([addr]) =>
+          client.readContract({
+            abi: erc20Abi,
+            address: addr as Address,
+            args: [address],
+            functionName: "balanceOf",
+          }),
+        ),
+      ]);
+      const rows: { symbol: string; text: string }[] = [];
+      if (native > 0n) {
+        rows.push({ symbol: "ETH", text: ether(native) });
+      }
+      rest.forEach((value, i) => {
+        const [, t] = erc20s[i];
+        if (value > 0n) {
+          rows.push({ symbol: t.symbol, text: amount(value, t.decimals) });
+        }
+      });
+      return rows;
+    },
+  });
+
+  return (
+    <div className="mt-3 rounded-xl border p-4">
+      <p className="text-muted-foreground text-xs">
+        Your account is not open yet, so it holds nothing. This is what your
+        wallet holds.
+      </p>
+
+      {held.isPending ? (
+        <p className="mt-3 flex items-center gap-2 text-muted-foreground text-xs">
+          <Loader2 className="size-3 animate-spin" /> Reading it…
+        </p>
+      ) : held.error ? (
+        <p className="mt-3 text-muted-foreground text-xs">
+          The chain did not answer.
+        </p>
+      ) : held.data && held.data.length > 0 ? (
+        <ul className="tabular mt-2 font-mono text-[11.5px] text-muted-foreground">
+          {held.data.map((row) => (
+            <li key={row.symbol}>
+              {row.text} {row.symbol}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-2 text-muted-foreground text-xs">
+          None of the tokens this works with, and no ETH.
+        </p>
+      )}
+
+      <p className="mt-3 text-muted-foreground text-xs">
+        <Link className="underline underline-offset-2" href="/">
+          Open the account
+        </Link>{" "}
+        and this answers for it instead.{" "}
+        <Link className="underline underline-offset-2" href="/portfolio">
+          Your portfolio
+        </Link>{" "}
+        has the rest.
+      </p>
     </div>
   );
 }
