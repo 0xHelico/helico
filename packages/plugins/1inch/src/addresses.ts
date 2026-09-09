@@ -44,10 +44,14 @@ export function swapVmAddress(chainId: number): `0x${string}` {
  * Written down rather than read from an SDK because there is no SDK to read it from: it is our
  * own deployment, recorded in `docs/deployments.md` and verified on Arbitrum One.
  *
- * ⚠️ **This address predates `ReceiptKind` and cannot read a mandate encoded by `mandate.ts`.**
- * It was deployed on 8 September; `Venue` gained a field on 9 September and `SwapMandate` became
- * a different tuple. `scripts/check-mandate.ts` reads the deployed bytecode back and asserts the
- * mismatch rather than trusting this comment. Redeploy before shipping to it for real.
+ * This is the 10 September deployment, and it replaced one that could not have taken a mandate at
+ * all: `ReceiptKind` widened `Venue` on 9 September, so `SwapMandate` became a different tuple and
+ * the old app answered `mandateHash` at a selector nothing here computes. A mandate sent there
+ * would not have reverted — it would have missed the function.
+ *
+ * `scripts/check-mandate.ts` reads the deployed bytecode back and refuses to run against an
+ * address that does not carry today's selector, so this paragraph cannot quietly go stale the way
+ * the one it replaced did.
  */
 export function mandateSwapAddress(chainId: number): `0x${string}` {
 	const known: Record<number, `0x${string}`> = {
