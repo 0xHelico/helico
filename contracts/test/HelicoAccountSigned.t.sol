@@ -271,6 +271,54 @@ contract HelicoAccountBatchTest is Test {
         return abi.encodePacked(r, s, v);
     }
 
+    /// @dev **A batch cannot call this account's own owner-only functions**, and every batch test
+    ///      in this file targets an external token, so none of them says so.
+    ///
+    ///      `_runBatch` dispatches each call as `calls[i].target.call(...)`. Inside that call
+    ///      `msg.sender` is the **account**, not the owner — so `setAgent`, which reverts unless
+    ///      `msg.sender == owner()`, refuses its own account. `executeBatch` gates on the owner
+    ///      at the door and then stops being the owner one line later.
+    ///
+    ///      This was proposed as a design in #289 — batch `setAgent` and `permitVenue` to save a
+    ///      wallet confirmation — and the suite had nothing to say about it. rifky found it
+    ///      on a fork instead, and the fix (#291) had to move to EIP-5792, which batches at the
+    ///      wallet so every inner call keeps the owner as sender.
+    ///
+    ///      `executeBatchWithSignature` carries the same limit for the same reason, which is why
+    ///      a relayer would not have rescued the idea either.
+    function test_ABatchCannotCallTheAccountsOwnOwnerOnlyFunctions() public {
+        Call[] memory calls = new Call[](1);
+        calls[0] = Call(account, 0, abi.encodeWithSignature("setAgent(address)", payee));
+
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(HelicoAccount.CallFailed.selector, account));
+        HelicoAccount(payable(account)).executeBatch(calls);
+
+        // And the same batch mechanism is fine the moment the target is somebody else, which is
+        // what made the limit invisible: it is not batching that fails, it is batching *inward*.
+        Call[] memory outward = new Call[](1);
+        outward[0] = Call(address(token), 0, abi.encodeWithSignature("approve(address,uint256)", payee, 1e18));
+        vm.prank(owner);
+        HelicoAccount(payable(account)).executeBatch(outward);
+        assertEq(token.allowance(account, payee), 1e18, "an outward call in the same batch shape works");
+    }
+
+    /// @dev The signed form has the limit too. Worth its own test because a reader who found the
+    ///      one above could reasonably assume a signature restores the owner as sender — the
+    ///      signature proves who authorised the batch, and changes nothing about who makes the
+    ///      calls inside it.
+    function test_ASignedBatchCannotReachThemEither() public {
+        Call[] memory calls = new Call[](1);
+        calls[0] = Call(account, 0, abi.encodeWithSignature("setAgent(address)", payee));
+
+        uint256 deadline = block.timestamp + 1 hours;
+        bytes memory sig = _sign(calls, 0, deadline);
+
+        vm.prank(stranger);
+        vm.expectRevert(abi.encodeWithSelector(HelicoAccount.CallFailed.selector, account));
+        HelicoAccount(payable(account)).executeBatchWithSignature(calls, deadline, sig);
+    }
+
     function test_OneSignatureCarriesEveryCall() public {
         Call[] memory calls = _pair();
         uint256 deadline = block.timestamp + 1 hours;
