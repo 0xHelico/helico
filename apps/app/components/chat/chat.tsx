@@ -12,6 +12,7 @@ import {
   PromptInputTextarea,
   PromptInputTools,
 } from "@/components/ai-elements/prompt-input";
+import { Cards } from "@/components/chat/cards";
 import { Greeting } from "@/components/chat/greeting";
 import { ModelPicker } from "@/components/chat/model-picker";
 import { PageHeader } from "@/components/chat/page-header";
@@ -25,6 +26,7 @@ import { SwapCard } from "@/components/swap-card";
 import { useHelicoSession } from "@/hooks/use-helico-session";
 import { api, type SwapConfig } from "@/lib/api";
 import {
+  type Card,
   isIntent,
   isTurnAction,
   type Step,
@@ -174,6 +176,9 @@ export function Chat({ conversationId }: { conversationId?: string }) {
         const steps: Step[] | undefined = Array.isArray(body.steps)
           ? body.steps
           : undefined;
+        const cards: Card[] | undefined = Array.isArray(body.cards)
+          ? body.cards
+          : undefined;
         const produced =
           body.intent ??
           (body.action === "status" ||
@@ -182,10 +187,11 @@ export function Chat({ conversationId }: { conversationId?: string }) {
             ? { action: body.action }
             : null);
         const result: TurnResult | null =
-          produced || steps
+          produced || steps || cards
             ? ({
                 ...(produced ?? {}),
                 ...(steps ? { steps } : {}),
+                ...(cards ? { cards } : {}),
               } as TurnResult)
             : null;
         setTurns((t) => [
@@ -303,6 +309,9 @@ export function Chat({ conversationId }: { conversationId?: string }) {
                   <p className="whitespace-pre-wrap text-[13px] leading-[1.65]">
                     {turn.text}
                   </p>
+                  {turn.intent?.cards ? (
+                    <Cards cards={turn.intent.cards} onSend={send} />
+                  ) : null}
                   {isIntent(turn.intent) ? (
                     <SwapCard intent={turn.intent} />
                   ) : isTurnAction(turn.intent) ? (

@@ -38,10 +38,30 @@ type Answer struct {
 	Action string   `json:"action"`
 	Intent *Intent  `json:"intent"`
 	Needs  []string `json:"needs,omitempty"`
+	// Cards is the answer as the app draws it, when a paragraph is the wrong shape for what was
+	// asked. "What can you do" used to come back as four bullets inside a wall of prose, which is
+	// the one question whose answer nobody reads that way.
+	Cards []Card `json:"cards,omitempty"`
 	// Steps is what ran to produce the rest, in order. The app draws it as a tree under the
 	// sentence, so that a person can see the refusal come from a named check rather than from a
 	// model changing its mind.
 	Steps []Step `json:"steps,omitempty"`
+}
+
+// Card is one thing this chat can do, rendered as a card rather than as a line in a list.
+//
+// Every card is pressable, and carries exactly one of the two ways to be. Try is a sentence a
+// person can send unchanged, which is what makes a card worth more than the bullet it replaced:
+// it is a way to use the thing rather than a description of it. Href is for what this chat does
+// not do itself — the limits and the portfolio are screens, and a card that described one without
+// going there would be the bullet again. Tags are short enough to sit in a row: the registry's
+// symbols, not prose about them.
+type Card struct {
+	Title string   `json:"title"`
+	Body  string   `json:"body"`
+	Try   string   `json:"try,omitempty"`
+	Href  string   `json:"href,omitempty"`
+	Tags  []string `json:"tags,omitempty"`
 }
 
 // maxMessage bounds what a person can send. A swap request is a sentence.
@@ -99,6 +119,17 @@ func (s *Service) Interpret(ctx context.Context, message string, prior ...Turn) 
 	default:
 		action = ActionSwap
 	}
+	// A sentence that named no token and no amount did not ask for a swap. The model answers with
+	// one of five actions, so anything it could not read lands on the default above — typing "p"
+	// was reaching the swap path and coming back demanding three fields the person had never
+	// mentioned, which is the chat inventing a request on their behalf.
+	//
+	// The help text answers both readings of an empty draft. Someone who typed nonsense is told
+	// what this can do, and someone who typed "I want to swap" is told a swap needs two tokens and
+	// an amount, and which tokens there are — more than the three-field demand gave them.
+	if action == ActionSwap && strings.TrimSpace(d.TokenIn) == "" && strings.TrimSpace(d.TokenOut) == "" && strings.TrimSpace(d.Amount) == "" {
+		action = ActionAbout
+	}
 	read := Step{Call: "Client.ask", Detail: "read as " + action, OK: true}
 
 	// None of these four needs a parameter, so none goes near build: there is nothing from the
@@ -106,7 +137,8 @@ func (s *Service) Interpret(ctx context.Context, message string, prior ...Turn) 
 	// still does the work, and revoking still costs a signature the person gives themselves.
 	switch action {
 	case ActionAbout:
-		return Answer{Action: ActionAbout, Reply: about(), Steps: []Step{read}}, nil
+		reply, cards := about()
+		return Answer{Action: ActionAbout, Reply: reply, Cards: cards, Steps: []Step{read}}, nil
 	case ActionWithdraw:
 		return Answer{
 			Action: ActionWithdraw,
@@ -161,23 +193,48 @@ func (s *Service) Interpret(ctx context.Context, message string, prior ...Turn) 
 //
 // It reads the registry rather than repeating it, so a token added to tokens.go is a token this
 // sentence offers, and there is no second list to fall behind.
-func about() string {
+func about() (string, []Card) {
 	chain := chains[0]
-	return "Helico gives you an account only you own. An agent you name may move its idle capital " +
+	reply := "Helico gives you an account only you own. An agent you name may move its idle capital " +
 		"into a lending market you allow-listed and pull it back, and it can do nothing else, " +
 		"because neither call it can make takes a recipient.\n\n" +
-		"Here in the chat:\n" +
-		"• Swap: name two tokens and an amount, and I build the intent. On " + chain.Name +
-		", in " + strings.Join(chain.Symbols(), ", ") + ".\n" +
-		"• Status: what your account holds, how much is working, how much is liquid.\n" +
-		"• Revoke: end the mandate. The agent can do nothing afterwards.\n" +
-		"• Withdraw: send everything back to your own wallet, and nowhere else.\n\n" +
-		"On the other screens: open the account, name the agent and choose its markets on the " +
-		"front page; read your mandates and what has moved through them on your portfolio, " +
-		"which is the question the chain on its own cannot answer.\n\n" +
 		"Not yet, and I would rather say so than leave it out: providing liquidity as a maker, " +
-		"borrowing, more than one market at a time, and any chain but " + chain.Name + ".\n\n" +
-		"Anything I have no address or number for, I ask about rather than guess."
+		"borrowing, more than one market at a time, and any chain but " + chain.Name + ". Anything " +
+		"I have no address or number for, I ask about rather than guess."
+
+	return reply, []Card{
+		{
+			Title: "Swap",
+			Body:  "Name two tokens and an amount. I check both against the registry and build the intent; you sign it.",
+			Try:   "Swap 0.1 ETH into USDC",
+			Tags:  chain.Symbols(),
+		},
+		{
+			Title: "Status",
+			Body:  "What your account holds, how much of it is working, and who may move it.",
+			Try:   "What is my position doing?",
+		},
+		{
+			Title: "Revoke",
+			Body:  "End the mandate. The agent can do nothing afterwards, and nobody has to agree.",
+			Try:   "Stop the agent",
+		},
+		{
+			Title: "Withdraw",
+			Body:  "Send everything back to your own wallet. The call takes no recipient, so there is nowhere else it can go.",
+			Try:   "Take everything back to my wallet",
+		},
+		{
+			Title: "Set your limits",
+			Body:  "Name the agent and choose the markets it may use. Setting the first one builds your account.",
+			Href:  "/",
+		},
+		{
+			Title: "See what moved",
+			Body:  "Your mandates and what has gone through them, which is the question the chain on its own cannot answer.",
+			Href:  "/portfolio",
+		},
+	}
 }
 
 // question prefers the model's own wording, and falls back to naming the gap.

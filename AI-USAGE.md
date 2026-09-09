@@ -1336,6 +1336,51 @@ READMEs.
   change, with the scroll position and the history length read out of the page. Production checked
   after deploying rather than after merging: 23 of 23.
 
+### 2026-09-09 — the evening: an account nobody had to open first, and an answer nobody read
+
+- **Done:** three things, all reported by Ghoza against the running app. Typing `p` in the chat
+  came back demanding three fields nobody had mentioned; the account had to be deployed by its own
+  button before any limit could be set; and "what can you do" answered with four bullets inside
+  four paragraphs.
+
+- **AI's role:** wrote all of it, and the interesting part is where each fix landed rather than
+  what it says.
+
+  The `p` bug had two candidate homes. The model's instructions said *"when it is clearly none of
+  the five, use swap"*, which forces nonsense onto the one path that then asks for parameters —
+  that line is now `about`. But a prompt cannot be tested, and the model kept answering `"swap"`
+  with three empty fields even after the change, so the fix that actually runs is four lines in
+  `Interpret`: a draft naming no token and no amount is not a swap request, whatever label came
+  back with it. Proved by pointing the backend at a fake OpenAI endpoint that reproduces the exact
+  reported draft.
+
+  Auto-open turned out to be smaller than the "gas sponsor" it looked like. The relayer path is
+  real — `executeWithSignature` and `factory.executeDigest` exist, the relayer key holds 0.005 ETH,
+  and `open` has no access control at all — but `apps/be` has keccak and secp256k1 and no
+  transaction signer, no RLP, no chain client, so a sponsored open means writing one two days
+  before the recording. It is also not needed: `open` is idempotent and permissionless, so the
+  write that needs an account can simply make one first. `openFirst()` runs in front of both
+  setters, and the EIP-5792 batch prepends it, which turns a new account and both its limits into
+  one confirmation.
+
+  That made the panel's own button a second way to do the same thing for an extra transaction, and
+  the two paths cannot both be exercised in one run — whichever goes first leaves nothing for the
+  other to open. The button went, and the fork test now presses **Nominate** against an account
+  that does not exist.
+
+  The help answer became six cards, and the shape is enforced rather than described: a card
+  carries a sentence to send **or** a screen to open, never both and never neither, so a card that
+  is only a bordered bullet fails the test. The swap card's token tags are the registry's own
+  symbols, which is why nothing in the browser holds a copy of that list.
+
+- **Verified:** the fork run is the evidence for the account change and it was rewritten to be
+  falsifiable — it now asserts `isOpen == false` *before* pressing anything, so a build where the
+  write does not open the account fails on the next line instead of passing quietly. Thirteen of
+  thirteen against a fork of Arbitrum One, including a real USDC transfer and the sweep. The card
+  test was checked by poisoning it: a card offering "borrowing" makes it fail, which is the only
+  reason its passing means anything. Backend suite green, `tsc` and Biome clean, and every screen
+  above read from a browser driven against the fork rather than from the diff.
+
 <!--
 Template for the next entry:
 
