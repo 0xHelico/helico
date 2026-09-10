@@ -15,6 +15,7 @@ import { Glyph } from "@/components/glyph";
 import { Card, NotDeployed } from "@/components/kit";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { VenueMark } from "@/components/venue-mark";
 import { CHAIN_ID, useAccountState } from "@/hooks/use-account-state";
 import { useUnlock } from "@/hooks/use-unlock";
 import {
@@ -367,6 +368,11 @@ function MarketRow({
 }) {
   return (
     <div className="flex items-center gap-3 rounded-xl border border-line bg-white p-3">
+      {/* The protocol's own mark. Four rows of text made a reader parse each line before they
+          could tell one market from another; a colour sorts the column by eye first. */}
+      <span className="shrink-0">
+        <VenueMark label={market.label} size={24} />
+      </span>
       <div className="min-w-0 flex-1">
         <p className="font-medium text-[12.5px] text-ink leading-none">
           {market.label} <span className="text-soft">{market.assetSymbol}</span>
