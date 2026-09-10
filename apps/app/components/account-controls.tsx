@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { useEffect } from "react";
 import { type Address, encodeFunctionData, getAddress } from "viem";
@@ -28,6 +28,7 @@ import {
   HELICO_AGENT,
   hasAgent,
 } from "@/lib/account";
+import { bestBps, MARKETS, type MarketStatus, readMarkets } from "@/lib/venues";
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
@@ -89,6 +90,16 @@ export function AccountControls() {
     await client.waitForTransactionReceipt({ hash });
     await refetch();
   };
+
+  // Every market the product offers, with what it pays and whether this account allows it. Read
+  // here rather than inside the list so the rates are in hand before anything is rendered — a
+  // toggle that appears before its number invites the one choice this screen exists to inform.
+  const markets = useQuery({
+    enabled: Boolean(client),
+    queryFn: () =>
+      readMarkets(client as NonNullable<typeof client>, account ?? null),
+    queryKey: ["markets", account],
+  });
 
   // One mutation for both writes. They differ by a function name and its arguments, and two
   // near-identical hooks would be two places to forget the receipt wait.
@@ -182,6 +193,8 @@ export function AccountControls() {
     data.agent !== null &&
     getAddress(data.agent) === getAddress(HELICO_AGENT);
   const permitted = venue.data === true;
+  const permittedCount = (markets.data ?? []).filter((m) => m.permitted).length;
+  const best = bestBps(markets.data ?? []);
   const onChain = chainId === CHAIN_ID;
   // Not gated on `opened` any more. The account does not have to exist before someone may say
   // what it permits: the write opens it on the way through, and until they set one of these there
@@ -292,26 +305,76 @@ export function AccountControls() {
 
         <Limit
           detail={
-            permitted
-              ? "Aave v3. Revoking leaves the way out open."
-              : "Nowhere yet."
+            permittedCount
+              ? "Revoking one leaves the way out of it open."
+              : "Nowhere yet. Choose below."
           }
           glyph="layers"
           name="Where it may go"
-          value={permitted ? "Aave v3" : "none"}
+          value={
+            permittedCount
+              ? `${permittedCount} of ${(markets.data ?? []).length || 4}`
+              : "none"
+          }
         >
-          <Switch
-            aria-label="Permit Aave v3 on Arbitrum One"
-            checked={permitted}
-            disabled={!canWrite || write.isPending}
-            onCheckedChange={(next) =>
-              write.mutate({
-                functionName: "permitVenue",
-                args: [AAVE_V3_POOL as Address, next],
-              })
-            }
-          />
+          <p className="text-[11px] text-faint">
+            {permittedCount
+              ? (markets.data ?? [])
+                  .filter((m) => m.permitted)
+                  .map((m) => `${m.label} ${m.assetSymbol}`)
+                  .join(", ")
+              : "The agent can reach nothing until you say so."}
+          </p>
         </Limit>
+      </div>
+
+      {/* **Every market, not the one this file used to name.** Four are deployed and verified;
+          until now the only address the product offered was Aave's, so an owner could not say yes
+          to a market paying almost twice as much. The addresses are a constant here on purpose —
+          permitting is where an owner names something the account trusts afterwards, so the choice
+          may not come from anywhere writable. Everything after the choice is derived. */}
+      <div className="mt-4 rounded-2xl border border-line bg-shade p-4">
+        <div className="flex items-baseline justify-between gap-3">
+          <p className="font-medium text-[13px] text-ink">Markets</p>
+          <p className="text-[11px] text-faint">
+            {best === null
+              ? "Rates are read live from each market."
+              : `Best on offer ${(best / 100).toFixed(2)}% — the enclave moves to whichever pays most.`}
+          </p>
+        </div>
+        <p className="mt-1 text-[11.5px] text-soft">
+          The agent may use any market you allow, and no others. It never gets a
+          recipient, so the worst it can do is move your money between your own
+          places.
+        </p>
+
+        <div className="mt-3 flex flex-col gap-2">
+          {(
+            markets.data ??
+            MARKETS.map((m) => ({ ...m, bps: null, permitted: false }))
+          ).map((market: MarketStatus) => (
+            <MarketRow
+              busy={write.isPending}
+              canWrite={canWrite}
+              key={market.pool}
+              market={market}
+              onToggle={(next) =>
+                write.mutate({
+                  functionName: "permitVenue",
+                  args: [market.pool, next],
+                })
+              }
+              top={best !== null && market.bps === best}
+            />
+          ))}
+        </div>
+
+        {markets.isLoading ? (
+          <p className="mt-3 flex items-center gap-2 text-[11px] text-faint">
+            <Loader2 className="size-3 animate-spin" />
+            Reading what each market pays.
+          </p>
+        ) : null}
       </div>
 
       {write.isPending ? (
@@ -331,6 +394,56 @@ export function AccountControls() {
         </p>
       )}
     </Card>
+  );
+}
+
+/**
+ * One market, what it pays, and the switch that allows it.
+ *
+ * The rate is shown next to the switch rather than somewhere else on the page, because the whole
+ * reason an owner would allow a second market is the number — and a toggle without it asks them to
+ * choose between four addresses.
+ */
+function MarketRow({
+  market,
+  canWrite,
+  busy,
+  top,
+  onToggle,
+}: {
+  market: MarketStatus;
+  canWrite: boolean;
+  busy: boolean;
+  top: boolean;
+  onToggle: (next: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-line bg-white p-3">
+      <div className="min-w-0 flex-1">
+        <p className="font-medium text-[12.5px] text-ink leading-none">
+          {market.label} <span className="text-soft">{market.assetSymbol}</span>
+        </p>
+        <p className="mt-1 truncate text-[11px] text-faint">{market.note}</p>
+      </div>
+      <div className="tabular shrink-0 text-right font-mono text-[12px]">
+        {market.bps === null ? (
+          <span className="text-faint">—</span>
+        ) : (
+          <span className={top ? "text-ink" : "text-soft"}>
+            {(market.bps / 100).toFixed(2)}%
+          </span>
+        )}
+        {top ? (
+          <p className="mt-0.5 font-sans text-[10px] text-faint">best</p>
+        ) : null}
+      </div>
+      <Switch
+        aria-label={`Permit ${market.label} ${market.assetSymbol}`}
+        checked={market.permitted}
+        disabled={!canWrite || busy}
+        onCheckedChange={onToggle}
+      />
+    </div>
   );
 }
 
