@@ -1918,6 +1918,33 @@ READMEs.
 - **Verified:** built and read off the rendered page — the whole thing now fits one screen at the
   reference's viewport, and the nav's active border sits on Limits where it should.
 
+### 2026-09-10 — the panel that carried a track claim came back
+
+- **Done:** Ghoza reported two cards touching on the portfolio, and the audit's first finding was
+  still open. Both were the same afternoon's work of mine.
+
+- **AI's role:** the touching cards were a spacing bug with a cause worth naming. `PortfolioHero`
+  is a **sibling** of the list it sits above, not a member of it, so `space-y-6` never reached the
+  gap between its card and the first section. The two sat flush and read as one long card with a
+  rule through it.
+
+  The larger fix is `MandatesPanel`. It is the one panel that shows an indexer answering a question
+  the chain cannot, and it fell off the page when the sections replaced the old layout — while the
+  chat's own card went on pointing at `/portfolio` for exactly that. It is back as the fifth
+  section.
+
+  `AccountPanel` is deleted instead, because the holdings section replaced its tiles and the limits
+  page shows the agent. What it carried that nothing else did was the account's own address, so
+  that is now a line under the holdings title: CREATE2 gives it before the contract exists, and it
+  is the one fact on that page a person cannot get anywhere else.
+
+  Two smaller ones in the same pass: the portfolio's column matches the limits page rather than the
+  reference's, whose own page carries a seven-column table, and the timestamp is larger again.
+
+- **Verified:** built and read off the rendered page — the gap is there, the address is under the
+  title, the column matches, and the chart's scale runs 0 to 1 rather than through a negative half
+  that a movement count cannot have.
+
 <!--
 Template for the next entry:
 

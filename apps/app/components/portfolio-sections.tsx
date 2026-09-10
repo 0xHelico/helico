@@ -53,9 +53,15 @@ function Filter({ label }: { label: string }) {
   );
 }
 
+const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
+
 export function Holdings() {
   const { data } = useAccountState();
   const held = totals(data);
+  // The account's own address, which left the page with the panel this replaced. It is the one
+  // fact here a person cannot get anywhere else: CREATE2 gives it before the contract exists.
+  const account =
+    data && data.kind !== "unconfigured" ? (data.address as string) : null;
   const rows =
     held && held.total > 0n
       ? [
@@ -67,7 +73,15 @@ export function Holdings() {
   return (
     <Card>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <SectionTitle>My Holdings</SectionTitle>
+        <div>
+          <SectionTitle>My Holdings</SectionTitle>
+          {account ? (
+            <p className="tabular mt-1 font-mono text-[11.5px] text-faint">
+              {short(account)} ·{" "}
+              {data?.kind === "open" ? "open" : "not opened yet"}
+            </p>
+          ) : null}
+        </div>
         <div className="flex items-center gap-1">
           <Filter label="Asset class" />
           <Filter label="Network" />

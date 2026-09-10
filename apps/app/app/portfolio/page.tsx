@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/chat/page-header";
+import { MandatesPanel } from "@/components/mandates-panel";
 import { PortfolioHero } from "@/components/portfolio-hero";
 import {
   Activity,
@@ -23,12 +24,20 @@ export default function PortfolioPage() {
         <PageHeader />
         {/* The page owns the gaps. Each panel used to add its own `mt-4`, so the space between
             two cards depended on which component drew the second one. */}
-        <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-10">
+        <main className="mx-auto w-full max-w-3xl flex-1 px-5 py-10">
           <PortfolioHero />
-          <div className="space-y-6">
+          {/* `mt-6` because the hero is a sibling of this list rather than a member of it, so
+              `space-y` never reached the gap between its card and the first section — the two sat
+              flush and read as one long card with a rule through it. */}
+          <div className="mt-6 space-y-6">
             <Holdings />
             <Allocation />
             <Activity />
+            {/* Back on the page. This is the one panel that shows an indexer answering a question
+                the chain cannot — Aqua's balances are private and four levels deep, and no event
+                parameter is indexed — and it fell off when the sections replaced the old layout,
+                while the chat's own card went on pointing here for exactly this. */}
+            <MandatesPanel />
           </div>
           <p className="mt-6 pb-4 text-[11.5px] text-faint">
             Read from the chain and from a subgraph, not from us.{" "}

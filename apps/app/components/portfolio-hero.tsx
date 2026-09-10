@@ -98,7 +98,7 @@ export function PortfolioHero() {
         </div>
         {/* No "Read" in front of it. The line is a timestamp and reads as one; the word only
             took space from the thing somebody is actually checking. */}
-        <span className="text-[15px] text-soft">{read ?? "Arbitrum One"}</span>
+        <span className="text-[17px] text-soft">{read ?? "Arbitrum One"}</span>
       </div>
 
       <Card>
