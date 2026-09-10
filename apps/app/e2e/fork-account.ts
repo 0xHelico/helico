@@ -246,9 +246,21 @@ check(
 //    button anywhere. The account is funded by a real transfer from a holder rather than by
 //    writing a balance into state: a sweep out of an account that could never have been paid in
 //    proves nothing about an account that can.
-const funded = await fundWithUsdc(account, 5_000_000n);
+// Through the app, not with a whale transfer. Naming the agent and allowing a market leaves an
+// account with nothing to move, and until #387 there was no way in the interface to change that:
+// the portfolio said "put something into your account" and offered no way to do it. The owner's
+// wallet is funded from a holder, and then the app moves it in.
+await fundWithUsdc(owner.address, 5_000_000n);
+await page.goto(`${APP}/limit`, { waitUntil: "domcontentloaded" });
+const amount = page.getByRole("textbox", { name: /how much USDC to move in/i });
+await amount.waitFor({ timeout: 30_000 });
+await amount.fill("5");
+const moveIn = page.getByRole("button", { name: /^Move it in$/ });
+await moveIn.click();
+await page.waitForTimeout(12_000);
+const funded = await read<bigint>("balanceOf", USDC, erc20Abi, [account]);
 check(
-  "the account holds USDC before the sweep",
+  "the app moves USDC from the wallet into the account",
   funded === 5_000_000n,
   `${funded}`,
 );
@@ -278,5 +290,5 @@ if (failures.length) {
   process.exit(1);
 }
 console.log(
-  "\nan account was opened, nominated, permitted and emptied through the app",
+  "\nan account was opened, nominated, permitted, funded and emptied through the app",
 );
