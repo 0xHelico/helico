@@ -1,7 +1,14 @@
 {
 	"$schema": "https://turbo.build/schema.json",
 	"globalDependencies": ["tsconfig.base.json", "bun.lock"],
-	"globalPassThroughEnv": ["ARBITRUM_RPC_URL", "GRAPH_STUDIO_URL", "RPC_URL"],
+	"globalPassThroughEnv": [
+		"ARBITRUM_RPC_URL",
+		"CONFIRM",
+		"DOLLARS",
+		"GRAPH_STUDIO_URL",
+		"MAKER_KEY",
+		"RPC_URL"
+	],
 	"tasks": {
 		"build": {
 			"dependsOn": ["^build"],
