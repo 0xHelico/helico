@@ -103,12 +103,17 @@ export function AccountPanel() {
           tint="bg-[#eef3fb]"
           value={usdc(data.idle)}
         />
+        {/* The asset, not a receipt. This said `aUSDC` while the number under it had already
+            stopped being Aave's: `readAccount` sums across every venue the owner permitted and
+            keeps the single-market reading only as a floor. So an owner whose capital the enclave
+            moved to Compound or Morpho read the right figure under Aave's name and Aave's ring.
+            It is USDC at work, wherever it is, and the note says which state it is in. */}
         <AssetTile
-          mark={<TokenMark size={22} symbol="aUSDC" />}
+          mark={<TokenMark size={22} symbol="USDC" />}
           note={
             bps === null ? "working" : `working · ${(bps / 100).toFixed(1)}%`
           }
-          symbol="aUSDC"
+          symbol="USDC"
           tint="bg-[#ecf5f0]"
           value={usdc(data.working)}
         />
