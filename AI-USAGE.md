@@ -1894,6 +1894,30 @@ READMEs.
   anywhere it should not be: `grep -i` across the repository and across every issue and pull
   request opened today returns nothing but a `ChevronDownIcon` that happens to contain the letters.
 
+### 2026-09-10 — the front page was mostly promises
+
+- **Done:** Ghoza said it was too busy and asked for the simplest version. Counted before cutting:
+  sixteen boxes before anything a person could press.
+
+- **AI's role:** the arithmetic made the cut obvious. Six capability cards of which **five said
+  "not wired yet"**, then the two controls that work, then three cards describing sentences the
+  chat already offers as cards of its own. Most of the screen was spent promising and describing,
+  and the product was below the fold.
+
+  Both lists became one sentence each. The roadmap sentence still names what is not built, which
+  is the part worth keeping: a page that lists only what works reads as a claim that nothing else
+  was ever intended.
+
+  What stayed is what is real — the balance, the two owner-only controls, and the four markets with
+  their live rates, which is the cross-protocol claim and the only place on the page where three
+  protocols are visible at once.
+
+  `capabilities.tsx` and `lib/capabilities.ts` are deleted rather than left unrendered, because
+  the same audit that prompted this found two other components already rendering nowhere.
+
+- **Verified:** built and read off the rendered page — the whole thing now fits one screen at the
+  reference's viewport, and the nav's active border sits on Limits where it should.
+
 <!--
 Template for the next entry:
 
