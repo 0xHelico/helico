@@ -2258,6 +2258,27 @@ READMEs.
   nothing breaks, but the plan to flip that header to enforcing is blocked on it. Named in the
   check rather than hidden: anything that is not that one directive still fails.
 
+### 2026-09-11 — Enabled, and holding nothing
+
+- **Done:** a "Money in" card on `/limit`, and `fork-account.ts` now funds through it instead of
+  with a whale transfer.
+
+  Ghoza asked how funds actually reach earn once everything is signed and enabled, and the honest
+  answer was that they could not: `supplyIdle` moves what the **account** holds, and nothing in the
+  app moved a token into the account. The portfolio said *"put something into your account"* and
+  offered no way to do it. It is one ERC-20 transfer, so there is no approval and nothing granted
+  to anybody. The account's address is shown too, because an exchange withdrawal goes to an address
+  rather than through a button. USDC only, and the reason is written in the file: every panel that
+  reads this account reads USDC, so a WETH deposit would land where the app cannot show it.
+
+- **AI's role:** Claude Opus 5 found the gap while answering the question, and built the control.
+  Ghoza asked the question that exposed it.
+
+- **Verified:** `bun run e2e:account` on a fork, funding through the interface rather than around
+  it: **the app moves USDC from the wallet into the account — 5000000**, and the sweep afterwards
+  still empties it. Thirteen checks, and the suite's own closing line now says opened, nominated,
+  permitted, **funded** and emptied through the app.
+
 <!--
 Template for the next entry:
 
