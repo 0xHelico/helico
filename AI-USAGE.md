@@ -2279,6 +2279,39 @@ READMEs.
   still empties it. Thirteen checks, and the suite's own closing line now says opened, nominated,
   permitted, **funded** and emptied through the app.
 
+### 2026-09-11 — Earn from the chat, skeletons, and starters that stay
+
+- **Done:** three things Ghoza asked for in one pass.
+
+  **Earn is its own action.** "Put my idle USDC to work" used to land on `about`, which described
+  earning to somebody trying to begin it, and the Earn card was a link to a page where they still
+  had to find the control. The action cannot move anything and does not claim to — the enclave
+  does the moving — so the card reads the account, names which of the three conditions is missing,
+  and carries the button for that one. It is the only action that answers *before* an account
+  exists, which is the point.
+
+  **Skeletons where a figure goes.** The totals said "nothing yet" and "Reading the account…"
+  while the chain was still being read, and Holdings showed an empty state — a claim that you hold
+  nothing rather than that nobody has looked.
+
+  **The starters stay, small.** They vanished on the first message. They are the fastest way to
+  reach four of the five actions, and someone who just asked one question is about to ask another.
+
+- **AI's role:** Claude Opus 5 implemented all three. Ghoza asked for each, and the framing of the
+  first was his: show the option even when the limits are not approved, and ask for the approval
+  when someone tries to execute.
+
+- **Verified:** `e2e/fork-chat-actions.ts` on a fork, **12 checks**, including the new pair: *earn
+  names the step that is missing* — "Nobody may move your money yet, and it has nowhere to go" —
+  and *and offers the way to do it*. Two Go tests hold the backend half: `earn` reaches its own
+  action rather than `about`, and the reply names all three conditions; and the Earn card carries a
+  sentence rather than a link, which is the thing that would quietly regress.
+
+  The classifier that returns `earn` is in this change and not deployed, and the chat's own route
+  forwards to the deployed backend, so that one request is stubbed in the browser run. Said in the
+  file rather than left to be discovered: the card is what is under test, and everything it reads
+  afterwards comes from the chain.
+
 <!--
 Template for the next entry:
 
