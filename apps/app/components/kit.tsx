@@ -13,7 +13,9 @@ export function Card({
   return (
     <section
       className={cn(
-        "rounded-2xl border border-line bg-white p-4 sm:p-5",
+        // Roomier than it was. Every card on the portfolio sits on one rhythm now, and the reference
+        // this was matched against breathes at about this much.
+        "rounded-2xl border border-line bg-white p-5 sm:p-6",
         className,
       )}
     >

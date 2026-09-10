@@ -7,7 +7,7 @@ import { useAccount } from "wagmi";
 
 import { GeneratedAvatar } from "@/components/generated-avatar";
 import { Card } from "@/components/kit";
-import { byDay, lastDays, Sparkline } from "@/components/sparkline";
+import { byDay, lastDays, Sparkline, zeroDays } from "@/components/sparkline";
 import { totals, useAccountState } from "@/hooks/use-account-state";
 import { configuredFactory } from "@/lib/account";
 import { readMovements } from "@/lib/mandates";
@@ -59,6 +59,11 @@ export function PortfolioHero() {
 
   // Rendered after mount only. The server has no clock the browser agrees with to the second,
   // and a timestamp is the one piece of a page guaranteed to differ between the two.
+  // `zeroDays` reads today's date, which the server and the browser need not agree on, so the
+  // chart waits for the client rather than risking a hydration mismatch over a tick label.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   const [read, setRead] = useState<string | null>(null);
   useEffect(() => {
     setRead(
@@ -75,12 +80,12 @@ export function PortfolioHero() {
 
   return (
     <>
-      <div className="flex flex-wrap items-center justify-between gap-3 py-6">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-5">
+        <div className="flex items-center gap-2.5">
           {/* Seeded on the address, so a wallet looks the same on every visit and two
               wallets never look alike. */}
-          <GeneratedAvatar name={address ?? "helico"} size={36} />
-          <h1 className="font-medium text-[19px] text-ink tracking-tight">
+          <GeneratedAvatar name={address ?? "helico"} size={28} />
+          <h1 className="font-medium text-[17px] text-ink tracking-tight">
             {isConnected && address ? (
               <>
                 Welcome, <span className="font-mono">{short(address)}</span>
@@ -99,7 +104,7 @@ export function PortfolioHero() {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="text-[12.5px] text-soft">In your account</div>
-            <div className="tabular mt-1 font-medium text-[44px] text-ink leading-none tracking-tight">
+            <div className="tabular mt-1 font-medium text-[38px] text-ink leading-none tracking-tight">
               {held ? <Amount value={held.total} /> : "—"}
             </div>
             <div className="tabular mt-2.5 font-mono text-[11.5px] text-faint">
@@ -113,30 +118,37 @@ export function PortfolioHero() {
             </div>
           </div>
 
-          {all.length > 0 ? (
-            <div className="flex rounded-full bg-shade p-0.5 text-[11.5px]">
-              {RANGES.map((r) => (
-                <button
-                  aria-pressed={range === r.label}
-                  className={cn(
-                    "rounded-full px-2.5 py-1 transition-colors",
-                    range === r.label
-                      ? "bg-white text-ink shadow-sm"
-                      : "text-soft hover:text-ink",
-                  )}
-                  key={r.label}
-                  onClick={() => setRange(r.label)}
-                  type="button"
-                >
-                  {r.label}
-                </button>
-              ))}
-            </div>
-          ) : null}
+          {/* Always here. It used to appear only once a wallet had movements, so an empty
+              account got a number and a hole where the reference has a control and a flat line. */}
+          <div className="flex rounded-full bg-shade p-0.5 text-[11.5px]">
+            {RANGES.map((r) => (
+              <button
+                aria-pressed={range === r.label}
+                className={cn(
+                  "rounded-full px-2.5 py-1 transition-colors",
+                  range === r.label
+                    ? "bg-white text-ink shadow-sm"
+                    : "text-soft hover:text-ink",
+                )}
+                key={r.label}
+                onClick={() => setRange(r.label)}
+                type="button"
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {days.length > 0 ? (
-          <Sparkline axes days={days} label="Aqua movements per day" />
+        {/* A wallet with no movements still gets the line, flat at zero. That is the reading
+            rather than a placeholder — nothing moved on each of those days — and the card keeps
+            its shape instead of collapsing to a number and a gap. */}
+        {mounted ? (
+          <Sparkline
+            axes
+            days={days.length > 0 ? days : zeroDays(span.days ?? 30)}
+            label="Aqua movements per day"
+          />
         ) : null}
       </Card>
     </>
