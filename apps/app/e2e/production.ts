@@ -124,11 +124,7 @@ const open = async (url: string): Promise<{ page: Page; text: string }> => {
   // own cards, and the other is written into the chat's greeting.
   for (const path of ["/chat", "/mandate"]) {
     const res = await fetch(`${APP}${path}`, { redirect: "manual" });
-    check(
-      `${path} still lands somewhere`,
-      res.status < 400,
-      `${res.status}`,
-    );
+    check(`${path} still lands somewhere`, res.status < 400, `${res.status}`);
   }
 }
 
