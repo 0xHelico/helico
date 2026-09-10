@@ -3,6 +3,8 @@
 import type { Address, PublicClient } from "viem";
 import { getAddress, isAddress, parseAbi } from "viem";
 
+import { readVenues, suppliedIn } from "./venues";
+
 /**
  * Only what the app calls. The factory has more; a smaller surface is a smaller lie.
  *
@@ -107,11 +109,14 @@ export type AccountState =
 export type AccountTokens = { idle: Address; working: Address };
 
 /**
- * Arbitrum One. The idle side is what a swap is paid from; the working side is Aave's receipt for
- * the same asset — which is why they are one asset in two states rather than two assets.
+ * Arbitrum One. The idle side is what a swap is paid from; the working side is what the same asset
+ * is worth wherever it has been put to work — which is why they are one asset in two states rather
+ * than two assets.
  *
- * Here rather than in each component. Three of them declared this pair, and a fourth would have
- * been three chances to get one character wrong in an address nobody reads twice.
+ * `working` names Aave's receipt only as the fallback for an account with no code yet. For an open
+ * account the working side is summed across every market its owner has permitted, because capital
+ * the enclave moved to Compound is still the owner's and a panel that showed it as zero would be
+ * telling them their money is idle at the moment it started earning more.
  */
 export const ACCOUNT_TOKENS: AccountTokens = {
   idle: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
@@ -162,6 +167,24 @@ export async function readAccount(
     return { kind: "unopened", address, idle, working };
   }
 
+  // An open account is asked where its capital actually is, rather than assumed to keep it in the
+  // one market this file used to name.
+  //
+  // **Never below the reading it replaces.** `tokens.working` is read directly above, so it is a
+  // floor on what is at work; the venue sweep should include the same position and usually more.
+  // Taking the larger is what makes a failure harmless — a venue that will not answer returns no
+  // position rather than throwing, so an empty result and an account with nothing at work look
+  // identical from here, and the difference matters in the direction that tells an owner their
+  // money is idle at the moment it started earning.
+  let atWork = working;
+  try {
+    const { positions } = await readVenues(client, address, [tokens.idle]);
+    const across = suppliedIn(positions, tokens.idle);
+    if (across > atWork) atWork = across;
+  } catch {
+    // Keep the single-market reading.
+  }
+
   let agent: Address | null = null;
   try {
     agent = await client.readContract({
@@ -173,7 +196,7 @@ export async function readAccount(
     // An account from an older implementation may not answer this. The address and the
     // balances are still true, and they are the part worth showing.
   }
-  return { kind: "open", address, idle, working, agent };
+  return { kind: "open", address, idle, working: atWork, agent };
 }
 
 /** Zero means nobody, and `agent()` returning the zero address is how the account says so. */

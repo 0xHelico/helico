@@ -38,7 +38,7 @@ import {
 	ReceiptKind,
 	type SwapMandate,
 } from '@helico/plugin-1inch'
-import { createPublicClient, createWalletClient, http, parseAbi, toHex } from 'viem'
+import { createPublicClient, createWalletClient, formatUnits, http, parseAbi, toHex } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { arbitrum } from 'viem/chains'
 
@@ -55,6 +55,8 @@ const AUSDC = '0x724dc807b04555b71ed48a6896b6F41593b8C637' as const
 const ORACLE_BOARD = '0xe8515af92442A5CDa67D1F32D1c8a987ba7e7d39' as const
 const COMPOUND_VENUE = '0x1eC57cE1DdfdC7a4EbF4F54Aedee19ab73fcBB2E' as const
 const MORPHO_VENUE = '0xBBa798A61f0D7D1AE51466Fd4045Cd2Ea25c9A29' as const
+/** The WETH market, deployed 10 September. `symbol()` answers `hcWETH` and `decimals()` 18. */
+const COMPOUND_WETH_VENUE = '0xb0A125F539237b553025e2cb180f9C40B25918cD' as const
 const ETH_USD_FEED = '0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612' as const
 const COMET = '0x9c4ec768c28520B50860ea7a15bd7213a9fF58bf' as const
 const MORPHO_VAULT = '0x5c0C306Aaa9F877de636f4d5822cA9F2E81563BA' as const
@@ -889,9 +891,142 @@ check(
 	`idle ${walletBeforeParking} → ${walletAfterParking}`,
 )
 
+// ── the question a user actually asks ─────────────────────────────────────────
+//
+// "Can I put five dollars of each side somewhere it earns?" Everything above proves parts of it
+// at sizes chosen to make arithmetic legible — a hundred USDC, three protocols. This is the real
+// amount Ghoza intends to open with, in both assets, through the venues that are on chain today.
+//
+// The WETH leg is the half that has never run outside a test that deployed its own copy of the
+// venue: `ForkCompoundVenueWeth.t.sol` proves the code, and this proves the deployment.
+console.log('')
+
+const FIVE_USDC = 5_000000n
+// Sized from the feed read above rather than from a constant, so the leg is still five dollars
+// next week. `answer` carries eight decimals; 1e10 lifts it to the 1e18 the division wants.
+const wethForFiveDollars = (5n * 10n ** 18n * 10n ** 18n) / (BigInt(answer) * 10n ** 10n)
+
+await send({
+	abi: accountAbi,
+	address: account,
+	args: [COMPOUND_WETH_VENUE, true],
+	functionName: 'permitVenue',
+})
+check('the owner permitted the live WETH venue', true, COMPOUND_WETH_VENUE)
+
+await fund(USDC, USDC_WHALE, account, FIVE_USDC)
+// Wrapped rather than impersonated. WETH holds its own backing, so impersonating it to transfer
+// out does not work — the same reason the reserve above is funded this way.
+await send({ abi: erc20, address: WETH, functionName: 'deposit', value: wethForFiveDollars })
+await send({
+	abi: erc20,
+	address: WETH,
+	args: [account, wethForFiveDollars],
+	functionName: 'transfer',
+})
+
+const startingIdle = await Promise.all(
+	([USDC, WETH] as const).map((token) =>
+		pub.readContract({ abi: erc20, address: token, args: [account], functionName: 'balanceOf' }),
+	),
+)
+
+const legs = [
+	{ asset: USDC, venue: COMPOUND_VENUE, amount: FIVE_USDC, name: 'five USDC', unit: 6 },
+	{
+		asset: WETH,
+		venue: COMPOUND_WETH_VENUE,
+		amount: wethForFiveDollars,
+		name: 'five dollars of ETH',
+		unit: 18,
+	},
+] as const
+
+// A snapshot, because the growth check below moves the clock a month and anything reading a rate
+// afterwards would be reading one from a fork that thinks it is October.
+const earningSnapshot = (await rpc('evm_snapshot', [])).result as string
+
+/** What this account's position at a venue is worth, in the asset's own units. */
+const positionAt = async (venue: `0x${string}`) =>
+	pub.readContract({
+		abi: venueAbi,
+		address: venue,
+		args: [
+			await pub.readContract({
+				abi: venueAbi,
+				address: venue,
+				args: [account],
+				functionName: 'balanceOf',
+			}),
+		],
+		functionName: 'previewRedeem',
+	})
+
+const before: bigint[] = []
+for (const leg of legs) {
+	// **The increment, not the total.** The parking block above already put a hundred USDC into
+	// this same Compound venue, so a check on the position's size passes at 105 whether the five
+	// arrived or not — which it did, on the first run of this, reading `105 of position` under a
+	// line that said five. What has to be true is that the position grew by what was supplied.
+	const was = await positionAt(leg.venue)
+	await send({
+		abi: accountAbi,
+		address: account,
+		args: [leg.venue, leg.asset, leg.amount],
+		functionName: 'supplyIdle',
+	})
+	const now = await positionAt(leg.venue)
+	before.push(now)
+	check(
+		`  ${leg.name} went into the live venue`,
+		now - was >= leg.amount - 10n && now - was <= leg.amount,
+		`position +${formatUnits(now - was, leg.unit)}, now ${formatUnits(now, leg.unit)}`,
+	)
+}
+
+const endingIdle = await Promise.all(
+	([USDC, WETH] as const).map((token) =>
+		pub.readContract({ abi: erc20, address: token, args: [account], functionName: 'balanceOf' }),
+	),
+)
+check(
+	'and the account holds neither of them liquid any more',
+	startingIdle[0] - (endingIdle[0] ?? 0n) === FIVE_USDC &&
+		startingIdle[1] - (endingIdle[1] ?? 0n) === wethForFiveDollars,
+	`USDC ${startingIdle[0]} → ${endingIdle[0]}, WETH ${startingIdle[1]} → ${endingIdle[1]}`,
+)
+
+// **"Earning" is the word being checked, and supplying is not it.** A venue that took the money
+// and paid nothing would pass every assertion above. Thirty days of the real markets' own interest
+// is the only thing that separates a place capital sits from a place it grows.
+await rpc('evm_increaseTime', [30 * 24 * 60 * 60])
+await rpc('evm_mine', [])
+for (const [index, leg] of legs.entries()) {
+	const now = await pub.readContract({
+		abi: venueAbi,
+		address: leg.venue,
+		args: [
+			await pub.readContract({
+				abi: venueAbi,
+				address: leg.venue,
+				args: [account],
+				functionName: 'balanceOf',
+			}),
+		],
+		functionName: 'previewRedeem',
+	})
+	const was = before[index] ?? 0n
+	check(
+		`  and after thirty days the ${leg.asset === USDC ? 'USDC' : 'WETH'} position is worth more`,
+		now > was,
+		`${formatUnits(was, leg.unit)} → ${formatUnits(now, leg.unit)}`,
+	)
+}
+await rpc('evm_revert', [earningSnapshot])
+
 console.log(
 	failures.length === 0
-		? '\nevery deployed contract answered at its own address: a mandate encoded, shipped, quoted, filled and paid out of Aave, and one account reaching three protocols through the live venues'
+		? '\nevery deployed contract answered at its own address: a mandate encoded, shipped, quoted, filled and paid out of Aave, one account reaching three protocols through the live venues, and five dollars a side earning in both assets'
 		: `\n${failures.length} failed: ${failures.join('; ')}`,
 )
 process.exit(failures.length === 0 ? 0 : 1)

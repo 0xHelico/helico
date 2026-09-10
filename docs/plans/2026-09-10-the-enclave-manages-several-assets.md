@@ -65,3 +65,58 @@ Option 3 is written down because it is the one that looks reasonable in a diff a
 3. `decideAcrossAssets`, ranking by value with the rate-gap fallback
 4. `index.ts` emits the winner
 5. Tests: two assets that disagree, a stale feed, and one asset behaving exactly as today
+
+## What the second venue found, after the fact
+
+**10 September 2026, once `cWETHv3` was deployed at `0xb0A125F5…18cD` (#340).**
+
+This plan carried an assumption it never said out loud: that a market listed in `pools` answers for
+every asset in `assets`. That was true of everything the plan could see. Aave's Pool serves every
+reserve, so `getReserveAToken(USDC)` and `getReserveAToken(WETH)` both answer from one address, and
+the whole `asset × pool` grid in step 2 was dense.
+
+It is not true of the venues. A `CompoundVenue` or a `MorphoVenue` holds exactly one market, and
+`getReserveAToken` on any other asset **reverts** — deliberately, so that a venue cannot be asked
+about capital it has no way to move. Measured at the live addresses before anything was changed:
+
+```
+                 getReserveAToken(USDC)   getReserveAToken(WETH)
+aave             0x724dc807…C637          0xe50fA9b3…28c8
+compound USDC    0x1eC57cE1…BB2E          revert
+morpho USDC      0xBBa798A6…c9A29         revert
+compound WETH    revert                   0xb0A125F5…18cD
+```
+
+And `ethCallBatch` throws on the first reply without a `result`, which is the behaviour
+`readAccountState` documents and wants: *"a view missing one market's rate is a view that would
+pick the best of the rest and call it the best."*
+
+Put together: **adding WETH to `assets` would not have earned less, it would have stopped every
+run.** Every five minutes, inside a TEE, with the failure landing where nobody was watching for it.
+The grid was never dense; the plan just never had a sparse row to notice.
+
+### The fix, and the one that was refused
+
+A market may now name the assets it lists. A market that names none lists them all, which is what
+an Aave Pool is and what keeps every earlier configuration meaning what it meant.
+
+The alternative — **treat a revert as "this market does not list this asset"** — needs no config
+change at all and is the one that looks reasonable in a diff. It is wrong for the same reason the
+batch throws in the first place: a dropped RPC call, a paused venue, a market mid-upgrade and a
+market that genuinely does not hold the asset all arrive as the same silence, and the run would
+carry on comparing whatever was left and call it the best. Written down, a revert stays a failure.
+
+Two refusals came with it, because a scope has two ways to be wrong:
+
+- an asset no market lists — capital the enclave watches and can never place, which reads as a
+  decision to hold on every run, forever, green
+- a market listing no asset the account holds — usually a typo in an address, and always a market
+  that will never be compared to anything
+
+### What this cost
+
+`STRIDE`. Every asset used to spend `1 + pools.length * VENUE_READS` calls, so its slice could be
+multiplied out; now an asset scoped to fewer markets shifts everything after it, and the reader
+keeps a cursor instead. That is exactly the arithmetic the earlier mutation test was written
+against — forcing `base` to a constant left all three shape tests green — so the same shape is
+checked again with values, at slices that are no longer equal in length.

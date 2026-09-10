@@ -26,7 +26,7 @@ function check(name: string, ok: boolean, detail = "") {
   }
 }
 
-const wallet = (key: `0x${string}`, address: string) => `
+const wallet = (_key: `0x${string}`, address: string) => `
 (() => {
   const provider = {
     isMetaMask: true, _events: {},

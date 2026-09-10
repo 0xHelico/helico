@@ -6,11 +6,30 @@
 	"chainSelectorName": "ethereum-mainnet-arbitrum-1",
 	"account": "0x0000000000000000000000000000000000000000",
 	"pools": [
-		{ "address": "0x794a61358D6845594F94dc1DB02A252b5b4814aD", "kind": "rebasing" },
-		{ "address": "0x1eC57cE1DdfdC7a4EbF4F54Aedee19ab73fcBB2E", "kind": "share-priced" },
-		{ "address": "0xBBa798A61f0D7D1AE51466Fd4045Cd2Ea25c9A29", "kind": "share-priced" }
+		{
+			"address": "0x794a61358D6845594F94dc1DB02A252b5b4814aD",
+			"kind": "rebasing"
+		},
+		{
+			"address": "0x1eC57cE1DdfdC7a4EbF4F54Aedee19ab73fcBB2E",
+			"kind": "share-priced",
+			"assets": ["0xaf88d065e77c8cC2239327C5EDb3A432268e5831"]
+		},
+		{
+			"address": "0xBBa798A61f0D7D1AE51466Fd4045Cd2Ea25c9A29",
+			"kind": "share-priced",
+			"assets": ["0xaf88d065e77c8cC2239327C5EDb3A432268e5831"]
+		},
+		{
+			"address": "0xb0A125F539237b553025e2cb180f9C40B25918cD",
+			"kind": "share-priced",
+			"assets": ["0x82aF49447D8a07e3bd95BD0d56f35241523fBab1"]
+		}
 	],
-	"assets": ["0xaf88d065e77c8cC2239327C5EDb3A432268e5831"],
+	"assets": [
+		"0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+		"0x82aF49447D8a07e3bd95BD0d56f35241523fBab1"
+	],
 	"agent": "0x84C3891a9693c891877aC474a90d17d29075fcAf",
 	"reportReceiver": "0x0000000000000000000000000000000000000000",
 	"policyHash": "0x0000000000000000000000000000000000000000000000000000000000000000",

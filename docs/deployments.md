@@ -4,6 +4,96 @@ Arbitrum One, chain id 42161. Every address below was read back from the chain a
 broadcast, not copied from a script's output — the third column is what the contract answers when
 asked about itself.
 
+## 10 September 2026 — a Compound venue for ETH
+
+`CompoundVenue` was written, reviewed and deployed against a six-decimal market only. This one
+points at `cWETHv3`, so the ETH side of a position earns while it waits instead of sitting idle —
+which is what "USDC **and** ETH can both be earning" needs in order to be true.
+
+| Contract | Address | Answers | Source |
+|---|---|---|---|
+| `CompoundVenue` (WETH) | [`0xb0A125F539237b553025e2cb180f9C40B25918cD`](https://arbiscan.io/address/0xb0A125F539237b553025e2cb180f9C40B25918cD#code) | `symbol()` → `hcWETH`, `decimals()` → 18, `UNDERLYING_ASSET_ADDRESS()` → WETH, `COMET()` → `0x6f7D514b…` | verified |
+
+Read back from the chain after the broadcast, not from the script's output:
+
+```
+symbol                        hcWETH
+name                          Helico Compound WETH
+decimals                      18
+ASSET                         0x82aF49447D8a07e3bd95BD0d56f35241523fBab1   WETH
+COMET                         0x6f7D514bbD4aFf3BcD1140B7344b32f063dEe486   cWETHv3
+UNDERLYING_ASSET_ADDRESS()    0x82aF49447D8a07e3bd95BD0d56f35241523fBab1   the Aave spelling
+getReserveAToken(WETH)        0xb0A125F539237b553025e2cb180f9C40B25918cD   itself
+currentLiquidityRate          12469942161792000000000000 ray  =  1.247% APR
+```
+
+The last two lines are the ones worth reading twice. The venue names **itself** as the receipt it
+issues, which is the whole reason a Compound market can be reached by apps that only know how to
+ask Aave's questions. And the rate is annual in ray — Comet answers per-second in wad, and the
+venue does both conversions so the enclave never learns which protocol replied.
+
+```
+tx         0x4ce467b3b8e8eb7a3f358b599e8b6020bb961ab06d70f914cd772120c9326188
+gas used   1,400,224   at 0.0201 gwei   cost 0.0000281 ETH
+deployer   0x6DCd7485aB17e0CBD0723b8435a35bb8d029439E   0.0073941 -> 0.0073660
+```
+
+### No contract changed, and that was the thing to check
+
+Nothing in `CompoundVenue` writes a scale factor down: name, symbol and `decimals` are all derived
+from `comet.baseToken()`. So an eighteen-decimal market should need no edit at all. **Should** is
+not a claim a submission is allowed to make, so `ForkCompoundVenueWeth.t.sol` watches it instead —
+seven tests against real `cWETHv3`, the mirror of the USDC file, with the maker lending WETH and
+selling it so the token unwound out of Compound is the eighteen-decimal one.
+
+The test that would catch a hidden `1e6` is **not** the value-conservation check. That compares
+the venue against itself, and a conversion wrong by a constant factor satisfies it in both places
+at once. It is the anchor outside the venue: the payout has to be a real slice of a twenty ETH
+position, and a factor of a million leaves that window in either direction.
+
+`DeployCompoundVenue.s.sol` takes the asset as an argument and asks the chain to agree, rather
+than reading it off the market — read off the market, the check could not fail. Both guards were
+exercised against a fork before the broadcast:
+
+```
+ASSET=<USDC> over cWETHv3     ->  AssetMismatch(0x6f7D514b…, 0x82aF4944…, 0xaf88d065…)
+COMET_ADDRESS=0x…dEaD         ->  NoCode(0x…dEaD)
+```
+
+### Naming it took a code change, which was not expected
+
+`config.production.json` now carries it, and adding the line turned out not to be a one-line
+change. Every market in that list was read for every asset, which was right while Aave was the
+only market — one Pool serves every reserve. A `CompoundVenue` holds exactly one market and
+`getReserveAToken` on any other asset **reverts**, and a failed call fails the whole run by design.
+So adding WETH to `assets` against a list holding three USDC-only venues would not have earned
+less; it would have stopped every run, every five minutes, in a TEE.
+
+Measured before it was written, at the live addresses:
+
+```
+                 getReserveAToken(USDC)   getReserveAToken(WETH)
+aave             0x724dc807…C637          0xe50fA9b3…28c8
+compound USDC    0x1eC57cE1…BB2E          revert
+morpho USDC      0xBBa798A6…c9A29         revert
+compound WETH    revert                   0xb0A125F5…18cD
+```
+
+So a market may now name the assets it lists, and one that names none lists them all — which is
+what an Aave Pool is, and what keeps every configuration written before this from needing a
+migration. Declared rather than discovered on purpose: treating a revert as "does not list it"
+would make a dropped RPC call, a paused venue and a market that genuinely does not hold the asset
+all arrive as the same silence.
+
+### Still inert
+
+- the owner calls `permitVenue(0xb0A125F5…)` — the account refuses any market it was not told
+  about, and there is no account yet
+- ~~`config.production.json` names it with `kind: "share-priced"`~~ — done, scoped to WETH
+- the workflow is redeployed, because config travels with the binary
+
+Until all three, ETH does not earn and the submission must not say it does.
+
 ## 10 September 2026 — the Aqua apps went behind proxies
 
 | Contract | Address | Answers | Source |

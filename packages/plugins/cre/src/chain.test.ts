@@ -388,3 +388,173 @@ describe('several assets', () => {
 		expect(state.assets[1]?.venues[0]?.receipt).not.toBe(zeroAddress)
 	})
 })
+
+describe('markets that list only some of the assets', () => {
+	// Aave's Pool serves every reserve, so one address answers for USDC and WETH alike. A
+	// `CompoundVenue` is the opposite: it holds one market, and `getReserveAToken` on any other
+	// asset **reverts**. Measured on Arbitrum One on 10 September 2026, not assumed — Aave answered
+	// for both, and each of the three venues answered for its own asset and reverted on the other.
+	const USDC_VENUE = `0x${'31'.repeat(20)}` as Address
+	const WETH_VENUE = `0x${'32'.repeat(20)}` as Address
+	const USDC_RECEIPT = `0x${'41'.repeat(20)}`
+	const WETH_RECEIPT = `0x${'42'.repeat(20)}`
+	const WETH_RATE = 12_469_942_161_792_000_000_000_000n // the real cWETHv3 rate, 1.247%
+	const USDC_VENUE_RATE = 55_000_000_000_000_000_000_000_000n // 5.5%, the best on offer
+
+	const scoped = [
+		{ address: AAVE_POOL.toLowerCase() as Address, kind: 'rebasing' as const },
+		{
+			address: USDC_VENUE,
+			kind: 'rebasing' as const,
+			assets: [USDC.toLowerCase() as Address],
+		},
+		{
+			address: WETH_VENUE,
+			kind: 'rebasing' as const,
+			assets: [WETH.toLowerCase() as Address],
+		},
+	]
+
+	const markets: Record<string, Market> = {
+		[AAVE_POOL.toLowerCase()]: aave(),
+		[USDC_VENUE]: market(USDC_RECEIPT, USDC_VENUE_RATE, 8_000_000_000n),
+		[WETH_VENUE]: market(WETH_RECEIPT, WETH_RATE, 3_000_000_000n),
+	}
+
+	/** Which assets each market will answer about. Anything else throws, as the real ones revert. */
+	const listedBy: Record<string, string[]> = {
+		[AAVE_POOL.toLowerCase()]: [USDC.toLowerCase(), WETH.toLowerCase()],
+		[USDC_VENUE]: [USDC.toLowerCase()],
+		[WETH_VENUE]: [WETH.toLowerCase()],
+	}
+
+	/** The asset argument out of a one-address call, which is the last twenty bytes of the word. */
+	const askedAbout = (data: Hex) => `0x${data.slice(-40)}`.toLowerCase()
+
+	const readScoped = () => {
+		const assets = [USDC.toLowerCase(), WETH.toLowerCase()] as Address[]
+		const base = handlers(markets)
+		// The venue's own guard, modelled rather than described: `require(asset == ASSET)`. Without
+		// it this suite would pass with the scoping removed, because a fake that answers every
+		// question cannot tell a question that was asked from one that was not.
+		const guard =
+			(inner: (data: Hex, to: string) => Hex) =>
+			(data: Hex, to: string): Hex => {
+				const lists = listedBy[to.toLowerCase()]
+				if (lists && !lists.includes(askedAbout(data))) {
+					throw new Error(`WrongAsset: ${to} was asked about ${askedAbout(data)}`)
+				}
+				return inner(data, to)
+			}
+		const handlersWithGuard = {
+			...base,
+			[sel('function getReserveAToken(address)')]: guard(
+				base[sel('function getReserveAToken(address)')] as (d: Hex, t: string) => Hex,
+			),
+			[sel('function getVirtualUnderlyingBalance(address)')]: guard(
+				base[sel('function getVirtualUnderlyingBalance(address)')] as (d: Hex, t: string) => Hex,
+			),
+			[sel('function getReserveData(address)')]: guard(
+				base[sel('function getReserveData(address)')] as (d: Hex, t: string) => Hex,
+			),
+		}
+		const fake = fakeRuntime({
+			config: configSchema.parse({ ...config, pools: scoped, assets }),
+			secrets: {},
+			now: 1_700_000_000,
+			handlers: handlersWithGuard,
+		})
+		const state = readAccountState(
+			fake.runtime,
+			config.rpcUrl,
+			{ account: config.account as Address, pools: scoped, assets },
+			{},
+		)
+		return { state, ...fake }
+	}
+
+	test('a scoped market is never asked about an asset it does not list', () => {
+		// **The whole point of the scope, and it is not an optimisation.** One reverting call fails
+		// the batch, so an unscoped USDC venue in a configuration that also names WETH does not
+		// earn less — it stops every run. The guard above throws exactly where the real venue
+		// reverts, so this test failing is what the deployed workflow would have done.
+		expect(() => readScoped()).not.toThrow()
+	})
+
+	test('each asset sees the markets that take it, and only those', () => {
+		const { state } = readScoped()
+		expect(state.assets[0]?.venues.map((v) => v.pool)).toEqual([
+			AAVE_POOL.toLowerCase() as Address,
+			USDC_VENUE,
+		])
+		expect(state.assets[1]?.venues.map((v) => v.pool)).toEqual([
+			AAVE_POOL.toLowerCase() as Address,
+			WETH_VENUE,
+		])
+	})
+
+	test('and each still reads its own answers, with the slices no longer equal in length', () => {
+		// **The assertion the shape check above cannot make**, and the reason the reader keeps a
+		// cursor instead of multiplying out a stride. Every asset used to spend the same number of
+		// calls; now USDC's slice and WETH's are only the same length by coincidence, and an asset
+		// scoped to fewer markets than the one before it shifts everything after it.
+		//
+		// Shape survives that — both lists are still two long and the addresses are still right.
+		// Only the values move, so only the values catch it.
+		const { state } = readScoped()
+		expect(state.assets[0]?.idle).toBe(1_000_000_000n)
+		expect(state.assets[1]?.idle).toBe(700_000_000n)
+		expect(state.assets[0]?.venues[1]?.supplyRateRay).toBe(USDC_VENUE_RATE)
+		expect(state.assets[1]?.venues[1]?.supplyRateRay).toBe(WETH_RATE)
+		expect(state.assets[0]?.venues[1]?.venueLiquidity).toBe(8_000_000_000n)
+		expect(state.assets[1]?.venues[1]?.venueLiquidity).toBe(3_000_000_000n)
+		expect(state.assets[0]?.venues[1]?.receipt).toBe(USDC_RECEIPT as Address)
+		expect(state.assets[1]?.venues[1]?.receipt).toBe(WETH_RECEIPT as Address)
+	})
+
+	test('and it is still one round trip', () => {
+		// Scoping removes calls; it must not add a batch. The reason this workflow is one and not
+		// one per asset is that a single view holds all of it before anything is decided.
+		const scopedRun = readScoped()
+		expect(scopedRun.rpcRequests.length).toBe(read(onlyAave()).rpcRequests.length)
+	})
+})
+
+describe('the config refuses a scope that cannot work', () => {
+	const withPools = (pools: unknown[], assets: string[]) =>
+		configSchema.safeParse({ ...config, pools, assets })
+
+	test('an asset no market lists', () => {
+		// Capital the enclave watches sit idle and can never place, which reads on every run as a
+		// decision to hold. Green forever, and one side of the account never earns anything.
+		const result = withPools(
+			[{ address: AAVE_POOL.toLowerCase(), kind: 'rebasing', assets: [USDC.toLowerCase()] }],
+			[USDC.toLowerCase(), WETH.toLowerCase()],
+		)
+		expect(result.success).toBe(false)
+		expect(JSON.stringify(result.error?.issues)).toContain('every asset needs at least one market')
+	})
+
+	test('a market scoped to an asset the account does not hold', () => {
+		const result = withPools(
+			[
+				{ address: AAVE_POOL.toLowerCase(), kind: 'rebasing' },
+				{ address: `0x${'31'.repeat(20)}`, kind: 'rebasing', assets: [WETH.toLowerCase()] },
+			],
+			[USDC.toLowerCase()],
+		)
+		expect(result.success).toBe(false)
+		expect(JSON.stringify(result.error?.issues)).toContain('at least one asset the account holds')
+	})
+
+	test('and an unscoped market still means every asset', () => {
+		// The compatibility that keeps every configuration written before this from needing a
+		// migration on the day it is read.
+		const result = withPools(
+			[{ address: AAVE_POOL.toLowerCase(), kind: 'rebasing' }],
+			[USDC.toLowerCase(), WETH.toLowerCase()],
+		)
+		expect(result.success).toBe(true)
+		expect(result.data?.pools[0]?.assets).toBeUndefined()
+	})
+})

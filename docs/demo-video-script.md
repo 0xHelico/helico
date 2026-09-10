@@ -37,7 +37,29 @@ that exists, and #22 asks for a full-length take by **11 September** rather than
 A shot that has to fall back is not a weaker video. A shot that claims something untrue ends the
 submission.
 
-### Pre-flight, re-run 9 September, evening — **read this one first**
+### Pre-flight, re-run 10 September — **read this one first**
+
+Nothing moved to a new address today. What changed is what the addresses *are*, what one more of
+them does, and one row below that stopped being true.
+
+> **The layers below are history, not instructions.** Each one was true when it was written and
+> newer layers supersede older ones wherever they disagree — the older rows are kept because the
+> difference is the record. A clause that has since expired is struck through where it sits, so a
+> reader who lands in the middle of this file is not handed a rule that stopped applying.
+> **Where two layers disagree, this one wins.**
+
+| | State, measured 10 September |
+|---|---|
+| **Both Aqua apps are upgradeable now** | `HelicoMandateSwap` `0x0524a353…6041` and `HelicoOracleBoard` `0xe8515af9…7d39` are **163-byte proxies** — read from the EIP-1967 slot, not assumed — delegating to `0xfdefc345…b557` and `0xc54cf202…b410`. The addresses a maker ships to are unchanged, which is the point of them. Both proxy and implementation are verified |
+| **A sixth contract: ETH earns too** | `CompoundVenue` over `cWETHv3` at [`0xb0A125F5…18cD`](https://arbiscan.io/address/0xb0A125F539237b553025e2cb180f9C40B25918cD#code), verified. `symbol()` → `hcWETH`, `decimals()` → 18, rate **125 bps**. No contract changed to get it: the venue derives its name, symbol and decimals from `comet.baseToken()` |
+| **Rates, read today** | Aave **274**, `cUSDCv3` **287**, `bbqUSDC` **446**, `cWETHv3` **125** basis points, all in Aave's units. They move; re-read on the day rather than quoting these |
+| **New evidence — the deployment, not the source** | `scripts/check-deployed.ts` is **46 checks against the live addresses**. It opens an account through the real factory, reaches Aave, Compound and Morpho from it, and puts five USDC and five dollars of ETH to work in both assets — then moves the clock thirty days and requires both positions to be worth more. Fork evidence, so say *"measured on a fork"* |
+| **New evidence — a maker position, filled** | `scripts/rehearse-maker.ts` ships a five-dollar-a-side Aqua position, finds it again through its own `Shipped` event, quotes it, and **has a second wallet fill it**. That had never happened anywhere before, on a fork or a chain. Still a fork |
+| **The escape hatch reaches further** | The sweep used to name two tokens and now names every asset and every receipt the account's own logs say it can hold. For the 2:50 shot this matters: an account with capital in Compound now empties completely |
+| **Still not sayable: multiple protocols in production** | Two of the three reasons are unchanged — no account exists on Arbitrum One, and `permitVenue` has never been called. `config.production.json` **does** now name four markets and two assets, so that clause is retired. And the deployed workflow is still the **8 September** build: 14 transactions to `WorkflowRegistry` from the deployer, every one on 8 September, the last at 13:42 UTC, checked on Ethereum mainnet |
+| The account | **Still none opened on mainnet.** `eth_getLogs` on the factory returns zero events of any kind, cross-checked through `cast` and through a raw JSON-RPC call because `cast logs` has truncated silently before |
+
+### Pre-flight, re-run 9 September, evening
 
 Four contracts went out this evening and **two of them replace addresses the tables below still
 name**. A take recorded against the older pair would show a mandate app that cannot accept today's
@@ -48,7 +70,7 @@ mandate.
 | **Two addresses changed** | `HelicoMandateSwap` is now `0x0524a353…6041` and `HelicoOracleBoard` is now `0xe8515af9…7d39`. The pair they replace predate `ReceiptKind` and cannot take a mandate or board carrying today's `Venue` — checked against the deployed bytecode, not assumed. Neither of the old pair had ever been used: `eth_getLogs` returns zero events on both |
 | **Two new contracts** | `CompoundVenue` `0x1eC57cE1…BB2E` (`hcUSDC`) and `MorphoVenue` `0xBBa798A6…9A29` (`hmUSDC`), both verified. **These replaced a pair deployed an hour earlier** — see `deployments.md`; the first pair could mint zero shares for a real deposit and never held anything. They let the enclave reach Compound v3 and any ERC-4626 vault — a Morpho vault being the first pointed at |
 | **Seven contracts now** | the five from this morning, with two addresses swapped, plus the two venues |
-| **Still not sayable: anything about multiple protocols** | The venues are deployed and **inert**. Nobody has called `permitVenue` on them, `config.production.json` does not name them, and the workflow has not been redeployed — so on Arbitrum One the account still reaches Aave and nothing else. See the row under *What must not be said* |
+| **Still not sayable: anything about multiple protocols** | ⚠️ **One clause here expired on 10 September — read the layer above.** The venues are deployed and **inert**. Nobody has called `permitVenue` on them, ~~`config.production.json` does not name them~~ (it names four markets and two assets as of 10 September), and the workflow has not been redeployed — so on Arbitrum One the account still reaches Aave and nothing else. See the row under *What must not be said* |
 | The account | **Still none opened on mainnet.** Unchanged, and still the honest sentence |
 
 ### Pre-flight, re-run 9 September
@@ -314,20 +336,25 @@ End on the repo URL. No outro music.
   reached at all: `ILendingVenue` carries Aave v3's own signatures and neither protocol answers
   them.
 
-  That is no longer why, and it changed twice in one day. Both venues are now **deployed and
-  verified** — `CompoundVenue` `0x1eC57cE1…BB2E`, `MorphoVenue` `0xBBa798A6…9A29` — and a fork test
-  drives one account across Aave, Compound and Morpho with the three rates landing in one unit,
-  274, 287 and 404 basis points.
+  That is no longer why, and the reason has now changed three times in three days. Four venues are
+  **deployed and verified** — `CompoundVenue` `0x1eC57cE1…BB2E` and `0xb0A125F5…18cD`,
+  `MorphoVenue` `0xBBa798A6…9A29`, alongside Aave's own pool — and `check-deployed.ts` drives one
+  account across all of them at the live addresses, the four rates landing in one unit: 274, 287,
+  446 and 125 basis points on 10 September.
 
-  What is true instead, and the only part that matters on camera: **the venues are inert.** Nobody
-  has called `permitVenue` on them, `config.production.json` does not name them, and the workflow
-  has not been redeployed. A deployed contract nothing points at changes nothing, so on Arbitrum
-  One the account still reaches Aave and nothing else.
+  `config.production.json` now names them too, four markets and two assets, so that clause is
+  retired rather than repeated.
 
-  So the line stays and its reason does not. Say *"across the markets you permitted"*, never
-  *"across protocols"* — the second is a claim about a deployment that does not exist, which is
-  disqualification reason 2 rather than a wording preference. If the venues are deployed before
-  the take, this row is rewritten again rather than dropped.
+  What is true instead, and the only part that matters on camera: **no account exists.** Nobody
+  has opened one on Arbitrum One, so nobody has called `permitVenue`, so there is nothing for a
+  workflow to reach — and the deployed workflow is still the 8 September build besides. Every
+  protocol the product can reach, it reaches on a fork.
+
+  So the line stays and its reason does not. Say *"across the markets you permitted"* and
+  *"measured on a fork"*, never *"across protocols"* unqualified — the second is a claim about a
+  deployment that does not exist, which is disqualification reason 2 rather than a wording
+  preference. When an account is opened and the workflow redeployed before the take, this row is
+  rewritten again rather than dropped.
   `0xHelico/helico#179`
 - **"The Graph tells the agent what to work on"** — no. What is true, and sayable: *the workflow
   asks The Graph how much the maker's mandates could demand, and sizes the liquid buffer to it.*

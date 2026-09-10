@@ -15,13 +15,13 @@ import { Button } from "@/components/ui/button";
 import { CHAIN_ID, totals, useAccountState } from "@/hooks/use-account-state";
 import {
   AAVE_V3_POOL,
-  ACCOUNT_TOKENS,
   accountReadAbi,
   accountWriteAbi,
   hasAgent,
 } from "@/lib/account";
 import { amountShort as held } from "@/lib/format";
 import { amount, readMandates, token, WALLET_TOKENS } from "@/lib/mandates";
+import { readVenues, sweepList } from "@/lib/venues";
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 const ZERO = "0x0000000000000000000000000000000000000000" as Address;
@@ -86,19 +86,31 @@ export function MandateCard({
     },
   });
 
-  // Both sides are named, because a contract cannot enumerate what it holds and an unnamed token
+  // Every token is named, because a contract cannot enumerate what it holds and an unnamed token
   // is a token left behind. Native currency needs no naming — `escape` sweeps it either way.
+  //
+  // **The list is built here, at the click, from the account's own history.** It used to be two
+  // addresses typed into this file, which was correct while Aave was the only market an account
+  // could reach. Once capital could sit in Compound or Morpho, or be denominated in WETH, that
+  // list swept whatever happened to still be USDC, returned successfully, and left the rest —
+  // the way out reporting that it had worked while doing part of the job.
+  //
+  // Naming the other five would have fixed it until the next venue. `readVenues` reads the
+  // markets out of the account's `VenuePermitted` logs and asks each one which receipt it issues,
+  // so a venue deployed after this file was written is swept without this file changing.
   const sweep = useMutation({
     mutationFn: async () => {
       if (!account) throw new Error("No account is open");
+      if (!client) throw new Error("No chain to read");
+      const { positions } = await readVenues(client, account);
       const hash = await writeContractAsync({
         abi: accountWriteAbi,
         address: account,
         chainId: CHAIN_ID,
         functionName: "escape",
-        args: [[ACCOUNT_TOKENS.idle, ACCOUNT_TOKENS.working]],
+        args: [sweepList(positions)],
       });
-      await client?.waitForTransactionReceipt({ hash });
+      await client.waitForTransactionReceipt({ hash });
       await refetch();
     },
   });

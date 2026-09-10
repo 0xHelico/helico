@@ -77,7 +77,39 @@ export type Addresses = {
 export type ReceiptKind = 'rebasing' | 'share-priced'
 
 /** One market the owner permitted, and what kind of receipt it hands back. */
-export type Pool = { address: Address; kind: ReceiptKind }
+export type Pool = {
+	address: Address
+	kind: ReceiptKind
+	/**
+	 * The assets this market lists, when it does not list all of them. Omitted means every asset
+	 * the account is configured for.
+	 *
+	 * **Why this had to exist before ETH could earn.** Aave's Pool serves every reserve, so one
+	 * address answers for USDC and WETH alike and the first configuration never needed to say
+	 * otherwise. A `CompoundVenue` or `MorphoVenue` is the opposite: one venue holds exactly one
+	 * market, and `getReserveAToken` on the wrong asset **reverts** rather than returning zero.
+	 * Since a failed call fails the whole run — deliberately, see `readAccountState` — a second
+	 * asset added to a configuration holding single-asset venues kills every run rather than
+	 * earning anything.
+	 *
+	 * Measured on Arbitrum One before this was written, not assumed: Aave answered
+	 * `getReserveAToken` for both USDC and WETH; each of the three venues answered for its own
+	 * asset and reverted on the other.
+	 *
+	 * **Declared rather than discovered.** Treating a revert as "this market does not list this
+	 * asset" would work and would be wrong: an RPC that drops a call, a venue that is paused, and
+	 * a market that genuinely does not hold the asset would all arrive as the same silence, and
+	 * the run would carry on comparing whatever was left. Written down, a revert stays a failure.
+	 */
+	assets?: Address[]
+}
+
+/** Whether a market is one this asset should be read at. A market with no list serves them all. */
+export function listsAsset(pool: Pool, asset: Address): boolean {
+	if (pool.assets === undefined) return true
+	const want = asset.toLowerCase()
+	return pool.assets.some((a) => a.toLowerCase() === want)
+}
 
 /** One market, as this account sees it. */
 export type VenueState = {
@@ -116,7 +148,11 @@ export type AssetState = {
 	asset: Address
 	/** What the account holds liquid in this asset, in the asset's own units. */
 	idle: bigint
-	/** One entry per configured market, in the order the owner wrote them. */
+	/**
+	 * One entry per market that **lists this asset**, in the order the owner wrote them. A market
+	 * scoped to other assets is absent rather than present and empty, because it is not a market
+	 * this asset could have gone to and a comparison should not see it at all.
+	 */
 	venues: VenueState[]
 }
 
@@ -166,17 +202,24 @@ export function readAccountState(
 		? [{ to: account, data: encodeFunctionData({ abi: nonceAbi }) }]
 		: []
 
+	// Which markets are read for which asset. A market that does not list an asset is not asked
+	// about it — `getReserveAToken` on the wrong asset reverts, and one revert fails the batch.
+	const perAsset = assets.map((asset) => ({
+		asset,
+		pools: pools.filter((pool) => listsAsset(pool, asset)),
+	}))
+
 	// One batch for every asset and every market, rather than one batch per asset. Comparing more
 	// things should cost more calls, not more waiting — and the whole reason this is one workflow
 	// is that a single view holds all of it before anything is decided.
 	const first = ethCallBatch(runtime, rpcUrl, [
 		{ to: account, data: encodeFunctionData({ abi: accountAbi, functionName: 'agent' }) },
-		...assets.flatMap((asset): Call[] => [
+		...perAsset.flatMap(({ asset, pools: listed }): Call[] => [
 			{
 				to: asset,
 				data: encodeFunctionData({ abi: erc20Abi, functionName: 'balanceOf', args: [account] }),
 			},
-			...pools.flatMap((pool): Call[] => [
+			...listed.flatMap((pool): Call[] => [
 				{
 					to: account,
 					data: encodeFunctionData({
@@ -217,18 +260,20 @@ export function readAccountState(
 	const agentHex = first[0] as Hex
 	const nonceHex = options.withNonce ? first[first.length - 1] : undefined
 
-	/** Calls this batch spends on one asset: its balance, then four per market. */
-	const STRIDE = 1 + pools.length * VENUE_READS
+	// A cursor rather than a stride. Every asset used to spend the same number of calls, so its
+	// slice could be multiplied out; now an asset's slice is only as long as the number of markets
+	// that list it, and a market scoped to WETH contributes nothing to USDC's.
+	let cursor = 1
 
 	// The markets' own answers, per asset — everything except what each receipt knows about itself.
-	const partial = assets.map((asset, a) => {
-		const base = 1 + a * STRIDE
-		const idleHex = first[base] as Hex
+	const partial = perAsset.map(({ asset, pools: listed }) => {
+		const idleHex = first[cursor++] as Hex
 		return {
 			asset,
 			idle: decodeFunctionResult({ abi: erc20Abi, functionName: 'balanceOf', data: idleHex }),
-			venues: pools.map((pool, index) => {
-				const at = base + 1 + index * VENUE_READS
+			venues: listed.map((pool) => {
+				const at = cursor
+				cursor += VENUE_READS
 				const [permittedHex, receiptHex, liquidityHex, reserveHex] = first.slice(
 					at,
 					at + VENUE_READS,
