@@ -241,3 +241,129 @@ export function suppliedIn(
     .filter((p) => p.asset.toLowerCase() === want)
     .reduce((total, p) => total + p.supplied, 0n);
 }
+
+// ── the markets an owner may say yes to ──────────────────────────────────────
+
+/**
+ * One market the product offers, and what to call it in front of somebody.
+ *
+ * Separate from `KNOWN_VENUES` above on purpose. That list is a fallback for sweeping an account
+ * that may hold anything; this is a catalogue with names and rates, and the two answer different
+ * questions — what might be in there, against what an owner can choose.
+ */
+export type Market = {
+  pool: Address;
+  /** The protocol, as somebody who does not read Solidity would say it. */
+  label: string;
+  asset: Address;
+  assetSymbol: string;
+  /** The market's own name on that protocol, for anyone who wants to go and look. */
+  note: string;
+};
+
+/**
+ * The four markets deployed and verified on Arbitrum One.
+ *
+ * **A constant, and it has to be.** Permitting is the one place the owner names an address the
+ * account will trust afterwards, so the list of addresses offered cannot come from the chain —
+ * anything readable is something someone else can write to. What is derived is everything after
+ * the choice: the receipts, the balances, the sweep.
+ */
+export const MARKETS: readonly Market[] = [
+  {
+    pool: "0x794a61358D6845594F94dc1DB02A252b5b4814aD",
+    label: "Aave v3",
+    asset: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+    assetSymbol: "USDC",
+    note: "one pool for every reserve, so it takes ETH too",
+  },
+  {
+    pool: "0x1eC57cE1DdfdC7a4EbF4F54Aedee19ab73fcBB2E",
+    label: "Compound v3",
+    asset: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+    assetSymbol: "USDC",
+    note: "cUSDCv3",
+  },
+  {
+    pool: "0xBBa798A61f0D7D1AE51466Fd4045Cd2Ea25c9A29",
+    label: "Morpho",
+    asset: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+    assetSymbol: "USDC",
+    note: "Steakhouse High Yield USDC",
+  },
+  {
+    pool: "0xb0A125F539237b553025e2cb180f9C40B25918cD",
+    label: "Compound v3",
+    asset: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+    assetSymbol: "ETH",
+    note: "cWETHv3",
+  },
+];
+
+export type MarketStatus = Market & {
+  /**
+   * The annual rate in basis points, or null when the market would not answer.
+   *
+   * Null rather than zero, because a market paying nothing and a market that could not be read
+   * are different things and only one of them is a reason not to choose it.
+   */
+  bps: number | null;
+  /** Whether this account currently allows it. False for an account that does not exist yet. */
+  permitted: boolean;
+};
+
+const reserveDataAbi = parseAbi([
+  "function getReserveData(address asset) view returns ((uint256,uint128,uint128,uint128,uint128,uint128,uint40,uint16,address,address,address,address,uint128,uint128,uint128))",
+]);
+
+const permittedAbi = parseAbi([
+  "function permittedVenue(address pool) view returns (bool)",
+]);
+
+/** Aave reports an annual rate in ray. A basis point is 1e23 of one. */
+const RAY_PER_BPS = 10n ** 23n;
+
+/**
+ * Every market with what it pays and whether this account allows it.
+ *
+ * Each market is read on its own, for the reason the enclave learned the hard way: a venue lists
+ * one asset and **reverts** for any other, and one refusal must not blank the list. An account
+ * with no code yet answers nothing, which is not an error — it is what "not opened" looks like.
+ */
+export async function readMarkets(
+  client: PublicClient,
+  account: Address | null,
+): Promise<MarketStatus[]> {
+  return Promise.all(
+    MARKETS.map(async (market): Promise<MarketStatus> => {
+      const [bps, permitted] = await Promise.all([
+        client
+          .readContract({
+            abi: reserveDataAbi,
+            address: market.pool,
+            args: [market.asset],
+            functionName: "getReserveData",
+          })
+          .then((data) => Number(data[2] / RAY_PER_BPS))
+          .catch(() => null),
+        account
+          ? client
+              .readContract({
+                abi: permittedAbi,
+                address: account,
+                args: [market.pool],
+                functionName: "permittedVenue",
+              })
+              .catch(() => false)
+          : Promise.resolve(false),
+      ]);
+      return { ...market, bps, permitted };
+    }),
+  );
+}
+
+/** The best rate on offer, for saying what an owner is leaving behind. */
+export function bestBps(markets: readonly MarketStatus[]): number | null {
+  const rates = markets.map((m) => m.bps).filter((b) => b !== null);
+  return rates.length ? Math.max(...rates) : null;
+}

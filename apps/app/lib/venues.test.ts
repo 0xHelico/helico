@@ -3,7 +3,11 @@ import type { Address, PublicClient } from "viem";
 
 import {
   ACCOUNT_ASSETS,
+  bestBps,
   KNOWN_VENUES,
+  MARKETS,
+  type Market,
+  readMarkets,
   readVenues,
   suppliedIn,
   sweepList,
@@ -286,5 +290,133 @@ describe("the list handed to escape", () => {
         },
       ]),
     ).toEqual([...ACCOUNT_ASSETS]);
+  });
+});
+
+describe("the markets an owner is offered", () => {
+  const RAY = 10n ** 23n;
+  const reserve = (rateBps: bigint) =>
+    [
+      0n,
+      0n,
+      rateBps * RAY,
+      0n,
+      0n,
+      0n,
+      0,
+      0,
+      ACCOUNT,
+      ACCOUNT,
+      ACCOUNT,
+      ACCOUNT,
+      0n,
+      0n,
+      0n,
+    ] as const;
+
+  const offering = (opts: {
+    rates?: Record<string, bigint>;
+    permits?: Record<string, boolean>;
+    accountThrows?: boolean;
+  }) =>
+    ({
+      readContract: async ({
+        functionName,
+        address,
+        args,
+      }: {
+        functionName: string;
+        address: Address;
+        args?: readonly unknown[];
+      }) => {
+        if (functionName === "getReserveData") {
+          const rate =
+            opts.rates?.[
+              `${address.toLowerCase()}:${String(args?.[0]).toLowerCase()}`
+            ];
+          // A venue reverts for an asset it does not list, exactly as the deployed ones do.
+          if (rate === undefined) throw new Error("WrongAsset");
+          return reserve(rate);
+        }
+        if (functionName === "permittedVenue") {
+          if (opts.accountThrows) throw new Error("no code at this address");
+          return opts.permits?.[String(args?.[0]).toLowerCase()] ?? false;
+        }
+        throw new Error(`unmodelled ${functionName}`);
+      },
+    }) as unknown as PublicClient;
+
+  const rateFor = (m: Market) =>
+    `${m.pool.toLowerCase()}:${m.asset.toLowerCase()}`;
+
+  test("all four are offered, each with its own market's rate", async () => {
+    // The defect this closes. Four markets are deployed and the product named one, so an owner
+    // could not say yes to Morpho at 446 bps while holding USDC in Aave at 274.
+    const rates = Object.fromEntries(
+      MARKETS.map((m, i) => [
+        rateFor(m),
+        [274n, 287n, 446n, 125n][i] as bigint,
+      ]),
+    );
+    const out = await readMarkets(offering({ rates }), ACCOUNT);
+    expect(out).toHaveLength(4);
+    expect(out.map((m) => m.bps)).toEqual([274, 287, 446, 125]);
+    expect(bestBps(out)).toBe(446);
+  });
+
+  test("a market that will not answer reports nothing, not zero", async () => {
+    // Zero is a rate. "Could not read it" is not, and only one of the two is a reason to leave a
+    // market unpermitted — so they must not arrive as the same number.
+    const first = MARKETS[0] as Market;
+    const out = await readMarkets(
+      offering({ rates: { [rateFor(first)]: 274n } }),
+      ACCOUNT,
+    );
+    expect(out[0]?.bps).toBe(274);
+    expect(out.slice(1).map((m) => m.bps)).toEqual([null, null, null]);
+    expect(bestBps(out)).toBe(274);
+  });
+
+  test("and one that will not answer does not take the others down with it", async () => {
+    const out = await readMarkets(offering({ rates: {} }), ACCOUNT);
+    expect(out).toHaveLength(4);
+    expect(bestBps(out)).toBeNull();
+  });
+
+  test("an account that does not exist yet permits nothing, which is not an error", async () => {
+    const out = await readMarkets(offering({ accountThrows: true }), ACCOUNT);
+    expect(out.every((m) => m.permitted === false)).toBe(true);
+  });
+
+  test("no account at all is read as permitting nothing, without asking", async () => {
+    const out = await readMarkets(offering({}), null);
+    expect(out.every((m) => m.permitted === false)).toBe(true);
+  });
+
+  test("what the account allows comes back per market, not as one flag", async () => {
+    const [aave, , morpho] = MARKETS as unknown as [Market, Market, Market];
+    const out = await readMarkets(
+      offering({
+        permits: {
+          [aave.pool.toLowerCase()]: true,
+          [morpho.pool.toLowerCase()]: true,
+        },
+      }),
+      ACCOUNT,
+    );
+    expect(out.map((m) => m.permitted)).toEqual([true, false, true, false]);
+  });
+
+  test("the catalogue covers both assets", () => {
+    // A list that is all USDC would leave the WETH venue unreachable, which is the shape of the
+    // bug this replaces rather than a different one.
+    const symbols = new Set(MARKETS.map((m) => m.assetSymbol));
+    expect(symbols.has("USDC")).toBe(true);
+    expect(symbols.has("ETH")).toBe(true);
+  });
+
+  test("and every address in it is distinct", () => {
+    const pools = MARKETS.map((m) => m.pool.toLowerCase());
+    expect(new Set(pools).size).toBe(pools.length);
   });
 });
