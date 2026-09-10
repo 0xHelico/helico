@@ -148,6 +148,20 @@ export const configShape = {
 				 * round as well as the compatible one.
 				 */
 				kind: z.enum(['rebasing', 'share-priced']).default('rebasing'),
+				/**
+				 * The assets this market lists, when it does not list all of them. Omitted means every
+				 * asset in `assets`, which is what an Aave Pool is — one address serving every reserve.
+				 *
+				 * **Required for a single-asset venue as soon as a second asset exists.** A
+				 * `CompoundVenue` holds exactly one market and `getReserveAToken` on the wrong asset
+				 * reverts; a failed call fails the whole run by design, so an unscoped USDC venue in a
+				 * configuration that also names WETH does not earn less, it stops every run.
+				 *
+				 * Optional rather than required so that every configuration written before ETH could
+				 * earn keeps its meaning: they named one asset, and a market that lists all of one
+				 * asset is the same market either way.
+				 */
+				assets: z.array(hex(20)).min(1).optional(),
 			}),
 		)
 		.min(1),
@@ -261,6 +275,33 @@ export const configSchema = z
 	.refine((c) => new Set(c.pools.map((p) => p.address)).size === c.pools.length, {
 		message: 'pools must not repeat a market',
 	})
+	// An asset no market will take is capital the enclave watches sit idle and can never place —
+	// which reads, on every run, as a decision to hold. Caught here because the alternative is a
+	// workflow that runs green forever while one side of the account never earns anything.
+	.refine(
+		(c) =>
+			c.assets.every((asset) =>
+				c.pools.some(
+					(pool) =>
+						pool.assets === undefined ||
+						pool.assets.some((a) => a.toLowerCase() === asset.toLowerCase()),
+				),
+			),
+		{ message: 'every asset needs at least one market that lists it' },
+	)
+	// A market scoped to assets the account does not hold is a line nobody reads again. Usually a
+	// typo in an address, and always a market that will never be compared to anything.
+	.refine(
+		(c) =>
+			c.pools.every(
+				(pool) =>
+					pool.assets === undefined ||
+					pool.assets.some((a) =>
+						c.assets.some((asset) => asset.toLowerCase() === a.toLowerCase()),
+					),
+			),
+		{ message: 'a market must list at least one asset the account holds' },
+	)
 export type Config = z.infer<typeof configSchema>
 
 const REPORT_ABI = [{ type: 'bool' }, { type: 'bytes32' }, idleMoveParamsAbi] as const

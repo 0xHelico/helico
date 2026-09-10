@@ -4,6 +4,7 @@
 	"private": true,
 	"scripts": {
 		"typecheck": "tsc --noEmit",
+		"test": "bun test",
 		"simulate": "cre workflow simulate ./workflow --target staging-settings --env .env --trigger-index 0 --non-interactive",
 		"rehearse": "./rehearse-idle.sh"
 	},
