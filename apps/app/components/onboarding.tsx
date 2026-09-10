@@ -16,72 +16,97 @@ import { readOnboarding, writeOnboarding } from "@/lib/onboarding";
 import { MARKETS } from "@/lib/venues";
 
 /**
+ * The gate in front of the first run, and it is deliberately thin.
+ *
+ * This is mounted on every page for every visitor, so it reads one `localStorage` key and renders
+ * nothing. Everything that costs something — the account state, the wallet's capabilities, the
+ * batch — lives in `FirstRun` below, which exists only while the dialog is up. Putting those hooks
+ * here would have every returning user paying for chain reads on every page to answer a question
+ * that was settled the first time they arrived.
+ */
+export function Onboarding() {
+  const { address, isConnected } = useAccount();
+  const [needed, setNeeded] = useState(false);
+
+  // In an effect rather than during render: the server has no storage to read and would disagree
+  // with the client about what to draw.
+  useEffect(() => {
+    setNeeded(
+      Boolean(isConnected && address) && readOnboarding(address) === null,
+    );
+  }, [address, isConnected]);
+
+  if (!(needed && address)) return null;
+  return <FirstRun address={address} onDone={() => setNeeded(false)} />;
+}
+
+/**
  * The first thing a new wallet sees, and the only thing it has to read.
  *
  * Four lines rather than a scroll of legal text, because terms nobody reads are terms nobody
  * agreed to, and a hackathon build asking someone to put real money on Arbitrum One owes them the
  * short version in words they will actually finish. The checkbox is required and the dialog does
- * not close on an outside click — an agreement you can dismiss by clicking beside it is not one.
+ * not close on an outside click or on Escape — an agreement you can dismiss by clicking beside it
+ * is not one.
  *
  * **What the switch does, exactly.** On, it nominates Helico's agent and allows all four markets.
- * On a wallet that can batch (EIP-5792) that is one confirmation for the lot; on one that cannot,
- * it is a transaction each, and this does not fire six prompts at somebody who has been here for
- * nine seconds — it says so and leaves the same button on the limits page. Off, nothing is set,
- * which is the state the limits page exists for.
+ * On a wallet that can batch (EIP-5792) that is one confirmation for the lot, and this stays open
+ * until it lands so the person can see what they are confirming. On a wallet that cannot, it is a
+ * transaction each, and firing six prompts at somebody who has been here nine seconds is not a
+ * feature — it says so and leaves the same button on the limits page.
  *
  * It never means "no signature". `setAgent` and `permitVenue` are owner-only on chain and no batch
  * can stand in for the owner, which is the property that makes a compromised agent harmless. The
- * copy below says one confirmation, and one confirmation is what it does.
+ * copy says one confirmation, and one confirmation is what it does.
  */
-export function Onboarding() {
-  const { address, isConnected } = useAccount();
-  const [open, setOpen] = useState(false);
+function FirstRun({
+  address,
+  onDone,
+}: {
+  address: `0x${string}`;
+  onDone: () => void;
+}) {
   const [agreed, setAgreed] = useState(false);
   const [unlockAll, setUnlockAll] = useState(true);
-  const [perStep, setPerStep] = useState(false);
+  const [stage, setStage] = useState<"terms" | "unlocking" | "per-step">(
+    "terms",
+  );
   const unlock = useUnlock();
 
-  // Asked once the wallet is known, and only for a wallet that has not answered. Reading is a
-  // `localStorage` hit, so it happens in an effect rather than during render, where the server
-  // has no storage to read and would disagree with the client about what to draw.
+  // The batch has landed, or it failed. Either way the person is done reading and belongs in the
+  // app; a failure leaves the limits page holding the same button.
+  const { done, error } = unlock;
   useEffect(() => {
-    if (!(isConnected && address)) {
-      setOpen(false);
-      return;
-    }
-    setOpen(readOnboarding(address) === null);
-  }, [address, isConnected]);
+    if (stage === "unlocking" && (done || error)) onDone();
+  }, [stage, done, error, onDone]);
 
   const start = () => {
-    if (!(agreed && address)) return;
+    if (!agreed) return;
     writeOnboarding(address, unlockAll);
-    if (unlockAll && unlock.canBatch && unlock.ready) {
+    if (!unlockAll) return onDone();
+    if (unlock.canBatch && unlock.ready) {
       unlock.unlock();
-      setOpen(false);
+      setStage("unlocking");
       return;
     }
-    // A wallet without EIP-5792 would ask six times in a row. Saying so beats doing it.
-    if (unlockAll) {
-      setPerStep(true);
-      return;
-    }
-    setOpen(false);
+    setStage("per-step");
   };
 
-  if (perStep) {
+  if (stage === "per-step") {
     return (
-      <Dialog onOpenChange={setOpen} open={open}>
+      <Dialog open>
         <DialogContent className="sm:max-w-[440px]" showCloseButton={false}>
           <DialogTitle className="text-[16px]">
             Your wallet asks one at a time
           </DialogTitle>
           <DialogDescription className="text-[13px] leading-relaxed">
             It cannot send several calls in one confirmation, so opening
-            everything would be {unlock.steps} separate prompts. Nothing is set
-            yet. The same button is on the limits page whenever you want it.
+            everything would be {unlock.steps} separate prompts. Nothing has
+            been sent. The same button is on the limits page whenever you want
+            it.
           </DialogDescription>
-          <div className="mt-2 flex justify-end gap-2">
-            <Button onClick={() => setOpen(false)} size="sm">
+          <div className="mt-2 flex justify-end">
+            <Button onClick={onDone} size="sm">
               Take me to the chat
             </Button>
           </div>
@@ -90,8 +115,27 @@ export function Onboarding() {
     );
   }
 
+  if (stage === "unlocking") {
+    return (
+      <Dialog open>
+        <DialogContent className="sm:max-w-[440px]" showCloseButton={false}>
+          <DialogTitle className="text-[16px]">Opening everything</DialogTitle>
+          <DialogDescription className="text-[13px] leading-relaxed">
+            {unlock.steps} calls in one confirmation: your account, Helico's
+            agent, and all {MARKETS.length} markets. Confirm it in your wallet.
+          </DialogDescription>
+          <div className="mt-2 flex justify-end">
+            <Button onClick={onDone} size="sm" variant="outline">
+              Skip for now
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
   return (
-    <Dialog onOpenChange={setOpen} open={open}>
+    <Dialog open>
       <DialogContent
         className="sm:max-w-[520px]"
         onEscapeKeyDown={(e) => e.preventDefault()}
