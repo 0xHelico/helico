@@ -96,6 +96,38 @@ const open = async (url: string): Promise<{ page: Page; text: string }> => {
   check("and offers to connect", /Connect your wallet/i.test(text));
 }
 
+// ── the doors, which a green deploy does not prove are there ──────────────────
+//
+// Both pages show the same gate to a visitor without a wallet, so the body cannot tell them
+// apart. The title can: it comes from the route's own metadata, so "Limits" at /limit is the
+// deployed build saying that route exists. Worth its own check because the failure it catches is
+// silent — an image that built, pushed and started, from the commit before the routes moved.
+{
+  const title = async (path: string) => {
+    const res = await fetch(`${APP}${path}`);
+    return /<title>([^<]*)/.exec(await res.text())?.[1] ?? "";
+  };
+  const [front, limits, portfolio] = await Promise.all([
+    title("/"),
+    title("/limit"),
+    title("/portfolio"),
+  ]);
+  check("the front door is the app itself", front === "Helico", front);
+  check("the limits have their own route", limits === "Limits", limits);
+  check(
+    "and the portfolio still has its own",
+    /Portfolio/.test(portfolio),
+    portfolio,
+  );
+
+  // The two addresses that predate the swap. Neither may 404: one of them is in the backend's
+  // own cards, and the other is written into the chat's greeting.
+  for (const path of ["/chat", "/mandate"]) {
+    const res = await fetch(`${APP}${path}`, { redirect: "manual" });
+    check(`${path} still lands somewhere`, res.status < 400, `${res.status}`);
+  }
+}
+
 // ── what the dapp sends, which is the half a browser does not show ────────────
 {
   const { headers: h } = await headers(`${APP}/`);
