@@ -1649,6 +1649,33 @@ READMEs.
   The local fake model had to learn the question first — it read it as `about` while the real model
   reads it as `status`, so the fixture was reproducing a different bug than the reported one.
 
+### 2026-09-10 — the one word in the nav named a page nobody calls that
+
+- **Done:** Ghoza asked for "Mandate" to become "Portfolio". Applied literally it would have made
+  things worse, so it was checked before it was changed.
+
+- **AI's role:** found the collision and put the choice back to him rather than guessing. The
+  sidebar had exactly one page link — **Mandate → `/`** — and `/` is the limits page: the
+  capability board, the two owner-only controls, and what you can ask the chat. Meanwhile
+  `/portfolio`, which is what somebody would look for by that name, **was not in the nav at all**;
+  it was reachable only from inside the chat's own cards. Renaming the label alone would have left
+  two things called Portfolio opening different pages.
+
+  His call: the nav entry becomes **Portfolio → `/portfolio`**, and the limits page keeps its
+  routes in — the chat's "Set your limits" card, the "Earn" card at `/#mandate`, the greeting, and
+  the wallet card's "Set a limit" — while leaving the sidebar.
+
+  `ShieldIcon` went with it. A shield is what a mandate looks like; a portfolio looks like
+  `LineChartIcon`, which the icon set already had.
+
+  The `Mandate` column header in `mandates-panel.tsx` stays. That one names a real object in
+  Aqua's ledger rather than a page, and renaming it would have been the change spreading past what
+  it was for.
+
+- **Verified:** in a browser against a fork, and not by reading the label. The nav item was
+  clicked and the resulting path read back — `/portfolio` — because a link that says the right
+  word and goes to the old place is exactly the bug this was fixing.
+
 <!--
 Template for the next entry:
 

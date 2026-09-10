@@ -1,9 +1,9 @@
 "use client";
 
 import {
+  LineChartIcon,
   PanelLeftIcon,
   PenSquareIcon,
-  ShieldIcon,
   TrashIcon,
 } from "lucide-react";
 import Image from "next/image";
@@ -126,11 +126,15 @@ export function AppSidebar({ address }: { address: `0x${string}` }) {
                   <SidebarMenuButton
                     asChild
                     className="h-8 rounded-lg border border-sidebar-border text-[13px] text-sidebar-foreground/70 transition-colors duration-150 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                    tooltip="Mandate"
+                    tooltip="Portfolio"
                   >
-                    <Link href="/" onClick={closeMobile}>
-                      <ShieldIcon className="size-4" />
-                      <span className="font-medium">Mandate</span>
+                    {/* The portfolio, not the limits page. "Mandate" was the only word in the nav
+                        and it named a page nobody calls that, while `/portfolio` — the thing a
+                        person looks for by name — was reachable only from inside the chat's own
+                        cards. The limits page keeps those routes in and leaves the sidebar. */}
+                    <Link href="/portfolio" onClick={closeMobile}>
+                      <LineChartIcon size={16} />
+                      <span className="font-medium">Portfolio</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
