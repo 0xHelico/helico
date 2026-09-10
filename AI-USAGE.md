@@ -1976,6 +1976,31 @@ READMEs.
 
   Not run against mainnet. That needs a funded wallet, and the script refuses every key here.
 
+### 2026-09-10 — Dev mode lost the session on every refresh
+
+- **Done:** one line in `apps/app/hooks/use-helico-session.tsx`. The effect that reads the session
+  cookie guards itself with a ref so it asks once per address, and its cleanup discards the answer.
+  React mounts every effect twice in dev, so the first mount set the ref and had its answer thrown
+  away, and the second returned early — `state` never left `"unknown"`, `AppShell` waited its 700ms
+  and showed the gate. The ref is now cleared with the request it guards.
+
+- **AI's role:** Claude Opus 5 reproduced it, found the cause and wrote the fix. Ghoza reported the
+  symptom, which is the part no reading of the code would have started from.
+
+- **Verified:** in a browser, against the running `next dev`, with an injected EIP-6963 wallet
+  signing for a generated key — sign in, reload, look:
+
+  ```
+  before   after reload — gate:1  app:0    FAIL  reload shows the gate
+  after    after reload — gate:0  app:1    PASS  reload lands back in the app
+  ```
+
+  The same script, the same server, the change hot-reloaded between the two runs. The production
+  shape of this is check 3 in `apps/app/e2e/browser-checks.ts` and has always passed, because a
+  production build does not double-mount — which is why nothing in CI could have caught it, and why
+  no test is added here: a dev-mode variant would need CI to run a dev server for a bug that cannot
+  reach production.
+
 <!--
 Template for the next entry:
 

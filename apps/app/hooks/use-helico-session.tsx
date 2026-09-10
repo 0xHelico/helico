@@ -77,6 +77,13 @@ export function HelicoSessionProvider({ children }: { children: ReactNode }) {
       });
     return () => {
       live = false;
+      // Cleared with the request it guards, and that is the whole fix. React mounts every effect
+      // twice in dev, so the first run sets the ref, fires `whoami`, and is then cleaned up —
+      // discarding its answer. Leave the ref set and the second run returns early, nothing ever
+      // asks again, and `state` stays "unknown" for the life of the page; `AppShell` waits 700ms
+      // and then shows the gate, so a signed-in wallet lands back on "Verify wallet" after every
+      // refresh. Production never double-mounts, which is why only dev saw it.
+      asked.current = null;
     };
   }, [address]);
 
