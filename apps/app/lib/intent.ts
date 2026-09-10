@@ -50,7 +50,9 @@ export type Card = {
  * rest of the turn. Cards travel the same way and for the same reason: an answer drawn as four
  * panels should still be four panels after a reload, not the paragraph it replaced.
  */
-export type TurnAction = { action: "status" | "revoke" | "withdraw" };
+export type TurnAction = {
+  action: "status" | "revoke" | "withdraw" | "earn";
+};
 
 type Extras = { steps?: Step[]; cards?: Card[] };
 
@@ -67,7 +69,12 @@ export function isTurnAction(value: unknown): value is TurnAction {
     return false;
   }
   const { action } = value as { action: unknown };
-  return action === "status" || action === "revoke" || action === "withdraw";
+  return (
+    action === "status" ||
+    action === "revoke" ||
+    action === "withdraw" ||
+    action === "earn"
+  );
 }
 
 /**

@@ -476,6 +476,52 @@ if (sweepRendered) {
   );
 }
 
+// ── 6. earn: the one action that cannot move anything, and says what would ──
+//
+// The classifier that returns `earn` is in this PR and not yet deployed, and the chat's own route
+// forwards to the deployed backend. So this one request is stubbed — the card is what is under
+// test here, not the wording that reaches it. Everything the card then reads (the agent, the
+// venue, the balance) comes from the chain.
+await page.route("**/api/chat", (route) =>
+  route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({
+      action: "earn",
+      reply:
+        "Three things have to be true first: the agent is named, the market is allowed, and the money is in your account.",
+      steps: [],
+    }),
+  }),
+);
+await say("Put my idle USDC to work");
+const earnText = page.getByText(
+  /Nobody may move your money yet|nothing in the account to move|Everything it needs is set/,
+);
+let earnRendered = false;
+try {
+  await earnText.first().waitFor({ timeout: 30_000 });
+  earnRendered = true;
+} catch {}
+check(
+  "earn names the step that is missing",
+  earnRendered,
+  earnRendered ? (await earnText.first().innerText()).slice(0, 90) : "",
+);
+if (earnRendered) {
+  // The setup is a signature either way. On a wallet that can batch it is the one button; on one
+  // that cannot — this injected wallet — it is the limits page, and offering neither would be a
+  // card that diagnoses and then stops.
+  const acted =
+    (await page
+      .getByRole("button", { name: /^Turn everything on with one signature$/ })
+      .count()) +
+    (await page
+      .getByRole("link", { name: /Set them on the limits page|Move money in/ })
+      .count());
+  check("and offers the way to do it", acted > 0, `${acted} affordance(s)`);
+}
+
 console.log(`\n${failed === 0 ? "all green" : `${failed} failed`}`);
 await browser.close();
 process.exit(failed === 0 ? 0 : 1);
