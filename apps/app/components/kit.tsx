@@ -6,12 +6,16 @@ import { cn } from "@/lib/utils";
 export function Card({
   children,
   className,
+  id,
 }: {
   children: ReactNode;
   className?: string;
+  /** So a link from elsewhere can land on this card rather than on the top of the page. */
+  id?: string;
 }) {
   return (
     <section
+      id={id}
       className={cn(
         // One padding, not a breakpoint pair. The reference this page was matched against uses a
         // single value, and a card that changes shape at 640px reads as two designs.

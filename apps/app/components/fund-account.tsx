@@ -10,7 +10,7 @@ import {
   useWriteContract,
 } from "wagmi";
 
-import { Card } from "@/components/kit";
+import { Card, Loading } from "@/components/kit";
 import { TokenMark } from "@/components/token-mark";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -97,7 +97,7 @@ export function FundAccount() {
   if (!(isConnected && account)) return null;
 
   return (
-    <Card className="mt-4">
+    <Card className="mt-4" id="money-in">
       <p className="font-medium text-[15px] text-ink">Money in</p>
       <p className="mt-1.5 text-[12.5px] text-soft leading-relaxed">
         The agent moves what your account holds, so this is the step that gives
@@ -140,9 +140,13 @@ export function FundAccount() {
         </Button>
       </div>
 
-      <p className="tabular mt-2.5 font-mono text-[11px] text-faint">
-        {formatUnits(wallet, 6)} USDC in this wallet
-      </p>
+      {held.isPending ? (
+        <Loading className="mt-2.5 h-3 w-40" />
+      ) : (
+        <p className="tabular mt-2.5 font-mono text-[11px] text-faint">
+          {formatUnits(wallet, 6)} USDC in this wallet
+        </p>
+      )}
 
       {short_ ? (
         <p className="mt-2 text-[11px] text-destructive">
