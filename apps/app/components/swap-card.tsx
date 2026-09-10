@@ -1,6 +1,10 @@
 "use client";
 
 import { NATIVE, planSwap, type SwapStep } from "@helico/plugin-uniswap";
+import { planAquaSwap } from "@/lib/aqua-swap";
+
+/** Which venue the fill goes through. Shown, not hidden: it is the difference the tracks care about. */
+type Venue = "aqua" | "uniswap";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ArrowDown, Check, Loader2 } from "lucide-react";
 import { erc20Abi, formatUnits, type Hex } from "viem";
@@ -21,9 +25,12 @@ import { shortfall } from "@/lib/intent";
  * The words for each transaction. The plugin returns what a step is; what a person reads about
  * it belongs here, next to the rest of the copy.
  */
-const label = (step: SwapStep, intent: Intent) =>
+const label = (step: SwapStep, intent: Intent, venue: Venue) =>
   ({
-    "approve-token": `Approve ${intent.tokenIn.symbol} for Permit2`,
+    "approve-token":
+      venue === "aqua"
+        ? `Allow 1inch's router to spend your ${intent.tokenIn.symbol}`
+        : `Approve ${intent.tokenIn.symbol} for Permit2`,
     "approve-permit2": `Allow the router to spend your ${intent.tokenIn.symbol}`,
     swap: `Swap ${intent.amountIn} ${intent.tokenIn.symbol} for ${intent.tokenOut.symbol}`,
   })[step.kind];
@@ -91,13 +98,51 @@ export function SwapCard({ intent }: { intent: Intent }) {
       if (!(publicClient && address)) {
         throw new Error("No client");
       }
-      return planSwap(publicClient, {
+      // Aqua first, and Uniswap only if nothing on Aqua will quote this pair at this size.
+      //
+      // The order is the point of #320: Uniswap is a competitor's protocol on screen in a
+      // submission whose tracks are Chainlink, 1inch and The Graph, and it was the one part of
+      // the product where neither 1inch nor The Graph carried any weight. Through Aqua both do —
+      // the fill is 1inch's SwapVM, and the candidates exist only because the index can list
+      // them.
+      //
+      // The fallback stays because live Aqua liquidity is thin and pair-specific: measured on
+      // Arbitrum One, of eleven valid live orders none would price USDC into WETH. A chat that
+      // answers "no route" when a route exists elsewhere is worse than one that says which venue
+      // it used, which is why the card shows it rather than hiding it.
+      const viaAqua = await planAquaSwap(publicClient, {
         account: address,
         tokenIn: intent.tokenIn.address,
         tokenOut: intent.tokenOut.address,
         amountIn: BigInt(intent.amountInWei),
         slippageBps: SLIPPAGE_BPS,
       });
+      // Normalised to one shape rather than a union the render has to branch on in five places.
+      // The venue is a field, not a type — every screen below cares about the same four numbers.
+      if (viaAqua) {
+        return {
+          venue: "aqua" as Venue,
+          amountOut: viaAqua.amountOut,
+          minAmountOut: viaAqua.minAmountOut,
+          steps: viaAqua.steps,
+          route: `1inch Aqua · ${viaAqua.valid} of ${viaAqua.considered} live orders quotable`,
+        };
+      }
+
+      const viaUniswap = await planSwap(publicClient, {
+        account: address,
+        tokenIn: intent.tokenIn.address,
+        tokenOut: intent.tokenOut.address,
+        amountIn: BigInt(intent.amountInWei),
+        slippageBps: SLIPPAGE_BPS,
+      });
+      return {
+        venue: "uniswap" as Venue,
+        amountOut: viaUniswap.amountOut,
+        minAmountOut: viaUniswap.minAmountOut,
+        steps: viaUniswap.steps,
+        route: `Uniswap v4 · ${viaUniswap.pool.key.fee / 10_000}% fee tier`,
+      };
     },
   });
 
@@ -144,7 +189,9 @@ export function SwapCard({ intent }: { intent: Intent }) {
         sent.push(hash);
         const receipt = await publicClient.waitForTransactionReceipt({ hash });
         if (receipt.status !== "success") {
-          throw new Error(`${label(step, intent)} failed on chain`);
+          throw new Error(
+            `${label(step, intent, plan.data?.venue ?? "uniswap")} failed on chain`,
+          );
         }
       }
       return sent;
@@ -213,7 +260,7 @@ export function SwapCard({ intent }: { intent: Intent }) {
         {plan.data ? (
           <>
             <dt>Route</dt>
-            <dd>Uniswap v4 · {plan.data.pool.key.fee / 10_000}% fee tier</dd>
+            <dd>{plan.data.route}</dd>
           </>
         ) : null}
       </dl>
@@ -260,7 +307,7 @@ export function SwapCard({ intent }: { intent: Intent }) {
                       i < sentCount ? "text-muted-foreground" : undefined
                     }
                   >
-                    {label(step, intent)}
+                    {label(step, intent, plan.data?.venue ?? "uniswap")}
                   </span>
                   {run.data?.[i] ? (
                     <a
