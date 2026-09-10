@@ -120,6 +120,90 @@ describe("a partial answer beats one error for the whole panel", () => {
   });
 });
 
+describe("what is at work, across every market", () => {
+  const AUSDC = TOKENS.working;
+  const COMPOUND = "0x1eC57cE1DdfdC7a4EbF4F54Aedee19ab73fcBB2E" as Address;
+
+  /** A chain that answers the venue reads too, which the client above deliberately does not. */
+  const withVenues = (balances: Record<string, bigint>, sharePrice = 1n) =>
+    ({
+      getCode: async () => "0xfe",
+      getLogs: async () => [
+        { args: { pool: COMPOUND, allowed: true } },
+        { args: { pool: AUSDC, allowed: true } },
+      ],
+      readContract: async ({
+        functionName,
+        address,
+        args,
+      }: {
+        functionName: string;
+        address: Address;
+        args?: readonly unknown[];
+      }) => {
+        if (functionName === "accountFor") return ACCOUNT;
+        if (functionName === "agent") return AGENT;
+        if (functionName === "balanceOf")
+          return balances[address.toLowerCase()] ?? 0n;
+        if (functionName === "getReserveAToken") {
+          // Compound names itself; the Aave stand-in names a different receipt.
+          if (address.toLowerCase() === COMPOUND.toLowerCase()) return COMPOUND;
+          return AUSDC;
+        }
+        if (functionName === "previewRedeem")
+          return BigInt(String(args?.[0])) * sharePrice;
+        throw new Error(`unmodelled ${functionName}`);
+      },
+    }) as unknown as PublicClient;
+
+  test("capital in a second market is counted, not reported as idle", async () => {
+    // The defect this closes. `working` used to be one aToken balance, so an account whose
+    // capital the enclave had moved to Compound read as 0% working — the agent doing its job
+    // looking, on the owner's screen, like the money had gone.
+    const state = await readAccount(
+      withVenues(
+        { [TOKENS.idle.toLowerCase()]: 0n, [COMPOUND.toLowerCase()]: 60n },
+        2n,
+      ),
+      FACTORY,
+      OWNER,
+      TOKENS,
+    );
+    expect(state.kind).toBe("open");
+    // 60 shares at two apiece, converted rather than counted.
+    expect(state.kind === "open" && state.working).toBe(120n);
+    expect(workingBps(state)).toBe(10_000);
+  });
+
+  test("and it never reads below the single market it replaced", async () => {
+    // A venue that will not answer returns no position rather than throwing, so an empty sweep
+    // and an account with nothing at work are indistinguishable here. The direct aToken reading
+    // is a floor, and taking the larger is what keeps a failed read from reporting idle capital.
+    const blind = {
+      getCode: async () => "0xfe",
+      getLogs: async () => {
+        throw new Error("range too wide");
+      },
+      readContract: async ({
+        functionName,
+        address,
+      }: {
+        functionName: string;
+        address: Address;
+      }) => {
+        if (functionName === "accountFor") return ACCOUNT;
+        if (functionName === "agent") return AGENT;
+        if (functionName === "balanceOf")
+          return address.toLowerCase() === AUSDC.toLowerCase() ? 500n : 0n;
+        throw new Error("this chain answers no venue read");
+      },
+    } as unknown as PublicClient;
+
+    const state = await readAccount(blind, FACTORY, OWNER, TOKENS);
+    expect(state.kind === "open" && state.working).toBe(500n);
+  });
+});
+
 describe("who the agent is", () => {
   const open = (agent: Address | null): AccountState => ({
     kind: "open",
