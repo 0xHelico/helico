@@ -522,6 +522,49 @@ if (earnRendered) {
   check("and offers the way to do it", acted > 0, `${acted} affordance(s)`);
 }
 
+// ── 7. deposit: money in, from the chat, and it actually moves ──────────────
+//
+// Stubbed for the same reason as `earn` and no further: the classifier that returns `deposit` is
+// in this change and the chat's route forwards to the deployed backend. The transfer underneath is
+// a real one, signed by this wallet, and the account's balance is read from the chain after it.
+await page.route("**/api/chat", (route) =>
+  route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({
+      action: "deposit",
+      reply:
+        "Your account is a contract only you own, and the agent moves what it holds.",
+      steps: [],
+    }),
+  }),
+);
+const walletBefore = await bal(USDC, taker.account.address);
+const accountBefore = await bal(USDC, helicoAccount);
+await say("Move money into my account");
+const howMuch = page.getByRole("textbox", {
+  name: /how much USDC to move in/i,
+});
+let depositRendered = false;
+try {
+  await howMuch.waitFor({ timeout: 30_000 });
+  depositRendered = true;
+} catch {}
+check("money in arrives as a control, not a link", depositRendered);
+if (depositRendered) {
+  await howMuch.fill("7");
+  await page.getByRole("button", { name: /^Move it in$/ }).click();
+  await page.waitForTimeout(20_000);
+  const walletAfter = await bal(USDC, taker.account.address);
+  const accountAfter = await bal(USDC, helicoAccount);
+  check(
+    "and 7 USDC leaves the wallet for the account",
+    accountAfter - accountBefore === 7_000_000n &&
+      walletBefore - walletAfter === 7_000_000n,
+    `account ${formatUnits(accountBefore, 6)} → ${formatUnits(accountAfter, 6)}, wallet -${formatUnits(walletBefore - walletAfter, 6)}`,
+  );
+}
+
 console.log(`\n${failed === 0 ? "all green" : `${failed} failed`}`);
 await browser.close();
 process.exit(failed === 0 ? 0 : 1);

@@ -21,6 +21,7 @@ import { Steps } from "@/components/chat/steps";
 import { SuggestedActions } from "@/components/chat/suggested-actions";
 import { ThinkingMessage } from "@/components/chat/thinking-message";
 import { Turn } from "@/components/chat/turn";
+import { FundAccount } from "@/components/fund-account";
 import { MandateCard } from "@/components/mandate-card";
 import { SwapCard } from "@/components/swap-card";
 import { useHelicoSession } from "@/hooks/use-helico-session";
@@ -184,7 +185,8 @@ export function Chat({ conversationId }: { conversationId?: string }) {
           (body.action === "status" ||
           body.action === "revoke" ||
           body.action === "withdraw" ||
-          body.action === "earn"
+          body.action === "earn" ||
+          body.action === "deposit"
             ? { action: body.action }
             : null);
         const result: TurnResult | null =
@@ -316,7 +318,14 @@ export function Chat({ conversationId }: { conversationId?: string }) {
                   {isIntent(turn.intent) ? (
                     <SwapCard intent={turn.intent} />
                   ) : isTurnAction(turn.intent) ? (
-                    <MandateCard action={turn.intent.action} />
+                    // Money in is the control itself rather than a reading of the account, which
+                    // is why it is not a MandateCard branch: nothing about it needs the mandate,
+                    // the venues or the movements that card reads.
+                    turn.intent.action === "deposit" ? (
+                      <FundAccount />
+                    ) : (
+                      <MandateCard action={turn.intent.action} />
+                    )
                   ) : null}
                 </Turn>
               ))}

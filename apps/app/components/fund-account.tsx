@@ -40,7 +40,17 @@ const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
  * these panels cannot show it. The cWETHv3 venue is real and the agent can use it; funding it
  * belongs with the work that teaches the panels about a second asset.
  */
-export function FundAccount() {
+export function FundAccount({
+  /**
+   * Without its own frame, for when something else already has one.
+   *
+   * The earn card reaches this as the step that is missing, and a bordered card inside a bordered
+   * card is one border more than anything on these screens draws.
+   */
+  plain = false,
+}: {
+  plain?: boolean;
+} = {}) {
   const { address, isConnected, chainId } = useAccount();
   const client = usePublicClient({ chainId: CHAIN_ID });
   const { data, refetch } = useAccountState();
@@ -96,14 +106,18 @@ export function FundAccount() {
 
   if (!(isConnected && account)) return null;
 
-  return (
-    <Card className="mt-4" id="money-in">
-      <p className="font-medium text-[15px] text-ink">Money in</p>
-      <p className="mt-1.5 text-[12.5px] text-soft leading-relaxed">
-        The agent moves what your account holds, so this is the step that gives
-        it something to move. An ordinary transfer, with no approval and nothing
-        granted to anybody.
-      </p>
+  const body = (
+    <>
+      {plain ? null : (
+        <>
+          <p className="font-medium text-[15px] text-ink">Money in</p>
+          <p className="mt-1.5 text-[12.5px] text-soft leading-relaxed">
+            The agent moves what your account holds, so this is the step that
+            gives it something to move. An ordinary transfer, with no approval
+            and nothing granted to anybody.
+          </p>
+        </>
+      )}
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <span className="flex items-center gap-2 rounded-xl border border-line px-2.5 py-1.5">
@@ -178,6 +192,8 @@ export function FundAccount() {
       <p className="tabular mt-1 select-all break-all font-mono text-[11px] text-faint">
         {account}
       </p>
-    </Card>
+    </>
   );
+
+  return plain ? body : <Card className="mt-4">{body}</Card>;
 }

@@ -251,6 +251,7 @@ const open = async (url: string): Promise<{ page: Page; text: string }> => {
     // silently did not happen answers this with `about` and fails here by name — which is more
     // than the cancelled workflow run managed to say.
     ["Put my idle USDC to work", "earn"],
+    ["Move money into my account", "deposit"],
     ["Swap 0.1 ETH into USDC", "swap"],
     ["Why has nothing moved?", "status"],
     ["Stop the agent", "revoke"],
