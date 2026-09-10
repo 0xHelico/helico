@@ -49,13 +49,26 @@ const tooltipLabel = (ts: number) =>
   });
 
 /** Round a step size to a nice value (1/2/2.5/5 × 10^k) for axis ticks. */
-function niceTicks(min: number, max: number, count = 5): number[] {
+function niceTicks(
+  min: number,
+  max: number,
+  count = 5,
+  /** The series only takes whole values, so the scale may not offer a fraction of one. */
+  integral = false,
+): number[] {
   if (min === max) {
     return [min];
   }
   const rough = (max - min) / (count - 1);
   const pow = 10 ** Math.floor(Math.log10(rough));
-  const step = ([1, 2, 2.5, 5, 10].find((b) => rough / pow <= b) ?? 10) * pow;
+  let step = ([1, 2, 2.5, 5, 10].find((b) => rough / pow <= b) ?? 10) * pow;
+  // A count of movements cannot be 0.25, and an empty wallet is exactly where this bites: the
+  // flat-series clamp below opens the scale to 0..1, which lands on a quarter step and rules the
+  // card at three values the data can never take. `sparkline.tsx` had this written down and the
+  // port dropped it.
+  if (integral) {
+    step = Math.max(1, Math.round(step));
+  }
   const ticks: number[] = [];
   for (let v = Math.ceil(min / step) * step; v <= max + 1e-9; v += step) {
     ticks.push(+v.toFixed(6));
@@ -93,6 +106,7 @@ export function PriceChart({ points }: { points: Point[] }) {
       return { pts: [] as XY[], ticks: [] as number[], min: 0, span: 1 };
     }
     const values = points.map((p) => p.value);
+    const integral = values.every(Number.isInteger);
     let low = Math.min(...values);
     let high = Math.max(...values);
     if (low === high) {
@@ -110,7 +124,7 @@ export function PriceChart({ points }: { points: Point[] }) {
         x: +(plotLeft + i * step).toFixed(2),
         y: +(MARGIN.top + (1 - (v - low) / range) * plotH).toFixed(2),
       })),
-      ticks: niceTicks(low, high, 5),
+      ticks: niceTicks(low, high, 5, integral),
       min: low,
       span: range,
     };

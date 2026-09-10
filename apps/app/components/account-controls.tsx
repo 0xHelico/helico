@@ -262,14 +262,17 @@ export function AccountControls() {
               : "none"
           }
         >
-          <p className="text-[11px] text-faint">
-            {permittedCount
-              ? (markets.data ?? [])
-                  .filter((m) => m.permitted)
-                  .map((m) => `${m.label} ${m.assetSymbol}`)
-                  .join(", ")
-              : "The agent can reach nothing until you say so."}
-          </p>
+          {/* Only when there is something to name. Empty, this said "The agent can reach nothing
+              until you say so." directly under "Nowhere yet. Choose below." — the same sentence
+              twice, with a gap between them. */}
+          {permittedCount ? (
+            <p className="text-[11px] text-faint">
+              {(markets.data ?? [])
+                .filter((m) => m.permitted)
+                .map((m) => `${m.label} ${m.assetSymbol}`)
+                .join(", ")}
+            </p>
+          ) : null}
         </Limit>
       </div>
 

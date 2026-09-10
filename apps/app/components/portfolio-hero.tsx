@@ -89,7 +89,12 @@ export function PortfolioHero() {
           <h1 className="font-medium text-ink text-xl tracking-tight">
             {isConnected && address ? (
               <>
-                Welcome, <span className="font-mono">{short(address)}</span>
+                Welcome,{" "}
+                {/* Already truncated, so a line break inside it splits an ellipsis from its
+                    tail — "0xc11e…" over "0D12" on any narrow screen. */}
+                <span className="whitespace-nowrap font-mono">
+                  {short(address)}
+                </span>
               </>
             ) : (
               "Portfolio"
