@@ -28,6 +28,8 @@ import {
 import { privateKeyToAccount } from "viem/accounts";
 import { arbitrum } from "viem/chains";
 
+import { passOnboarding } from "./onboarding";
+
 const APP = process.env.APP_URL ?? "http://localhost:3100";
 const FORK = process.env.FORK_RPC_URL ?? "http://127.0.0.1:8545";
 // anvil's first key. It only ever signs on a fork — never one of Helico's, which is the rule.
@@ -184,11 +186,16 @@ await page.goto(`${APP}/`, { waitUntil: "domcontentloaded" });
 await page
   .getByRole("button", { name: /verify wallet/i })
   .click({ timeout: 30_000 });
+// The first run, answered the way every suite answers it: unlock off, so this file goes on
+// setting the two limits one at a time, which is the thing it is here to check.
+await passOnboarding(page);
+// The limits moved to their own page when the conversation took the front door.
+await page.goto(`${APP}/limit`, { waitUntil: "domcontentloaded" });
 await page
   .getByRole("heading", { name: /limits it works inside/ })
   .waitFor({ timeout: 30_000 });
 
-// 1. Nominate the agent, from the limits panel on the front page. Nothing has opened the
+// 1. Nominate the agent, from the limits panel. Nothing has opened the
 //    account: this is the whole point of the step, because the first limit an owner sets is what
 //    deploys it. On every build before this one the button below was disabled until a separate
 //    press on the portfolio page had deployed the account, so this step could not have run at all.
@@ -247,7 +254,7 @@ check(
 );
 
 const before = await read<bigint>("balanceOf", USDC, erc20Abi, [owner.address]);
-await page.goto(`${APP}/chat`, { waitUntil: "domcontentloaded" });
+await page.goto(`${APP}/`, { waitUntil: "domcontentloaded" });
 await page.fill("textarea", "Take everything back to my wallet");
 await page.keyboard.press("Enter");
 const send = page.getByRole("button", { name: /send .* back to me/i });

@@ -3,14 +3,11 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { useEffect } from "react";
-import { type Address, encodeFunctionData, getAddress } from "viem";
+import { type Address, getAddress } from "viem";
 import {
   useAccount,
-  useCapabilities,
   usePublicClient,
   useReadContract,
-  useSendCalls,
-  useWaitForCallsStatus,
   useWriteContract,
 } from "wagmi";
 
@@ -19,6 +16,7 @@ import { Card, NotDeployed } from "@/components/kit";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { CHAIN_ID, useAccountState } from "@/hooks/use-account-state";
+import { useUnlock } from "@/hooks/use-unlock";
 import {
   AAVE_V3_POOL,
   accountReadAbi,
@@ -121,71 +119,21 @@ export function AccountControls() {
     },
   });
 
-  // Both limits in one confirmation, on wallets that can do it.
-  //
-  // Not `executeBatch`. That runs each call as the *account*, and both setters are
-  // `msg.sender != owner()` reverts, so a batch cannot administer the account it runs on. Proved
-  // on a fork rather than reasoned about: `CallFailed(0xBCb6c913…)` naming the account's own
-  // address, while the same batch against an external target returns fine (#289).
-  //
-  // EIP-5792 batches at the wallet instead, so every call keeps the owner as `msg.sender` and
-  // both setters pass. A wallet without it falls through to the two controls below, which is
-  // exactly today's behaviour, so this can only remove confirmations and never add a failure.
-  const capabilities = useCapabilities({ query: { enabled: isConnected } });
-  const canBatch =
-    capabilities.data?.[CHAIN_ID]?.atomic?.status === "supported" ||
-    capabilities.data?.[CHAIN_ID]?.atomic?.status === "ready";
-
-  const send = useSendCalls();
-  const batch = useWaitForCallsStatus({ id: send.data?.id });
+  // Both limits in one confirmation, on wallets that can do it — and now every market rather
+  // than Aave alone. The batch itself lives in `useUnlock`, because the onboarding sends the same
+  // one and two copies of a six-call batch is two places to forget a market.
+  const unlockAll = useUnlock();
 
   // The batch does not go through `writeContractAsync`, so nothing else refetches for it. Without
-  // this the two limits below stay reading "none" against an account that has both.
-  const batched = batch.data?.status;
+  // this the limits below stay reading "none" against an account that has all of them.
+  const unlocked = unlockAll.done;
   useEffect(() => {
-    if (batched === "success") {
+    if (unlocked) {
       void refetch();
       void venue.refetch();
+      void markets.refetch();
     }
-  }, [batched, refetch, venue.refetch]);
-
-  const setUp = () => {
-    if (!account) return;
-    send.sendCalls({
-      calls: [
-        // Opening comes first and only when it is needed, so a wallet that can batch turns a new
-        // account and both its limits into a single confirmation.
-        ...(opened || !(factory && address)
-          ? []
-          : [
-              {
-                to: factory,
-                data: encodeFunctionData({
-                  abi: factoryAbi,
-                  functionName: "open",
-                  args: [address as Address],
-                }),
-              },
-            ]),
-        {
-          to: account,
-          data: encodeFunctionData({
-            abi: accountWriteAbi,
-            functionName: "setAgent",
-            args: [HELICO_AGENT as Address],
-          }),
-        },
-        {
-          to: account,
-          data: encodeFunctionData({
-            abi: accountWriteAbi,
-            functionName: "permitVenue",
-            args: [AAVE_V3_POOL as Address, true],
-          }),
-        },
-      ],
-    });
-  };
+  }, [unlocked, refetch, venue.refetch, markets.refetch]);
 
   const nominated = data ? hasAgent(data) : false;
   const isOurs =
@@ -223,30 +171,27 @@ export function AccountControls() {
       {/* Only for the state a stranger is actually in: open, and configured for nothing. The
           moment either limit is set, the two controls below are the better answer, because
           changing one of them later should not touch the other. */}
-      {canWrite && canBatch && !(nominated || permitted) ? (
+      {canWrite && unlockAll.canBatch && !(nominated || permitted) ? (
         <div className="mb-4 rounded-2xl border border-line bg-shade p-4">
-          <p className="font-medium text-[13px] text-ink">
-            {opened ? "Set both limits at once" : "Open it and set both limits"}
-          </p>
+          <p className="font-medium text-[13px] text-ink">Unlock everything</p>
           <p className="mt-1 text-[11.5px] text-soft">
-            Your wallet can send these together, so this is one confirmation for
-            all of it. Nothing here can move money.
+            Your wallet can send these together, so nominating the agent and
+            allowing all {MARKETS.length} markets is one confirmation. Nothing
+            here can move money.
           </p>
           <Button
             className="mt-3"
-            disabled={send.isPending || batch.isLoading}
-            onClick={setUp}
+            disabled={unlockAll.pending}
+            onClick={unlockAll.unlock}
             size="sm"
           >
-            {send.isPending || batch.isLoading
+            {unlockAll.pending
               ? "Setting up…"
-              : opened
-                ? "Nominate the agent and permit Aave"
-                : "Open, nominate the agent, permit Aave"}
+              : `Unlock everything (${unlockAll.steps} calls, 1 confirmation)`}
           </Button>
-          {send.error ? (
+          {unlockAll.error ? (
             <p className="mt-2 text-[11px] text-destructive">
-              {send.error.message.split("\n")[0]}
+              {unlockAll.error.message.split("\n")[0]}
             </p>
           ) : null}
         </div>

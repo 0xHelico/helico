@@ -67,7 +67,7 @@ export function AppSidebar({ address }: { address: `0x${string}` }) {
 
   const handleNewChat = useCallback(() => {
     setOpenMobile(false);
-    router.push("/chat");
+    router.push("/");
   }, [router, setOpenMobile]);
 
   const handleShowDeleteAllDialog = useCallback(() => {
@@ -76,7 +76,7 @@ export function AppSidebar({ address }: { address: `0x${string}` }) {
 
   const handleDeleteAll = useCallback(() => {
     setShowDeleteAllDialog(false);
-    router.replace("/chat");
+    router.replace("/");
     mutate(HISTORY_KEY, [], { revalidate: false });
 
     api.deleteConversations().catch(() => undefined);
@@ -142,10 +142,10 @@ export function AppSidebar({ address }: { address: `0x${string}` }) {
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     asChild
-                    className={navClass(pathname === "/")}
+                    className={navClass(pathname.startsWith("/limit"))}
                     tooltip="Limits"
                   >
-                    <Link href="/" onClick={closeMobile}>
+                    <Link href="/limit" onClick={closeMobile}>
                       <SlidersHorizontalIcon size={16} />
                       <span className="font-medium">Limits</span>
                     </Link>

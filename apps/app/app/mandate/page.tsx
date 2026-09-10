@@ -6,5 +6,5 @@ import { redirect } from "next/navigation";
  * anything a judge or a reviewer has bookmarked — still land somewhere true.
  */
 export default function MandatePage() {
-  redirect("/");
+  redirect("/limit");
 }

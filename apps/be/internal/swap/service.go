@@ -240,15 +240,15 @@ func about() (string, []Card) {
 			Body: "Idle USDC works while it waits, and the agent compares Aave v3, Compound v3 and a " +
 				"Morpho vault before it moves — three protocols, not three markets in one. It holds " +
 				"the best of them, and can do nothing else with your money.",
-			// The anchor, not the page. The front page leads with a board of capabilities and the
-			// controls that grant them are further down, so a card promising Earn that lands at the
-			// top sends a reader to the row that looks blocked rather than to the two that work.
-			Href: "/#mandate",
+			// The anchor, not the page: the limits page opens with the account summary and the
+			// controls that grant this are further down, so a card promising Earn that lands at
+			// the top sends a reader past the two controls it is about.
+			Href: "/limit#mandate",
 		},
 		{
 			Title: "Set your limits",
 			Body:  "Name the agent and choose the markets it may use. Setting the first one builds your account.",
-			Href:  "/",
+			Href:  "/limit",
 		},
 		{
 			Title: "See what moved",

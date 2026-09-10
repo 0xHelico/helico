@@ -1,7 +1,6 @@
-import { Chat } from "@/components/chat/chat";
+import { redirect } from "next/navigation";
 
-export const metadata = { title: "Ask Helico" };
-
+/** The chat moved to the front door. Kept so links and bookmarks that predate the move still land. */
 export default function ChatPage() {
-  return <Chat />;
+  redirect("/");
 }
