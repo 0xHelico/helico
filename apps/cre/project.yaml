@@ -5,11 +5,10 @@
 # verdict back, so unlike the template it genuinely needs an RPC.
 #
 # `staging-settings` points at a LOCAL FORK of Arbitrum One. That is the target
-# you can run today. NOTE: this describes the retiring Uniswap v4 path; the
-# workflow now manages idle capital in a lending market. The vault is not on a
-# live network, and the workflow
-# has nothing to read without one. `rehearse-idle.sh` starts the fork, deploys the
-# vault onto it, and gives the position something to be out of range about.
+# you can run today. `rehearse-idle.sh` starts the fork, deploys the account
+# factory onto it, opens an account, funds it with real USDC and WETH, permits
+# the four markets the production config names, and lets the enclave choose
+# between them.
 #
 # The chain name is Arbitrum One either way. A fork keeps chain id 42161, which
 # is also what the deploy script insists on.
@@ -18,8 +17,9 @@ staging-settings:
         - chain-name: ethereum-mainnet-arbitrum-1
           url: http://127.0.0.1:8546
 # ==========================================================================
-# `production-settings` is the same workflow against the real chain. It needs a
-# deployed vault, and deploying one is not something this file can do for you.
+# `production-settings` is the same workflow against the real chain. It needs an
+# account opened on Arbitrum One, and opening one is not something this file can
+# do for you.
 production-settings:
     account:
         # Who owns the deployed workflow: may update it, pause it, delete it. The deployer,
