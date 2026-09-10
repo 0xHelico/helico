@@ -48,19 +48,19 @@ export function StatTile({
   return (
     <div
       className={cn(
-        "flex items-start gap-3 rounded-xl p-4",
+        "flex items-center gap-3 rounded-xl p-4",
         tint ?? "bg-shade",
       )}
     >
-      {icon ? <span className="mt-0.5 shrink-0">{icon}</span> : null}
+      {icon ? <span className="shrink-0">{icon}</span> : null}
       <div className="min-w-0">
-        <div className="text-[11.5px] text-soft">{name}</div>
-        <div className="tabular mt-1 truncate font-medium text-[15px] text-ink tracking-tight">
+        <div className="flex items-baseline gap-1.5 text-[11.5px] text-soft">
+          <span className="truncate">{name}</span>
+          {note ? <span className="truncate text-faint">· {note}</span> : null}
+        </div>
+        <div className="tabular mt-0.5 truncate font-medium text-[15px] text-ink tracking-tight">
           {value}
         </div>
-        {note ? (
-          <div className="tabular mt-1 text-[11px] text-faint">{note}</div>
-        ) : null}
       </div>
     </div>
   );
@@ -80,13 +80,13 @@ export function Empty({
   icon?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center gap-3 py-10 text-center">
+    <div className="flex flex-col items-center gap-2.5 py-9 text-center">
       {icon ? (
-        <span className="flex size-10 items-center justify-center rounded-full bg-shade">
+        <span className="flex size-8 items-center justify-center rounded-full bg-shade">
           {icon}
         </span>
       ) : null}
-      <p className="max-w-sm text-[12.5px] text-soft leading-relaxed">
+      <p className="max-w-[19rem] text-[12px] text-soft leading-relaxed">
         {children}
       </p>
     </div>
@@ -171,14 +171,17 @@ export function AssetTile({
       )}
     >
       {mark ? <span className="shrink-0">{mark}</span> : null}
+      {/* Two lines, not three. The note used to stack under the figure, which made every tile a
+          third taller than it needed to be and pushed the grid out of the rhythm the rest of the
+          page keeps. It belongs beside the symbol: both are labels for the number below. */}
       <div className="min-w-0">
-        <div className="text-[11.5px] text-soft">{symbol}</div>
+        <div className="flex items-baseline gap-1.5 text-[11.5px] text-soft">
+          <span className="truncate">{symbol}</span>
+          {note ? <span className="truncate text-faint">· {note}</span> : null}
+        </div>
         <div className="tabular mt-0.5 truncate font-medium text-[15px] text-ink tracking-tight">
           {value}
         </div>
-        {note ? (
-          <div className="tabular mt-0.5 text-[11px] text-faint">{note}</div>
-        ) : null}
       </div>
     </div>
   );
