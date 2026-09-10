@@ -2312,6 +2312,31 @@ READMEs.
   file rather than left to be discovered: the card is what is under test, and everything it reads
   afterwards comes from the chain.
 
+### 2026-09-11 — A deploy that silently did not happen
+
+- **Done:** re-ran the dropped backend deploy, added the check that would have caught it, filed
+  #390 for the cause, and gave the README a **Try it** section.
+
+  #389's `be-deploy` was **cancelled** rather than run, so `api.helico.site` went on answering from
+  a build that did not know the `earn` action the app had started sending. The run showed as
+  cancelled, not failed, so the merge looked clean and `main` looked deployed. The cause is one
+  `concurrency` group shared by all three deploy workflows: with `cancel-in-progress: false` only
+  one run may wait, and two merges sixteen minutes apart is enough to drop one.
+
+- **AI's role:** Claude Opus 5 noticed the cancelled run while checking that the merge had reached
+  production, and did all four.
+
+- **Verified:** the deploy re-run and the running image compared against `main` over SSH, rather
+  than trusting a green workflow. The guard is behavioural rather than a tag comparison: `bun run
+  --filter @helico/app prod` already asks the deployed backend what each starter maps to, and
+  "Put my idle USDC to work" is now one of them — a backend that has not been redeployed answers it
+  with `about` and fails a named check.
+
+  Worth writing down: the deploy workflow's own success check is `curl` for a 200 on `/`, which an
+  old container answers exactly as well as a new one. It reported success on a deploy that had not
+  changed anything. That is why the check that matters is one that asks the deployed thing to do
+  something only the new build can do.
+
 <!--
 Template for the next entry:
 

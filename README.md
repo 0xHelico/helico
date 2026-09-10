@@ -20,6 +20,32 @@ Three ideas, one each for a way authority usually leaks:
 
 Nothing here is claimed before it is proven. Where something is not true yet, it says so.
 
+## Try it
+
+Deployed and open. Nothing has to be run locally.
+
+**[app.helico.site](https://app.helico.site)** — connect a wallet on Arbitrum One. One signature
+proves the address is yours; it costs no gas and moves nothing.
+
+1. **Agree, and turn everything on.** The first run offers one switch. On a wallet that can batch
+   (EIP-5792) it opens your account, names Helico's agent and allows all four markets in **one
+   confirmation**. On a wallet that cannot, it says so and sends nothing, and the same button waits
+   on [`/limit`](https://app.helico.site/limit).
+2. **Put something in.** *Money in* on the limits page moves USDC from your wallet into your
+   account. An ordinary transfer: no approval, and nothing granted to anybody. The agent moves what
+   the **account** holds, so this is the step that gives it something to move.
+3. **Say what you want.** Swap by sentence, ask what your position is doing, ask why nothing moved,
+   start earning, stop the agent, or take everything back. Six starters on the front door reach all
+   six things it can do.
+
+Every one of those is a call you sign. Naming the agent and allowing a market are owner-only on
+chain, and no batch or relayer can make them for you — which is the property that makes a
+compromised agent harmless rather than a promise that it will behave.
+
+**What is not there yet, said here rather than discovered:** providing liquidity as a maker has no
+interface. The contracts do it and a script does it
+([`scripts/ship-maker-position.ts`](scripts/ship-maker-position.ts)); the app does not.
+
 ## Layout
 
 | Directory | Contents |
