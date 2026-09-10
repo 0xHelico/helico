@@ -115,7 +115,7 @@ func (s *Service) Interpret(ctx context.Context, message string, prior ...Turn) 
 	// lies quietly.
 	action := strings.ToLower(strings.TrimSpace(d.Action))
 	switch action {
-	case ActionStatus, ActionRevoke, ActionAbout, ActionWithdraw:
+	case ActionStatus, ActionRevoke, ActionAbout, ActionWithdraw, ActionEarn:
 	default:
 		action = ActionSwap
 	}
@@ -160,6 +160,18 @@ func (s *Service) Interpret(ctx context.Context, message string, prior ...Turn) 
 				"nothing has moved, the reason is in there somewhere: an account nobody has " +
 				"created, an agent nobody has named, a market nobody has allowed, or a move too " +
 				"small to be worth the gas.",
+			Steps: []Step{read},
+		}, nil
+	case ActionEarn:
+		return Answer{
+			Action: ActionEarn,
+			// Written for somebody who has not set anything up, because that is who asks this.
+			// The card beside it reads the account and names which of the three steps is missing;
+			// this sentence has no address and cannot.
+			Reply: "Your idle USDC can earn in Aave v3, Compound v3 or a Morpho vault, and the " +
+				"agent holds whichever pays best. Three things have to be true first: the agent is " +
+				"named, the market is allowed, and the money is in your account. Each one is a call " +
+				"you sign yourself, and the card below shows which is still missing.",
 			Steps: []Step{read},
 		}, nil
 	case ActionRevoke:
@@ -242,10 +254,10 @@ func about() (string, []Card) {
 			Body: "Your idle USDC earns while it waits. The agent looks at Aave v3, Compound v3 and a " +
 				"Morpho vault before it moves, which is three protocols rather than three markets " +
 				"inside one. It holds whichever pays best, and can do nothing else with your money.",
-			// The anchor, not the page: the limits page opens with the account summary and the
-			// controls that grant this are further down, so a card promising Earn that lands at
-			// the top sends a reader past the two controls it is about.
-			Href: "/limit#mandate",
+			// A sentence, not a link, since #387 gave every step of the setup a button in the
+			// chat. It used to open the limits page at an anchor, which asked a person to go and
+			// find the controls; now the answer arrives with the one that is actually missing.
+			Try: "Put my idle USDC to work",
 		},
 		{
 			Title: "Set your limits",
