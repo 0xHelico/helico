@@ -7,7 +7,7 @@ import { formatUnits } from "viem";
 import { useAccount } from "wagmi";
 
 import { GeneratedAvatar } from "@/components/generated-avatar";
-import { Card } from "@/components/kit";
+import { Card, Loading } from "@/components/kit";
 import { byDay, Sparkline } from "@/components/sparkline";
 import { totals, useAccountState } from "@/hooks/use-account-state";
 import { configuredFactory } from "@/lib/account";
@@ -80,7 +80,12 @@ export function PortfolioSummary() {
       <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <div className="tabular font-medium text-[30px] text-ink tracking-tight">
-            {held ? (
+            {/* A bar while the chain is being read, rather than a sentence where a number goes.
+                "nothing yet" is a statement about an account, and until the read comes back there
+                is no account to make a statement about. */}
+            {account.isPending && factory ? (
+              <Loading className="h-[30px] w-44" />
+            ) : held ? (
               <>
                 {usdc(held.total).split(".")[0] as string}
                 <span className="text-faint">
@@ -94,14 +99,19 @@ export function PortfolioSummary() {
               "nothing yet"
             )}
           </div>
+          {account.isPending && factory ? (
+            <Loading className="mt-2 h-3 w-52" />
+          ) : null}
           <p className="mt-1 text-[11px] text-faint">
-            {held
-              ? `${usdc(held.idle)} liquid · ${usdc(held.working)} working`
-              : factory
-                ? account.isError
-                  ? "The chain did not answer."
-                  : "Reading the account…"
-                : "No account factory deployed yet, so there is nothing to total."}
+            {account.isPending && factory
+              ? ""
+              : held
+                ? `${usdc(held.idle)} liquid · ${usdc(held.working)} working`
+                : factory
+                  ? account.isError
+                    ? "The chain did not answer."
+                    : "Reading the account…"
+                  : "No account factory deployed yet, so there is nothing to total."}
           </p>
         </div>
         {days.length > 0 ? (

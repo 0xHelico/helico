@@ -56,7 +56,7 @@ function Filter({ label }: { label: string }) {
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
 export function Holdings() {
-  const { data } = useAccountState();
+  const { data, isPending: pending } = useAccountState();
   const held = totals(data);
   // The account's own address, which left the page with the panel this replaced. It is the one
   // fact here a person cannot get anywhere else: CREATE2 gives it before the contract exists.
@@ -92,7 +92,14 @@ export function Holdings() {
         </div>
       </div>
 
-      {rows.length > 0 ? (
+      {/* A pair of bars while the chain is read. An empty state before the answer arrives says
+          "you hold nothing", which is a different claim from "we have not looked yet". */}
+      {pending ? (
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Loading className="h-[68px]" />
+          <Loading className="h-[68px]" />
+        </div>
+      ) : rows.length > 0 ? (
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
           {rows.map((r) => (
             <AssetTile

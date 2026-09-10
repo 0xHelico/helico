@@ -6,7 +6,7 @@ import { formatUnits } from "viem";
 import { useAccount } from "wagmi";
 
 import { GeneratedAvatar } from "@/components/generated-avatar";
-import { Card } from "@/components/kit";
+import { Card, Loading } from "@/components/kit";
 import { PriceChart } from "@/components/price-chart";
 import { byDay, lastDays, zeroDays } from "@/components/sparkline";
 import { totals, useAccountState } from "@/hooks/use-account-state";
@@ -113,7 +113,13 @@ export function PortfolioHero() {
                 already says which part is liquid, so a caption here only pushes the one thing
                 somebody came to read further down. */}
             <div className="tabular font-medium text-4xl text-ink tracking-tight">
-              {held ? <Amount value={held.total} /> : "—"}
+              {account.isPending ? (
+                <Loading className="h-9 w-40" />
+              ) : held ? (
+                <Amount value={held.total} />
+              ) : (
+                "nothing yet"
+              )}
             </div>
             <div className="tabular mt-3 font-mono text-soft text-xs">
               {held

@@ -51,6 +51,20 @@ const (
 	// asking for their money back was answered with "This ends the mandate" while every token
 	// stayed exactly where it was.
 	ActionWithdraw = "withdraw"
+	// ActionEarn is asking for idle money to be put to work.
+	//
+	// It qualifies under the rule above, but only just, and the reason is worth writing down: the
+	// enclave does the moving, so this action cannot move anything itself. What is behind it is
+	// the **setup** — naming the agent, allowing the markets, and getting money into the account
+	// — every step of which is a call the owner signs on their own screen.
+	//
+	// So the card it produces is not a promise. It reads what the account has and says which of
+	// the three is missing, with the button for that one. Asked before any of it is done, it
+	// answers with the first step rather than with a refusal; asked after all of it, it says the
+	// agent will move it on its next run. Before this existed the Earn card was a link and
+	// "put my idle USDC to work" landed on "about", which described earning to somebody who was
+	// trying to start it.
+	ActionEarn = "earn"
 )
 
 // Step is one check that ran, named after the function in this package that ran it. The chat

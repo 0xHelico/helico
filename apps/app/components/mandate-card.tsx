@@ -13,6 +13,7 @@ import {
 import { TokenMark } from "@/components/token-mark";
 import { Button } from "@/components/ui/button";
 import { CHAIN_ID, totals, useAccountState } from "@/hooks/use-account-state";
+import { useUnlock } from "@/hooks/use-unlock";
 import {
   AAVE_V3_POOL,
   accountReadAbi,
@@ -46,7 +47,7 @@ const ZERO = "0x0000000000000000000000000000000000000000" as Address;
 export function MandateCard({
   action,
 }: {
-  action: "status" | "revoke" | "withdraw";
+  action: "status" | "revoke" | "withdraw" | "earn";
 }) {
   const { address, isConnected, chainId } = useAccount();
   const client = usePublicClient({ chainId: CHAIN_ID });
@@ -70,6 +71,11 @@ export function MandateCard({
     queryKey: ["mandates", address],
     queryFn: () => readMandates(address as string),
   });
+
+  // Up here with the other hooks, not beside the branch that uses it: everything below returns
+  // early for a wallet that is not connected or an account that is not read yet, and a hook after
+  // one of those runs on some renders and not others.
+  const unlock = useUnlock();
 
   const revoke = useMutation({
     mutationFn: async () => {
@@ -135,7 +141,10 @@ export function MandateCard({
       <Note>No account factory is deployed, so there is nothing to read.</Note>
     );
   }
-  if (data.kind === "unopened") {
+  // Earn is the exception, and it is the whole point of the action: somebody asking to start
+  // earning before they have an account needs the first step, not a list of what their wallet
+  // happens to hold. Every other action here reads an account, so for them this still stands.
+  if (data.kind === "unopened" && action !== "earn") {
     return <WalletInstead address={address} />;
   }
 
@@ -155,6 +164,25 @@ export function MandateCard({
         : held && held.working === 0n
           ? "Nothing has moved yet. The agent looks every five minutes and only moves when the gain clears the gas."
           : null;
+  /**
+   * Earn, asked before any of the setup is done, which is when people ask it.
+   *
+   * The three conditions are the same ones `because` above names, in the same order, because they
+   * are the order they have to happen in: nobody may move it, then it has nowhere to go, then
+   * there is nothing to move. What is added here is the button for the step that is actually
+   * missing — the card used to be a link to a page where a reader had to find the control.
+   *
+   * `useUnlock` is the same batch the limits page and the first run send, so a market added there
+   * is a market permitted from here without this file changing.
+   */
+  const needsLimits = !nominated || venue.data === false;
+  const needsMoney = !needsLimits && held !== null && held.total === 0n;
+  const earnNext = needsLimits
+    ? "Nobody may move your money yet, and it has nowhere to go. Naming the agent and allowing the markets are the two calls that change that."
+    : needsMoney
+      ? "The agent may move it and has somewhere to put it. There is nothing in the account to move."
+      : "Everything it needs is set. The agent looks every five minutes and moves when the gain clears the gas.";
+
   const live = mandates.data?.rows.filter((m) => m.active) ?? [];
   const spendable = [...(mandates.data?.spendable ?? new Map())].filter(
     ([, value]) => value > 0n,
@@ -168,7 +196,11 @@ export function MandateCard({
 
       <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-muted-foreground text-xs">
         <dt>Who may move it</dt>
-        <dd>{nominated ? short(data.agent as string) : "nobody but you"}</dd>
+        <dd>
+          {nominated && data.kind === "open"
+            ? short(data.agent as string)
+            : "nobody but you"}
+        </dd>
         <dt>Where it may go</dt>
         <dd>{venue.data === true ? "Aave v3" : "nowhere yet"}</dd>
         <dt>Holding</dt>
@@ -186,6 +218,45 @@ export function MandateCard({
               : `${live.length} live`}
         </dd>
       </dl>
+
+      {action === "earn" ? (
+        <div className="mt-3 border-t pt-3">
+          <p className="text-[11.5px] text-soft leading-relaxed">{earnNext}</p>
+          {needsLimits && unlock.canBatch && unlock.ready ? (
+            <Button
+              className="mt-3"
+              disabled={unlock.pending}
+              onClick={unlock.unlock}
+              size="sm"
+            >
+              {unlock.pending
+                ? "Setting up…"
+                : "Turn everything on with one signature"}
+            </Button>
+          ) : null}
+          {needsLimits && !(unlock.canBatch && unlock.ready) ? (
+            <Link
+              className="mt-3 inline-block text-[11.5px] underline underline-offset-2 hover:text-ink"
+              href="/limit"
+            >
+              Set them on the limits page
+            </Link>
+          ) : null}
+          {needsMoney ? (
+            <Link
+              className="mt-3 inline-block text-[11.5px] underline underline-offset-2 hover:text-ink"
+              href="/limit#money-in"
+            >
+              Move money in
+            </Link>
+          ) : null}
+          {unlock.error ? (
+            <p className="mt-2 text-[11px] text-destructive">
+              {unlock.error.message.split("\n")[0]}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       {action === "status" && because ? (
         <p className="mt-3 border-t pt-3 text-[11.5px] text-soft leading-relaxed">

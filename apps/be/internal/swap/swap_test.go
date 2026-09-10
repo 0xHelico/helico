@@ -627,3 +627,48 @@ func TestPriorTurnsAreBounded(t *testing.T) {
 		t.Errorf("an earlier turn reached the model at %d runes, want %d", longest, maxPriorRunes)
 	}
 }
+
+// TestEarnIsItsOwnAction holds the line the Earn card is built on: a person asking to start
+// earning gets `earn`, not `about`, and the answer names the three things that have to be true
+// without pretending this endpoint can do any of them.
+//
+// Before it existed, "put my idle USDC to work" fell through to `about`, which described earning
+// to somebody who was trying to begin it — and the card it produced was a link to a page where
+// they still had to find the control.
+func TestEarnIsItsOwnAction(t *testing.T) {
+	svc := New(fakeModel(t, http.StatusOK, `{"action":"earn","chain":"arbitrum","tokenIn":"","tokenOut":"","amount":"","question":""}`))
+	got, err := svc.Interpret(context.Background(), "put my idle USDC to work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Action != ActionEarn {
+		t.Fatalf("action = %q, want %q", got.Action, ActionEarn)
+	}
+	if got.Intent != nil {
+		t.Fatalf("earn built a swap intent: %+v", got.Intent)
+	}
+	// The three conditions, in the order they have to happen in. A reply that named only the
+	// markets would send someone to enable a venue for an account holding nothing.
+	for _, want := range []string{"agent is named", "market is allowed", "money is in your account"} {
+		if !strings.Contains(got.Reply, want) {
+			t.Errorf("reply does not name %q: %q", want, got.Reply)
+		}
+	}
+}
+
+// TestEarnCardIsPressable keeps the Earn card from going back to being a link. Every card carries
+// exactly one of Try or Href, and the whole point of #387 is that this one is a sentence a person
+// can send rather than a page they have to go and read.
+func TestEarnCardIsPressable(t *testing.T) {
+	_, cards := about()
+	for _, c := range cards {
+		if c.Title != "Earn" {
+			continue
+		}
+		if c.Try == "" || c.Href != "" {
+			t.Fatalf("Earn card = %+v, want a Try and no Href", c)
+		}
+		return
+	}
+	t.Fatal("no Earn card")
+}
