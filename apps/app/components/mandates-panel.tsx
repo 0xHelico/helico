@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeftRight, Wallet } from "lucide-react";
+import { ScrollText, Wallet } from "lucide-react";
 import { useState } from "react";
 import { isAddress } from "viem";
 import { useAccount } from "wagmi";
@@ -98,7 +98,7 @@ export function MandatesPanel() {
     const data = mandates.data;
     if (data.rows.length === 0) {
       return (
-        <Empty icon={ArrowLeftRight}>
+        <Empty icon={ScrollText}>
           No mandates for {short(maker)}. An answer, not a failure.
         </Empty>
       );
