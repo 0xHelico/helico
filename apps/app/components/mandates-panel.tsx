@@ -4,7 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { isAddress } from "viem";
 import { useAccount } from "wagmi";
-import { Glyph } from "@/components/glyph";
 import {
   Card,
   Empty,
