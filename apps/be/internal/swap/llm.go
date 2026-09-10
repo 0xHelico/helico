@@ -40,6 +40,7 @@ action is one of:
 - "withdraw" — they want their money back: everything returned to their own wallet, out, emptied
 - "earn"   — they want their idle money working: earning, lending, supplied, put to work
 - "deposit" — they want to move money into their account: fund it, top it up, put money in
+- "provide" — they want to offer liquidity of their own: provide, market make, be the maker, LP
 - "about"  — a greeting, or a question about you: what you are, what you can do, how this works
 
 Rules:
@@ -55,6 +56,9 @@ Rules:
   reply to those is written by the application, not by you, so answer with the action alone.
 - "earn" is about starting it, "status" is about what it is already doing. "Put my idle USDC to
   work" is earn. "How much of my money is earning" is status.
+- "provide" is offering their own two-sided position for other people to trade against. "Provide
+  liquidity for ETH and USDC" and "let me be the maker" are provide. It is not a swap: a swap
+  spends one token to get another, this commits both and waits.
 - "deposit" is money moving from their wallet into their own account. "Move 50 USDC into my
   account" is deposit. "Swap 50 USDC into WETH" is a swap: one is a transfer to themselves, the
   other is an exchange between two tokens.

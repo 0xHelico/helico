@@ -414,13 +414,16 @@ func TestAboutOffersOnlyWhatTheRegistryHolds(t *testing.T) {
 	// `staking` is on this list because it was asked for and does not exist: nothing in
 	// `contracts/src`, `apps` or `packages` stakes anything, so a card offering it would be a
 	// partner integration that is not there — the category the rules disqualify rather than deduct.
-	for _, word := range []string{"bridge", "borrow", "perpetual", "liquidity as a maker", "staking", "stake "} {
+	// "liquidity as a maker" left this list when it stopped being a thing we cannot do: `provide`
+	// ships a position through Aqua, and `shipCall` is reached from the app rather than only from a
+	// script. Naming it as a refusal after that would be the same failure in the other direction.
+	for _, word := range []string{"bridge", "borrow", "perpetual", "staking", "stake "} {
 		if strings.Contains(strings.ToLower(offered), word) {
 			t.Errorf("%q is offered, and no action behind it does that", word)
 		}
 	}
 	// And the ones it does refuse have to be there, or the paragraph is decoration.
-	for _, word := range []string{"liquidity as a maker", "borrowing"} {
+	for _, word := range []string{"borrowing", "more than one market"} {
 		if !strings.Contains(strings.ToLower(refused), word) {
 			t.Errorf("the reply does not say it cannot do %q", word)
 		}

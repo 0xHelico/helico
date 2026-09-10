@@ -76,6 +76,20 @@ const (
 	// preference. The card is the same control either way — asked for directly, or reached as the
 	// missing step of `earn`.
 	ActionDeposit = "deposit"
+	// ActionProvide is shipping a position of your own to Aqua, which is the half of the product
+	// that existed only as a script.
+	//
+	// `HelicoMandateSwap` is deployed and `scripts/ship-maker-position.ts` ships to 1inch's router,
+	// and nothing in `apps/app` or `apps/be` ever called `shipCall` — so the app could take
+	// somebody else's position and never offer one (#346, point 4). That is also why a swap has
+	// nothing to fill against: on Arbitrum One six positions hold WETH and USDC and all of them
+	// refuse to price (#393), and the only fix available to us is to be the maker.
+	//
+	// It commits rather than deposits, and the distinction is the whole reason this is safe to put
+	// behind a sentence: `ship` writes a number into Aqua's ledger and moves no tokens, the
+	// approval is for exactly the two amounts shipped, and docking ends it. Nothing here is
+	// custody.
+	ActionProvide = "provide"
 )
 
 // Step is one check that ran, named after the function in this package that ran it. The chat
