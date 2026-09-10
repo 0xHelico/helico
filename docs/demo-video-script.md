@@ -42,6 +42,12 @@ submission.
 Nothing moved to a new address today. What changed is what the addresses *are*, what one more of
 them does, and one row below that stopped being true.
 
+> **The layers below are history, not instructions.** Each one was true when it was written and
+> newer layers supersede older ones wherever they disagree — the older rows are kept because the
+> difference is the record. A clause that has since expired is struck through where it sits, so a
+> reader who lands in the middle of this file is not handed a rule that stopped applying.
+> **Where two layers disagree, this one wins.**
+
 | | State, measured 10 September |
 |---|---|
 | **Both Aqua apps are upgradeable now** | `HelicoMandateSwap` `0x0524a353…6041` and `HelicoOracleBoard` `0xe8515af9…7d39` are **163-byte proxies** — read from the EIP-1967 slot, not assumed — delegating to `0xfdefc345…b557` and `0xc54cf202…b410`. The addresses a maker ships to are unchanged, which is the point of them. Both proxy and implementation are verified |
@@ -64,7 +70,7 @@ mandate.
 | **Two addresses changed** | `HelicoMandateSwap` is now `0x0524a353…6041` and `HelicoOracleBoard` is now `0xe8515af9…7d39`. The pair they replace predate `ReceiptKind` and cannot take a mandate or board carrying today's `Venue` — checked against the deployed bytecode, not assumed. Neither of the old pair had ever been used: `eth_getLogs` returns zero events on both |
 | **Two new contracts** | `CompoundVenue` `0x1eC57cE1…BB2E` (`hcUSDC`) and `MorphoVenue` `0xBBa798A6…9A29` (`hmUSDC`), both verified. **These replaced a pair deployed an hour earlier** — see `deployments.md`; the first pair could mint zero shares for a real deposit and never held anything. They let the enclave reach Compound v3 and any ERC-4626 vault — a Morpho vault being the first pointed at |
 | **Seven contracts now** | the five from this morning, with two addresses swapped, plus the two venues |
-| **Still not sayable: anything about multiple protocols** | The venues are deployed and **inert**. Nobody has called `permitVenue` on them, `config.production.json` does not name them, and the workflow has not been redeployed — so on Arbitrum One the account still reaches Aave and nothing else. See the row under *What must not be said* |
+| **Still not sayable: anything about multiple protocols** | ⚠️ **One clause here expired on 10 September — read the layer above.** The venues are deployed and **inert**. Nobody has called `permitVenue` on them, ~~`config.production.json` does not name them~~ (it names four markets and two assets as of 10 September), and the workflow has not been redeployed — so on Arbitrum One the account still reaches Aave and nothing else. See the row under *What must not be said* |
 | The account | **Still none opened on mainnet.** Unchanged, and still the honest sentence |
 
 ### Pre-flight, re-run 9 September
