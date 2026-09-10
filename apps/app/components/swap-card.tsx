@@ -1,9 +1,8 @@
 "use client";
 
-import { NATIVE, type SwapStep } from "@helico/plugin-uniswap";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ArrowDown, Check, Loader2 } from "lucide-react";
-import { erc20Abi, formatUnits, type Hex } from "viem";
+import { erc20Abi, formatUnits, type Hex, zeroAddress } from "viem";
 import {
   useAccount,
   usePublicClient,
@@ -12,7 +11,7 @@ import {
 } from "wagmi";
 import { ChainMark, TokenMark } from "@/components/token-mark";
 import { Button } from "@/components/ui/button";
-import { planAquaSwap } from "@/lib/aqua-swap";
+import { type AquaStep, planAquaSwap } from "@/lib/aqua-swap";
 import { explorerTx, SLIPPAGE_BPS } from "@/lib/chain";
 import { amountFloor, amountShort } from "@/lib/format";
 import type { Intent } from "@/lib/intent";
@@ -22,10 +21,13 @@ import { shortfall } from "@/lib/intent";
  * The words for each transaction. The plugin returns what a step is; what a person reads about
  * it belongs here, next to the rest of the copy.
  */
-const label = (step: SwapStep, intent: Intent) =>
+const label = (step: AquaStep, intent: Intent) =>
   ({
-    "approve-token": `Allow 1inch's router to spend your ${intent.tokenIn.symbol}`,
-    "approve-permit2": `Allow the router to spend your ${intent.tokenIn.symbol}`,
+    // Aqua positions hold WETH and the router pulls with `safeTransferFrom`, so ETH is wrapped
+    // first. Named as its own step because it is the wallet's own ether moving, and a person
+    // signing two transactions should be told which one is which.
+    wrap: `Wrap ${intent.amountIn} ETH into WETH`,
+    "approve-token": `Allow 1inch's router to spend your ${intent.tokenIn.symbol === "ETH" ? "WETH" : intent.tokenIn.symbol}`,
     swap: `Swap ${intent.amountIn} ${intent.tokenIn.symbol} for ${intent.tokenOut.symbol}`,
   })[step.kind];
 
@@ -112,10 +114,10 @@ export function SwapCard({ intent }: { intent: Intent }) {
         amountIn: BigInt(intent.amountInWei),
         slippageBps: SLIPPAGE_BPS,
       });
+      // `planAquaSwap` names which wall it hit, so this no longer flattens three different facts
+      // into the one that happens to be false on Arbitrum One.
       if (!viaAqua) {
-        throw new Error(
-          "No live Aqua position holds both sides of this pair right now.",
-        );
+        throw new Error("Nothing to fill against right now.");
       }
       return {
         amountOut: viaAqua.amountOut,
@@ -138,7 +140,7 @@ export function SwapCard({ intent }: { intent: Intent }) {
       if (!(publicClient && address)) {
         throw new Error("No client");
       }
-      if (intent.tokenIn.address === NATIVE) {
+      if (intent.tokenIn.address === zeroAddress) {
         return publicClient.getBalance({ address });
       }
       return publicClient.readContract({

@@ -388,6 +388,39 @@ if (swapRendered) {
   );
 }
 
+// ── 2b. the same swap starting in native ETH, which has to wrap first ───────
+//
+// "Swap 0.1 ETH into USDC" is the Swap card's own suggested sentence and one of the six starters,
+// and until now it could not work at any liquidity: Aqua positions hold WETH, so looking up
+// positions for `0x0000…0000` matched nothing and the card answered "no live Aqua position" — true
+// for the wrong reason. The plan wraps first, so this is three transactions rather than two.
+await page.waitForTimeout(13_000);
+const usdcBeforeEth = await bal(USDC, taker.account.address);
+await say("Swap 0.01 ETH into USDC");
+const ethSwap = page.getByRole("button", {
+  name: /^Sign \d+ transactions$/,
+});
+let ethRendered = false;
+try {
+  await ethSwap.last().waitFor({ timeout: 60_000 });
+  ethRendered = true;
+} catch {}
+check(
+  "an ETH swap plans a wrap, an approval and the fill",
+  ethRendered && (await ethSwap.last().innerText()).includes("3"),
+  ethRendered ? await ethSwap.last().innerText() : "no card",
+);
+if (ethRendered) {
+  await ethSwap.last().click();
+  await page.waitForTimeout(30_000);
+  const usdcAfterEth = await bal(USDC, taker.account.address);
+  check(
+    "and it lands: ETH wrapped, USDC in",
+    usdcAfterEth > usdcBeforeEth,
+    `+${formatUnits(usdcAfterEth - usdcBeforeEth, 6)} USDC`,
+  );
+}
+
 // ── 3. status: a reading, and nothing to sign ────────────────────────────────
 await say("Check my portfolio");
 await page
