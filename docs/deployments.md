@@ -4,6 +4,72 @@ Arbitrum One, chain id 42161. Every address below was read back from the chain a
 broadcast, not copied from a script's output — the third column is what the contract answers when
 asked about itself.
 
+## 10 September 2026 — the workflow catches up with the contracts
+
+The workflow on the DON had been the **8 September** build since 8 September: one asset, one
+pool. Config travels inside the binary, so every venue deployed since was invisible to it and
+permitting them on chain would have changed nothing.
+
+```
+name          helico-production      (updated, not re-registered)
+workflow id   006b5dd30e5815579834fee2989d4164baea200b1a2b7aedcea65b2deccdcf6c
+binary hash   8f244f97332ee7bbe0a4838ba9ba895b5a327b1c1176c8b4ffa6e712774cb6bc
+config hash   13c7ab9ce3a4df176b49342e3dbd577a3089593193d5d26b90d1717f2c442999
+tx            0xce50ae941a4a32600fc90f1716cbe69e012e37a757c7be005bf6f91d7e74675a
+              block 25,945,855 on Ethereum mainnet, 117,678 gas, 0.0000169 ETH
+deployer      0x6DCd7485…439E   0.0024506 -> 0.0024338 ETH
+```
+
+**What it now carries**, and this is the part worth checking rather than trusting:
+
+| Market | Kind | Reads |
+|---|---|---|
+| `0x794a61358D…` Aave v3 Pool | rebasing | every asset |
+| `0x1eC57cE1Dd…` `CompoundVenue` | share-priced | USDC only |
+| `0xBBa798A61f…` `MorphoVenue` | share-priced | USDC only |
+| `0xb0A125F539…` `CompoundVenue` | share-priced | WETH only |
+
+### Verified from the chain and the artefact, not from the CLI
+
+The CLI is not the witness here: it once reported *"No workflows found"* about this same workflow
+while it was running. Four checks instead:
+
+```
+transaction status                       1, success
+totalActiveWorkflowsByOwner(deployer)    1        ← an update, not a second registration
+the registry event carries               006b5dd3…
+sha256(config.production.json)           13c7ab9ce3a4df176b49342e3dbd577a3089593193d5d26b90d1717f2c442999
+```
+
+The last one is the one that matters. The config hash the registry holds is **byte-exact sha256 of
+the file on `main`**, so the workflow running on `zone-a` is reading the four markets and two
+assets above rather than a config that merely resembles them. The artefact URL itself needs signed
+access and cannot be fetched to compare, which is why the hash is the proof.
+
+### What it does not yet do
+
+**Nothing.** There is still no account on Arbitrum One, so every run reaches its logic and holds —
+`0 accounts: nothing to manage`. The workflow being current is a precondition for the demonstration,
+not the demonstration. See #234.
+
+### The failure worth recording, because it cost two attempts
+
+`cre workflow deploy` refused with:
+
+```
+settings owner "0x6DCd7485…439E" does not match address derived from
+private key "0xf39Fd6e5…2266"
+```
+
+`apps/cre/.env` held **anvil's first account** in `CRE_ETH_PRIVATE_KEY`. Nothing leaked — that key
+is public and already sits in `rehearse-idle.sh` as `OWNER_KEY`. What put it there is upstream:
+`.env.example` carried it as the default *and its comment said the key was unused once deployed*,
+so a `.env` copied from it kept a fixture key in the slot production reads until a real deploy
+asked for one. The comment is corrected; the value stays anvil's, because it is right for the
+rehearsal.
+
+Second time this shape has cost something. A default is a question nobody gets asked.
+
 ## 10 September 2026 — a Compound venue for ETH
 
 `CompoundVenue` was written, reviewed and deployed against a six-decimal market only. This one
