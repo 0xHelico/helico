@@ -1676,6 +1676,35 @@ READMEs.
   clicked and the resulting path read back — `/portfolio` — because a link that says the right
   word and goes to the old place is exactly the bug this was fixing.
 
+### 2026-09-10 — the script named a board two deployments out of date
+
+- **Done:** checked every address in `docs/demo-video-script.md` against the chain rather than
+  against `deployments.md`, on the day the video is recorded, because the script is the thing that
+  gets read aloud.
+
+- **AI's role:** found two stale claims on the same pair of lines, and neither would have looked
+  wrong to a reader.
+
+  ```
+  0x0524a353…    163 bytes  ← current HelicoMandateSwap, a proxy
+  0xe8515af9…    163 bytes  ← current HelicoOracleBoard, a proxy
+  0xeb480C09…  7,872 bytes  ← the FIRST board, superseded twice
+  ```
+
+  The script named `HelicoOracleBoard` as `0xeb480C09…C760` — the 9 September first attempt. It
+  moved to `0xF0aB4fF0…` in #325 and then behind a proxy at `0xe8515af9…` in #338, and the script
+  followed neither. Nothing about it is a lie: that contract is deployed, verified, and answers
+  `AQUA()`. It is simply not the one anyone would ship to, so a judge opening the address said in
+  the video lands on superseded implementation rather than the proxy the README points at.
+
+  The byte counts were stale in the same direction and more quietly. `HelicoMandateSwap` was
+  quoted at 7,707 bytes and answers 163 — it is a proxy now, and 163 is the interesting number
+  rather than an embarrassing one, so the line says why.
+
+- **Verified:** `cast code` and `cast call AQUA()` on all five addresses the script names, plus the
+  router still answering `AQUA_YIELD_COVER_OPCODE()` → 34. The corrected figures are the ones those
+  calls returned, and both superseded boards are now absent from the script and the README.
+
 <!--
 Template for the next entry:
 
