@@ -192,7 +192,7 @@ await passOnboarding(page);
 // The limits moved to their own page when the conversation took the front door.
 await page.goto(`${APP}/limit`, { waitUntil: "domcontentloaded" });
 await page
-  .getByRole("heading", { name: /limits it works inside/ })
+  .getByRole("heading", { name: /what it is allowed to do/i })
   .waitFor({ timeout: 30_000 });
 
 // 1. Nominate the agent, from the limits panel. Nothing has opened the

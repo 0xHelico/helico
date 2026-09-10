@@ -27,7 +27,7 @@ export const Greeting = () => (
       initial={{ opacity: 0, y: 10 }}
       transition={{ delay: 0.65, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
     >
-      Swaps happen here. To have a liquidity position kept near the market
+      Swaps happen here. If you want a liquidity position kept near the market
       price,{" "}
       <Link
         className="underline underline-offset-2 hover:text-muted-foreground"

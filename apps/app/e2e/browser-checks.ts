@@ -239,8 +239,8 @@ const watchCsp = (page: Page) => {
   check("a new wallet is asked to agree first", await agree.isVisible());
   check("and cannot start until it has", await start.isDisabled());
   check(
-    "unlock everything is offered, and defaults to on",
-    await page.getByRole("switch", { name: /unlock everything/i }).isChecked(),
+    "turning everything on is offered, and defaults to on",
+    await page.getByRole("switch", { name: /turn everything on/i }).isChecked(),
   );
   await passOnboarding(page);
 
@@ -254,7 +254,7 @@ const watchCsp = (page: Page) => {
     "with the composer on it",
     (await page.getByPlaceholder(/Ask anything/i).count()) > 0,
   );
-  check("and not the limits", !/limits it works inside/.test(front));
+  check("and not the limits", !/what it is allowed to do/i.test(front));
 
   // Asked again on a reload. Agreeing once has to be enough, or the terms become a toll.
   await page.reload({ waitUntil: "domcontentloaded" });
@@ -268,7 +268,7 @@ const watchCsp = (page: Page) => {
 
   await page.goto(`${APP}/limit`, { waitUntil: "domcontentloaded" });
   await page
-    .getByRole("heading", { name: /limits it works inside/ })
+    .getByRole("heading", { name: /what it is allowed to do/i })
     .waitFor({ timeout: 30_000 });
   const limits = (await page.locator("body").innerText()).trim();
   check(

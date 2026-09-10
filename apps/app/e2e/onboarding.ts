@@ -15,7 +15,7 @@ export async function passOnboarding(page: Page): Promise<boolean> {
   const agree = page.getByRole("checkbox", { name: /read this and I agree/i });
   if ((await agree.count()) === 0) return false;
   await agree.check();
-  const unlock = page.getByRole("switch", { name: /unlock everything/i });
+  const unlock = page.getByRole("switch", { name: /turn everything on/i });
   if (await unlock.isChecked()) await unlock.click();
   await page.getByRole("button", { name: /^Start$/ }).click();
   await agree.waitFor({ state: "hidden", timeout: 15_000 });

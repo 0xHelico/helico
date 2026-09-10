@@ -2179,6 +2179,28 @@ READMEs.
   the mandate — and five of its six assertions named text that had been deleted when that page was
   simplified. It had been passing over nothing, because nothing had run it. Rewritten.
 
+### 2026-09-10 — The copy said the right thing in the wrong voice
+
+- **Done:** every string a person reads, rewritten. The first run, the limits page, the empty
+  states, the chat greeting, and the seven cards the Go backend ships as answers. Same claims,
+  plainer words, and no em dashes anywhere in the visible copy. The two that stood in for a missing
+  number now say what is missing.
+
+  One of them was not a voice problem. The unlock screen read **"6 calls in one confirmation"**,
+  which is true and lands as *six signatures*. Ghoza read it that way and asked whether it could be
+  made one. It always was one: the batch is a single signature and a single transaction, so the
+  gas is one transaction's, not six. The sentence put the number a person fears first and buried
+  the one that answers them. It now says one signature, one transaction, and the button says the
+  same.
+
+- **AI's role:** Claude Opus 5 rewrote the copy. Ghoza asked for it to sound human and to lose the
+  dashes, and found the misleading line by reading the screen.
+
+- **Verified:** the browser run again, sixteen checks green against the renamed heading and the
+  renamed switch, plus `go test ./internal/swap` for the backend's own cards. The headline at
+  `/limit` changed, so the two suites that anchor on it were moved with it rather than left
+  matching a heading that no longer exists.
+
 <!--
 Template for the next entry:
 

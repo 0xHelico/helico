@@ -80,8 +80,8 @@ export function MandatesPanel() {
     if (!maker) {
       return (
         <Empty icon={Wallet}>
-          Connect a wallet, or paste any address. This answers for every maker
-          on the chain, not just ours.
+          Connect a wallet, or paste any address. This works for any maker on
+          the chain, not only ours.
         </Empty>
       );
     }
@@ -99,7 +99,7 @@ export function MandatesPanel() {
     if (data.rows.length === 0) {
       return (
         <Empty icon={ScrollText}>
-          No mandates for {short(maker)}. An answer, not a failure.
+          {short(maker)} has no mandates. That is an answer, not an error.
         </Empty>
       );
     }

@@ -91,7 +91,7 @@ export function PortfolioSummary() {
                 </span>
               </>
             ) : (
-              "—"
+              "nothing yet"
             )}
           </div>
           <p className="mt-1 text-[11px] text-faint">

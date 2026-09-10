@@ -142,11 +142,12 @@ func (s *Service) Interpret(ctx context.Context, message string, prior ...Turn) 
 	case ActionWithdraw:
 		return Answer{
 			Action: ActionWithdraw,
-			Reply: "This sends everything the account holds back to you. There is nowhere else it " +
-				"can go: the destination is the owner address fixed when the account was built, and " +
-				"the call takes no recipient. It lives in the proxy rather than in code that can be " +
-				"replaced, so no upgrade can take this door away. What is working comes back as " +
-				"Aave's receipt for it, which redeems there for the asset itself.",
+			Reply: "This sends everything your account holds back to you. There is nowhere else it " +
+				"could go: the destination is your own address, fixed when the account was built, " +
+				"and the call has no recipient to set. It sits in the proxy rather than in code " +
+				"that can be swapped out, so no upgrade can take this door away from you. Whatever " +
+				"is earning comes back as Aave's receipt for it, which you redeem there for the " +
+				"asset itself.",
 			Steps: []Step{read},
 		}, nil
 	case ActionStatus:
@@ -155,15 +156,16 @@ func (s *Service) Interpret(ctx context.Context, message string, prior ...Turn) 
 			// Phrased for "why has nothing happened" as well as "what do I hold", because both
 			// arrive here and the second wording answered only one of them. The card below carries
 			// the actual reason, which this sentence cannot: it is composed without an address.
-			Reply: "Here is your position, read from the chain rather than from me. If nothing has " +
-				"moved, the reason is in it — an account nobody has deployed, an agent nobody " +
-				"nominated, a market nobody permitted, or a move too small to be worth its gas.",
+			Reply: "Here is your position, read straight from the chain rather than from me. If " +
+				"nothing has moved, the reason is in there somewhere: an account nobody has " +
+				"created, an agent nobody has named, a market nobody has allowed, or a move too " +
+				"small to be worth the gas.",
 			Steps: []Step{read},
 		}, nil
 	case ActionRevoke:
 		return Answer{
 			Action: ActionRevoke,
-			Reply:  "This ends the mandate. The agent can do nothing afterwards, and you sign it yourself. Nobody has to agree.",
+			Reply:  "This ends the mandate. The agent can do nothing afterwards, you sign it yourself, and nobody else has to agree.",
 			Steps:  []Step{read},
 		}, nil
 	}
@@ -200,33 +202,33 @@ func (s *Service) Interpret(ctx context.Context, message string, prior ...Turn) 
 // sentence offers, and there is no second list to fall behind.
 func about() (string, []Card) {
 	chain := chains[0]
-	reply := "Helico gives you an account only you own. An agent you name may move its idle capital " +
-		"between the lending markets you allow-listed and pull it back, and it can do nothing " +
-		"else, because neither call it can make takes a recipient.\n\n" +
-		"Not yet, and I would rather say so than leave it out: providing liquidity as a maker, " +
-		"borrowing, more than one market at a time, and any chain but " + chain.Name + ". Anything " +
-		"I have no address or number for, I ask about rather than guess."
+	reply := "You get an account that only you own. You name an agent, and it can move your idle " +
+		"money between the lending markets you allowed and pull it back out again. That is all it " +
+		"can do, because neither of those calls lets it say where money goes.\n\n" +
+		"Not yet, and I would rather tell you than leave it out: providing liquidity as a maker, " +
+		"borrowing, using more than one market at a time, and any chain other than " + chain.Name +
+		". If I do not have an address or a number for something, I will ask instead of guessing."
 
 	return reply, []Card{
 		{
 			Title: "Swap",
-			Body:  "Name two tokens and an amount. I check both against the registry and build the intent; you sign it.",
+			Body:  "Name two tokens and an amount. I check both against the registry and build the intent. You sign it.",
 			Try:   "Swap 0.1 ETH into USDC",
 			Tags:  chain.Symbols(),
 		},
 		{
 			Title: "Status",
-			Body:  "What your account holds, how much of it is working, and who may move it.",
+			Body:  "What your account holds, how much of it is earning, and who is allowed to move it.",
 			Try:   "What is my position doing?",
 		},
 		{
 			Title: "Revoke",
-			Body:  "End the mandate. The agent can do nothing afterwards, and nobody has to agree.",
+			Body:  "End the mandate. The agent can do nothing afterwards, and nobody else has to agree.",
 			Try:   "Stop the agent",
 		},
 		{
 			Title: "Withdraw",
-			Body:  "Send everything back to your own wallet. The call takes no recipient, so there is nowhere else it can go.",
+			Body:  "Send everything back to your own wallet. The call has no recipient to set, so there is nowhere else it could go.",
 			Try:   "Take everything back to my wallet",
 		},
 		{
@@ -237,9 +239,9 @@ func about() (string, []Card) {
 			// `bestPaying` returns, so a card promising several at once would describe a different
 			// product. That limit stays named in the "Not yet" line rather than quietly dropped.
 			Title: "Earn",
-			Body: "Idle USDC works while it waits, and the agent compares Aave v3, Compound v3 and a " +
-				"Morpho vault before it moves — three protocols, not three markets in one. It holds " +
-				"the best of them, and can do nothing else with your money.",
+			Body: "Your idle USDC earns while it waits. The agent looks at Aave v3, Compound v3 and a " +
+				"Morpho vault before it moves, which is three protocols rather than three markets " +
+				"inside one. It holds whichever pays best, and can do nothing else with your money.",
 			// The anchor, not the page: the limits page opens with the account summary and the
 			// controls that grant this are further down, so a card promising Earn that lands at
 			// the top sends a reader past the two controls it is about.
@@ -247,12 +249,12 @@ func about() (string, []Card) {
 		},
 		{
 			Title: "Set your limits",
-			Body:  "Name the agent and choose the markets it may use. Setting the first one builds your account.",
+			Body:  "Name the agent and pick the markets it may use. Setting the first one creates your account.",
 			Href:  "/limit",
 		},
 		{
 			Title: "See what moved",
-			Body:  "Your mandates and what has gone through them, which is the question the chain on its own cannot answer.",
+			Body:  "Your mandates and what has gone through them. The chain on its own cannot answer that.",
 			Href:  "/portfolio",
 		},
 	}

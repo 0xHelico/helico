@@ -107,7 +107,8 @@ export function Holdings() {
         </div>
       ) : (
         <Empty icon={Wallet}>
-          No holdings found. Fund your account to see its assets in one place.
+          Nothing in here yet. Put something into your account and it shows up
+          on this page.
         </Empty>
       )}
     </Card>
@@ -152,7 +153,7 @@ export function Allocation() {
 
       {share === null ? (
         <Empty icon={ChartPie}>
-          Allocation appears once the account holds something.
+          This fills in as soon as your account holds something.
         </Empty>
       ) : (
         <div className="py-10 text-center">
@@ -184,7 +185,8 @@ export function Activity() {
         <Loading className="mt-4 h-24" />
       ) : (moves.data?.timestamps.length ?? 0) === 0 ? (
         <Empty icon={ArrowLeftRight}>
-          No activity yet. Anything the agent moves through Aqua shows up here.
+          Nothing has moved yet. Anything the agent does through Aqua turns up
+          here.
         </Empty>
       ) : (
         <ul className="mt-4 divide-y divide-line">
