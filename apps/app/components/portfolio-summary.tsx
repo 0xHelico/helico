@@ -54,7 +54,12 @@ export function PortfolioSummary() {
             <p className="font-medium text-[14px] text-ink leading-none">
               {isConnected && address ? (
                 <>
-                  Welcome, <span className="font-mono">{short(address)}</span>
+                  Welcome,{" "}
+                  {/* Already truncated, so a break inside it splits an ellipsis from its tail —
+                      "0x729D…" over "870B" on any narrow screen. */}
+                  <span className="whitespace-nowrap font-mono">
+                    {short(address)}
+                  </span>
                 </>
               ) : (
                 "No wallet connected"

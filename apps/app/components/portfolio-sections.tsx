@@ -74,10 +74,10 @@ export function Holdings() {
     <Card>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <SectionTitle>My Holdings</SectionTitle>
+          <SectionTitle>Holdings</SectionTitle>
           {account ? (
             <p className="tabular mt-1 font-mono text-[11.5px] text-faint">
-              {short(account)} ·{" "}
+              Account {short(account)} ·{" "}
               {data?.kind === "open" ? "open" : "not opened yet"}
             </p>
           ) : null}

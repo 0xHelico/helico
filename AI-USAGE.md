@@ -2115,6 +2115,29 @@ READMEs.
   no test is added here: a dev-mode variant would need CI to run a dev server for a bug that cannot
   reach production.
 
+### 2026-09-10 — A UI audit done with screenshots, and the six things it found
+
+- **Done:** six fixes across `price-chart.tsx`, `mandates-panel.tsx`, `portfolio-sections.tsx`,
+  `portfolio-hero.tsx`, `portfolio-summary.tsx` and `account-controls.tsx`. The one worth naming is
+  the chart: *Aqua movements per day* is a count, and its axis read `0 · 0.25 · 0.5 · 0.75 · 1` for
+  every empty wallet — three gridlines at values the data cannot take. `sparkline.tsx` states that
+  rule in its own docblock and the port to `PriceChart` dropped it.
+
+  The others: two panels in a row carrying the same glyph, two unlabelled addresses on one page, an
+  address breaking across its own ellipsis on mobile, one title in a different voice, and the same
+  sentence printed twice under itself.
+
+- **AI's role:** Claude Opus 5 ran the audit and wrote the fixes. Ghoza asked for the audit.
+
+- **Verified:** by screenshot, not by reading. A headless run signs in with an injected wallet and
+  captures both pages at 1440x900 and 390x844, scrolling the inner container because the layout is
+  `h-dvh` and the page itself never scrolls. Every finding was seen before it was written down, and
+  every fix was re-shot afterwards — the axis now reads `0 · 1`, the address survives 390px intact,
+  and the duplicated sentence is gone.
+
+  The first pass missed one of them: `whitespace-nowrap` went on the portfolio hero and the limits
+  page kept breaking, because that card is a different component. The re-shoot is what caught it.
+
 <!--
 Template for the next entry:
 
