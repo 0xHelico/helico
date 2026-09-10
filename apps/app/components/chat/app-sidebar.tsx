@@ -4,11 +4,12 @@ import {
   LineChartIcon,
   PanelLeftIcon,
   PenSquareIcon,
+  SlidersHorizontalIcon,
   TrashIcon,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import { useSWRConfig } from "swr";
@@ -29,6 +30,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { api } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -43,6 +45,14 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
 export function AppSidebar({ address }: { address: `0x${string}` }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const navClass = (active: boolean) =>
+    cn(
+      "h-8 rounded-lg text-[13px] transition-colors duration-150 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
+      active
+        ? "border border-sidebar-border bg-sidebar-accent/40 text-sidebar-foreground"
+        : "text-sidebar-foreground/70",
+    );
   const { setOpenMobile, toggleSidebar } = useSidebar();
   const { mutate } = useSWRConfig();
   const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false);
@@ -122,16 +132,31 @@ export function AppSidebar({ address }: { address: `0x${string}` }) {
           <SidebarGroup className="pt-1">
             <SidebarGroupContent>
               <SidebarMenu>
+                {/* Both pages, named for what they are. The border marks which one you are on:
+                    it used to sit on the only nav item there was, so with two of them it said
+                    "these are links" instead of "you are here", which is a decoration rather than
+                    a state. */}
+                {/* Both pages, named for what they are. "Mandate" used to be the only entry and it
+                    named neither: it opened the limits page under a word nobody calls it, while
+                    the portfolio was reachable only from inside the chat's own cards. */}
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     asChild
-                    className="h-8 rounded-lg border border-sidebar-border text-[13px] text-sidebar-foreground/70 transition-colors duration-150 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                    className={navClass(pathname === "/")}
+                    tooltip="Limits"
+                  >
+                    <Link href="/" onClick={closeMobile}>
+                      <SlidersHorizontalIcon size={16} />
+                      <span className="font-medium">Limits</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    className={navClass(pathname.startsWith("/portfolio"))}
                     tooltip="Portfolio"
                   >
-                    {/* The portfolio, not the limits page. "Mandate" was the only word in the nav
-                        and it named a page nobody calls that, while `/portfolio` — the thing a
-                        person looks for by name — was reachable only from inside the chat's own
-                        cards. The limits page keeps those routes in and leaves the sidebar. */}
                     <Link href="/portfolio" onClick={closeMobile}>
                       <LineChartIcon size={16} />
                       <span className="font-medium">Portfolio</span>

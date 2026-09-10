@@ -7,7 +7,8 @@ import { useAccount } from "wagmi";
 
 import { GeneratedAvatar } from "@/components/generated-avatar";
 import { Card } from "@/components/kit";
-import { byDay, lastDays, Sparkline, zeroDays } from "@/components/sparkline";
+import { PriceChart } from "@/components/price-chart";
+import { byDay, lastDays, zeroDays } from "@/components/sparkline";
 import { totals, useAccountState } from "@/hooks/use-account-state";
 import { configuredFactory } from "@/lib/account";
 import { readMovements } from "@/lib/mandates";
@@ -95,9 +96,9 @@ export function PortfolioHero() {
             )}
           </h1>
         </div>
-        <span className="text-soft text-sm">
-          {read ? `Read ${read}` : "Arbitrum One"}
-        </span>
+        {/* No "Read" in front of it. The line is a timestamp and reads as one; the word only
+            took space from the thing somebody is actually checking. */}
+        <span className="text-[15px] text-soft">{read ?? "Arbitrum One"}</span>
       </div>
 
       <Card>
@@ -146,11 +147,24 @@ export function PortfolioHero() {
             rather than a placeholder — nothing moved on each of those days — and the card keeps
             its shape instead of collapsing to a number and a gap. */}
         {mounted ? (
-          <Sparkline
-            axes
-            days={days.length > 0 ? days : zeroDays(span.days ?? 30)}
-            label="Aqua movements per day"
-          />
+          <div className="mt-4">
+            <div className="flex items-baseline justify-between gap-4">
+              <span className="text-[11.5px] text-soft">
+                Aqua movements per day
+              </span>
+            </div>
+            <div className="mt-2">
+              <PriceChart
+                points={(days.length > 0
+                  ? days
+                  : zeroDays(span.days ?? 30)
+                ).map((d) => ({
+                  timestamp: Date.parse(`${d.date}T00:00:00Z`),
+                  value: d.count,
+                }))}
+              />
+            </div>
+          </div>
         ) : null}
       </Card>
     </>
