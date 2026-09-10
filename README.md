@@ -176,6 +176,31 @@ subgraph is here. Pricing comes from 1inch's deployed SwapVM, not from arithmeti
 [the plugin's README](packages/plugins/1inch/README.md) lists the three ways this can be wrong
 *without reverting*, each with a test.
 
+**And for real, with a refusal in front of each way it could go wrong.**
+[`scripts/ship-maker-position.ts`](scripts/ship-maker-position.ts) is that sequence against Arbitrum
+One rather than a fork. It ships one position and stops — filling is the taker's action — and it
+refuses to run off chain 42161, without an explicit `CONFIRM=ship`, on any of the four addresses
+this repository already uses, or on a wallet that does not hold both sides. The approval it leaves
+behind is for exactly the amounts shipped, not unlimited.
+
+The rehearsal is the part worth reading.
+[`scripts/rehearse-ship.ts`](scripts/rehearse-ship.ts) runs that script **unchanged** against a
+fork, on a wallet it generates, and makes every one of those refusals fire on purpose:
+
+```
+ok    a reserved address refuses
+ok    an unfunded wallet refuses
+ok    and approves nothing on the way out  — 0
+ok    ship moved no tokens  — 20 USDC · 0.01 WETH
+ok    the shipped position quotes near the feed  — 0.5 USDC -> 0.000203967213000518 WETH @ $2451.37 vs feed $2465.60
+```
+
+The last line is the only honest test that a position is live, and the first version of it was not a
+test at all: it read the quote's two returned words as one number and passed on 6.7e150 WETH. It
+would have passed identically on a position mispriced by 1e12 — the mistake `price.ts` exists to
+prevent. Decoded properly the fill lands 0.58% under Chainlink, which is the 30bps fee plus the band
+and nothing else produces that number.
+
 #### A second app, because the first one cannot quote a one-sided maker
 
 `HelicoMandateSwap` prices as a constant product, and that is a real limit rather than a
