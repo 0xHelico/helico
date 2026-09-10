@@ -1623,6 +1623,32 @@ READMEs.
   is the half that shows the fix is targeted rather than a blanket un-gating. The narrowed card was
   read off a rendered page carrying a real quote.
 
+### 2026-09-10 — a "why" answered with a dashboard
+
+- **Done:** Ghoza asked the chat *"Why did you not move anything?"* and got *"Here is what your
+  position is doing"* over a card of balances. The classification was right and the answer was to a
+  different question.
+
+- **AI's role:** the reply is composed without an address, so the sentence cannot know the reason —
+  but the card can, and already had every input. It knows whether an agent is nominated, whether a
+  market is permitted, and what is idle against what is working. The first of those that is missing
+  **is** the reason, and a reader was left to infer it from four rows of a definition list.
+
+  Five states, one sentence each, and the ordering is the causal one: no account, no agent, no
+  market, nothing held, or held-but-unmoved. The last says the enclave looks every five minutes and
+  moves only when the gain clears the gas — `0 */5 * * * *` read out of `config.production.json`
+  rather than remembered.
+
+  The pending case got its own care. While the venue read is in flight the card must not claim the
+  agent has nowhere to put it, so that branch waits for `false` rather than for "not true" — a
+  reason invented out of an unresolved promise is worse than no reason.
+
+- **Verified:** two of the five states driven in a browser against a fork. A wallet with no account
+  gets the reason from `WalletInstead`, which already said it; an account opened, nominated and
+  permitted through the app, then swept empty, gets *"There is nothing in the account to move."*
+  The local fake model had to learn the question first — it read it as `about` while the real model
+  reads it as `status`, so the fixture was reproducing a different bug than the reported one.
+
 <!--
 Template for the next entry:
 
