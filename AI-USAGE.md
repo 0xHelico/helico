@@ -1864,6 +1864,35 @@ READMEs.
 
   Worth saying plainly: this reaches further than the portfolio. Geist replaces Inter across the
   chat and the front page too, which is what "the same typeface" means.
+### 2026-09-10 — four passes against the wrong reference
+
+- **Done:** the portfolio still did not look like what Ghoza wanted, after three rounds of
+  changes. The cause was mine and worth writing down: two references were in play and I never
+  asked which one was the target, so each pass moved some things closer and others further away.
+
+- **AI's role:** the two disagreed on exactly the things I kept changing.
+
+  ```
+                          A            B
+  section titles          20px         ~15px
+  empty-state glyph       bare         inside a light disc
+  label above the figure  present      absent
+  chart scale             right        left
+  ```
+
+  I had been copying A, so the disc came out and the titles grew — both of them away from what was
+  actually wanted. Asking took one turn and settled four rounds of guessing. The lesson is the
+  cheap one: when two sources disagree on the thing being changed, that is not a detail to resolve
+  by taste.
+
+  Against the right one: titles back to 15px, the glyph back inside its disc at 16px, no caption
+  above the figure — the page is the portfolio and the line under the number already says which
+  part is liquid — and the chart's scale down the left with the plot on the card's own white
+  rather than in a tinted box, which was a panel inside a panel.
+
+- **Verified:** built and read off the rendered page. Also checked that neither reference is named
+  anywhere it should not be: `grep -i` across the repository and across every issue and pull
+  request opened today returns nothing but a `ChevronDownIcon` that happens to contain the letters.
 
 <!--
 Template for the next entry:

@@ -25,9 +25,7 @@ export function Card({
 }
 
 export function SectionTitle({ children }: { children: ReactNode }) {
-  return (
-    <h2 className="font-medium text-ink text-xl tracking-tight">{children}</h2>
-  );
+  return <h2 className="font-medium text-[15px] text-ink">{children}</h2>;
 }
 
 /**
@@ -86,13 +84,17 @@ export function Empty({
   }>;
 }) {
   return (
-    // A thin outlined glyph rather than a filled disc. The disc made an absence look like a
-    // component that had failed to load; a light stroke at this size reads as punctuation.
-    <div className="flex flex-col items-center gap-3 py-16 text-center">
+    // The glyph sits in a light disc. A bare stroke on white reads as a stray mark at this size;
+    // the disc gives it an edge and makes the absence look deliberate rather than unfinished.
+    <div className="flex flex-col items-center gap-3 py-14 text-center">
       {Icon ? (
-        <Icon className="text-faint" size={22} strokeWidth={1.5} />
+        <span className="flex size-9 items-center justify-center rounded-full bg-shade">
+          <Icon className="text-faint" size={16} strokeWidth={1.75} />
+        </span>
       ) : null}
-      <p className="max-w-xs text-soft text-sm">{children}</p>
+      <p className="max-w-[17rem] text-[12.5px] text-soft leading-relaxed">
+        {children}
+      </p>
     </div>
   );
 }
