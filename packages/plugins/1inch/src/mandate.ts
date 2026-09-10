@@ -11,7 +11,7 @@ import { AQUA_ABI, type Call, strategyHash } from './calldata'
  * order or the wrong width and nothing reverts: the ship succeeds, the hash differs from the one
  * the app computes, and every later call answers for a mandate nobody shipped. The contract says
  * so itself on `mandateHash` — *"ship anything else and the mandate is unreachable"* — which is
- * why `check-mandate.ts` compares these bytes against the deployed contract's own answer instead
+ * why `check-deployed.ts` compares these bytes against the deployed contract's own answer instead
  * of trusting the tuple below to be right.
  */
 

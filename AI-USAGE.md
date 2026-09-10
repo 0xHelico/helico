@@ -1504,7 +1504,7 @@ READMEs.
 
 - **Done:** #325 replaced both Aqua apps on Arbitrum One, which is the redeploy #311 asked for. It
   updated the address constant in `@helico/plugin-1inch`. It did not update the paragraph directly
-  above that constant, or the assertion in `scripts/check-mandate.ts` — both of which existed only
+  above that constant, or the assertion in `scripts/check-deployed.ts` — both of which existed only
   to describe the problem the redeploy had just fixed.
 
 - **AI's role:** noticed and rewrote them. The docblock said *"this address predates `ReceiptKind`

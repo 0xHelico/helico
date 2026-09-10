@@ -188,7 +188,7 @@ market converts the whole position at yesterday's number.
 Until 9 September none of that could be reached from outside Solidity: nothing could encode a
 `SwapMandate`, so the mandate half of this track lived entirely in Foundry.
 [`packages/plugins/1inch/src/mandate.ts`](packages/plugins/1inch/src/mandate.ts) encodes one, and
-[`scripts/check-mandate.ts`](scripts/check-mandate.ts) runs the whole path from TypeScript against
+[`scripts/check-deployed.ts`](scripts/check-deployed.ts) runs the whole path from TypeScript against
 a fork of Arbitrum One — the encoder held against the contract's own `mandateHash` first, because
 Aqua files a position under the hash of the raw bytes and an encoding wrong by one field ships
 successfully and files under a hash nobody looks up.
