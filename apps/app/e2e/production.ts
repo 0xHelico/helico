@@ -247,6 +247,10 @@ const open = async (url: string): Promise<{ page: Page; text: string }> => {
   const starters: [string, string][] = [
     ["What can you do?", "about"],
     ["Check my portfolio", "status"],
+    // The one that would have caught #390. `earn` is the newest action, so a backend deploy that
+    // silently did not happen answers this with `about` and fails here by name — which is more
+    // than the cancelled workflow run managed to say.
+    ["Put my idle USDC to work", "earn"],
     ["Swap 0.1 ETH into USDC", "swap"],
     ["Why has nothing moved?", "status"],
     ["Stop the agent", "revoke"],

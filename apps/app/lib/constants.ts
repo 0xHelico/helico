@@ -11,12 +11,13 @@ export const isProductionEnvironment = process.env.NODE_ENV === "production";
  *
  * **Every one was sent to the deployed backend and the action it came back as is written beside
  * it.** A starter the classifier reads as something else is a button that answers a question
- * nobody asked, and the only way to know is to ask it. Between them they cover all five actions
- * the backend has, so nothing it can do is unreachable from this screen.
+ * nobody asked, and the only way to know is to ask it. Between them they cover all six actions the
+ * backend has, so nothing it can do is unreachable from this screen.
  */
 export const suggestions = [
   "What can you do?", // about
   "Check my portfolio", // status
+  "Put my idle USDC to work", // earn
   "Swap 0.1 ETH into USDC", // swap
   "Why has nothing moved?", // status
   "Stop the agent", // revoke
