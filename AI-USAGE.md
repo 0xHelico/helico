@@ -1775,6 +1775,37 @@ READMEs.
 - **Verified:** built and read off the rendered page in a browser against a fork, twice — once to
   see the shape and once after the padding pass — rather than from the diff.
 
+### 2026-09-10 — a deploy that worked reported failure, and that is worse than a wasted red
+
+- **Done:** Ghoza said the portfolio still showed `aUSDC`. It did, and the reason was not the code
+  — the fix had merged and production was serving an older build.
+
+- **AI's role:** the first reading was wrong and worth recording. The deploy job's last *listed*
+  step is "The app answers", so that is what the run summary shows; I took it for the running step
+  and started reasoning about a five-minute health check that bounds itself. Asking for every
+  step's state instead put the stall two steps earlier, in the SSH call.
+
+  ```
+  app: disk at 86%, reclaiming build cache first   →  7.401GB freed, now 78%
+  app: deployment queued
+  app: no new container within 600s                →  red
+  ```
+
+  **The deploy succeeded.** The box was at load 31.66 on 8 cores with a `next-build` at 314% CPU,
+  so the image came out after `coolify-deploy` had stopped waiting. The disk guard worked and then
+  the timeout undid the good news by calling a slow build a broken one.
+
+  Two changes, both in the script I own. The wait goes to 25 minutes, because the cost of waiting
+  too long is a slow pipeline and the cost of giving up early is a red run for a deploy that
+  worked. And when it does expire it asks Coolify whether a deployment is still in progress, so
+  the message separates *slow* from *stuck* — "no new container" reads as the second and was the
+  first.
+
+- **Verified:** installed on the server and checksummed against the repository copy —
+  `cf46b862…ca67` both sides — with `bash -n` passing there, and the previous copy kept beside it.
+  Production was then read with a browser rather than trusted: the tile says `USDC · liquid` and
+  `USDC · working`, and `aUSDC` is gone from the page.
+
 <!--
 Template for the next entry:
 
