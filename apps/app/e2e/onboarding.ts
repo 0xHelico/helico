@@ -13,7 +13,15 @@ import type { Page } from "playwright";
  */
 export async function passOnboarding(page: Page): Promise<boolean> {
   const agree = page.getByRole("checkbox", { name: /read this and I agree/i });
-  if ((await agree.count()) === 0) return false;
+  // Waited for, not counted. The dialog appears after the session read comes back, so a caller
+  // that signs in and calls this on the next line finds nothing, returns false, and leaves the
+  // terms sitting over the page it is about to assert on. That failure looks like the app being
+  // broken rather than like a race, which is how it cost an afternoon.
+  try {
+    await agree.waitFor({ state: "visible", timeout: 20_000 });
+  } catch {
+    return false;
+  }
   await agree.check();
   const unlock = page.getByRole("switch", { name: /turn everything on/i });
   if (await unlock.isChecked()) await unlock.click();
