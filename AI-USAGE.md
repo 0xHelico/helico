@@ -1805,6 +1805,114 @@ READMEs.
   `cf46b862…ca67` both sides — with `bash -n` passing there, and the previous copy kept beside it.
   Production was then read with a browser rather than trusted: the tile says `USDC · liquid` and
   `USDC · working`, and `aUSDC` is gone from the page.
+### 2026-09-10 — the maker position, rehearsed before it cost anything
+
+- **Done:** Ghoza asked for a fork test of the maker position, at the size he intends to open with
+  — "amount nya jangan besar besar, kecil aja... 5 usdc dan 5 dollar senilai ETH".
+
+- **AI's role:** wrote `scripts/rehearse-maker.ts`. Part 4 of #320 is the only part that spends
+  real money, and none of the three merged parts had ever met a fill — of eleven valid orders live
+  on Arbitrum One, not one prices USDC into WETH, so there had never been anything to fill against.
+  The script ships a position, finds it again by decoding its own `Shipped` event, quotes it, and
+  fills it from a second wallet. That last step had not happened anywhere before, on a fork or a
+  chain.
+
+  Tokens come from Aave's reserves by impersonation rather than `anvil_setStorageAt`, because a
+  balance written into a storage slot tests the arithmetic and skips the token.
+
+  **A check that was not one.** The first version contained
+  `check('the taker approves the router, not Aqua', true, …)` — the condition was the literal
+  `true`, so the line printed `ok` whatever the approval had done, and the thing it named is the
+  one counter-intuitive address in the flow. Replaced with two allowance reads: the router has the
+  amount, Aqua has nothing.
+
+- **Verified:** eleven assertions on a fork of Arbitrum One. Mutation-checked — shipping bytes that
+  hash differently from the quoted order dies at the quote with
+  `SafeBalancesForTokenNotInActiveStrategy`.
+
+### 2026-09-10 — a Compound venue for ETH, and the enclave that would have died of it
+
+- **Done:** "oke jadi nanti dimaksimalkan usdc dan eth bisa di earning", then "deploy compound
+  venue untuk cwethv3".
+
+- **AI's role:** deployed `CompoundVenue` over `cWETHv3` with no contract change — name, symbol and
+  decimals all derive from `comet.baseToken()`. Wrote `ForkCompoundVenueWeth.t.sol`, the mirror of
+  the USDC file, because "should need no change" is not a claim a submission may make.
+
+  **The venue turned out to be the smaller half.** Adding WETH to the enclave's `assets` would have
+  stopped every run: a `CompoundVenue` lists one asset and reverts for any other, `ethCallBatch`
+  throws on the first reply without a result, and three USDC-only venues plus a second asset is a
+  workflow that fails every five minutes inside a TEE. Measured at the live addresses before
+  anything was changed. A market may now name the assets it lists — declared rather than inferred
+  from a revert, because a dropped call, a paused venue and a market that genuinely does not hold
+  the asset all arrive as the same silence.
+
+- **Plan:** docs/plans/2026-09-10-the-enclave-manages-several-assets.md
+- **Verified:** seven fork tests on real `cWETHv3`; the anchor that would catch a hidden `1e6` is
+  not value conservation — that compares the venue against itself — but that the payout is a real
+  slice of a twenty ETH position. Two mutations against the scoping, four tests each.
+
+### 2026-09-10 — every market an owner can choose, and the sweep that left five behind
+
+- **Done:** "berarti kan gak align, bikinin align supaya informasinya tersampaikan di front end".
+
+- **AI's role:** the escape button sent `escape([USDC, aUSDC])` — two addresses typed into
+  `mandate-card.tsx`. Right while Aave was the only market an account could reach; wrong once
+  capital could sit in Compound or Morpho or be denominated in WETH. The sweep took whatever
+  happened to still be USDC, the transaction succeeded, and the rest stayed. The way out reporting
+  success while doing part of the job.
+
+  `escape` taking a caller-supplied list is correct and stays — a contract cannot enumerate what it
+  holds, and a stored list can be padded with dust until the loop costs more than the money. The
+  caller was the problem. `readVenues` now derives the list from the account's own `VenuePermitted`
+  logs, so a venue deployed after that file was written is swept without the file changing.
+
+  The panel offered one market out of four. `MARKETS` is a constant and has to be: permitting is
+  where an owner names an address the account trusts afterwards, so what is offered may not come
+  from anywhere writable.
+
+- **Verified:** 20 tests. Four mutations, all four caught. An earlier run of the same mutations
+  reported four survivors and **none of them had applied** — Biome had reformatted the file and
+  `str.replace` returns the string unchanged when the pattern is absent. The mutations assert the
+  pattern first now.
+
+### 2026-09-10 — the rehearsal that permitted one market, and the workflow redeploy
+
+- **Done:** "oke yang workflow kerjakan".
+
+- **AI's role:** `rehearse-idle.sh` permitted one market and named one asset, and its comment said
+  Aave was the only market on Arbitrum answering this interface — true when written, untrue since
+  the venues were deployed. A rehearsal that permits one market proves the workflow runs and proves
+  nothing about it **choosing**, which is what the Chainlink track is about.
+
+  It now takes `pools` and `assets` from `config.production.json` rather than retyping them. Three
+  fixture problems surfaced, each the shape of a bug it would have hidden: the final check read
+  Aave's aToken while the enclave chose Morpho, so a working move printed "Nothing moved"; "it
+  moved" was treated as "it chose"; and the first batch went from 6 `eth_call`s to 24 and timed
+  out at the simulator's ten-second limit — measured, three cold reads 7.6s against 0.49s warm.
+
+  Ghoza ran the deploy itself. The rules binding this session refuse CRE mainnet deploy operations,
+  so everything up to and after it was prepared and verified here and the one command was his.
+
+- **Verified:** the enclave compared three markets and took Morpho at 4.45% over Aave and Compound,
+  through the deployed contracts. After the deploy, `sha256(config.production.json)` is byte-exact
+  the config hash the registry holds — the artefact URL needs signed access, so the hash is the
+  proof that the running workflow reads four markets and two assets.
+
+### 2026-09-10 — the complexity debt, paid
+
+- **Done:** the last item that was mine.
+
+- **AI's role:** `onCronTrigger` had been one over the cognitive-complexity ceiling since the
+  multi-asset work landed — 21 against 20 — and printed a warning on every `bun run check`. It had
+  been recorded as debt in the commit that created it rather than paid. The signing block moves out
+  whole: `if (signs)` stays, and the two throws go with it. That is the right cut rather than the
+  convenient one, because every other branch decides *whether* to move while those two say the run
+  is broken.
+
+- **Verified:** now at 17. Checked that the rule still bites rather than that the warning merely
+  stopped appearing — five throwaway branches added to the same function put it back at 22. Those
+  two look identical from a terminal.
 
 ### 2026-09-10 — matched against an implementation instead of a picture
 
