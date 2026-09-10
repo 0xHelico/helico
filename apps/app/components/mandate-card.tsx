@@ -389,7 +389,7 @@ function WalletInstead({ address }: { address: Address }) {
       {/* Not "open the account": there is no separate opening step since #306, which made the
           first limit an owner sets deploy it and removed the button that used to. */}
       <p className="mt-3 text-muted-foreground text-xs">
-        <Link className="underline underline-offset-2" href="/">
+        <Link className="underline underline-offset-2" href="/limit">
           Set a limit
         </Link>{" "}
         and this answers for the account instead.{" "}

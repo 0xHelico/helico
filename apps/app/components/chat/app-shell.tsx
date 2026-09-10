@@ -8,6 +8,7 @@ const GRACE_MS = 700;
 
 import { AppSidebar } from "@/components/chat/app-sidebar";
 import { ConnectGate } from "@/components/chat/connect-gate";
+import { Onboarding } from "@/components/onboarding";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { useHelicoSession } from "@/hooks/use-helico-session";
 
@@ -56,6 +57,9 @@ export function AppShell({
 
   return (
     <SidebarProvider defaultOpen={defaultOpen}>
+      {/* Inside the gate rather than in front of it: the terms are agreed to by a wallet, and
+          until one has proved itself there is nobody to record an agreement against. */}
+      <Onboarding />
       <AppSidebar address={session.address} />
       <SidebarInset>{children}</SidebarInset>
     </SidebarProvider>

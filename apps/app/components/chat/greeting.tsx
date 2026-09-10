@@ -3,14 +3,16 @@ import Link from "next/link";
 
 export const Greeting = () => (
   <div className="flex flex-col items-center px-4" key="overview">
-    <motion.div
+    {/* An h1, because it is the page's title now that the conversation is the front door — and
+        because "past the gate" is a thing the browser checks have to be able to name. */}
+    <motion.h1
       animate={{ opacity: 1, y: 0 }}
       className="text-center font-semibold text-2xl tracking-tight text-foreground md:text-3xl"
       initial={{ opacity: 0, y: 10 }}
       transition={{ delay: 0.35, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
     >
       What would you like to do?
-    </motion.div>
+    </motion.h1>
     <motion.div
       animate={{ opacity: 1, y: 0 }}
       className="mt-3 text-center text-muted-foreground/80 text-sm"
@@ -29,7 +31,7 @@ export const Greeting = () => (
       price,{" "}
       <Link
         className="underline underline-offset-2 hover:text-muted-foreground"
-        href="/"
+        href="/limit"
       >
         set a mandate
       </Link>

@@ -43,7 +43,7 @@ export default function PortfolioPage() {
             Read from the chain and from a subgraph, not from us.{" "}
             <Link
               className="underline underline-offset-2 hover:text-ink"
-              href="/"
+              href="/limit"
             >
               The limits you set →
             </Link>
