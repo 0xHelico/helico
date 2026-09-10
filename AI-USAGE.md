@@ -2201,6 +2201,32 @@ READMEs.
   `/limit` changed, so the two suites that anchor on it were moved with it rather than left
   matching a heading that no longer exists.
 
+### 2026-09-11 — Starters for somebody who has just arrived
+
+- **Done:** the four suggested prompts on the front door became six, written for a wallet that has
+  never opened an account. Three of the old four assumed money already in play, which is a dead end
+  for every wallet meeting that screen for the first time. The six reach all five actions the
+  backend has.
+
+- **AI's role:** Claude Opus 5 chose and verified the six. Ghoza asked for ready made prompts for a
+  new user and named the first two.
+
+- **Verified:** each one sent to the **deployed** model, and the action it came back as asserted in
+  `e2e/production.ts`: `about, status, swap, status, revoke, withdraw`. A starter that lands
+  somewhere else is a button answering a question nobody asked, and asking the model is the only way
+  to know.
+
+  **That check lied on its first run.** It sent all six at once, three came back with no action, and
+  it reported a wording problem in three starters that answer correctly on their own. The cause was
+  `HTTP 429`: six messages a minute per address, and the suite already spends one. Now one at a time,
+  honouring `Retry-After`. A rate limit read as a missing action is a check that accuses the wrong
+  thing.
+
+  It also surfaced a flake I had introduced hours earlier: `e2e/onboarding.ts` counted the first-run
+  checkbox instead of waiting for it, so a caller that signed in and called it on the next line found
+  nothing and left the terms sitting over the page it was about to assert on. Two checks call it that
+  way. Found by hitting it, not by reading it.
+
 <!--
 Template for the next entry:
 
