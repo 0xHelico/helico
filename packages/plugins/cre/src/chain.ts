@@ -59,8 +59,8 @@ export type Addresses = {
 	 * would pick the best of the rest and call it the best.
 	 */
 	pools: Pool[]
-	/** The ERC-20 being placed. */
-	asset: Address
+	/** The ERC-20s being placed, in the order the owner wrote them. */
+	assets: Address[]
 }
 
 /**
@@ -111,13 +111,26 @@ export type VenueState = {
 	supplyRateRay: bigint
 }
 
-export type AccountState = {
-	/** Who the account will currently accept an idle move from. Zero means nobody. */
-	agent: Address
-	/** The asset the account holds liquid. */
+/** One asset the account holds, and every market that will take it. */
+export type AssetState = {
+	asset: Address
+	/** What the account holds liquid in this asset, in the asset's own units. */
 	idle: bigint
 	/** One entry per configured market, in the order the owner wrote them. */
 	venues: VenueState[]
+}
+
+export type AccountState = {
+	/** Who the account will currently accept an idle move from. Zero means nobody. */
+	agent: Address
+	/**
+	 * One entry per configured asset, in the order the owner wrote them.
+	 *
+	 * A run reads every asset before deciding anything, which is the whole reason this is one
+	 * workflow rather than one per asset: only a view that holds all of them can answer "which
+	 * move is worth the one move this run gets".
+	 */
+	assets: AssetState[]
 	/** The account's signature nonce, read only when the enclave signs. */
 	nonce?: bigint
 }
@@ -141,7 +154,7 @@ const VENUE_READS = 4
 export function readAccountState(
 	runtime: TeeRuntime<unknown>,
 	rpcUrl: string,
-	{ account, pools, asset }: Addresses,
+	{ account, pools, assets }: Addresses,
 	options: { withNonce?: boolean; nonceFunction?: string } = {},
 ): AccountState {
 	// `HelicoAccount.nonce` takes no argument, unlike the vault's `nonces(address)`: one account
@@ -153,86 +166,108 @@ export function readAccountState(
 		? [{ to: account, data: encodeFunctionData({ abi: nonceAbi }) }]
 		: []
 
+	// One batch for every asset and every market, rather than one batch per asset. Comparing more
+	// things should cost more calls, not more waiting — and the whole reason this is one workflow
+	// is that a single view holds all of it before anything is decided.
 	const first = ethCallBatch(runtime, rpcUrl, [
 		{ to: account, data: encodeFunctionData({ abi: accountAbi, functionName: 'agent' }) },
-		{
-			to: asset,
-			data: encodeFunctionData({ abi: erc20Abi, functionName: 'balanceOf', args: [account] }),
-		},
-		...pools.flatMap((pool): Call[] => [
+		...assets.flatMap((asset): Call[] => [
 			{
-				to: account,
-				data: encodeFunctionData({
-					abi: accountAbi,
-					functionName: 'permittedVenue',
-					args: [pool.address],
-				}),
+				to: asset,
+				data: encodeFunctionData({ abi: erc20Abi, functionName: 'balanceOf', args: [account] }),
 			},
-			{
-				to: pool.address,
-				data: encodeFunctionData({
-					abi: lendingVenueAbi,
-					functionName: 'getReserveAToken',
-					args: [asset],
-				}),
-			},
-			{
-				to: pool.address,
-				data: encodeFunctionData({
-					abi: lendingVenueAbi,
-					functionName: 'getVirtualUnderlyingBalance',
-					args: [asset],
-				}),
-			},
-			{
-				to: pool.address,
-				data: encodeFunctionData({
-					abi: reserveDataAbi,
-					functionName: 'getReserveData',
-					args: [asset],
-				}),
-			},
+			...pools.flatMap((pool): Call[] => [
+				{
+					to: account,
+					data: encodeFunctionData({
+						abi: accountAbi,
+						functionName: 'permittedVenue',
+						args: [pool.address],
+					}),
+				},
+				{
+					to: pool.address,
+					data: encodeFunctionData({
+						abi: lendingVenueAbi,
+						functionName: 'getReserveAToken',
+						args: [asset],
+					}),
+				},
+				{
+					to: pool.address,
+					data: encodeFunctionData({
+						abi: lendingVenueAbi,
+						functionName: 'getVirtualUnderlyingBalance',
+						args: [asset],
+					}),
+				},
+				{
+					to: pool.address,
+					data: encodeFunctionData({
+						abi: reserveDataAbi,
+						functionName: 'getReserveData',
+						args: [asset],
+					}),
+				},
+			]),
 		]),
 		...nonceCall,
 	])
 
-	const [agentHex, idleHex] = first as [Hex, Hex]
+	const agentHex = first[0] as Hex
 	const nonceHex = options.withNonce ? first[first.length - 1] : undefined
 
-	// The market's own answers, which is everything except what the receipt knows about itself.
-	const partial = pools.map((pool, index) => {
-		const at = 2 + index * VENUE_READS
-		const [permittedHex, receiptHex, liquidityHex, reserveHex] = first.slice(
-			at,
-			at + VENUE_READS,
-		) as [Hex, Hex, Hex, Hex]
+	/** Calls this batch spends on one asset: its balance, then four per market. */
+	const STRIDE = 1 + pools.length * VENUE_READS
+
+	// The markets' own answers, per asset — everything except what each receipt knows about itself.
+	const partial = assets.map((asset, a) => {
+		const base = 1 + a * STRIDE
+		const idleHex = first[base] as Hex
 		return {
-			pool: pool.address,
-			kind: pool.kind,
-			venuePermitted: decodeFunctionResult({
-				abi: accountAbi,
-				functionName: 'permittedVenue',
-				data: permittedHex,
+			asset,
+			idle: decodeFunctionResult({ abi: erc20Abi, functionName: 'balanceOf', data: idleHex }),
+			venues: pools.map((pool, index) => {
+				const at = base + 1 + index * VENUE_READS
+				const [permittedHex, receiptHex, liquidityHex, reserveHex] = first.slice(
+					at,
+					at + VENUE_READS,
+				) as [Hex, Hex, Hex, Hex]
+				return {
+					pool: pool.address,
+					kind: pool.kind,
+					venuePermitted: decodeFunctionResult({
+						abi: accountAbi,
+						functionName: 'permittedVenue',
+						data: permittedHex,
+					}),
+					receipt: decodeFunctionResult({
+						abi: lendingVenueAbi,
+						functionName: 'getReserveAToken',
+						data: receiptHex,
+					}),
+					venueLiquidity: decodeFunctionResult({
+						abi: lendingVenueAbi,
+						functionName: 'getVirtualUnderlyingBalance',
+						data: liquidityHex,
+					}),
+					supplyRateRay: decodeFunctionResult({
+						abi: reserveDataAbi,
+						functionName: 'getReserveData',
+						data: reserveHex,
+					}).currentLiquidityRate,
+				}
 			}),
-			receipt: decodeFunctionResult({
-				abi: lendingVenueAbi,
-				functionName: 'getReserveAToken',
-				data: receiptHex,
-			}),
-			venueLiquidity: decodeFunctionResult({
-				abi: lendingVenueAbi,
-				functionName: 'getVirtualUnderlyingBalance',
-				data: liquidityHex,
-			}),
-			supplyRateRay: decodeFunctionResult({
-				abi: reserveDataAbi,
-				functionName: 'getReserveData',
-				data: reserveHex,
-			}).currentLiquidityRate,
 		}
 	})
 
-	const listed = partial.filter((venue) => venue.receipt !== zeroAddress)
+	// Keyed by asset **and** pool from here on. The same market appears once per asset it lists, so
+	// a map keyed on the pool alone would have every asset reading the first one's receipt.
+	const key = (asset: Address, pool: Address) => `${asset.toLowerCase()}:${pool.toLowerCase()}`
+
+	const listed = partial.flatMap((a) =>
+		a.venues.filter((v) => v.receipt !== zeroAddress).map((v) => ({ asset: a.asset, ...v })),
+	)
 	const second = listed.length
 		? ethCallBatch(
 				runtime,
@@ -256,40 +291,43 @@ export function readAccountState(
 				]),
 			)
 		: []
+	const seatOf = new Map(listed.map((venue, seat) => [key(venue.asset, venue.pool), seat]))
 
-	// Which pair of the second batch belongs to which market. The config refuses a repeated pool,
-	// so one address names one seat.
-	const seatOf = new Map(listed.map((venue, seat) => [venue.pool, seat]))
-
-	// The receipt balances, still in whatever units the receipt counts in.
-	const raw = partial.map((venue) => {
-		const seat = seatOf.get(venue.pool)
-		if (seat === undefined) return { ...venue, receiptBalance: 0n, receiptAsset: zeroAddress }
-		const [balanceHex, receiptAssetHex] = second.slice(seat * 2, seat * 2 + 2) as [Hex, Hex]
-		return {
-			...venue,
-			receiptBalance: decodeFunctionResult({
-				abi: receiptAbi,
-				functionName: 'balanceOf',
-				data: balanceHex,
-			}),
-			receiptAsset: decodeFunctionResult({
-				abi: receiptAbi,
-				functionName: 'UNDERLYING_ASSET_ADDRESS',
-				data: receiptAssetHex,
-			}),
-		}
-	})
+	const raw = partial.map((a) => ({
+		...a,
+		venues: a.venues.map((venue) => {
+			const seat = seatOf.get(key(a.asset, venue.pool))
+			if (seat === undefined) return { ...venue, receiptBalance: 0n, receiptAsset: zeroAddress }
+			const [balanceHex, receiptAssetHex] = second.slice(seat * 2, seat * 2 + 2) as [Hex, Hex]
+			return {
+				...venue,
+				receiptBalance: decodeFunctionResult({
+					abi: receiptAbi,
+					functionName: 'balanceOf',
+					data: balanceHex,
+				}),
+				receiptAsset: decodeFunctionResult({
+					abi: receiptAbi,
+					functionName: 'UNDERLYING_ASSET_ADDRESS',
+					data: receiptAssetHex,
+				}),
+			}
+		}),
+	}))
 
 	// A third batch, and only when something actually needs converting. A rebasing receipt is
 	// already denominated in the asset, and a share-priced venue holding nothing has nothing to
-	// convert — so the common single-Aave configuration still costs two round trips, exactly as
-	// it did before share-priced venues existed.
+	// convert — so the common all-Aave configuration still costs two round trips whatever the
+	// number of assets.
 	//
 	// The receipt is asked rather than the arithmetic repeated here. `previewRedeem` is a handful
 	// of lines and copying them would work today; what it would not do is stay equal to the
 	// contract that actually burns the shares.
-	const needsConverting = raw.filter((v) => v.kind === 'share-priced' && v.receiptBalance > 0n)
+	const needsConverting = raw.flatMap((a) =>
+		a.venues
+			.filter((v) => v.kind === 'share-priced' && v.receiptBalance > 0n)
+			.map((v) => ({ asset: a.asset, ...v })),
+	)
 	const third = needsConverting.length
 		? ethCallBatch(
 				runtime,
@@ -306,23 +344,28 @@ export function readAccountState(
 				),
 			)
 		: []
-	const convertedAt = new Map(needsConverting.map((venue, seat) => [venue.pool, seat]))
+	const convertedAt = new Map(
+		needsConverting.map((venue, seat) => [key(venue.asset, venue.pool), seat]),
+	)
 
 	return {
 		agent: decodeFunctionResult({ abi: accountAbi, functionName: 'agent', data: agentHex }),
-		idle: decodeFunctionResult({ abi: erc20Abi, functionName: 'balanceOf', data: idleHex }),
-		venues: raw.map((venue) => {
-			const seat = convertedAt.get(venue.pool)
-			if (seat === undefined) return { ...venue, supplied: venue.receiptBalance }
-			return {
-				...venue,
-				supplied: decodeFunctionResult({
-					abi: sharePricedReceiptAbi,
-					functionName: 'previewRedeem',
-					data: third[seat] as Hex,
-				}),
-			}
-		}),
+		assets: raw.map((a) => ({
+			asset: a.asset,
+			idle: a.idle,
+			venues: a.venues.map((venue) => {
+				const seat = convertedAt.get(key(a.asset, venue.pool))
+				if (seat === undefined) return { ...venue, supplied: venue.receiptBalance }
+				return {
+					...venue,
+					supplied: decodeFunctionResult({
+						abi: sharePricedReceiptAbi,
+						functionName: 'previewRedeem',
+						data: third[seat] as Hex,
+					}),
+				}
+			}),
+		})),
 		nonce: nonceHex ? decodeFunctionResult({ abi: nonceAbi, data: nonceHex }) : undefined,
 	}
 }

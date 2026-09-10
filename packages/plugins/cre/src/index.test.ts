@@ -86,7 +86,7 @@ const config: Config = {
 	nonceFunction: 'nonce',
 	account: account.toLowerCase(),
 	pools: [{ address: AAVE_POOL.toLowerCase(), kind: 'rebasing' as const }],
-	asset: USDC.toLowerCase(),
+	assets: [USDC.toLowerCase()],
 	agent: agent.toLowerCase(),
 	reportReceiver: '0x3333333333333333333333333333333333333333',
 	policyHash: committedHash,
@@ -273,7 +273,9 @@ describe('configSchema', () => {
 			agent,
 		})
 		expect(parsed.pools).toEqual([{ address: aave, kind: 'rebasing' }])
-		expect(parsed.asset).toBe(USDC.toLowerCase())
+		// The singular `asset` is folded into the list, so a configuration written before assets
+		// became plural keeps its meaning rather than failing on a field its author never wrote.
+		expect(parsed.assets).toEqual([USDC.toLowerCase()])
 		expect(parsed.agent).toBe(agent.toLowerCase())
 	})
 

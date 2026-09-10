@@ -12,8 +12,8 @@ import { type Address, encodeAbiParameters, type Hex, zeroAddress } from 'viem'
 import { z } from 'zod'
 import { type IdleMoveParams, idleMoveParamsAbi } from './abi'
 import { AI_SECRET_IDS, describeForOwner, explain } from './ai'
-import { type AccountState, type Pool, readAccountState } from './chain'
-import { decideIdleMove, targetSplit } from './decision'
+import { type AccountState, type AssetState, type Pool, readAccountState } from './chain'
+import { decideIdleMove, type IdleBalances, targetSplit } from './decision'
 import { type IdlePolicy, POLICY_SECRET_IDS, policyFromSecrets, policyHash } from './policy'
 import { encodeIdleMove } from './relay'
 import { type Authorisation, encodeAuthorisation, type IdleMoveDomain, signIdleMove } from './sign'
@@ -151,8 +151,19 @@ export const configShape = {
 			}),
 		)
 		.min(1),
-	/** The ERC-20 being placed. */
-	asset: hex(20),
+	/**
+	 * The ERC-20s being placed, in the order the owner wrote them.
+	 *
+	 * **A list rather than one, and one workflow rather than one per asset.** Two workflows would
+	 * have been a config change and no code, and they cannot see each other: `HelicoAccount.nonce`
+	 * is strictly sequential, so on a run where both decide to move, the second signature is spent
+	 * against a nonce the first already used and the move reverts. A rule about the account's total
+	 * idle capital cannot exist across two agents either.
+	 *
+	 * `asset` is still accepted and folded in, so every configuration written before this keeps its
+	 * meaning rather than needing a migration on the day it is read.
+	 */
+	assets: z.array(hex(20)).min(1),
 	/**
 	 * The address the owner nominated as the agent. The enclave holds the key behind it and stops
 	 * when the account no longer names it, so a revocation shows up as a hold on the next run
@@ -214,8 +225,27 @@ export const configShape = {
 	subgraphTimeoutSeconds: z.number().int().positive().max(60).default(20),
 }
 
+/**
+ * Fold a singular `asset` into `assets`, so a configuration written before the list existed keeps
+ * its meaning.
+ *
+ * Before the object is parsed rather than after, because `assets` is required and a config with
+ * only `asset` would otherwise fail validation before anything had a chance to translate it — and
+ * the failure would name a field the author never wrote.
+ *
+ * If both are present the list wins and the singular is ignored rather than merged. Merging would
+ * silently place an asset the author had already replaced.
+ */
+const foldSingularAsset = (raw: unknown): unknown => {
+	if (typeof raw !== 'object' || raw === null) return raw
+	const c = raw as Record<string, unknown>
+	if (Array.isArray(c.assets) || typeof c.asset !== 'string') return raw
+	const { asset: _dropped, ...rest } = c
+	return { ...rest, assets: [c.asset] }
+}
+
 export const configSchema = z
-	.object(configShape)
+	.preprocess(foldSingularAsset, z.object(configShape))
 	.refine((c) => c.delivery !== 'forwarder' || c.chainSelectorName !== undefined, {
 		message: 'forwarder delivery needs chainSelectorName',
 	})
@@ -260,16 +290,17 @@ export type Outcome = { act: false; reason: string } | { act: true; params: Idle
  * market alone — `eligibleVenues` takes them out of the list, and the run goes on with what is
  * left, which is the rule `_venueFor` follows in the contract.
  */
-export function decide(
+export function decideForAsset(
 	config: Config,
 	policy: IdlePolicy,
-	state: AccountState,
+	agent: string,
+	side: AssetState,
 	now: number,
 ): Outcome {
-	if (state.agent.toLowerCase() !== config.agent)
+	if (agent.toLowerCase() !== config.agent)
 		return { act: false, reason: 'the account has not nominated this agent' }
 
-	const { usable, skipped, evacuate } = eligibleVenues(config.asset, state.venues)
+	const { usable, skipped, evacuate } = eligibleVenues(side.asset, side.venues)
 
 	// An evacuation outranks everything below it. The owner revoked a market this account is
 	// sitting in, and that is an instruction rather than one more input to the split — holding
@@ -285,7 +316,7 @@ export function decide(
 			params: {
 				account: config.account as Address,
 				pool: leaving.pool,
-				asset: config.asset as Address,
+				asset: side.asset,
 				amount: leaving.amount,
 				supply: false,
 				deadline: BigInt(now + config.deadlineSeconds),
@@ -306,7 +337,7 @@ export function decide(
 		}
 	}
 
-	const verdict = decideIdleMove({ policy, balances: { idle: state.idle, venues: usable }, now })
+	const verdict = decideIdleMove({ policy, balances: { idle: side.idle, venues: usable }, now })
 	if (!verdict.act) return verdict
 
 	const sizing = sizeIdleMove({
@@ -332,7 +363,7 @@ export function decide(
 		params: {
 			account: config.account as Address,
 			pool: verdict.venue.pool,
-			asset: config.asset as Address,
+			asset: side.asset,
 			amount: sizing.amount,
 			supply: verdict.supply,
 			deadline: BigInt(now + config.deadlineSeconds),
@@ -349,6 +380,89 @@ type Judged = {
 	outcome: Outcome
 	/** The buffer note for this account, already bracketed, or empty when no index is configured. */
 	buffer: string
+	/** Which asset the decision chose, so the explanation is about the move that is happening. */
+	asset?: Address
+}
+
+/**
+ * One move leaves per run, so with several assets the enclave must answer whose.
+ *
+ * **This is the reason the workflow is one workflow.** `HelicoAccount.nonce` is strictly
+ * sequential — one signed statement authorises exactly one call — so two agents, one per asset,
+ * would spend the same nonce on a run where both wanted to move and the second would revert. Only
+ * a view that holds every asset can choose between them.
+ *
+ * **Ranked by rate gap, not by amount, and the difference is not cosmetic.** Amounts live in each
+ * asset's own units: five WETH is `5e18` and five USDC is `5e6`, so any comparison of raw amounts
+ * picks the eighteen-decimal asset every time, whatever it is worth. The gap between the best rate
+ * available and what the capital earns today is dimensionless, so it compares.
+ *
+ * **What that costs, stated rather than hidden.** A large gap on a small balance outranks a small
+ * gap on a large one, and by value that is sometimes the wrong call. Ranking by value needs a price
+ * for every asset — Chainlink feeds exist and `HelicoOracleBoard` already reads one — and it is
+ * `docs/plans/2026-09-10-the-enclave-manages-several-assets.md` step 3 rather than this. Until
+ * then the enclave prefers the correction that captures the most yield per unit placed, and the
+ * runs are five minutes apart, so the asset that loses this one is first in line for the next.
+ *
+ * An evacuation outranks every ordinary move regardless of gap: the owner revoked a market and
+ * that is an instruction, not an input.
+ */
+export function decideAcrossAssets(
+	config: Config,
+	/**
+	 * The effective policy **per asset**, because the mandate buffer is not one number for the
+	 * account. It is raised by what that asset's own mandates could demand, and sharing one floor
+	 * across assets would hold WETH liquid because USDC is committed.
+	 */
+	policies: Map<string, IdlePolicy>,
+	state: AccountState,
+	now: number,
+): { outcome: Outcome; asset?: Address; side?: AssetState } {
+	if (state.agent.toLowerCase() !== config.agent)
+		return { outcome: { act: false, reason: 'the account has not nominated this agent' } }
+
+	const considered = state.assets.map((side) => ({
+		asset: side.asset,
+		side,
+		outcome: decideForAsset(
+			config,
+			policies.get(side.asset.toLowerCase()) ??
+				policies.values().next().value ??
+				({} as IdlePolicy),
+			state.agent,
+			side,
+			now,
+		),
+	}))
+
+	const acting = considered.filter((c) => c.outcome.act)
+	if (acting.length === 0) {
+		// Every asset held, so report the first asset's reason rather than inventing one. With one
+		// asset configured this is exactly what the single-asset workflow said.
+		const first = considered[0]
+		return {
+			outcome: first?.outcome ?? { act: false, reason: 'the account holds nothing to place' },
+			asset: first?.asset,
+			side: first?.side,
+		}
+	}
+
+	const gap = (c: (typeof considered)[number]): bigint => {
+		const o = c.outcome
+		if (!o.act) return 0n
+		const best = c.side.venues.reduce((m, v) => (v.supplyRateRay > m ? v.supplyRateRay : m), 0n)
+		const held = c.side.venues.reduce(
+			(m, v) => (v.supplied > 0n && v.supplyRateRay < m ? v.supplyRateRay : m),
+			best,
+		)
+		return best - held
+	}
+
+	let winner = acting[0] as (typeof considered)[number]
+	for (const c of acting.slice(1)) {
+		if (gap(c) > gap(winner)) winner = c
+	}
+	return { outcome: winner.outcome, asset: winner.asset, side: winner.side }
 }
 
 /**
@@ -376,7 +490,7 @@ function evaluate(
 		{
 			account: account as Address,
 			pools: config.pools as Pool[],
-			asset: config.asset as Address,
+			assets: config.assets as Address[],
 		},
 		{ withNonce: signs, nonceFunction: config.nonceFunction },
 	)
@@ -388,18 +502,34 @@ function evaluate(
 	// never turns the decision into a wrong one: it can only fail to raise a floor, and the run
 	// falls back to the owner's own `minIdleAmount`. See `subgraph.ts` for what each of those does
 	// to the next swap.
-	const demand = readMandateDemand(runtime, config, account, config.asset)
+	// One read per asset. The buffer a mandate creates is a claim on *that* token, so a single
+	// number shared across assets would hold WETH liquid because USDC is committed — and free
+	// USDC because WETH is not.
+	const demands = new Map(
+		(config.assets as Address[]).map((asset) => [
+			asset.toLowerCase(),
+			readMandateDemand(runtime, config, account, asset),
+		]),
+	)
 	// Never hashed: the policy hash commits to the secrets the owner published, and this is not
 	// those secrets.
-	const effective = withMandateBuffer(policy, demand)
+	const policies = new Map([...demands].map(([asset, d]) => [asset, withMandateBuffer(policy, d)]))
+	// The first asset's numbers are what the run *reports* — the note beside the verdict and the
+	// policy the AI is handed. The decision itself uses the map, per asset. With one asset
+	// configured the two are the same thing, which is why this reads like the old code.
+	const firstAsset = (config.assets as Address[])[0]?.toLowerCase() ?? ''
+	const demand = demands.get(firstAsset) as ReturnType<typeof readMandateDemand>
+	const effective = policies.get(firstAsset) ?? policy
 	const buffer = config.subgraphUrl ? ` [${bufferNote(policy, demand)}]` : ''
+	const chosen = decideAcrossAssets({ ...config, account }, policies, state, now)
 
 	return {
 		account,
 		state,
 		effective,
 		demand,
-		outcome: decide({ ...config, account }, effective, state, now),
+		outcome: chosen.outcome,
+		asset: chosen.asset,
 		buffer,
 	}
 }
@@ -487,6 +617,25 @@ function readSecrets(
 	return all
 }
 
+/**
+ * The asset the decision actually chose, not the first one configured.
+ *
+ * Its own function because `onCronTrigger` is already at the complexity the linter allows, and
+ * because the failure it prevents is quiet: explaining a WETH move with USDC's balances in front
+ * of the model produces a correct verdict with a wrong sentence attached to it.
+ */
+function sideFor(
+	state: AccountState,
+	asset?: Address,
+): { side?: AssetState; balances: IdleBalances } {
+	const want = asset?.toLowerCase()
+	const side = want
+		? (state.assets.find((a) => a.asset.toLowerCase() === want) ?? state.assets[0])
+		: state.assets[0]
+	const usable = side ? eligibleVenues(side.asset, side.venues).usable : []
+	return { side, balances: { idle: side?.idle ?? 0n, venues: usable } }
+}
+
 // ─── TEE cron callback ───────────────────────────────────────
 export const onCronTrigger = async (runtime: TeeRuntime<Config>): Promise<string> => {
 	const config = runtime.config
@@ -538,6 +687,7 @@ export const onCronTrigger = async (runtime: TeeRuntime<Config>): Promise<string
 	if (!acting) return holdLine(judged, fleet)
 
 	const { state, effective, demand, outcome, buffer } = acting
+	const chosen = acting
 	// Narrows `outcome` for everything below. `largestMove` only ever returns an acting one, so
 	// this is a type boundary rather than a runtime possibility.
 	if (!outcome.act) return holdLine(judged, fleet)
@@ -548,17 +698,17 @@ export const onCronTrigger = async (runtime: TeeRuntime<Config>): Promise<string
 	//     rejected answer changes nothing about what happens next. It is handed every market the
 	//     decision was allowed to consider, so a hold about a rate gap has the rates in front of
 	//     it.
-	const { usable } = eligibleVenues(config.asset, state.venues)
+	const { side, balances } = sideFor(state, chosen.asset)
 	const reason = config.aiUrl
 		? explain(
 				runtime,
 				config,
 				secrets,
 				describeForOwner(
-					config.asset,
+					side?.asset ?? (config.assets as Address[])[0],
 					effective,
-					{ idle: state.idle, venues: usable },
-					targetSplit(effective, { idle: state.idle, venues: usable }),
+					balances,
+					targetSplit(effective, balances),
 					outcome,
 					// The model is handed the buffer it is explaining *and* where that buffer came
 					// from. Without it, a floor raised by a mandate reads as the owner's own number
