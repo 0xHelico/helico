@@ -130,6 +130,14 @@ they were.
 `HelicoMandateSwap` is an Aqua app where the strategy **is** the mandate: an expiry, a named agent
 contract, and a per-token ceiling on what may leave the maker's wallet.
 
+It is deployed on Arbitrum One at
+[`0x0524a353…6041`](https://arbiscan.io/address/0x0524a353dfab33CD362593ae8e97707764Fb6041#code),
+behind a proxy, alongside `HelicoOracleBoard` at
+[`0xe8515af9…7d39`](https://arbiscan.io/address/0xe8515af92442A5CDa67D1F32D1c8a987ba7e7d39#code).
+Both are verified as proxy **and** implementation, because verifying one leaves unverified
+bytecode at the address this file names. Every deployment, including the ones these replaced and
+why, is in [`docs/deployments.md`](docs/deployments.md).
+
 Liquidity never enters the app or Aqua. `pull` goes maker → recipient, `push` goes taker → maker,
 and a test asserts both hold zero either side of a swap. Aqua files a strategy under the hash of
 bytes it never reads, so every field is enforced in our contract or nowhere. 28 tests run against

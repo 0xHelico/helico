@@ -1705,6 +1705,26 @@ READMEs.
   router still answering `AQUA_YIELD_COVER_OPCODE()` → 34. The corrected figures are the ones those
   calls returned, and both superseded boards are now absent from the script and the README.
 
+### 2026-09-10 — the README could not reach its own deployment
+
+- **Done:** after correcting the video script, ran the same check on the README — every full
+  address in it, against the chain rather than against `deployments.md`.
+
+- **AI's role:** found nothing wrong and one thing missing, which is a distinction worth keeping.
+  All five addresses answer: Aqua at 5,619 bytes, the two Compound venues, the Morpho venue, the
+  Aave pool. Nothing stale, unlike the script.
+
+  But **neither of our own Aqua apps appears in the README at all** — not `HelicoMandateSwap` at
+  `0x0524a353…6041`, not `HelicoOracleBoard` at `0xe8515af9…7d39`, and there is no link to
+  `docs/deployments.md` either. So a judge reading the 1inch section can check the code and cannot
+  check the deployment, while "a custom Aqua app" is the prize's own wording.
+
+  This was not a claim to add. The deployment is real and recorded; what was missing was a route
+  to something already true, which is one sentence.
+
+- **Verified:** `cast code` on all five README addresses, and both link checkers after the edit —
+  33 README links with none broken, 136 relative links across 63 files all resolving.
+
 <!--
 Template for the next entry:
 
