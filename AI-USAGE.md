@@ -2060,9 +2060,15 @@ READMEs.
   against a fork first.
 
   `rehearse-maker.ts` already proved the whole maker path and could never be the thing that runs it:
-  it holds anvil's published keys and funds itself with `anvil_setStorageAt`. The new script is the
-  same sequence against the live chain, minus the fill — a taker's action is not the job of the
-  script that puts money up.
+  it holds anvil's published keys, and a fork is the only place those spend anything. The new
+  script is the same sequence against the live chain, minus the fill — a taker's action is not the
+  job of the script that puts money up.
+
+  *(Corrected after merge: this said `rehearse-maker.ts` funds itself with `anvil_setStorageAt`. It
+  does not, and the entry above for #343 says the opposite — it impersonates a real holder and
+  calls `transfer`, because a balance written into a storage slot tests the arithmetic and skips
+  the token. Two entries in this file disagreeing about one script is worse than either being
+  wrong alone, and this is a submission document.)*
 
   Four refusals: off Arbitrum One, without `CONFIRM=ship`, on any of this repository's own four
   addresses, and on a wallet that does not hold both sides — the last one before any approval is
