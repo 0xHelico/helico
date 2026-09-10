@@ -33,6 +33,11 @@
 }
 
 @theme inline {
+  /* Both faces. `--font-mono` was declared nowhere, so every `font-mono` — every address, every
+     figure line, the mandate table, the chart's dates — fell through to the browser's default. */
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
