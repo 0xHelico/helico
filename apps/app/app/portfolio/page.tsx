@@ -1,8 +1,11 @@
 import Link from "next/link";
-import { AccountPanel } from "@/components/account-panel";
 import { PageHeader } from "@/components/chat/page-header";
-import { MandatesPanel } from "@/components/mandates-panel";
 import { PortfolioHero } from "@/components/portfolio-hero";
+import {
+  Activity,
+  Allocation,
+  Holdings,
+} from "@/components/portfolio-sections";
 
 export const metadata = { title: "Portfolio | Helico" };
 
@@ -23,8 +26,9 @@ export default function PortfolioPage() {
         <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-10">
           <PortfolioHero />
           <div className="space-y-6">
-            <AccountPanel />
-            <MandatesPanel />
+            <Holdings />
+            <Allocation />
+            <Activity />
           </div>
           <p className="mt-6 pb-4 text-[11.5px] text-faint">
             Read from the chain and from a subgraph, not from us.{" "}

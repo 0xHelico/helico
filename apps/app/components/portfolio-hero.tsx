@@ -103,8 +103,10 @@ export function PortfolioHero() {
       <Card>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <div className="text-soft text-sm">In your account</div>
-            <div className="tabular mt-1 font-medium text-4xl text-ink tracking-tight">
+            {/* No label above the figure. The page is the portfolio and the line under the number
+                already says which part is liquid, so a caption here only pushes the one thing
+                somebody came to read further down. */}
+            <div className="tabular font-medium text-4xl text-ink tracking-tight">
               {held ? <Amount value={held.total} /> : "—"}
             </div>
             <div className="tabular mt-3 font-mono text-soft text-xs">
