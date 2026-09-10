@@ -10,6 +10,7 @@ import {
   useReadContract,
   useWriteContract,
 } from "wagmi";
+import { FundAccount } from "@/components/fund-account";
 import { TokenMark } from "@/components/token-mark";
 import { Button } from "@/components/ui/button";
 import { CHAIN_ID, totals, useAccountState } from "@/hooks/use-account-state";
@@ -242,14 +243,9 @@ export function MandateCard({
               Set them on the limits page
             </Link>
           ) : null}
-          {needsMoney ? (
-            <Link
-              className="mt-3 inline-block text-[11.5px] underline underline-offset-2 hover:text-ink"
-              href="/limit#money-in"
-            >
-              Move money in
-            </Link>
-          ) : null}
+          {/* The control itself, not a link to it. Money in lives in the conversation now, so the
+              step that is missing arrives with the thing that does it. */}
+          {needsMoney ? <FundAccount plain /> : null}
           {unlock.error ? (
             <p className="mt-2 text-[11px] text-destructive">
               {unlock.error.message.split("\n")[0]}

@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { AccountControls } from "@/components/account-controls";
 import { PageHeader } from "@/components/chat/page-header";
-import { FundAccount } from "@/components/fund-account";
 import { PortfolioSummary } from "@/components/portfolio-summary";
 
 export const metadata = { title: "Limits" };
@@ -45,10 +44,6 @@ export default function Page() {
               are everything the agent can reach.
             </p>
             <AccountControls />
-            {/* After the limits, not before: the money is worth moving once the agent is allowed
-                to move it, and a deposit box above an account that permits nothing invites the
-                one order of operations that leaves capital sitting still. */}
-            <FundAccount />
           </section>
 
           <p className="mt-8 pb-8 text-[12.5px] text-soft leading-relaxed">

@@ -371,7 +371,7 @@ function MarketRow({
       {/* The protocol's own mark. Four rows of text made a reader parse each line before they
           could tell one market from another; a colour sorts the column by eye first. */}
       <span className="shrink-0">
-        <VenueMark label={market.label} size={24} />
+        <VenueMark label={market.label} size={28} />
       </span>
       <div className="min-w-0 flex-1">
         <p className="font-medium text-[12.5px] text-ink leading-none">

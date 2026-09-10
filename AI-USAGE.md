@@ -2337,6 +2337,38 @@ READMEs.
   changed anything. That is why the check that matters is one that asks the deployed thing to do
   something only the new build can do.
 
+### 2026-09-11 — Money in moved into the conversation, and two logos were the wrong way round
+
+- **Done:** `deposit` is its own action, so moving money into your account is a sentence rather than
+  a panel on a settings page. Asked for directly it is the whole card; reached as the missing step
+  of `earn` it is the same control without its own frame, so the step that is missing arrives with
+  the thing that does it. Off `/limit` entirely, which is what Ghoza asked for.
+
+  And a correction: **Aave and Morpho had each other's marks.** Aave's is the pale violet ghost, a
+  rounded top and two eyes; Morpho's is a blue butterfly, which is what the genus name means. Ghoza
+  saw it in one look at a screenshot.
+
+- **AI's role:** Claude Opus 5 implemented both. Ghoza asked for money in to live in the chat, and
+  caught the logos.
+
+- **Verified:** `e2e/fork-chat-actions.ts` on a fork, **14 checks**, and the new pair moves real
+  money rather than only rendering:
+
+  ```
+  ok  money in arrives as a control, not a link
+  ok  and 7 USDC leaves the wallet for the account  — account 0 → 7, wallet -7
+  ```
+
+  Two Go tests hold the classifier: `deposit` reaches its own action, and the reply says the two
+  things a person needs before signing — that the account is theirs, and that nothing is being
+  approved. The line that matters there is the one between a deposit and a swap: "move 50 USDC into
+  my account" and "swap 50 USDC into WETH" are one word apart and mean opposite things.
+
+  The marks were checked by rendering them at 110px and at 28px side by side and looking, then
+  again in place on the page. The first attempt at Compound had all three cards merged into one
+  diagonal blob, and the first Morpho had its eyes fused into the arch — neither of which reading
+  the SVG would have told me.
+
 <!--
 Template for the next entry:
 

@@ -115,7 +115,7 @@ func (s *Service) Interpret(ctx context.Context, message string, prior ...Turn) 
 	// lies quietly.
 	action := strings.ToLower(strings.TrimSpace(d.Action))
 	switch action {
-	case ActionStatus, ActionRevoke, ActionAbout, ActionWithdraw, ActionEarn:
+	case ActionStatus, ActionRevoke, ActionAbout, ActionWithdraw, ActionEarn, ActionDeposit:
 	default:
 		action = ActionSwap
 	}
@@ -160,6 +160,15 @@ func (s *Service) Interpret(ctx context.Context, message string, prior ...Turn) 
 				"nothing has moved, the reason is in there somewhere: an account nobody has " +
 				"created, an agent nobody has named, a market nobody has allowed, or a move too " +
 				"small to be worth the gas.",
+			Steps: []Step{read},
+		}, nil
+	case ActionDeposit:
+		return Answer{
+			Action: ActionDeposit,
+			Reply: "Your account is a contract only you own, and the agent moves what it holds — so " +
+				"this is the step that gives it something to move. It is an ordinary transfer with no " +
+				"approval, and the card below sends it. If you would rather pay in from an exchange, " +
+				"the same card has the address.",
 			Steps: []Step{read},
 		}, nil
 	case ActionEarn:
@@ -258,6 +267,12 @@ func about() (string, []Card) {
 			// chat. It used to open the limits page at an anchor, which asked a person to go and
 			// find the controls; now the answer arrives with the one that is actually missing.
 			Try: "Put my idle USDC to work",
+		},
+		{
+			Title: "Money in",
+			Body: "Move USDC from your wallet into your own account, which is what the agent moves. An " +
+				"ordinary transfer: no approval, and nothing granted to anybody.",
+			Try: "Move money into my account",
 		},
 		{
 			Title: "Set your limits",
