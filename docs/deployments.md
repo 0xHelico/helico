@@ -4,6 +4,58 @@ Arbitrum One, chain id 42161. Every address below was read back from the chain a
 broadcast, not copied from a script's output — the third column is what the contract answers when
 asked about itself.
 
+## 10 September 2026 — the Aqua apps went behind proxies
+
+| Contract | Address | Answers | Source |
+|---|---|---|---|
+| `HelicoMandateSwap` | [`0x0524a353dfab33CD362593ae8e97707764Fb6041`](https://arbiscan.io/address/0x0524a353dfab33CD362593ae8e97707764Fb6041#code) | `AQUA()` → `0x1111113CCf…`, `UPGRADER()` → `0xaeE1F9d2…6E9C` | verified, proxy **and** implementation |
+| `HelicoOracleBoard` | [`0xe8515af92442A5CDa67D1F32D1c8a987ba7e7d39`](https://arbiscan.io/address/0xe8515af92442A5CDa67D1F32D1c8a987ba7e7d39#code) | the same two | verified, proxy **and** implementation |
+
+```
+implementation behind the mandate swap   0xfdefc345…b557
+implementation behind the oracle board   0xc54cf202…b410
+proxy code                               329 chars — delegatecall and nothing else
+```
+
+**The address that matters is the proxy's.** A maker ships to it and Aqua keys every balance by
+it; the implementation is a place the proxy borrows code from and is not an app. Both halves are
+verified, because verifying only one leaves unverified bytecode at the address the README names.
+
+### Why, and it is the third address change in two days
+
+That is the argument rather than an embarrassment beside it. `ReceiptKind` widened `Venue` on 9
+September and both apps had to be replaced; the venue pair was replaced an hour after that. Every
+one of those moved an address quoted in five documents. Behind a proxy the next one is an upgrade.
+
+`ForkMandateSwap.t.sol` proves the property rather than asserting it: a mandate is shipped, the app
+is upgraded, and **the same mandate fills at the same price through the new code** — with Aqua's
+ledger following it across, because Aqua keys balances by the app address and the address survived.
+
+### What a maker is now trusting
+
+An Aqua app can `pull` from the maker's own wallet, so whoever holds `UPGRADER` can change what an
+already-shipped mandate does. That is a real transfer of trust and it is written into
+`UpgradeableAquaApp` rather than left implicit. The mitigation is that `UPGRADER` is
+`0xaeE1F9d2…6E9C` — held apart from the deployer and the agent, the same separation `HelicoAccount`
+uses. A zero upgrader would freeze an app, which is a legitimate setting and not this one.
+
+`scripts/check-storage-layout.py` now covers both apps. Their only storage is `_reentrancyLocks` at
+slot 0, which is exactly why: a field declared above it moves the lock, and the lock is what stops
+a taker re-entering a maker's strategy mid-fill.
+
+### One guard that failed on a correct deployment
+
+`scripts/check-mandate.ts` grepped the deployed bytecode for `mandateHash`'s selector. A proxy
+carries no selectors at all, so the check went red on the deployment it exists to protect — the
+implementation had it and the address that matters did not. It calls the function now instead,
+which is the better test either way: a selector present in bytecode is not a selector that can be
+reached.
+
+### Superseded, and neither was ever used
+
+`0xE56e2ACF…2a0d` and `0xF0aB4fF0…22A9`, both deployed the previous evening. `eth_getLogs` returned
+zero events on both, so nothing was stranded.
+
 ## 9 September 2026 — two venues outside Aave, and the two apps that can now reach them
 
 The enclave compares markets and moves capital to the best one, and until today every market it

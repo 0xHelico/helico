@@ -4,3 +4,7 @@
    1   0  permittedVenue  t_mapping(t_address,t_bool)
    2   0  nonce  t_uint256
    3   0  venueEverPermitted  t_mapping(t_address,t_bool)
+# HelicoMandateSwap
+   0   0  _reentrancyLocks  t_mapping(t_address,t_mapping(t_bytes32,t_struct(TransientLock)_storage))
+# HelicoOracleBoard
+   0   0  _reentrancyLocks  t_mapping(t_address,t_mapping(t_bytes32,t_struct(TransientLock)_storage))

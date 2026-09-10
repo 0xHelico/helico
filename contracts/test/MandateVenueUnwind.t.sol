@@ -43,7 +43,7 @@ contract MandateVenueUnwindTest is Test {
         vm.warp(1_000_000);
 
         aqua = new Aqua();
-        app = new HelicoMandateSwap(IAqua(address(aqua)));
+        app = new HelicoMandateSwap(IAqua(address(aqua)), address(0));
 
         tokenA = new TestToken("Token A", "TKA");
         tokenB = new TestToken("Token B", "TKB");

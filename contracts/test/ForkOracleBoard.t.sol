@@ -48,7 +48,7 @@ contract ForkOracleBoardTest is Test, IHelicoOracleBoardCallback {
             return;
         }
         aqua = new Aqua();
-        board = new HelicoOracleBoard(IAqua(address(aqua)));
+        board = new HelicoOracleBoard(IAqua(address(aqua)), address(0));
         // Fixed once. Computing it inside `_board()` made the hash move with `block.timestamp`,
         // so a test that warped was addressing a strategy nobody had shipped — and the failure
         // named the ledger rather than the clock.

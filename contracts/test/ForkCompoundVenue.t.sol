@@ -71,7 +71,7 @@ contract ForkCompoundVenueTest is Test {
         }
 
         aqua = new Aqua();
-        app = new HelicoMandateSwap(IAqua(address(aqua)));
+        app = new HelicoMandateSwap(IAqua(address(aqua)), address(0));
         venue = new CompoundVenue(COMET);
         // A year, not a month: the accrual test warps a hundred and eighty days forward and a
         // mandate that expires under it fails as `MandateExpired`, which reads like a bug in the

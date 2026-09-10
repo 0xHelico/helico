@@ -41,7 +41,12 @@ SNAPSHOT = CONTRACTS / "storage-layout.txt"
 
 # Every contract whose storage outlives its code. A contract missing from here is not checked,
 # which is how `HelicoAccount` went unguarded while being the more dangerous of the two.
-UPGRADEABLE = ["HelicoAccount"]
+#
+# The two Aqua apps joined on 10 September, when they went behind proxies. Their only storage is
+# `_reentrancyLocks`, inherited from `AquaApp` and sitting at slot 0 — which is exactly why they
+# belong here rather than being waved through as "nearly stateless". A future field declared above
+# it moves the lock, and the lock is what stops a taker re-entering a maker's strategy mid-fill.
+UPGRADEABLE = ["HelicoAccount", "HelicoMandateSwap", "HelicoOracleBoard"]
 
 
 def _shape(type_name: str) -> str:

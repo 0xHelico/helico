@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
-import {AquaApp} from "@1inch/aqua/AquaApp.sol";
 import {IAqua} from "@1inch/aqua/interfaces/IAqua.sol";
+
+import {UpgradeableAquaApp} from "./UpgradeableAquaApp.sol";
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -119,7 +120,7 @@ struct Sides {
 ///      constrains something the taker does not control. Exact-out would hand the taker the
 ///      number the ceiling is meant to bound; it can be added later, deliberately, rather than
 ///      arriving as a symmetry nobody asked for.
-contract HelicoMandateSwap is AquaApp {
+contract HelicoMandateSwap is UpgradeableAquaApp {
     /// @notice Basis-point denominator (100% = 10_000 bps).
     uint256 internal constant BPS_BASE = 10_000;
 
@@ -180,7 +181,7 @@ contract HelicoMandateSwap is AquaApp {
     error ReceiptRetained(address receipt, uint256 heldNow);
 
     /// @param aqua_ The Aqua deployment this app keeps its ledger in.
-    constructor(IAqua aqua_) AquaApp(aqua_) {}
+    constructor(IAqua aqua_, address upgrader) UpgradeableAquaApp(aqua_, upgrader) {}
 
     /// @notice The identifier Aqua files a mandate under.
     /// @dev Aqua hashes the raw bytes the maker shipped, so this only agrees with Aqua's own

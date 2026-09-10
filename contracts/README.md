@@ -16,12 +16,12 @@ same count — [`docs/deployments.md`](../docs/deployments.md) lists the address
   settles a swap out of capital still earning in a lending market.
 - **`HelicoOracleBoard`** — a second Aqua app, priced from Chainlink and braked by its own
   inventory, for the maker who holds one token. Deployed 9 September at
-  [`0xF0aB4fF0…22A9`](https://arbiscan.io/address/0xF0aB4fF02ab557eC7abAE4697b279301643222A9#code).
+  [`0xe8515af9…7d39`](https://arbiscan.io/address/0xe8515af92442A5CDa67D1F32D1c8a987ba7e7d39#code).
 
 ## HelicoOracleBoard
 
 Built and deployed 9 September —
-[`0xF0aB4fF0…22A9`](https://arbiscan.io/address/0xF0aB4fF02ab557eC7abAE4697b279301643222A9#code), verified. A second Aqua app, sitting beside `HelicoMandateSwap` rather
+[`0xe8515af9…7d39`](https://arbiscan.io/address/0xe8515af92442A5CDa67D1F32D1c8a987ba7e7d39#code), verified. A second Aqua app, sitting beside `HelicoMandateSwap` rather
 than replacing it, and it exists because of a maker the first one cannot serve.
 
 That maker holds **one** token. Their USDC sits in a lending market earning, and a fill is settled

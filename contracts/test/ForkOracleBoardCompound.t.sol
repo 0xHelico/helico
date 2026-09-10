@@ -60,7 +60,7 @@ contract ForkOracleBoardCompoundTest is Test, IHelicoOracleBoardCallback {
         }
 
         aqua = new Aqua();
-        board = new HelicoOracleBoard(IAqua(address(aqua)));
+        board = new HelicoOracleBoard(IAqua(address(aqua)), address(0));
         compound = new CompoundVenue(COMET);
         morpho = new MorphoVenue(MORPHO_VAULT);
         expiry = block.timestamp + 365 days;

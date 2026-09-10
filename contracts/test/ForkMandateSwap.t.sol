@@ -7,6 +7,7 @@ import {IAqua} from "@1inch/aqua/interfaces/IAqua.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {DeployMandateSwap} from "../script/DeployMandateSwap.s.sol";
+import {UpgradeableAquaApp} from "../src/UpgradeableAquaApp.sol";
 import {HelicoMandateSwap, SwapMandate, Venue} from "../src/HelicoMandateSwap.sol";
 import {PayingTaker} from "./MandateTakers.sol";
 
@@ -40,6 +41,8 @@ contract ForkMandateSwapTest is Test {
 
     address maker = address(0xA11CE);
 
+    address upgrader = makeAddr("app-upgrader");
+
     bool forked;
 
     function setUp() public {
@@ -54,9 +57,11 @@ contract ForkMandateSwapTest is Test {
             return;
         }
 
+        // Through the script rather than the constructor, so this suite exercises the proxy the
+        // broadcast actually puts in front of the app rather than a bare implementation.
         script = new DeployMandateSwap();
         aqua = IAqua(script.AQUA());
-        app = script.deploy(aqua);
+        app = script.deploy(aqua, upgrader);
 
         deal(address(USDC), maker, RESERVE_USDC);
         deal(address(WETH), maker, RESERVE_WETH);
@@ -161,6 +166,74 @@ contract ForkMandateSwapTest is Test {
             )
         );
         taker.swap(app, m, true, AMOUNT_IN, 0, address(taker));
+    }
+
+    // ── the proxy, and the only reason it is worth its risk ───────────────────
+
+    /// @dev **A mandate shipped before an upgrade still fills after one.** That is the whole
+    ///      argument for putting these apps behind a proxy, and it is a claim about Aqua's ledger
+    ///      rather than about the proxy: Aqua keys every balance by the *app address*, so an
+    ///      upgrade that kept the address keeps the balances, and one that changed it would have
+    ///      stranded the maker.
+    ///
+    ///      Between 8 and 9 September both apps were replaced because `ReceiptKind` widened
+    ///      `Venue`. Nothing was shipped to either at the time, which is luck rather than design —
+    ///      this is the mechanism that makes it not need luck next time.
+    function test_AMandateSurvivesAnUpgradeOfTheAppItWasShippedTo() public {
+        uint256 out = _quoteOffChain(RESERVE_USDC, RESERVE_WETH, AMOUNT_IN);
+        SwapMandate memory m = SwapMandate({
+            maker: maker,
+            token0: address(USDC),
+            token1: address(WETH),
+            feeBps: 30,
+            maxOut0: type(uint256).max,
+            maxOut1: out,
+            expiry: uint64(block.timestamp + 1 days),
+            agent: address(taker),
+            salt: "survives-an-upgrade",
+            venues: new Venue[](0)
+        });
+        bytes32 hash = _ship(m);
+
+        (uint256 ledgerBefore,) = aqua.rawBalances(maker, address(app), hash, address(USDC));
+        assertEq(ledgerBefore, RESERVE_USDC, "shipped, and the ledger says so");
+
+        // A second implementation, and deliberately not a different contract: what is being tested
+        // is that the address survives, not that arbitrary code can be installed under a maker.
+        HelicoMandateSwap next = new HelicoMandateSwap(aqua, upgrader);
+        vm.prank(upgrader);
+        app.upgradeToAndCall(address(next), "");
+
+        uint256 got = taker.swap(app, m, true, AMOUNT_IN, 0, address(0xB0B));
+        assertEq(got, out, "the same mandate fills at the same price through the new code");
+
+        (uint256 ledgerAfter,) = aqua.rawBalances(maker, address(app), hash, address(USDC));
+        assertEq(ledgerAfter, RESERVE_USDC + AMOUNT_IN, "and Aqua's ledger followed it across");
+    }
+
+    /// @dev The authority, which is the price of the property above. Anyone who can upgrade can
+    ///      rewrite what a shipped mandate does, so the check that only one address can is not
+    ///      ceremony.
+    function test_NobodyButTheUpgraderCanReplaceTheApp() public {
+        HelicoMandateSwap next = new HelicoMandateSwap(aqua, upgrader);
+
+        vm.prank(maker);
+        vm.expectRevert(abi.encodeWithSelector(UpgradeableAquaApp.NotUpgrader.selector, maker));
+        app.upgradeToAndCall(address(next), "");
+
+        vm.prank(address(taker));
+        vm.expectRevert(abi.encodeWithSelector(UpgradeableAquaApp.NotUpgrader.selector, address(taker)));
+        app.upgradeToAndCall(address(next), "");
+    }
+
+    /// @dev An implementation with no code leaves a proxy that delegatecalls into nothing — every
+    ///      call then returns success with empty data, which reads as a contract answering zero to
+    ///      everything rather than as a broken one. Refused at the door instead.
+    function test_AnImplementationWithNoCodeIsRefused() public {
+        address empty = makeAddr("not-a-contract");
+        vm.prank(upgrader);
+        vm.expectRevert(abi.encodeWithSelector(UpgradeableAquaApp.ImplementationHasNoCode.selector, empty));
+        app.upgradeToAndCall(empty, "");
     }
 
     function _ship(SwapMandate memory m) private returns (bytes32) {

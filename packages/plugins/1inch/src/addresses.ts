@@ -55,7 +55,7 @@ export function swapVmAddress(chainId: number): `0x${string}` {
  */
 export function mandateSwapAddress(chainId: number): `0x${string}` {
 	const known: Record<number, `0x${string}`> = {
-		[ARBITRUM_ONE]: '0xE56e2ACF431D80fbBb3192CD264138629F4f2a0d',
+		[ARBITRUM_ONE]: '0x0524a353dfab33CD362593ae8e97707764Fb6041',
 	}
 	const a = known[chainId]
 	if (!a) throw new Error(`No HelicoMandateSwap deployment for chain ${chainId}`)
