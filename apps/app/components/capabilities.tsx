@@ -51,7 +51,14 @@ export function Grants() {
   });
 
   const active = data ? hasAgent(data) : false;
-  const canToggle = Boolean(account && isConnected && chainId === CHAIN_ID);
+  // Not gated on the account existing, because switching this **on** does not touch one — the
+  // handler scrolls to the controls that grant it. Only switching it off revokes, and that
+  // direction is unreachable without an agent anyway, since `checked` is false until there is one.
+  //
+  // It was gated on `kind === "open"`, so the row the product leads with was dead for everybody
+  // who had not used the product yet: the two controls below worked and the switch describing
+  // them did not. Same shape as #306.
+  const canToggle = Boolean(isConnected && chainId === CHAIN_ID);
 
   return (
     <ul
