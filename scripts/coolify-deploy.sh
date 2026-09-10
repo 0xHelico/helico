@@ -23,7 +23,11 @@ set -euo pipefail
 MAP="$HOME/.config/coolify/apps.map"
 TOKEN_FILE="$HOME/.config/coolify/deploy.token"
 API="http://127.0.0.1:8000/api/v1"
-TIMEOUT_SECONDS=600
+# Generous on purpose. Ten minutes was enough until a deploy landed on a box at load 31 with a
+# `next-build` at 314% CPU, and the image came out after the wait had already called it a failure.
+# The cost of waiting too long is a slow pipeline; the cost of giving up too early is a red run for
+# a deploy that worked, which teaches everyone to stop reading them.
+TIMEOUT_SECONDS=1500
 
 app="${SSH_ORIGINAL_COMMAND:-}"
 read -r _ uuid port url < <(awk -v a="$app" '$1 == a {print; exit}' "$MAP") || true
@@ -106,5 +110,14 @@ while [ "$SECONDS" -lt "$deadline" ]; do
 	fi
 done
 
-echo "$app: no new container within ${TIMEOUT_SECONDS}s" >&2
+# Say which of the two this is. "No new container" reads as broken and is usually still building,
+# and Coolify knows the difference: its own deployment row is the answer. Asking costs one call and
+# turns a bare failure into one a reader can act on.
+state="$(curl --silent --max-time 10 -H "Authorization: Bearer $(cat "$TOKEN_FILE")" \
+	"$API/deployments" 2>/dev/null | grep -o "\"status\":\"in_progress\"" | head -1 || true)"
+if [ -n "$state" ]; then
+	echo "$app: no new container within ${TIMEOUT_SECONDS}s, and Coolify still reports a deployment in progress — slow, not stuck. The build will land without another push." >&2
+else
+	echo "$app: no new container within ${TIMEOUT_SECONDS}s, and Coolify reports no deployment in progress. This one is stuck rather than slow." >&2
+fi
 exit 1
