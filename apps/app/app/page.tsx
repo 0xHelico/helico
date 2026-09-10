@@ -1,22 +1,20 @@
 import Link from "next/link";
 import { AccountControls } from "@/components/account-controls";
-import { Asks, Grants } from "@/components/capabilities";
 import { PageHeader } from "@/components/chat/page-header";
 import { PortfolioSummary } from "@/components/portfolio-summary";
 
 export const metadata = { title: "Helico" };
 
 /**
- * The front door.
+ * The front door, and it is two controls.
  *
- * It used to be the conversation, which meant the first thing anyone saw was a box offering to
- * swap — and Helico is not a swap tool.
+ * It carried sixteen boxes before it carried anything a person could press: six capability cards
+ * of which five said "not wired yet", then the limits, then three cards describing sentences the
+ * chat already offers as cards of its own. Most of the screen was spent promising and describing.
  *
- * The order is facts, then offer, then controls. Your account and what it may spend are true
- * right now and readable by anyone; what the agent *may* be allowed to do is a list of mostly
- * unbuilt things, and leading with it put five greyed-out rows above the fold and the product
- * below it. Each section is one card with one title, so the page has one rhythm rather than a
- * heading, a dashed row, a white card and a table all claiming the same level.
+ * Both lists are now one sentence each. The roadmap sentence still names what is not built, which
+ * is the part worth keeping — a page that lists only what works reads as a claim that nothing else
+ * was ever intended.
  */
 export default function Page() {
   return (
@@ -37,16 +35,6 @@ export default function Page() {
 
           <PortfolioSummary />
 
-          <section className="mt-10">
-            <h2 className="font-medium text-[15px] text-ink">
-              What it may be allowed to do
-            </h2>
-            <p className="mt-1.5 text-[12.5px] text-soft">
-              One is wired to a contract. The rest are the direction.
-            </p>
-            <Grants />
-          </section>
-
           <section className="mt-10" id="mandate">
             <h2 className="font-medium text-[15px] text-ink">
               The limits you set
@@ -58,22 +46,19 @@ export default function Page() {
             <AccountControls />
           </section>
 
-          <section className="mt-10 pb-8">
-            <h2 className="font-medium text-[15px] text-ink">
-              What you can ask it
-            </h2>
-            <p className="mt-1.5 text-[12.5px] text-soft">
-              Said once, signed by you, in the{" "}
-              <Link
-                className="underline underline-offset-2 hover:text-ink"
-                href="/chat"
-              >
-                conversation
-              </Link>
-              .
-            </p>
-            <Asks />
-          </section>
+          <p className="mt-8 pb-8 text-[12.5px] text-soft leading-relaxed">
+            Today the agent moves idle capital between the markets you allow,
+            and nothing else. Lending against it, perpetuals, paying for its own
+            work and moving across chains are the direction rather than what is
+            wired. Ask it anything in the{" "}
+            <Link
+              className="underline underline-offset-2 hover:text-ink"
+              href="/chat"
+            >
+              conversation
+            </Link>
+            .
+          </p>
         </main>
       </div>
     </div>
