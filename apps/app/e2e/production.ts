@@ -238,6 +238,57 @@ const open = async (url: string): Promise<{ page: Page; text: string }> => {
     cards.length > 0 && cards.every((c) => Boolean(c.try) !== Boolean(c.href)),
   );
 
+  // Every starter on the front door, sent to the model that will actually receive it.
+  //
+  // These are the six buttons a person meets before they have typed anything, and each one claims
+  // in `lib/constants.ts` which of the five actions it lands on. A starter that lands somewhere
+  // else is a button that answers a question nobody asked, and rewording one is exactly how that
+  // happens quietly. Six model calls, on a suite that is run by hand before a recording.
+  const starters: [string, string][] = [
+    ["What can you do?", "about"],
+    ["Check my portfolio", "status"],
+    ["Swap 0.1 ETH into USDC", "swap"],
+    ["Why has nothing moved?", "status"],
+    ["Stop the agent", "revoke"],
+    ["Take everything back to my wallet", "withdraw"],
+  ];
+  // One at a time, and backing off when told to. The endpoint allows six messages a minute per
+  // address (`BE_SWAP_RATE_PER_MIN`), and this suite has already spent one on "p" above, so
+  // sending six more in a row earns a 429 on the last of them. The first version of this check
+  // read that as a missing action and blamed the wording of three starters that answer correctly.
+  //
+  // Worth knowing beyond this file: there are six starters on the front door and six messages a
+  // minute, so a person who presses every one of them and then types is at the limit.
+  const landed: { message: string; want: string; got: string }[] = [];
+  const ask = async (message: string) => {
+    const res = await fetch(`${API}/api/swap/intent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message }),
+    });
+    return res;
+  };
+  for (const [message, want] of starters) {
+    let res = await ask(message);
+    if (res.status === 429) {
+      const after = Number(res.headers.get("retry-after") ?? "10");
+      await new Promise((r) => setTimeout(r, (after + 1) * 1000));
+      res = await ask(message);
+    }
+    const got = res.ok
+      ? (((await res.json()) as { action?: string }).action ?? "(none)")
+      : `HTTP ${res.status}`;
+    landed.push({ message, want, got });
+  }
+  const wrong = landed.filter((l) => l.got !== l.want);
+  check(
+    "every starter on the front door lands where it says it does",
+    wrong.length === 0,
+    wrong.length === 0
+      ? landed.map((l) => l.got).join(", ")
+      : wrong.map((l) => `"${l.message}" → ${l.got}, not ${l.want}`).join("; "),
+  );
+
   // The allow-list is what stops it being an open proxy onto our own quota.
   const refused = await fetch(`${API}/api/graph`, {
     method: "POST",
