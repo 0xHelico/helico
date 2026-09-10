@@ -14,6 +14,32 @@ import type { MakerMandates, Mandate, Subgraph } from './types'
  * `strategy` comes back raw. Aqua never interprets those bytes and neither does the subgraph —
  * each app defines its own struct, so the caller decodes with the ABI it owns.
  */
+/**
+ * Live strategies, newest first, without naming a maker.
+ *
+ * Filtered on `active` in the query rather than after it, because the alternative is paging the
+ * whole history to throw most of it away — and this runs on every quote the chat offers.
+ */
+const FILLABLE = `
+  query Fillable($first: Int!, $skip: Int!) {
+    mandates(
+      where: { active: true }
+      orderBy: shippedAtBlock
+      orderDirection: desc
+      first: $first
+      skip: $skip
+    ) {
+      strategyHash
+      strategy
+      active
+      movementCount
+      shippedAt
+      app { id }
+      balances { token amount tokensCount totalPulled totalPushed }
+    }
+  }
+`
+
 const MANDATES = `
   query Mandates($maker: Bytes!, $first: Int!, $skip: Int!) {
     mandates(
@@ -138,4 +164,46 @@ export async function makerMandates(
 		active: mandates.filter((m) => m.active).length,
 		spendable: spendable(mandates),
 	}
+}
+
+/**
+ * Every live strategy that holds **both** of a pair, whoever shipped it.
+ *
+ * The mirror of `makerMandates`, and the query a taker needs rather than a maker. You cannot fill
+ * an order you cannot find: `_balances` is private and four levels deep, `rawBalances` wants a
+ * hash you do not have yet, and no event parameter is indexed — so an index is not a convenience
+ * here, it is the only way to know what is fillable at all.
+ *
+ * **Both sides, and `tokensCount` rather than `amount > 0`.** A strategy naming only one of the
+ * pair cannot be priced by a constant product, and Aqua's own `safeBalances` refuses a read where
+ * either token is outside an active strategy. `spendable` comes from Aqua's own three-state
+ * sentinel — 0 never shipped, 255 docked — so a balance left reading non-zero after a `dock` is
+ * caught here rather than at the fill.
+ *
+ * The strategies come back **undecoded**, and deliberately: this package indexes Aqua, which never
+ * interprets those bytes either. Decoding belongs to whoever owns the struct — for a SwapVM order
+ * that is `@helico/plugin-1inch`, whose `openOrders` also applies the hash gate that decides
+ * whether the bytes are the order they claim to be.
+ */
+export async function fillableFor(
+	subgraph: Subgraph,
+	pair: [string, string],
+	auth: GraphAuth = { apiKey: '' },
+	fetchImpl: typeof fetch = fetch,
+): Promise<Mandate[]> {
+	const [a, b] = pair.map((t) => t.toLowerCase())
+	const out: Mandate[] = []
+	for (let skip = 0; ; skip += PAGE) {
+		const raw = await query<Raw>(subgraph, auth, FILLABLE, { first: PAGE, skip }, fetchImpl)
+		const page = toMandates(raw)
+		for (const m of page) {
+			// `spendable` rather than the sentinel by hand: `toMandates` already derives it, and two
+			// copies of Aqua's three-state rule would eventually disagree about a docked balance.
+			const held = (t: string) =>
+				m.balances.some((x) => x.token.toLowerCase() === t && x.amount > 0n && x.spendable)
+			if (held(a as string) && held(b as string)) out.push(m)
+		}
+		if (page.length < PAGE) break
+	}
+	return out
 }

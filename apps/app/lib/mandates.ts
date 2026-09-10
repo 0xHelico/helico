@@ -41,8 +41,11 @@ const CACHED: Subgraph = { ...AQUA_SUBGRAPH, url: `${API_BASE}/api/graph` };
  * when everything of ours was down, and routing them through our backend would have quietly
  * traded that away for a smaller bill. Now the backend is an optimisation: when it is missing,
  * slow, or refusing, the page is exactly as good as it was before it existed.
+ *
+ * Exported so the Aqua swap planner reaches the index the same way. A second copy of the
+ * fallback would eventually keep only one of the two properties it exists for.
  */
-async function viaCache<T>(
+export async function askGraph<T>(
   ask: (subgraph: Subgraph) => Promise<T>,
 ): Promise<T> {
   try {
@@ -69,7 +72,7 @@ export type MandateView = {
 };
 
 export async function readMandates(maker: string): Promise<MandateView> {
-  const answer: MakerMandates = await viaCache((s) => makerMandates(s, maker));
+  const answer: MakerMandates = await askGraph((s) => makerMandates(s, maker));
   return {
     maker: answer.maker,
     rows: answer.mandates.map((m) => ({
@@ -176,7 +179,7 @@ const PAGE = 1000;
 export async function readMovements(
   maker: string,
 ): Promise<{ timestamps: number[]; capped: boolean }> {
-  const raw = await viaCache((subgraph) =>
+  const raw = await askGraph((subgraph) =>
     query<{ movements: { timestamp: string }[] }>(
       subgraph,
       { apiKey: "" },

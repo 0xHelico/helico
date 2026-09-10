@@ -49,7 +49,7 @@ export function swapVmAddress(chainId: number): `0x${string}` {
  * the old app answered `mandateHash` at a selector nothing here computes. A mandate sent there
  * would not have reverted — it would have missed the function.
  *
- * `scripts/check-mandate.ts` reads the deployed bytecode back and refuses to run against an
+ * `scripts/check-deployed.ts` reads the deployed bytecode back and refuses to run against an
  * address that does not carry today's selector, so this paragraph cannot quietly go stale the way
  * the one it replaced did.
  */

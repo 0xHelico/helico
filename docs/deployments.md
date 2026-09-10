@@ -45,7 +45,7 @@ a taker re-entering a maker's strategy mid-fill.
 
 ### One guard that failed on a correct deployment
 
-`scripts/check-mandate.ts` grepped the deployed bytecode for `mandateHash`'s selector. A proxy
+`scripts/check-deployed.ts` grepped the deployed bytecode for `mandateHash`'s selector. A proxy
 carries no selectors at all, so the check went red on the deployment it exists to protect — the
 implementation had it and the address that matters did not. It calls the function now instead,
 which is the better test either way: a selector present in bytecode is not a selector that can be
@@ -140,11 +140,11 @@ either Aqua app refuses a venue that fails the first, and `_cover` cannot burn w
 > `Venue` by a field, so `SwapMandate` is a different tuple now: the deployed app answers
 > `mandateHash` at selector `0xbeb513da` and today's struct hashes to `0x5344635d`. The bytecode
 > at that address contains the first and not the second, which is asserted rather than assumed —
-> `scripts/check-mandate.ts` reads the code back and fails if it ever stops being true.
+> `scripts/check-deployed.ts` reads the code back and fails if it ever stops being true.
 >
 > Nothing is wrong with what is deployed; it is simply older than the tests. But a mandate
 > shipped to it today would not revert, it would miss the function, so **this needs redeploying
-> before anything ships to it for real**. `check-mandate.ts` deploys the current source onto a
+> before anything ships to it for real**. `check-deployed.ts` deploys the current source onto a
 > fork and runs the whole path against it, so the redeploy is the only step that is missing.
 
 ```
