@@ -768,43 +768,73 @@ export const onCronTrigger = async (runtime: TeeRuntime<Config>): Promise<string
 
 	// 5. Cross back with the move only.
 	if (signs) {
-		const key = secrets[config.agentKeySecretId]?.value as Hex | undefined
-		if (!key) throw new Error(`Secret ${config.agentKeySecretId} is missing`)
-		if (state.nonce === undefined) throw new Error('The account did not answer the nonce read')
-		const auth: Authorisation = { params: outcome.params, policyHash: hash, nonce: state.nonce }
-		const domain: IdleMoveDomain = {
-			name: config.domainName,
-			version: config.domainVersion,
-			chainId: config.chainId as number,
-			// **The account that acts, not the one config names.** `HelicoAccount.domainSeparator`
-			// is built from `address(this)`, so a statement signed under any other address
-			// recovers to something that is not the agent and the account refuses it. Since
-			// `account` now defaults to the zero address, using it here would sign every
-			// ordinary run against `0x0000…0000` and no signature would ever be usable.
-			//
-			// Caught by @rifkyeasy in review. The test that had covered signing agreed with the
-			// bug rather than measuring it: it built its expected domain from the same
-			// `config.account` expression the code used, so both were wrong together.
-			verifyingContract: acting.account as Address,
-		}
-		const { signature, signer } = await signIdleMove(key, domain, auth)
-		// The statement is public by design once relayed; it is what the DON attests to.
-		runtime
-			.usingTheDons()
-			.report({
-				encodedPayload: hexToBase64(encodeAuthorisation(auth, signature)),
-				encoderName: 'evm',
-				signingAlgo: 'ecdsa',
-				hashingAlgo: 'keccak256',
-			})
-			.result()
+		const statement = await signAndReport(runtime, config, secrets, hash, {
+			account: acting.account as Address,
+			nonce: state.nonce,
+			params: outcome.params,
+		})
 		// The buffer note goes before the statement, never after: `rehearse-idle.sh` reads the
 		// JSON out of this line with a greedy match to the last `}`, and prose behind it would be
 		// swallowed into what it tries to parse.
-		return `${move}${rest}${fleet}${buffer} ${authorisationJson(auth, signature, signer)}${because}`
+		return `${move}${rest}${fleet}${buffer} ${statement}${because}`
 	}
 	const txHash = deliver(runtime.usingTheDons(), config, encodeReport(true, hash, outcome.params))
 	return `${move}${rest}${fleet}${buffer} tx ${txHash}${because}`
+}
+
+/**
+ * Sign the move inside the enclave, hand it to the DON, and give back the statement to print.
+ *
+ * Extracted from `onCronTrigger` rather than left inline, and not only for its size: the two
+ * throws here are the enclave refusing to sign something it cannot sign correctly, which is a
+ * different kind of decision from the branches above them. Those choose *whether* to move; these
+ * two say the run is broken.
+ *
+ * The key is read here and never crosses out. The statement does — it is public by design once
+ * relayed, and it is what the DON attests to.
+ */
+async function signAndReport(
+	runtime: TeeRuntime<Config>,
+	config: Config,
+	secrets: Record<string, { value: string }>,
+	policyHashUsed: Hex,
+	move: { account: Address; nonce: bigint | undefined; params: IdleMoveParams },
+): Promise<string> {
+	const key = secrets[config.agentKeySecretId]?.value as Hex | undefined
+	if (!key) throw new Error(`Secret ${config.agentKeySecretId} is missing`)
+	if (move.nonce === undefined) throw new Error('The account did not answer the nonce read')
+
+	const auth: Authorisation = {
+		params: move.params,
+		policyHash: policyHashUsed,
+		nonce: move.nonce,
+	}
+	const domain: IdleMoveDomain = {
+		name: config.domainName,
+		version: config.domainVersion,
+		chainId: config.chainId as number,
+		// **The account that acts, not the one config names.** `HelicoAccount.domainSeparator`
+		// is built from `address(this)`, so a statement signed under any other address recovers
+		// to something that is not the agent and the account refuses it. Since `account` now
+		// defaults to the zero address, using it here would sign every ordinary run against
+		// `0x0000…0000` and no signature would ever be usable.
+		//
+		// Caught by @rifkyeasy in review. The test that had covered signing agreed with the bug
+		// rather than measuring it: it built its expected domain from the same `config.account`
+		// expression the code used, so both were wrong together.
+		verifyingContract: move.account,
+	}
+	const { signature, signer } = await signIdleMove(key, domain, auth)
+	runtime
+		.usingTheDons()
+		.report({
+			encodedPayload: hexToBase64(encodeAuthorisation(auth, signature)),
+			encoderName: 'evm',
+			signingAlgo: 'ecdsa',
+			hashingAlgo: 'keccak256',
+		})
+		.result()
+	return authorisationJson(auth, signature, signer)
 }
 
 /**
