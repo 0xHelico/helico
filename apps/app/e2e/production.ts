@@ -252,6 +252,7 @@ const open = async (url: string): Promise<{ page: Page; text: string }> => {
     // than the cancelled workflow run managed to say.
     ["Put my idle USDC to work", "earn"],
     ["Move money into my account", "deposit"],
+    ["Provide liquidity for ETH and USDC", "provide"],
     ["Swap 0.1 ETH into USDC", "swap"],
     ["Why has nothing moved?", "status"],
     ["Stop the agent", "revoke"],

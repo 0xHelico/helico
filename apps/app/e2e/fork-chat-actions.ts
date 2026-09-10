@@ -23,12 +23,14 @@
  * correctly answers "no live Aqua position". That is #320, not a bug here.
  */
 import {
+  AQUA_ABI,
   ARBITRUM_ONE,
   aquaAddress,
   concentratedStrategy,
   ONE,
   shipCall,
   strategyHash as strategyHashOf,
+  swapVmAddress,
 } from "@helico/plugin-1inch";
 import { chromium, type Route } from "playwright";
 import {
@@ -37,6 +39,7 @@ import {
   formatUnits,
   http,
   parseAbi,
+  parseAbiItem,
   toHex,
 } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
@@ -156,7 +159,7 @@ const { strategy } = concentratedStrategy({
 }
 
 // ── the taker, and an account with an agent and money in it ───────────────────
-const taker = await wallet_(500n * 10n ** 6n);
+const taker = await wallet_(500n * 10n ** 6n, 10n ** 17n);
 const takerWallet = createWalletClient({
   account: taker.account,
   chain: arbitrum,
@@ -596,6 +599,94 @@ if (depositRendered) {
       walletBefore - walletAfter === 7_000_000n,
     `account ${formatUnits(accountBefore, 6)} → ${formatUnits(accountAfter, 6)}, wallet -${formatUnits(walletBefore - walletAfter, 6)}`,
   );
+}
+
+// ── 8. provide: the product ships a position of its own ────────────────────
+//
+// The half that existed only as a script (#346, point 4), and the only fix available to us for a
+// swap with nothing to fill against: on Arbitrum One six positions hold WETH and USDC and every
+// one refuses to price (#393). Stubbed at the classifier for the same reason as the two above; the
+// ship is a real transaction and Aqua's ledger is read afterwards.
+await page.route("**/api/chat", (route) =>
+  route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({
+      action: "provide",
+      reply: "You can be the maker rather than the taker.",
+      steps: [],
+    }),
+  }),
+);
+await say("Provide liquidity for ETH and USDC");
+const amountASide = page.getByRole("textbox", {
+  name: /how many dollars a side/i,
+});
+let provideRendered = false;
+try {
+  await amountASide.waitFor({ timeout: 30_000 });
+  provideRendered = true;
+} catch {}
+check("provide offers a maker position, not a refusal", provideRendered);
+if (provideRendered) {
+  await amountASide.fill("10");
+  await page.getByRole("button", { name: /^Ship it$/ }).click();
+  // Two approvals and the ship.
+  const shipped = page.getByText(/It is filed under/);
+  let landed = false;
+  try {
+    await shipped.waitFor({ timeout: 90_000 });
+    landed = true;
+  } catch {}
+  check(
+    "and it ships",
+    landed,
+    landed
+      ? (await shipped.innerText()).replace(/\n/g, " ").slice(0, 90)
+      : (await page.locator("body").innerText()).slice(-160),
+  );
+  if (landed) {
+    // Aqua's own ledger, not the card's word for it. `ship` moves no token, so the wallet's
+    // balances are unchanged and the only evidence it happened is the number Aqua now holds.
+    const filed = /filed under\s+(0x[0-9a-f]{8})/.exec(
+      await shipped.innerText(),
+    );
+    const events = await pub.getLogs({
+      address: aquaAddress(ARBITRUM_ONE),
+      event: parseAbiItem(
+        "event Shipped(address maker, address app, bytes32 strategyHash, bytes strategy)",
+      ),
+      fromBlock: "earliest",
+    });
+    const ours = events.filter(
+      (e) =>
+        String(e.args.maker).toLowerCase() ===
+        taker.account.address.toLowerCase(),
+    );
+    check(
+      "and Aqua recorded it against this wallet",
+      ours.length === 1 && Boolean(filed),
+      `${ours.length} Shipped event(s), card says ${filed?.[1] ?? "nothing"}`,
+    );
+    if (ours.length === 1) {
+      const [amount, count] = (await pub.readContract({
+        abi: AQUA_ABI,
+        address: aquaAddress(ARBITRUM_ONE),
+        args: [
+          taker.account.address,
+          swapVmAddress(ARBITRUM_ONE),
+          ours[0]?.args.strategyHash as `0x${string}`,
+          USDC,
+        ],
+        functionName: "rawBalances",
+      })) as [bigint, number];
+      check(
+        "and the ledger holds the USDC side, spendable",
+        amount === 10_000_000n && count > 0 && count < 255,
+        `${formatUnits(amount, 6)} USDC, sentinel ${count}`,
+      );
+    }
+  }
 }
 
 console.log(`\n${failed === 0 ? "all green" : `${failed} failed`}`);

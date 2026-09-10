@@ -115,7 +115,13 @@ func (s *Service) Interpret(ctx context.Context, message string, prior ...Turn) 
 	// lies quietly.
 	action := strings.ToLower(strings.TrimSpace(d.Action))
 	switch action {
-	case ActionStatus, ActionRevoke, ActionAbout, ActionWithdraw, ActionEarn, ActionDeposit:
+	case ActionStatus,
+		ActionRevoke,
+		ActionAbout,
+		ActionWithdraw,
+		ActionEarn,
+		ActionDeposit,
+		ActionProvide:
 	default:
 		action = ActionSwap
 	}
@@ -160,6 +166,16 @@ func (s *Service) Interpret(ctx context.Context, message string, prior ...Turn) 
 				"nothing has moved, the reason is in there somewhere: an account nobody has " +
 				"created, an agent nobody has named, a market nobody has allowed, or a move too " +
 				"small to be worth the gas.",
+			Steps: []Step{read},
+		}, nil
+	case ActionProvide:
+		return Answer{
+			Action: ActionProvide,
+			Reply: "You can be the maker rather than the taker. This commits WETH and USDC to a band " +
+				"around the current price and lets anyone trade against it, priced by 1inch's own " +
+				"concentrate instruction. Your tokens do not move: Aqua is a ledger, so shipping writes " +
+				"a number and the approval is for exactly what you commit. Docking ends it and needs " +
+				"nobody's permission.",
 			Steps: []Step{read},
 		}, nil
 	case ActionDeposit:
@@ -226,9 +242,9 @@ func about() (string, []Card) {
 	reply := "You get an account that only you own. You name an agent, and it can move your idle " +
 		"money between the lending markets you allowed and pull it back out again. That is all it " +
 		"can do, because neither of those calls lets it say where money goes.\n\n" +
-		"Not yet, and I would rather tell you than leave it out: providing liquidity as a maker, " +
-		"borrowing, using more than one market at a time, and any chain other than " + chain.Name +
-		". If I do not have an address or a number for something, I will ask instead of guessing."
+		"Not yet, and I would rather tell you than leave it out: borrowing, using more than one " +
+		"market at a time, and any chain other than " + chain.Name + ". If I do not have an " +
+		"address or a number for something, I will ask instead of guessing."
 
 	return reply, []Card{
 		{
@@ -267,6 +283,12 @@ func about() (string, []Card) {
 			// chat. It used to open the limits page at an anchor, which asked a person to go and
 			// find the controls; now the answer arrives with the one that is actually missing.
 			Try: "Put my idle USDC to work",
+		},
+		{
+			Title: "Provide liquidity",
+			Body: "Commit WETH and USDC to a band around the price and let anyone trade against it. " +
+				"Your tokens stay in your wallet: Aqua is a ledger, and docking ends it.",
+			Try: "Provide liquidity for ETH and USDC",
 		},
 		{
 			Title: "Money in",

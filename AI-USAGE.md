@@ -2400,6 +2400,39 @@ READMEs.
   1inch's and I did not name it. Expiry is the likely shape and I have not proved it, so #393 says
   so in those words rather than asserting a cause.
 
+### 2026-09-11 — The product can be a maker, which is why the swap could not fill
+
+- **Done:** `provide` is an action. A sentence ships a real Aqua position from the connected
+  wallet: both sides sized off the Chainlink feed, a band 20% either way, 30bps kept, priced by
+  1inch's `concentrate` in their deployed SwapVM. "Providing liquidity as a maker" has left the
+  "Not yet" line, and the test that guarded that refusal now guards the opposite.
+
+  Also #346 point 2, which turned out to be already done and needed only checking and one fix: the
+  setup card was gated on Aave's permission alone, so somebody who allowed Morpho and left Aave was
+  still being offered the whole setup.
+
+- **AI's role:** Claude Opus 5 measured why the swap would not fill, concluded the maker half was
+  the only fix available, and built it. Ghoza said fix it, and #346 point 4 — his own list — had
+  already named the gap.
+
+- **Verified:** `e2e/fork-chat-actions.ts`, **20 checks**, and the maker four read Aqua's own ledger
+  rather than the card's word for it:
+
+  ```
+  ok  provide offers a maker position, not a refusal
+  ok  and it ships  — filed under 0x519302ed… on 1inch's SwapVM at 0x11111133…
+  ok  and Aqua recorded it against this wallet  — 1 Shipped event(s)
+  ok  and the ledger holds the USDC side, spendable  — 10 USDC, sentinel 2
+  ```
+
+  **The measurement that chose this work over something easier.** "No live Aqua position holds both
+  sides" looked like a liquidity fact to wait out. Asking Arbitrum One instead: 30 active mandates,
+  6 holding WETH and USDC, 4 decoding to the order Aqua filed, and **all 4 refusing to price** in
+  both directions at every size from 0.0005 to 0.1 WETH. The largest holds 14.08 USDC and refuses a
+  $2 swap, while the same code path prices a position of ours without complaint. So it was never
+  going to resolve itself, and the only fix in our reach was to be the maker — which #346 had
+  listed as a gap without anyone connecting it to the swap.
+
 <!--
 Template for the next entry:
 
