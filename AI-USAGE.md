@@ -1806,6 +1806,35 @@ READMEs.
   Production was then read with a browser rather than trusted: the tile says `USDC · liquid` and
   `USDC · working`, and `aUSDC` is gone from the page.
 
+### 2026-09-10 — matched against an implementation instead of a picture
+
+- **Done:** Ghoza said the portfolio was still not the same and pointed at a working implementation
+  rather than another screenshot. That changed the job: the values stopped being a matter of
+  judgement and became something to read off and copy.
+
+- **AI's role:** the earlier pass matched the *rhythm* — uniform gaps, an icon on every empty
+  state, tiles that are not three lines. That was the wrong reading of "the same", and reading the
+  reference made it obvious how much was still guesswork.
+
+  What the reference actually specifies, and what ours now carries: a `max-w-6xl` column, a `py-8`
+  header with a 36px mark and a `text-xl` title, `text-4xl` for the figure, a `mt-3 text-xs` sub
+  line, `rounded-xl bg-shade p-1` around the range pills with `rounded-lg px-3 py-1.5 text-xs`
+  buttons, `mt-6` between cards, `p-5` inside them, `text-xl` section titles, and tiles whose label
+  row is `font-medium text-soft text-xs` over a `text-sm` figure.
+
+  `Empty` changed shape rather than size: the reference has no grey disc, just a 22px glyph at
+  `strokeWidth 1.5` with `py-16` around it. The disc made an absence look like a component that had
+  failed to load.
+
+  The chart already had the gradient, the 2px round-capped line and the dashed rules. What it did
+  not have was the reference's placement: the scale on the right and the plot in a tinted rounded
+  box. Left-hand ticks indent the line by their own width, so the plot started where the card's
+  text did; on the right it keeps the card's full width.
+
+- **Verified:** built and read off the rendered page at the reference's own viewport width, not
+  from the diff. Every primitive changed is used only by the two portfolio panels, checked before
+  editing, so none of this reaches the front page or the chat.
+
 <!--
 Template for the next entry:
 

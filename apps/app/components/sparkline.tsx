@@ -159,24 +159,28 @@ export function Sparkline({
 
       {axes ? (
         <>
-          <div className="relative mt-3 pl-8">
+          {/* The scale sits on the right and the plot in a tinted box, which is where the
+              reference this was matched against puts them. Left-hand ticks indent the line by
+              their own width, so the chart starts where the card's text does and the two read as
+              one column; on the right the plot keeps the card's full width. */}
+          <div className="relative mt-3 rounded-2xl bg-shade/60 p-3 pr-10">
             {ticks.map((v) => (
               <div key={v}>
                 <span
-                  className="tabular -translate-y-1/2 absolute left-0 w-7 text-right text-[11px] text-faint leading-none"
+                  className="tabular -translate-y-1/2 absolute right-3 w-6 text-left text-[11px] text-faint leading-none"
                   style={{ top: `${pct(v, max)}%` }}
                 >
                   {v}
                 </span>
                 <span
-                  className="absolute right-0 left-8 border-line border-t border-dashed"
+                  className="absolute right-10 left-3 border-t border-dashed border-ink/10"
                   style={{ top: `${pct(v, max)}%` }}
                 />
               </div>
             ))}
             {plot}
           </div>
-          <div className="tabular mt-2 flex justify-between pl-8 text-[11px] text-faint">
+          <div className="tabular mt-2 flex justify-between pr-10 pl-3 text-[11px] text-faint">
             {dateLabels(days, 5).map((d) => (
               <span key={d}>{d}</span>
             ))}

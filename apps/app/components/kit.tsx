@@ -13,9 +13,9 @@ export function Card({
   return (
     <section
       className={cn(
-        // Roomier than it was. Every card on the portfolio sits on one rhythm now, and the reference
-        // this was matched against breathes at about this much.
-        "rounded-2xl border border-line bg-white p-5 sm:p-6",
+        // One padding, not a breakpoint pair. The reference this page was matched against uses a
+        // single value, and a card that changes shape at 640px reads as two designs.
+        "rounded-2xl border border-line bg-white p-5",
         className,
       )}
     >
@@ -25,7 +25,9 @@ export function Card({
 }
 
 export function SectionTitle({ children }: { children: ReactNode }) {
-  return <h2 className="font-medium text-[15px] text-ink">{children}</h2>;
+  return (
+    <h2 className="font-medium text-ink text-xl tracking-tight">{children}</h2>
+  );
 }
 
 /**
@@ -54,11 +56,11 @@ export function StatTile({
     >
       {icon ? <span className="shrink-0">{icon}</span> : null}
       <div className="min-w-0">
-        <div className="flex items-baseline gap-1.5 text-[11.5px] text-soft">
+        <div className="flex items-baseline gap-1.5 font-medium text-soft text-xs">
           <span className="truncate">{name}</span>
           {note ? <span className="truncate text-faint">· {note}</span> : null}
         </div>
-        <div className="tabular mt-0.5 truncate font-medium text-[15px] text-ink tracking-tight">
+        <div className="tabular truncate font-medium text-ink text-sm">
           {value}
         </div>
       </div>
@@ -74,21 +76,23 @@ export function StatTile({
  */
 export function Empty({
   children,
-  icon,
+  icon: Icon,
 }: {
   children: ReactNode;
-  icon?: ReactNode;
+  icon?: React.ComponentType<{
+    size?: number;
+    className?: string;
+    strokeWidth?: number;
+  }>;
 }) {
   return (
-    <div className="flex flex-col items-center gap-2.5 py-9 text-center">
-      {icon ? (
-        <span className="flex size-8 items-center justify-center rounded-full bg-shade">
-          {icon}
-        </span>
+    // A thin outlined glyph rather than a filled disc. The disc made an absence look like a
+    // component that had failed to load; a light stroke at this size reads as punctuation.
+    <div className="flex flex-col items-center gap-3 py-16 text-center">
+      {Icon ? (
+        <Icon className="text-faint" size={22} strokeWidth={1.5} />
       ) : null}
-      <p className="max-w-[19rem] text-[12px] text-soft leading-relaxed">
-        {children}
-      </p>
+      <p className="max-w-xs text-soft text-sm">{children}</p>
     </div>
   );
 }
@@ -175,11 +179,11 @@ export function AssetTile({
           third taller than it needed to be and pushed the grid out of the rhythm the rest of the
           page keeps. It belongs beside the symbol: both are labels for the number below. */}
       <div className="min-w-0">
-        <div className="flex items-baseline gap-1.5 text-[11.5px] text-soft">
+        <div className="flex items-baseline gap-1.5 font-medium text-soft text-xs">
           <span className="truncate">{symbol}</span>
           {note ? <span className="truncate text-faint">· {note}</span> : null}
         </div>
-        <div className="tabular mt-0.5 truncate font-medium text-[15px] text-ink tracking-tight">
+        <div className="tabular truncate font-medium text-ink text-sm">
           {value}
         </div>
       </div>

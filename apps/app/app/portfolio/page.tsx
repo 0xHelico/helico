@@ -20,9 +20,9 @@ export default function PortfolioPage() {
         <PageHeader />
         {/* The page owns the gaps. Each panel used to add its own `mt-4`, so the space between
             two cards depended on which component drew the second one. */}
-        <main className="mx-auto w-full max-w-3xl flex-1 px-5 py-10">
+        <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-10">
           <PortfolioHero />
-          <div className="space-y-4">
+          <div className="space-y-6">
             <AccountPanel />
             <MandatesPanel />
           </div>

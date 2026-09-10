@@ -80,12 +80,12 @@ export function PortfolioHero() {
 
   return (
     <>
-      <div className="flex flex-wrap items-center justify-between gap-3 pb-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 py-8">
         <div className="flex items-center gap-2.5">
           {/* Seeded on the address, so a wallet looks the same on every visit and two
               wallets never look alike. */}
-          <GeneratedAvatar name={address ?? "helico"} size={28} />
-          <h1 className="font-medium text-[17px] text-ink tracking-tight">
+          <GeneratedAvatar name={address ?? "helico"} size={36} />
+          <h1 className="font-medium text-ink text-xl tracking-tight">
             {isConnected && address ? (
               <>
                 Welcome, <span className="font-mono">{short(address)}</span>
@@ -95,7 +95,7 @@ export function PortfolioHero() {
             )}
           </h1>
         </div>
-        <span className="text-[12.5px] text-soft">
+        <span className="text-soft text-sm">
           {read ? `Read ${read}` : "Arbitrum One"}
         </span>
       </div>
@@ -103,11 +103,11 @@ export function PortfolioHero() {
       <Card>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <div className="text-[12.5px] text-soft">In your account</div>
-            <div className="tabular mt-1 font-medium text-[38px] text-ink leading-none tracking-tight">
+            <div className="text-soft text-sm">In your account</div>
+            <div className="tabular mt-1 font-medium text-4xl text-ink tracking-tight">
               {held ? <Amount value={held.total} /> : "—"}
             </div>
-            <div className="tabular mt-2.5 font-mono text-[11.5px] text-faint">
+            <div className="tabular mt-3 font-mono text-soft text-xs">
               {held
                 ? `${usdc(held.idle)} liquid · ${usdc(held.working)} working`
                 : factory
@@ -120,12 +120,12 @@ export function PortfolioHero() {
 
           {/* Always here. It used to appear only once a wallet had movements, so an empty
               account got a number and a hole where the reference has a control and a flat line. */}
-          <div className="flex rounded-full bg-shade p-0.5 text-[11.5px]">
+          <div className="flex shrink-0 rounded-xl bg-shade p-1">
             {RANGES.map((r) => (
               <button
                 aria-pressed={range === r.label}
                 className={cn(
-                  "rounded-full px-2.5 py-1 transition-colors",
+                  "rounded-lg px-3 py-1.5 font-medium text-xs transition-colors",
                   range === r.label
                     ? "bg-white text-ink shadow-sm"
                     : "text-soft hover:text-ink",
