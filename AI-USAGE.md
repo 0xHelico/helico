@@ -2115,6 +2115,47 @@ READMEs.
   no test is added here: a dev-mode variant would need CI to run a dev server for a bug that cannot
   reach production.
 
+### 2026-09-10 — A first run, and swapping the front door
+
+- **Plan:** [docs/plans/2026-09-10-onboarding-and-the-front-door.md](docs/plans/2026-09-10-onboarding-and-the-front-door.md),
+  committed before any of the code, and it carries Ghoza's request verbatim.
+
+- **Done:** `/` is the conversation and the limits moved to `/limit`; `/chat` and `/mandate` still
+  land somewhere true. A first-run dialog asks a new wallet to agree to four short lines before
+  anything else, and offers one switch — **Unlock everything**, on by default — that nominates the
+  agent and allows all four markets in a single confirmation.
+
+  The batch already existed and permitted **Aave alone**, which would have left the enclave
+  choosing between one option and calling it the best. It now carries every market and lives in
+  `hooks/use-unlock.ts`, because the limits page and the onboarding send the same one.
+
+- **AI's role:** Claude Opus 5 measured the constraint, wrote the plan, and implemented it. Ghoza
+  asked for the onboarding, the switch, and the swap of the two doors.
+
+- **Verified:** in a browser against a dev server with the backend and a fork behind it, signing
+  with an injected EIP-6963 wallet. Sixteen checks green, including the ones that had to be able
+  to fail: `Start` is disabled until the checkbox is ticked, an outside click does not dismiss the
+  terms, the dialog is not shown again after a reload, `/chat` lands on `/`, `/mandate` on
+  `/limit`, and the sidebar's active marker is compared against the *same link on the other page*
+  rather than against a regex a base class could satisfy.
+
+  **The measurement that shaped the design, made before it was designed.** "Unlock without
+  signing" has a floor: `setAgent` and `permitVenue` are owner-only, and `executeBatch` runs each
+  call as the account, so the account cannot administer itself. On a fork of Arbitrum One,
+  `execute(self, setAgent(…))` from the owner reverts
+
+  ```
+  CallFailed(0xBCb6c91358E9cEC312ea47d5CCD02921D616fC77)
+  ```
+
+  naming the account's own address, while the owner calling `setAgent` directly succeeds and
+  `agent()` reads back. So the dialog promises **one confirmation**, never none, and nothing in the
+  UI says otherwise.
+
+  **A finding along the way:** check 5 of the browser suite asserted that the front door leads with
+  the mandate — and five of its six assertions named text that had been deleted when that page was
+  simplified. It had been passing over nothing, because nothing had run it. Rewritten.
+
 <!--
 Template for the next entry:
 
