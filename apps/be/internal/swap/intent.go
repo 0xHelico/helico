@@ -65,6 +65,17 @@ const (
 	// "put my idle USDC to work" landed on "about", which described earning to somebody who was
 	// trying to start it.
 	ActionEarn = "earn"
+	// ActionDeposit is moving money from the wallet into the account.
+	//
+	// The step between "the agent is allowed to work" and "the agent is working", and the only one
+	// of the three that is not a permission: `supplyIdle` moves what the **account** holds, so an
+	// allowed account with an empty balance is an agent with nothing to do.
+	//
+	// It is here rather than on a settings page because that is where Ghoza wanted it, and the
+	// shape agrees: it is a thing you do once you have decided to, which is a sentence, not a
+	// preference. The card is the same control either way — asked for directly, or reached as the
+	// missing step of `earn`.
+	ActionDeposit = "deposit"
 )
 
 // Step is one check that ran, named after the function in this package that ran it. The chat

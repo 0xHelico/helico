@@ -672,3 +672,47 @@ func TestEarnCardIsPressable(t *testing.T) {
 	}
 	t.Fatal("no Earn card")
 }
+
+// TestDepositIsItsOwnAction holds the line between paying yourself and trading.
+//
+// "Move 50 USDC into my account" and "Swap 50 USDC into WETH" are one word apart and mean opposite
+// things: a transfer to a contract the person owns, and an exchange between two tokens. The second
+// spends money at a price; the first does not. A classifier that confuses them turns a deposit into
+// a swap card quoting a pair nobody asked about.
+func TestDepositIsItsOwnAction(t *testing.T) {
+	svc := New(fakeModel(t, http.StatusOK, `{"action":"deposit","chain":"arbitrum","tokenIn":"","tokenOut":"","amount":"","question":""}`))
+	got, err := svc.Interpret(context.Background(), "move 50 USDC into my account")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Action != ActionDeposit {
+		t.Fatalf("action = %q, want %q", got.Action, ActionDeposit)
+	}
+	if got.Intent != nil {
+		t.Fatalf("deposit built a swap intent: %+v", got.Intent)
+	}
+	// The two things a person needs to know before they sign: that it is theirs, and that nothing
+	// is being granted. Neither is decoration — an approval is what this deliberately is not.
+	for _, want := range []string{"only you own", "no approval"} {
+		if !strings.Contains(got.Reply, want) {
+			t.Errorf("reply does not say %q: %q", want, got.Reply)
+		}
+	}
+}
+
+// TestMoneyInIsACardYouCanSend keeps Money in reachable from the one screen it now lives on.
+// It was a panel on the limits page; moving it into the conversation only works if the
+// conversation says it exists.
+func TestMoneyInIsACardYouCanSend(t *testing.T) {
+	_, cards := about()
+	for _, c := range cards {
+		if c.Title != "Money in" {
+			continue
+		}
+		if c.Try == "" || c.Href != "" {
+			t.Fatalf("Money in card = %+v, want a Try and no Href", c)
+		}
+		return
+	}
+	t.Fatal("no Money in card")
+}

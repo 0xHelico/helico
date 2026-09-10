@@ -39,6 +39,7 @@ action is one of:
 - "revoke" — they want to end the mandate, cancel it, stop the agent, or take back permission
 - "withdraw" — they want their money back: everything returned to their own wallet, out, emptied
 - "earn"   — they want their idle money working: earning, lending, supplied, put to work
+- "deposit" — they want to move money into their account: fund it, top it up, put money in
 - "about"  — a greeting, or a question about you: what you are, what you can do, how this works
 
 Rules:
@@ -54,7 +55,10 @@ Rules:
   reply to those is written by the application, not by you, so answer with the action alone.
 - "earn" is about starting it, "status" is about what it is already doing. "Put my idle USDC to
   work" is earn. "How much of my money is earning" is status.
-- tokenIn, tokenOut and amount are for "swap" only. Leave them empty for the other five.
+- "deposit" is money moving from their wallet into their own account. "Move 50 USDC into my
+  account" is deposit. "Swap 50 USDC into WETH" is a swap: one is a transfer to themselves, the
+  other is an exchange between two tokens.
+- tokenIn, tokenOut and amount are for "swap" only. Leave them empty for the other six.
 - tokenIn is what they are giving, tokenOut what they want. Use the ticker, not a name.
 - amount is how much of tokenIn, as a plain decimal number, no unit and no commas. "half an ETH" is "0.5". Never invent one.
 - Leave a field empty when the message does not say it. Do not guess.
