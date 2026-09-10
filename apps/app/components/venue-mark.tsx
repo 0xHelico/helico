@@ -5,6 +5,10 @@
  * nothing to break when a CDN moves its files. Each one is the shape people recognise the protocol
  * by, in that protocol's own colour, at a size where more detail would be lost anyway.
  *
+ * **Aave is the violet one and Morpho is the blue one.** They shipped the other way round for a
+ * day. Aave's mark is the ghost — a rounded top and two eyes — and Morpho's is a butterfly, which
+ * is what the genus name means.
+ *
  * The list of markets was four rows of text a reader had to parse before they could tell one from
  * another. A mark in the protocol's colour sorts the column by eye before it is read, which is the
  * whole job here.
@@ -33,22 +37,20 @@ function Mark({
   );
 }
 
-/** Aave. The blue disc and the two wings of its 2024 mark. */
+/** Aave. The ghost: a lavender disc, a white arch, and its two eyes. */
 function Aave({ size }: { size: number }) {
   return (
     <Mark label="Aave" size={size}>
-      <circle cx={16} cy={16} fill="#2F6BF6" r={16} />
-      {/* Two thick wings sweeping from the shoulders down to the centre. The mark's pale lower
-          halves are dropped on purpose: at 22px they read as a separate object sitting between
-          the wings rather than as part of them, which is worse than not drawing them. */}
+      <circle cx={16} cy={16} fill="#9896F0" r={16} />
+      {/* The ghost, simplified to the two things it is recognised by: a rounded top and two eyes.
+          These were on Morpho for a day, which is the wrong way round — Aave's mark is the pale
+          violet one. */}
       <path
-        d="M9.6 7.4c1.9-.8 4 .2 4.6 2.1L16 15.6v9.8L8 12.6c-1-1.7-.3-4 1.6-5.2Z"
+        d="M5.8 22.4a10.2 10.2 0 1 1 20.4 0h-4a6.2 6.2 0 0 0-12.4 0Z"
         fill="#fff"
       />
-      <path
-        d="M22.4 7.4c-1.9-.8-4 .2-4.6 2.1L16 15.6v9.8L24 12.6c1-1.7.3-4-1.6-5.2Z"
-        fill="#fff"
-      />
+      <circle cx={12.8} cy={20.6} fill="#fff" r={1.9} />
+      <circle cx={19.2} cy={20.6} fill="#fff" r={1.9} />
     </Mark>
   );
 }
@@ -62,27 +64,29 @@ function Compound({ size }: { size: number }) {
           over the group keeps them parallel by construction; rotating each about its own centre
           slid them onto the same diagonal and merged the three into one blob. */}
       <g fill="#00D395" transform="translate(5.5 0) skewX(-20)">
-        <rect height="15" rx="2.2" width="5" x="19" y="5" />
-        <rect height="13" rx="2.2" width="5" x="13.5" y="9" />
-        <rect height="11" rx="2.2" width="5" x="8" y="13" />
+        <rect height="15" rx="2.6" width="6" x="18.6" y="5" />
+        <rect height="12.5" rx="2.6" width="6" x="12.3" y="9" />
+        <rect height="10" rx="2.6" width="6" x="6" y="13" />
       </g>
     </Mark>
   );
 }
 
-/** Morpho. The horseshoe and its two eyes, on the lavender disc. */
+/** Morpho. A blue butterfly, which is what the name means. */
 function Morpho({ size }: { size: number }) {
   return (
     <Mark label="Morpho" size={size}>
-      <circle cx={16} cy={16} fill="#8B87F5" r={16} />
+      <circle cx={16} cy={16} fill="#2F6BF6" r={16} />
+      {/* Two wings sweeping from the shoulders down to the centre. `Morpho` is a genus of blue
+          butterflies, which is the whole of the mark and the reason it is not the violet one. */}
       <path
-        d="M5.8 22.4a10.2 10.2 0 1 1 20.4 0h-4a6.2 6.2 0 0 0-12.4 0Z"
+        d="M9.6 7.4c1.9-.8 4 .2 4.6 2.1L16 15.6v9.8L8 12.6c-1-1.7-.3-4 1.6-5.2Z"
         fill="#fff"
       />
-      {/* Low, and clear of the horseshoe. Higher up they merged into its inner edge and the mark
-          came out as a notched crown. */}
-      <circle cx={12.8} cy={20.6} fill="#fff" r={1.7} />
-      <circle cx={19.2} cy={20.6} fill="#fff" r={1.7} />
+      <path
+        d="M22.4 7.4c-1.9-.8-4 .2-4.6 2.1L16 15.6v9.8L24 12.6c1-1.7.3-4-1.6-5.2Z"
+        fill="#fff"
+      />
     </Mark>
   );
 }
