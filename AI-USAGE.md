@@ -2227,6 +2227,37 @@ READMEs.
   nothing and left the terms sitting over the page it was about to assert on. Two checks call it that
   way. Found by hitting it, not by reading it.
 
+### 2026-09-11 — QA pass: every transaction the chat can make, and three checks that were not checking
+
+- **Done:** `apps/app/e2e/fork-chat-actions.ts`, which drives all five actions the backend returns
+  through the chat on a fork and reads the chain after each one. Ten checks, one command. Plus a
+  mark for each lending market, and repairs to three checks in the browser suite.
+
+- **AI's role:** Claude Opus 5 wrote the suite, ran the whole battery, and fixed what it found.
+  Ghoza asked for every transaction type to be tested and for the protocols to carry their logos.
+
+- **Verified:** the battery, in one sitting. `biome` clean at both scopes; `turbo typecheck` clean;
+  unit tests across seven packages including Go; `forge test` **21 suites, 152 tests, 0 failed**;
+  all seven python checks; `check-deployed`, `check-aqua`, `check-subgraph`, `rehearse-ship`;
+  `bun run e2e` **33 checks**; `bun run e2e:account` **13 checks**; `bun run prod` against live
+  production; and the new suite **10 checks**, including 5 USDC becoming 0.00205 WETH through the
+  chat and 25 USDC leaving the account for its owner.
+
+  **What the pass actually found, and none of it was in the app.** Three checks in the browser
+  suite had stopped checking: the portfolio heading matched two headings once that page gained an
+  Allocation section, so a strict-mode violation arrived as a timeout; and two assertions asked for
+  text that had moved to the limits page. Nothing had failed because nothing had run them.
+
+  **Two bugs in my own new suite, both the same shape.** Every card in the `about` answer is itself
+  a button whose accessible name is its whole text, so `/Swap/` matched the Swap **card** and
+  `/Send everything back/` matched the Withdraw **card**. Each reported a rendered card beside a
+  transaction that moved nothing. Anchored both.
+
+  **One finding stands.** The front door evaluates a string as JavaScript, so `script-src` would
+  need `'unsafe-eval'`; `/limit` and `/portfolio` raise nothing. The policy is report-only so
+  nothing breaks, but the plan to flip that header to enforcing is blocked on it. Named in the
+  check rather than hidden: anything that is not that one directive still fails.
+
 <!--
 Template for the next entry:
 
