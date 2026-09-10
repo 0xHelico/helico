@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { ArrowLeftRight, Wallet } from "lucide-react";
 import { useState } from "react";
 import { isAddress } from "viem";
 import { useAccount } from "wagmi";
@@ -78,7 +79,7 @@ export function MandatesPanel() {
   const body = () => {
     if (!maker) {
       return (
-        <Empty>
+        <Empty icon={<Wallet className="size-4 text-faint" />}>
           Connect a wallet, or paste any address. This answers for every maker
           on the chain, not just ours.
         </Empty>
@@ -97,7 +98,9 @@ export function MandatesPanel() {
     const data = mandates.data;
     if (data.rows.length === 0) {
       return (
-        <Empty>No mandates for {short(maker)}. An answer, not a failure.</Empty>
+        <Empty icon={<ArrowLeftRight className="size-4 text-faint" />}>
+          No mandates for {short(maker)}. An answer, not a failure.
+        </Empty>
       );
     }
     // The section is titled "what this wallet may spend", and a docked mandate spends nothing.
@@ -165,7 +168,7 @@ export function MandatesPanel() {
   };
 
   return (
-    <Card className="mt-4">
+    <Card>
       <SectionTitle>What this wallet may spend</SectionTitle>
       <p className="mt-1.5 text-[12.5px] text-soft">
         There is no on-chain way to ask this. An indexer is the only answer.

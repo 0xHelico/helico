@@ -196,6 +196,29 @@ export function Sparkline({
 }
 
 /** The last `n` days of a series, or all of it. One row is one day, so this is a date range. */
+/**
+ * `n` days ending today, all zero.
+ *
+ * A wallet with no movements has no series at all — `byDay([])` is empty — so the chart used to
+ * vanish and take the range switcher with it. Zero on every day is not invented data: it is the
+ * true reading, and the axis label already says what is being counted. The alternative was a card
+ * with a number and a hole under it.
+ */
+export function zeroDays(n: number): Day[] {
+  const out: Day[] = [];
+  const ONE_DAY = 86_400_000;
+  const midnight = Date.parse(
+    `${new Date().toISOString().slice(0, 10)}T00:00:00Z`,
+  );
+  for (let i = n - 1; i >= 0; i--) {
+    out.push({
+      date: new Date(midnight - i * ONE_DAY).toISOString().slice(0, 10),
+      count: 0,
+    });
+  }
+  return out;
+}
+
 export function lastDays(days: Day[], n: number | null): Day[] {
   return n === null || days.length <= n ? days : days.slice(-n);
 }

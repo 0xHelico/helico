@@ -1746,6 +1746,35 @@ READMEs.
 - **Verified:** read off the rendered portfolio in a browser against a fork — two tiles, both
   USDC, one liquid and one working.
 
+### 2026-09-10 — the portfolio kept losing its rhythm wherever a section was empty
+
+- **Done:** Ghoza gave a reference portfolio to match on type, spacing, position and layout, from
+  the top through the activity section.
+
+- **AI's role:** the vocabulary was already right — `Card`, `SectionTitle`, `Empty` with a round
+  icon slot, `AssetTile`. What was wrong was that nothing used it consistently, and the gaps showed
+  worst exactly where the reference looks calmest: on an empty wallet.
+
+  **The hero collapsed when there was nothing to plot.** `byDay([])` returns an empty array, so the
+  range switcher and the chart both sat behind `all.length > 0` and an empty account got a number
+  with a hole under it. `zeroDays` gives the last N days at zero, which is the reading rather than
+  a placeholder — nothing moved on each of those days, and the axis label already says what is
+  counted. It renders after mount, because the date it needs is the one thing a server and a
+  browser need not agree on.
+
+  **Spacing belonged to the wrong things.** Each panel added its own `mt-4`, so the gap between two
+  cards depended on which component drew the second one. The page owns it now.
+
+  **The asset grid held something that is not an asset.** USDC liquid, USDC working and *Agent* sat
+  in one row of three, so the eye compared an address against two balances. Two columns of assets,
+  and the agent on its own line under them.
+
+  Then the small ones: empty states carry their icon, cards breathe at `p-5 sm:p-6`, and the total
+  came down from 44px to 38.
+
+- **Verified:** built and read off the rendered page in a browser against a fork, twice — once to
+  see the shape and once after the padding pass — rather than from the diff.
+
 <!--
 Template for the next entry:
 

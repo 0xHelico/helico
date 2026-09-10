@@ -56,7 +56,7 @@ export function AccountPanel() {
   const { data, error } = useAccountState();
 
   const note = (text: string) => (
-    <Card className="mt-4">
+    <Card>
       <SectionTitle>Your account</SectionTitle>
       <div className="mt-3">
         <NotDeployed>{text}</NotDeployed>
@@ -77,7 +77,7 @@ export function AccountPanel() {
   }
   if (!data || data.kind === "unconfigured") {
     return (
-      <Card className="mt-4">
+      <Card>
         <SectionTitle>Your account</SectionTitle>
         <Loading className="mt-3 h-28" />
       </Card>
@@ -88,14 +88,16 @@ export function AccountPanel() {
   const opened = data.kind === "open";
 
   return (
-    <Card className="mt-4">
+    <Card>
       <SectionTitle>Your account</SectionTitle>
 
       <div className="tabular mt-1 font-mono text-[11.5px] text-faint">
         {short(data.address)} · {opened ? "open" : "not opened yet"}
       </div>
 
-      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+      {/* Two columns, and only assets in them. The agent used to sit in this row, so the eye
+          compared an address against two balances as though they were the same kind of thing. */}
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <AssetTile
           mark={<TokenMark size={22} symbol="USDC" />}
           note="liquid"
@@ -117,6 +119,9 @@ export function AccountPanel() {
           tint="bg-[#ecf5f0]"
           value={usdc(data.working)}
         />
+      </div>
+
+      <div className="mt-3">
         <StatTile
           icon={<Glyph name="wings" size={22} />}
           name="Agent"
