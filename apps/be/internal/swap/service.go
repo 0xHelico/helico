@@ -152,8 +152,13 @@ func (s *Service) Interpret(ctx context.Context, message string, prior ...Turn) 
 	case ActionStatus:
 		return Answer{
 			Action: ActionStatus,
-			Reply:  "Here is what your position is doing. Read from the chain, not from me.",
-			Steps:  []Step{read},
+			// Phrased for "why has nothing happened" as well as "what do I hold", because both
+			// arrive here and the second wording answered only one of them. The card below carries
+			// the actual reason, which this sentence cannot: it is composed without an address.
+			Reply: "Here is your position, read from the chain rather than from me. If nothing has " +
+				"moved, the reason is in it — an account nobody has deployed, an agent nobody " +
+				"nominated, a market nobody permitted, or a move too small to be worth its gas.",
+			Steps: []Step{read},
 		}, nil
 	case ActionRevoke:
 		return Answer{

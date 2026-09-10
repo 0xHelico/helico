@@ -141,6 +141,20 @@ export function MandateCard({
 
   const held = totals(data);
   const nominated = hasAgent(data);
+  // Why nothing has moved, which is the question people actually ask. Every input is already on
+  // this card; without this line a reader has to infer the cause from four rows of a list.
+  //
+  // The venue case waits for `false` rather than for "not true": while that read is in flight,
+  // claiming the agent has nowhere to put it would be a reason invented out of a pending promise.
+  const because = !nominated
+    ? "Nobody may move it, so nothing has. Nominate an agent above and it starts."
+    : venue.data === false
+      ? "The agent has nowhere to put it. Permit a market and it can."
+      : held && held.total === 0n
+        ? "There is nothing in the account to move. Send it some and the agent takes over."
+        : held && held.working === 0n
+          ? "Nothing has moved yet. The agent looks every five minutes and only moves when the gain clears the gas."
+          : null;
   const live = mandates.data?.rows.filter((m) => m.active) ?? [];
   const spendable = [...(mandates.data?.spendable ?? new Map())].filter(
     ([, value]) => value > 0n,
@@ -172,6 +186,12 @@ export function MandateCard({
               : `${live.length} live`}
         </dd>
       </dl>
+
+      {action === "status" && because ? (
+        <p className="mt-3 border-t pt-3 text-[11.5px] text-soft leading-relaxed">
+          {because}
+        </p>
+      ) : null}
 
       {spendable.length > 0 ? (
         <>
