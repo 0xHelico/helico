@@ -13,9 +13,10 @@ Three ideas, one each for a way authority usually leaks:
   installed a deliberately hostile implementation and the owner still got everything back.
 - **A 1inch Aqua mandate.** Tokens never leave your wallet. The app holds a ledger entry, not
   money, and docking ends it immediately.
-- **A Chainlink CRE Confidential Workflow.** It decides how much idle capital should be earning
-  and how much must stay liquid. None of the calls it may make takes a recipient, so it can choose
-  where money works and has no way to send it anywhere else.
+- **A Chainlink CRE Confidential Workflow.** It decides how much idle capital should be earning,
+  how much must stay liquid, and which of three lending protocols pays best for it right now. None
+  of the calls it may make takes a recipient, so it can choose where money works and has no way to
+  send it anywhere else.
 
 Nothing here is claimed before it is proven. Where something is not true yet, it says so.
 
@@ -23,7 +24,7 @@ Nothing here is claimed before it is proven. Where something is not true yet, it
 
 | Directory | Contents |
 |---|---|
-| [`contracts/`](contracts/) | The account, the Aqua app, the SwapVM instruction, the vault |
+| [`contracts/`](contracts/) | The account, the two Aqua apps, the SwapVM instruction, the lending venues |
 | [`apps/app/`](apps/app/) | The dapp — [app.helico.site](https://app.helico.site) |
 | [`apps/be/`](apps/be/) | Go backend: sessions, chat, a cached subgraph read |
 | [`apps/landing/`](apps/landing/) | [helico.site](https://helico.site) and the blog, Astro |
@@ -78,6 +79,51 @@ zero, because a transaction that moves nothing reads in a log exactly like one t
 > **The model explains; it does not decide.** The verdict is computed before the model is called
 > and never reads its answer back. It needs an enclave because a normal workflow asks every node
 > and takes a consensus — ten nodes asking a model get ten answers, and free text has no median.
+
+#### Three protocols, one interface
+
+A comparison inside one protocol family is a market picker. The enclave compares **across**
+protocols, and the piece that lets it is an interface the markets never agreed to.
+
+`ILendingVenue` carries Aave v3's own signatures, so Aave needs no adapter and everything else
+does. `CompoundVenue` and `MorphoVenue` answer it on behalf of Comet and of any ERC-4626 vault.
+
+**The venue is its own receipt**, and that one decision solves two problems at once. Both Aqua
+apps ask a receipt for `UNDERLYING_ASSET_ADDRESS()` — Aave's spelling, which Comet spells
+`baseToken()`. Nothing requires the receipt to be a different contract from the pool, so the venue
+answers the question itself. It also settles burn authority: `_burn(msg.sender, …)` needs nobody's
+permission, which is what lets a swap unwind a lending position in the same call. Aave gets that
+for free because its Pool owns the aToken; these earn it by being the token.
+
+**Rates arrive in three shapes and leave in one.** Aave publishes an annual ray, Comet a
+per-second wad, and Morpho publishes no rate at all — so `MorphoVenue` measures one, sampling its
+own share price against a `1e27` probe large enough that ten minutes of drift is 832,775,079 units
+rather than 1. Two independent methods, checked against each other on 10 September: the venue's
+trailing measurement reports **446 bps**, and Morpho's own API reports a net APY of **458 bps** for
+the same vault — arrived at without reading a rate from Morpho at all. Everything converts to
+Aave's units before the enclave sees it, so the decision never learns which protocol answered.
+
+Live on Arbitrum One, verified, each reading its own market:
+
+| Venue | Address | Market | Rate, 10 September |
+|---|---|---|---|
+| Aave v3 Pool | [`0x794a6135…14aD`](https://arbiscan.io/address/0x794a61358D6845594F94dc1DB02A252b5b4814aD) | USDC and WETH, one pool for every reserve | 273 bps |
+| `CompoundVenue` | [`0x1eC57cE1…BB2E`](https://arbiscan.io/address/0x1eC57cE1DdfdC7a4EbF4F54Aedee19ab73fcBB2E#code) | `cUSDCv3` | 287 bps |
+| `MorphoVenue` | [`0xBBa798A6…c9A29`](https://arbiscan.io/address/0xBBa798A61f0D7D1AE51466Fd4045Cd2Ea25c9A29#code) | Steakhouse High Yield USDC, `bbqUSDC` | 446 bps |
+| `CompoundVenue` | [`0xb0A125F5…18cD`](https://arbiscan.io/address/0xb0A125F539237b553025e2cb180f9C40B25918cD#code) | `cWETHv3` | 125 bps |
+
+An account reaches exactly the venues its owner has named, and no others: `supplyIdle` is gated on
+`permittedVenue`, and neither it nor `withdrawIdle` takes a recipient. That is the same rule that
+makes a compromised agent harmless — the worst it can do is move the owner's money between the
+owner's own places.
+
+**Run it:** `anvil --fork-url $ARBITRUM_RPC_URL --port 8549 --silent & bun scripts/check-deployed.ts`
+
+Forty-six checks against the addresses above rather than against a fresh copy of the source — the
+difference being whether what is shown is what is on chain. It opens an account through the live
+factory, reaches all three protocols from it, and puts five USDC and five dollars of ETH to work in
+both assets, then moves the clock thirty days and requires both positions to be worth more than
+they were.
 
 ### 1inch Aqua
 
