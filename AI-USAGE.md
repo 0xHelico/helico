@@ -1725,6 +1725,27 @@ READMEs.
 - **Verified:** `cast code` on all five README addresses, and both link checkers after the edit —
   33 README links with none broken, 136 relative links across 63 files all resolving.
 
+### 2026-09-10 — the working tile named a receipt the number had stopped coming from
+
+- **Done:** Ghoza asked for the `aUSDC` to go. Checking what it was attached to turned a label
+  change into a correctness one, in the direction that matters.
+
+- **AI's role:** the portfolio's second tile was marked and labelled `aUSDC`, Aave's receipt. The
+  number under it stopped being Aave's when `readAccount` began summing across every venue the
+  owner has ever permitted, keeping the single-market reading only as a floor. So an owner whose
+  capital the enclave moved into Compound or Morpho read the right figure under the wrong token's
+  name, inside Aave's pink ring, for a position Aave had nothing to do with.
+
+  That is the awkward kind of wrong: the value is correct and nothing looks broken.
+
+  The tile names the asset now. It is USDC at work, wherever it is, and the note beside it already
+  says which state it is in. The `aUSDC` mark itself stays, because `WALLET_TOKENS` carries it on
+  purpose — after an escape the receipt really is sitting in the wallet, and there it is genuinely
+  Aave's.
+
+- **Verified:** read off the rendered portfolio in a browser against a fork — two tiles, both
+  USDC, one liquid and one working.
+
 <!--
 Template for the next entry:
 
