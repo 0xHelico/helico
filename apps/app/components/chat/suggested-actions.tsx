@@ -8,14 +8,48 @@ import { Suggestion } from "../ai-elements/suggestion";
 type SuggestedActionsProps = {
   /** Sending is the page's job; this only says which words were chosen. */
   onSelect: (suggestion: string) => void;
+  /**
+   * Once the conversation has started.
+   *
+   * The starters used to vanish on the first message, which made them a thing you got one look
+   * at. They are the fastest way to reach four of the five actions, and someone who has just
+   * asked one question is exactly the person about to ask another — so they stay, as one row of
+   * small pills above the composer rather than a block of cards competing with the answer.
+   */
+  compact?: boolean;
 };
 
-function PureSuggestedActions({ onSelect }: SuggestedActionsProps) {
+function PureSuggestedActions({ compact, onSelect }: SuggestedActionsProps) {
   const suggestedActions = suggestions;
   const handleSuggestionClick = useCallback(
     (suggestion: string) => onSelect(suggestion),
     [onSelect],
   );
+
+  if (compact) {
+    return (
+      <div
+        className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5"
+        data-testid="suggested-actions"
+        style={{
+          msOverflowStyle: "none",
+          scrollbarWidth: "none",
+          WebkitOverflowScrolling: "touch",
+        }}
+      >
+        {suggestedActions.map((suggestedAction) => (
+          <Suggestion
+            className="h-auto shrink-0 whitespace-nowrap rounded-full border border-border/50 bg-card/30 px-3 py-1.5 text-[11.5px] text-muted-foreground transition-colors duration-150 hover:bg-card/60 hover:text-foreground"
+            key={suggestedAction}
+            onClick={handleSuggestionClick}
+            suggestion={suggestedAction}
+          >
+            {suggestedAction}
+          </Suggestion>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div
