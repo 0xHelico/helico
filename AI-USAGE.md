@@ -2369,6 +2369,37 @@ READMEs.
   diagonal blob, and the first Morpho had its eyes fused into the arch — neither of which reading
   the SVG would have told me.
 
+### 2026-09-11 — The ETH swap could never have worked, and the message said the wrong thing
+
+- **Done:** two fixes behind one screenshot Ghoza sent of the swap card refusing a pair.
+
+  **Native ETH could never match a position.** Aqua holds WETH, and SwapVM pulls the taker's side
+  with `safeTransferFrom`, which native currency has no equivalent of. So "Swap 0.1 ETH into USDC"
+  — the Swap card's own suggested sentence — looked up positions for `0x0000…0000`, matched nothing
+  whatever the liquidity was, and answered "no live Aqua position". True for the wrong reason, which
+  is the worst kind of true. The plan wraps first now; the other direction is refused by name rather
+  than quietly paying WETH to somebody who asked for ETH.
+
+  **The message flattened three facts into the one that was false.** It said no position holds the
+  pair. Six do.
+
+- **AI's role:** Claude Opus 5 measured, found both, and fixed them. Ghoza sent the screenshot and
+  said fix it.
+
+- **Verified:** on a fork against a real shipped position, **0.01 ETH → 23.446576 USDC**, planned as
+  wrap, approve and fill. Sixteen checks in `e2e/fork-chat-actions.ts`, all green.
+
+  **The measurement that stopped me building the wrong thing.** Before touching the message I asked
+  Arbitrum One what it actually holds: 30 active mandates, 6 holding both WETH and USDC, 4 decoding
+  to the order Aqua filed — and **all 4 refusing to quote in both directions at every size** from
+  0.0005 to 0.1 WETH, with the same custom error from 1inch's router. Four independent makers
+  failing identically is not size or inventory: the largest holds 14.08 USDC and refuses a $2 swap,
+  while the same code path prices a position of ours without complaint.
+
+  `0x89c62b64` is not an error in any Solidity here — 445 signatures computed, none match — so it is
+  1inch's and I did not name it. Expiry is the likely shape and I have not proved it, so #393 says
+  so in those words rather than asserting a cause.
+
 <!--
 Template for the next entry:
 

@@ -10,13 +10,16 @@ import {
   swapVmAddress,
 } from "@helico/plugin-1inch";
 import { fillableFor } from "@helico/plugin-thegraph";
-import type { SwapStep } from "@helico/plugin-uniswap";
 import {
   type Address,
   decodeAbiParameters,
+  encodeFunctionData,
   erc20Abi,
+  type Hex,
   type PublicClient,
+  parseAbi,
   parseAbiParameters,
+  zeroAddress,
 } from "viem";
 
 import { askGraph } from "@/lib/mandates";
@@ -35,6 +38,30 @@ import { askGraph } from "@/lib/mandates";
  * `HelicoMandateSwap`, not to Aqua — so this is one approval and one transaction, the shape any
  * DEX has.
  */
+/**
+ * Wrapped ether on Arbitrum One, and the one function of it this needs.
+ *
+ * Aqua positions hold WETH. SwapVM pulls the taker's side with `safeTransferFrom`, which native
+ * currency has no equivalent of, so a swap that starts in ETH has to wrap first — and the starter
+ * on the front door is literally "Swap 0.1 ETH into USDC". Before this, that sentence looked up
+ * positions for `0x0000…0000`, matched nothing whatever the liquidity was, and came back as "no
+ * live Aqua position" — a true sentence for the wrong reason, which is the worst kind.
+ */
+const WETH: Address = "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1";
+const weth = parseAbi(["function deposit() payable"]);
+
+/**
+ * One transaction and what it is for.
+ *
+ * Declared here rather than borrowed from `@helico/plugin-uniswap`, which is where it used to come
+ * from: this plan has a step that one does not have, and the swap stopped going through Uniswap on
+ * 10 September.
+ */
+export type AquaStep = {
+  kind: "wrap" | "approve-token" | "swap";
+  transaction: { to: Address; data: Hex; value: bigint };
+};
+
 export type AquaPlan = {
   /** The position being filled, and the hash Aqua files it under. */
   chosen: OpenOrder;
@@ -48,7 +75,7 @@ export type AquaPlan = {
   slippageBps: number;
   deadline: bigint;
   /** In the order they must be sent. One entry when the allowance already covers it. */
-  steps: SwapStep[];
+  steps: AquaStep[];
 };
 
 /**
@@ -128,17 +155,65 @@ export type PlanAquaSwapInput = {
 /**
  * Find a position, price it, and return the transactions that fill it.
  *
- * Returns `null` when nothing quotes, which is a real answer rather than a failure: live Aqua
- * liquidity is thin and pair-specific, and the caller should say so rather than show a spinner.
+ * Throws with the wall it actually hit rather than returning `null` for all of them: no position
+ * holding the pair, positions that do not decode to what Aqua filed, and positions that decode and
+ * still will not price. They are three different facts about the world and the third one is the
+ * true one on Arbitrum One today.
  */
 export async function planAquaSwap(
   client: PublicClient,
   input: PlanAquaSwapInput,
 ): Promise<AquaPlan | null> {
   const { account, tokenIn, tokenOut, amountIn, slippageBps } = input;
-  const { orders, considered } = await candidates(tokenIn, tokenOut);
-  const picked = await best(client, orders, tokenIn, tokenOut, amountIn);
-  if (!picked) return null;
+
+  // Native ether is wrapped on the way in, and refused on the way out.
+  //
+  // In: the position holds WETH and the router pulls with `safeTransferFrom`, so the taker has to
+  // be holding WETH by the time the fill runs. One extra transaction, from the wallet's own ETH.
+  //
+  // Out: the router would pay WETH, and unwrapping it is not a step this can add honestly — the
+  // amount is only known after the fill, and withdrawing the wallet's whole WETH balance would
+  // take ether that was already there. Named rather than silently substituted, because handing
+  // somebody WETH when they asked for ETH is a different thing from what they asked for.
+  if (tokenOut === zeroAddress) {
+    throw new Error(
+      "Aqua pays WETH rather than native ETH. Ask for WETH and this works.",
+    );
+  }
+  const wrapping = tokenIn === zeroAddress;
+  const payWith = wrapping ? WETH : tokenIn;
+
+  const { orders, considered } = await candidates(payWith, tokenOut);
+  const picked = await best(client, orders, payWith, tokenOut, amountIn);
+
+  // Three different walls, and they used to arrive as one sentence.
+  //
+  // "No live Aqua position holds both sides of this pair right now" was what a person saw in every
+  // case, and on Arbitrum One it is simply false: measured just now, **six** positions hold WETH
+  // and USDC, four of them decode to the order Aqua filed, and all four refuse a quote in both
+  // directions at every size from 0.0005 to 0.1 WETH with the same custom error from 1inch's
+  // router (`0x89c62b64`). Four independent makers failing identically is not about size or
+  // inventory; those orders are not fillable through this router today.
+  //
+  // Saying which wall it is matters more than it looks. A judge reading "no position holds this
+  // pair" concludes the integration does not work. The truth is that the index found them, the
+  // hash gate proved them, and the router refused them — which is three working parts and one
+  // absent maker.
+  if (!picked) {
+    if (considered === 0) {
+      throw new Error(
+        "No Aqua position holds both sides of this pair right now.",
+      );
+    }
+    if (orders.length === 0) {
+      throw new Error(
+        `${considered} position${considered === 1 ? "" : "s"} hold this pair, and none of them decodes to the order Aqua filed under its hash.`,
+      );
+    }
+    throw new Error(
+      `${orders.length} Aqua position${orders.length === 1 ? "" : "s"} hold this pair and none will price it right now. Aqua's own liquidity is thin; a maker position of ours is what fixes this.`,
+    );
+  }
 
   const minAmountOut =
     (picked.amountOut * BigInt(10_000 - slippageBps)) / 10_000n;
@@ -152,14 +227,24 @@ export async function planAquaSwap(
   const spender = swapVmAddress(ARBITRUM_ONE) as Address;
   const allowance = await client.readContract({
     abi: erc20Abi,
-    address: tokenIn,
+    address: payWith,
     args: [account, spender],
     functionName: "allowance",
   });
 
-  const steps: SwapStep[] = [];
+  const steps: AquaStep[] = [];
+  if (wrapping) {
+    steps.push({
+      kind: "wrap",
+      transaction: {
+        to: WETH,
+        data: encodeFunctionData({ abi: weth, functionName: "deposit" }),
+        value: amountIn,
+      },
+    });
+  }
   if (allowance < amountIn) {
-    const approve = fillApproval(ARBITRUM_ONE, tokenIn, amountIn);
+    const approve = fillApproval(ARBITRUM_ONE, payWith, amountIn);
     steps.push({
       kind: "approve-token",
       transaction: { to: approve.to, data: approve.data, value: 0n },
@@ -168,7 +253,7 @@ export async function planAquaSwap(
   const fill = fillCall(
     ARBITRUM_ONE,
     picked.chosen.order,
-    tokenIn,
+    payWith,
     tokenOut,
     amountIn,
     minAmountOut,
