@@ -51,7 +51,7 @@ export type Card = {
  * panels should still be four panels after a reload, not the paragraph it replaced.
  */
 export type TurnAction = {
-  action: "status" | "revoke" | "withdraw" | "earn" | "deposit";
+  action: "status" | "revoke" | "withdraw" | "earn" | "deposit" | "provide";
 };
 
 type Extras = { steps?: Step[]; cards?: Card[] };
@@ -74,7 +74,8 @@ export function isTurnAction(value: unknown): value is TurnAction {
     action === "revoke" ||
     action === "withdraw" ||
     action === "earn" ||
-    action === "deposit"
+    action === "deposit" ||
+    action === "provide"
   );
 }
 

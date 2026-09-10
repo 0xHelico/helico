@@ -23,6 +23,7 @@ import { ThinkingMessage } from "@/components/chat/thinking-message";
 import { Turn } from "@/components/chat/turn";
 import { FundAccount } from "@/components/fund-account";
 import { MandateCard } from "@/components/mandate-card";
+import { ProvideCard } from "@/components/provide-card";
 import { SwapCard } from "@/components/swap-card";
 import { useHelicoSession } from "@/hooks/use-helico-session";
 import { api, type SwapConfig } from "@/lib/api";
@@ -186,7 +187,8 @@ export function Chat({ conversationId }: { conversationId?: string }) {
           body.action === "revoke" ||
           body.action === "withdraw" ||
           body.action === "earn" ||
-          body.action === "deposit"
+          body.action === "deposit" ||
+          body.action === "provide"
             ? { action: body.action }
             : null);
         const result: TurnResult | null =
@@ -323,6 +325,8 @@ export function Chat({ conversationId }: { conversationId?: string }) {
                     // the venues or the movements that card reads.
                     turn.intent.action === "deposit" ? (
                       <FundAccount />
+                    ) : turn.intent.action === "provide" ? (
+                      <ProvideCard />
                     ) : (
                       <MandateCard action={turn.intent.action} />
                     )
