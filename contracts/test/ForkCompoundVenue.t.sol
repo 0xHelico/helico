@@ -12,6 +12,12 @@ import {ReceiptKind} from "../src/ReceiptMath.sol";
 import {HelicoMandateSwap, SwapMandate, Venue} from "../src/HelicoMandateSwap.sol";
 import {PayingTaker} from "./MandateTakers.sol";
 
+/// @notice `supplyTo` is absent from `IComet` because the venue never credits anybody but itself.
+///         The attack below needs it, so the test declares it rather than widening the interface.
+interface ICometSupplyTo {
+    function supplyTo(address dst, address asset, uint256 amount) external;
+}
+
 /// @notice A maker paid out of Compound, through the app that only knew how to read Aave.
 ///
 /// @dev The claim being tested is the one that made the whole file worth writing: the enclave is
@@ -235,6 +241,54 @@ contract ForkCompoundVenueTest is Test {
         emit log_named_uint("paid to taker  ", out);
         emit log_named_uint("shares burned  ", burned);
         emit log_named_uint("what 1:1 burns ", out);
+    }
+
+    /// @dev **A deposit that mints nothing.** Found by @rifkyeasy reviewing #317, measured on a
+    ///      fork rather than argued about, and brought back here as a test because the scratch that
+    ///      produced it was thrown away.
+    ///
+    ///      The virtual `+1` offset makes the classic first-depositor attack unprofitable: a holder
+    ///      of one share can never own more than half the pool, so the donor loses more than the
+    ///      victim does. That property holds and is worth having. What it does **not** do is stop
+    ///      the victim losing — donate enough and an honest deposit rounds to zero shares while
+    ///      `supply` returns without complaint.
+    ///
+    ///      "Nobody gains" is not "nobody loses", and the guard is one line.
+    function test_ADepositThatWouldMintNothingIsRefused() public onlyForked {
+        address attacker = address(0xBAD);
+        address victim = address(0x71C);
+
+        vm.prank(USDC_WHALE);
+        USDC.transfer(attacker, 30_000e6 + 1);
+        vm.prank(USDC_WHALE);
+        USDC.transfer(victim, 1_000e6);
+
+        // A **fresh** venue: the attack needs the attacker to be the first depositor, and the
+        // one in `setUp` already holds the maker's sixty thousand. Using that one is why the first
+        // version of this test did not revert — the ratio was nowhere near degenerate.
+        CompoundVenue empty = new CompoundVenue(COMET);
+
+        vm.startPrank(attacker);
+        USDC.approve(address(empty), type(uint256).max);
+        empty.supply(address(USDC), 1, attacker, 0);
+        assertEq(empty.balanceOf(attacker), 1, "one wei bought one share");
+
+        // The donation goes to the venue's Comet position directly, so `totalAssets` rises while
+        // `totalSupply` does not. Nothing about it is exotic — Comet lets anyone supply on
+        // another address's behalf.
+        USDC.approve(address(COMET), type(uint256).max);
+        ICometSupplyTo(address(COMET)).supplyTo(address(empty), address(USDC), 30_000e6);
+        vm.stopPrank();
+
+        assertGt(empty.totalAssets(), 29_000e6, "the pool now holds far more than its one share");
+
+        vm.startPrank(victim);
+        USDC.approve(address(empty), type(uint256).max);
+        vm.expectRevert(abi.encodeWithSelector(CompoundVenue.DepositMintsNothing.selector, 1_000e6));
+        empty.supply(address(USDC), 1_000e6, victim, 0);
+        vm.stopPrank();
+
+        assertEq(USDC.balanceOf(victim), 1_000e6, "the victim still has their money");
     }
 
     /// @dev The conversion is the reason `ReceiptKind` exists, and this is the venue that proves it

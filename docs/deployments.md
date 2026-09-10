@@ -12,10 +12,18 @@ These two answer `ILendingVenue` on behalf of Compound v3 and of any ERC-4626 va
 
 | Contract | Address | Answers | Source |
 |---|---|---|---|
-| `CompoundVenue` | [`0xB7B7DD5ff9cCf35D1AE3283F485b261B962a58a6`](https://arbiscan.io/address/0xB7B7DD5ff9cCf35D1AE3283F485b261B962a58a6#code) | `symbol()` → `hcUSDC`, `UNDERLYING_ASSET_ADDRESS()` → USDC | verified |
-| `MorphoVenue` | [`0xD7fC33eeaB4113d784402880B524B95e92A29b5A`](https://arbiscan.io/address/0xD7fC33eeaB4113d784402880B524B95e92A29b5A#code) | `symbol()` → `hmUSDC`, `UNDERLYING_ASSET_ADDRESS()` → USDC | verified |
+| `CompoundVenue` | [`0x1eC57cE1DdfdC7a4EbF4F54Aedee19ab73fcBB2E`](https://arbiscan.io/address/0x1eC57cE1DdfdC7a4EbF4F54Aedee19ab73fcBB2E#code) | `symbol()` → `hcUSDC`, `UNDERLYING_ASSET_ADDRESS()` → USDC | verified |
+| `MorphoVenue` | [`0xBBa798A61f0D7D1AE51466Fd4045Cd2Ea25c9A29`](https://arbiscan.io/address/0xBBa798A61f0D7D1AE51466Fd4045Cd2Ea25c9A29#code) | `symbol()` → `hmUSDC`, `UNDERLYING_ASSET_ADDRESS()` → USDC | verified |
 | `HelicoMandateSwap` | [`0xE56e2ACF431D80fbBb3192CD264138629F4f2a0d`](https://arbiscan.io/address/0xE56e2ACF431D80fbBb3192CD264138629F4f2a0d#code) | `AQUA()` → `0x1111113CCf…` | verified |
 | `HelicoOracleBoard` | [`0xF0aB4fF02ab557eC7abAE4697b279301643222A9`](https://arbiscan.io/address/0xF0aB4fF02ab557eC7abAE4697b279301643222A9#code) | `AQUA()` → `0x1111113CCf…`, feed answered `247996000000` at 8 decimals | verified |
+
+> ⚠️ **The venue pair above replaced an earlier pair the same evening.** `0xB7B7DD5ff9cCf35D1AE3283F485b261B962a58a6`
+> and `0xD7fC33eeaB4113d784402880B524B95e92A29b5A` went out at 19:10 and were superseded within the hour, because
+> @rifkyeasy found that `supply` could mint **zero shares without reverting** — a donation into a
+> fresh venue rounds an honest deposit to nothing while the call returns happily. The `+1` offset
+> makes that donation unprofitable, which is not the same as harmless, and the docblock had
+> treated the two as one thing. Neither superseded venue ever held anything: `totalAssets` was
+> zero on both when they were replaced.
 
 **The last two supersede** `0xA16D3138…87Ed` and `0xeb480C09…C760`, which both predate
 `ReceiptKind` and cannot take a mandate or a board carrying today's `Venue`. That was checked

@@ -46,7 +46,7 @@ mandate.
 | | State, measured after the broadcast |
 |---|---|
 | **Two addresses changed** | `HelicoMandateSwap` is now `0xE56e2ACF…2a0d` and `HelicoOracleBoard` is now `0xF0aB4fF0…22A9`. The pair they replace predate `ReceiptKind` and cannot take a mandate or board carrying today's `Venue` — checked against the deployed bytecode, not assumed. Neither of the old pair had ever been used: `eth_getLogs` returns zero events on both |
-| **Two new contracts** | `CompoundVenue` `0xB7B7DD5f…58a6` (`hcUSDC`) and `MorphoVenue` `0xD7fC33ee…9b5A` (`hmUSDC`), both verified. They let the enclave reach Compound v3 and any ERC-4626 vault — a Morpho vault being the first pointed at |
+| **Two new contracts** | `CompoundVenue` `0x1eC57cE1…BB2E` (`hcUSDC`) and `MorphoVenue` `0xBBa798A6…9A29` (`hmUSDC`), both verified. **These replaced a pair deployed an hour earlier** — see `deployments.md`; the first pair could mint zero shares for a real deposit and never held anything. They let the enclave reach Compound v3 and any ERC-4626 vault — a Morpho vault being the first pointed at |
 | **Seven contracts now** | the five from this morning, with two addresses swapped, plus the two venues |
 | **Still not sayable: anything about multiple protocols** | The venues are deployed and **inert**. Nobody has called `permitVenue` on them, `config.production.json` does not name them, and the workflow has not been redeployed — so on Arbitrum One the account still reaches Aave and nothing else. See the row under *What must not be said* |
 | The account | **Still none opened on mainnet.** Unchanged, and still the honest sentence |
@@ -315,7 +315,7 @@ End on the repo URL. No outro music.
   them.
 
   That is no longer why, and it changed twice in one day. Both venues are now **deployed and
-  verified** — `CompoundVenue` `0xB7B7DD5f…58a6`, `MorphoVenue` `0xD7fC33ee…9b5A` — and a fork test
+  verified** — `CompoundVenue` `0x1eC57cE1…BB2E`, `MorphoVenue` `0xBBa798A6…9A29` — and a fork test
   drives one account across Aave, Compound and Morpho with the three rates landing in one unit,
   274, 287 and 404 basis points.
 
