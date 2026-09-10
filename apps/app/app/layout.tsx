@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Instrument_Serif, Inter } from "next/font/google";
+import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
 import { headers } from "next/headers";
 import type { ReactNode } from "react";
 import { Toaster } from "sonner";
@@ -9,7 +9,14 @@ import { AppKitProvider } from "@/context";
 import { HelicoSessionProvider } from "@/hooks/use-helico-session";
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
+// Geist, not Inter. The reference this app's surfaces were matched against sets both faces, and
+// a page can match on spacing, weight and colour and still look unlike it, because no two glyphs
+// are the same shape.
+const sans = Geist({ subsets: ["latin"], variable: "--font-geist-sans" });
+
+// `--font-mono` was declared nowhere, so every `font-mono` — every address, every figure line,
+// the mandate table, the chart's dates — fell through to whatever the browser picks.
+const mono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono" });
 
 // The face figures are set in, so a balance reads as a quantity rather than as body text. The
 // reference for this pairing is ABC Arizona, which is commercial and cannot ship from a public
@@ -76,7 +83,10 @@ export default async function RootLayout({
   const collapsed = cookies?.includes("sidebar_state=false") ?? false;
 
   return (
-    <html className={`${inter.variable} ${numeric.variable}`} lang="en">
+    <html
+      className={`${sans.variable} ${mono.variable} ${numeric.variable}`}
+      lang="en"
+    >
       <body className="antialiased">
         {/* Light only. Nothing sets `.dark`, so the `dark:` utilities in the chat compile
             and never match — see the note in globals.css. */}

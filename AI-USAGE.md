@@ -1835,6 +1835,36 @@ READMEs.
   from the diff. Every primitive changed is used only by the two portfolio panels, checked before
   editing, so none of this reaches the front page or the chat.
 
+### 2026-09-10 — the palettes were identical and every glyph was wrong
+
+- **Done:** Ghoza said to look per pixel because a lot still differed. Comparing the spec rather
+  than the picture found it, and it was not any of the things the previous three passes changed.
+
+- **AI's role:** read the reference's tokens against ours first, because a wrong grey would explain
+  everything at once. They are **identical** — `--color-ink: #16181a`, `--color-soft: #676c70`,
+  `--color-faint: #6f747a`, `--color-line: #e9e9e7`, `--color-shade: #f5f5f3`, same `pos` and
+  `neg`. So the palette was never the difference.
+
+  The typeface was, and it explains all of it. The reference sets **Geist** and **Geist Mono**;
+  this app set Inter and declared `--font-mono` nowhere at all, so every `font-mono` fell through
+  to whatever the browser picks — fourteen places, including every address, the
+  `0.00 liquid · 0.00 working` line, the mandate table and the chart's dates.
+
+  A page can match on spacing, weight and colour and still look unlike the thing it was matched
+  against, because no two glyphs are the same shape. Three passes of spacing work could not have
+  closed that, and it is one import.
+
+  One detail nearly went in wrong: `--font-sans: var(--font-sans)` is circular, because Next names
+  the CSS variable it injects. The reference avoids it by naming its variables `--font-geist-sans`
+  and mapping them, and the mapping belongs in `@theme inline` rather than `@theme` so the
+  reference survives instead of being substituted.
+
+- **Verified:** built and read off the rendered page. Both faces resolve — the figures and the
+  addresses are visibly Geist rather than the browser default.
+
+  Worth saying plainly: this reaches further than the portfolio. Geist replaces Inter across the
+  chat and the front page too, which is what "the same typeface" means.
+
 <!--
 Template for the next entry:
 
