@@ -58,6 +58,9 @@ export function AccountControls() {
       : undefined;
   const opened = data?.kind === "open";
 
+  // Aave's own permission, kept for one thing only: the summary line under "Where it may go" reads
+  // a single market so it can say something before the whole list has answered. Every control is
+  // per-market (`markets.data`), and this is not one of them.
   const venue = useReadContract({
     abi: accountReadAbi,
     address: account,
@@ -141,7 +144,6 @@ export function AccountControls() {
     data?.kind === "open" &&
     data.agent !== null &&
     getAddress(data.agent) === getAddress(HELICO_AGENT);
-  const permitted = venue.data === true;
   const permittedCount = (markets.data ?? []).filter((m) => m.permitted).length;
   const best = bestBps(markets.data ?? []);
   const onChain = chainId === CHAIN_ID;
@@ -172,7 +174,9 @@ export function AccountControls() {
       {/* Only for the state a stranger is actually in: open, and configured for nothing. The
           moment either limit is set, the two controls below are the better answer, because
           changing one of them later should not touch the other. */}
-      {canWrite && unlockAll.canBatch && !(nominated || permitted) ? (
+      {/* `permittedCount`, not the Aave-only read: since every market has its own toggle, someone
+          who allowed Morpho and left Aave alone was still being offered "turn everything on". */}
+      {canWrite && unlockAll.canBatch && !(nominated || permittedCount > 0) ? (
         <div className="mb-4 rounded-2xl border border-line bg-shade p-4">
           <p className="font-medium text-[13px] text-ink">Turn everything on</p>
           <p className="mt-1 text-[11.5px] text-soft">
