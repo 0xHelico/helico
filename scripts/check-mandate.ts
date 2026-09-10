@@ -135,15 +135,49 @@ check('the app is deployed, so the rest of this means something', deployedCode.l
 // The one this replaced could not have taken a mandate at all: `ReceiptKind` widened `Venue` on 9
 // September, and the old app answered `mandateHash` at `0xbeb513da` while today's struct hashes to
 // `0x5344635d`. A mandate sent there would not have reverted — it would have missed the function,
-// which is the failure that looks like nothing at all. So the selector is read out of the bytecode
-// before anything is shipped, and this script refuses rather than proceeds.
-const TAKES_TODAYS_MANDATE = '5344635d'
+// which is the failure that looks like nothing at all.
+//
+// **Asked rather than read out of the bytecode.** This grepped the deployed code for the selector
+// until 10 September, when the apps went behind proxies and the check broke on a deployment that
+// was correct: a proxy is a few hundred bytes of delegatecall and carries no selectors at all. The
+// implementation had it and the address that matters did not, so the guard failed on the one thing
+// it was written to protect.
+//
+// Calling it is the better test anyway. A selector present in bytecode is not a selector that can
+// be reached; an answer is.
+// A throwaway mandate: nothing is shipped with it and none of its fields matter. It exists only
+// so the call has an argument of today's shape.
+const PROBE: SwapMandate = {
+	maker: '0x0000000000000000000000000000000000000001',
+	token0: '0x0000000000000000000000000000000000000002',
+	token1: '0x0000000000000000000000000000000000000003',
+	feeBps: 30n,
+	maxOut0: 0n,
+	maxOut1: 0n,
+	expiry: 0n,
+	agent: '0x0000000000000000000000000000000000000004',
+	salt: toHex(0, { size: 32 }),
+	venues: [],
+}
+
+let answersTodaysMandate = false
+try {
+	await pub.readContract({
+		address: APP,
+		abi: MANDATE_SWAP_ABI,
+		functionName: 'mandateHash',
+		args: [PROBE],
+	})
+	answersTodaysMandate = true
+} catch {
+	answersTodaysMandate = false
+}
 check(
-	'and its bytecode carries the selector this package computes',
-	deployedCode.includes(TAKES_TODAYS_MANDATE),
-	`mandateHash(SwapMandate) → 0x${TAKES_TODAYS_MANDATE}`,
+	'and it answers the mandate this package encodes',
+	answersTodaysMandate,
+	'mandateHash(SwapMandate) → 0x5344635d, called through whatever is at that address',
 )
-if (!deployedCode.includes(TAKES_TODAYS_MANDATE)) {
+if (!answersTodaysMandate) {
 	console.error('\nThat address cannot read a mandate this package encodes. Stopping.')
 	process.exit(1)
 }

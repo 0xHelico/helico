@@ -60,7 +60,7 @@ contract ForkOracleBoardYieldTest is Test, IHelicoOracleBoardCallback {
             return;
         }
         aqua = new Aqua();
-        board = new HelicoOracleBoard(IAqua(address(aqua)));
+        board = new HelicoOracleBoard(IAqua(address(aqua)), address(0));
         expiry = block.timestamp + 30 days;
 
         vm.prank(USDC_WHALE);

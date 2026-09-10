@@ -64,7 +64,7 @@ contract ForkMorphoVenueTest is Test {
         }
 
         aqua = new Aqua();
-        app = new HelicoMandateSwap(IAqua(address(aqua)));
+        app = new HelicoMandateSwap(IAqua(address(aqua)), address(0));
         venue = new MorphoVenue(VAULT);
         expiry = uint64(block.timestamp + 365 days);
 

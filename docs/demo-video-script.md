@@ -30,7 +30,7 @@ that exists, and #22 asks for a full-length take by **11 September** rather than
 
 | Shot | Needs | State on **8 September** |
 |---|---|---|
-| 3 — the swap | `HelicoMandateSwap` deployed to Arbitrum One | **satisfied.** Deployed and verified at [`0xE56e2ACF…2a0d`](https://arbiscan.io/address/0xE56e2ACF431D80fbBb3192CD264138629F4f2a0d#code). The fork test is no longer the fallback, it is the second angle |
+| 3 — the swap | `HelicoMandateSwap` deployed to Arbitrum One | **satisfied.** Deployed and verified at [`0x0524a353…6041`](https://arbiscan.io/address/0x0524a353dfab33CD362593ae8e97707764Fb6041#code). The fork test is no longer the fallback, it is the second angle |
 | 4 — the query | the subgraph deployed and indexing | **satisfied.** Deployed, synced, serving the canonical Aqua |
 | 5 — the enclave | nothing, works today | — |
 
@@ -45,7 +45,7 @@ mandate.
 
 | | State, measured after the broadcast |
 |---|---|
-| **Two addresses changed** | `HelicoMandateSwap` is now `0xE56e2ACF…2a0d` and `HelicoOracleBoard` is now `0xF0aB4fF0…22A9`. The pair they replace predate `ReceiptKind` and cannot take a mandate or board carrying today's `Venue` — checked against the deployed bytecode, not assumed. Neither of the old pair had ever been used: `eth_getLogs` returns zero events on both |
+| **Two addresses changed** | `HelicoMandateSwap` is now `0x0524a353…6041` and `HelicoOracleBoard` is now `0xe8515af9…7d39`. The pair they replace predate `ReceiptKind` and cannot take a mandate or board carrying today's `Venue` — checked against the deployed bytecode, not assumed. Neither of the old pair had ever been used: `eth_getLogs` returns zero events on both |
 | **Two new contracts** | `CompoundVenue` `0x1eC57cE1…BB2E` (`hcUSDC`) and `MorphoVenue` `0xBBa798A6…9A29` (`hmUSDC`), both verified. **These replaced a pair deployed an hour earlier** — see `deployments.md`; the first pair could mint zero shares for a real deposit and never held anything. They let the enclave reach Compound v3 and any ERC-4626 vault — a Morpho vault being the first pointed at |
 | **Seven contracts now** | the five from this morning, with two addresses swapped, plus the two venues |
 | **Still not sayable: anything about multiple protocols** | The venues are deployed and **inert**. Nobody has called `permitVenue` on them, `config.production.json` does not name them, and the workflow has not been redeployed — so on Arbitrum One the account still reaches Aave and nothing else. See the row under *What must not be said* |
@@ -59,7 +59,7 @@ in the video, the other would have given away a requirement we meet.
 
 | | State on 9 September, measured |
 |---|---|
-| **Deployed, read back from the chain** | Five contracts as of 9 September. `HelicoAccountFactory` `0x01CC7d9F…E081` (3,883 bytes), `HelicoAccount` implementation `0x0842BB3f…4847` (8,779), `HelicoMandateSwap` `0xE56e2ACF…2a0d` (7,707), `HelicoAquaSwapVMRouter` `0xb8c9f14d…c3be` (18,863), `HelicoOracleBoard` `0xeb480C09…C760`. The router answers `AQUA_YIELD_COVER_OPCODE()` → **34**, which is the sentence about the added instruction being *on chain* rather than in a file |
+| **Deployed, read back from the chain** | Five contracts as of 9 September. `HelicoAccountFactory` `0x01CC7d9F…E081` (3,883 bytes), `HelicoAccount` implementation `0x0842BB3f…4847` (8,779), `HelicoMandateSwap` `0x0524a353…6041` (7,707), `HelicoAquaSwapVMRouter` `0xb8c9f14d…c3be` (18,863), `HelicoOracleBoard` `0xeb480C09…C760`. The router answers `AQUA_YIELD_COVER_OPCODE()` → **34**, which is the sentence about the added instruction being *on chain* rather than in a file |
 | **Deployed since the 8 September table** | `HelicoOracleBoard` `0xeb480C09…C760` (verified), the second Aqua app — priced from Chainlink, braked by its own inventory, for a maker holding **one** token. **Nothing has shipped a board to it**, so it is a deployed contract with no positions on it. Say *deployed and verified*; do not say anyone is using it |
 | **The workflow is not the simulator** | The deployed workflow runs on Chainlink's DON. See the split rule under *What must not be said* — this is the row that changed what is sayable |
 | The four sites | `helico.site`, `app.helico.site`, `api.helico.site/healthz` 200, `docs.helico.site` 308. `bun run --filter @helico/app prod` is now **23 checks** and passes, including the API's own headers |

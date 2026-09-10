@@ -53,7 +53,7 @@ contract AccountIsTheMakerTest is Test {
         (owner, ownerKey) = makeAddrAndKey("owner");
 
         aqua = new Aqua();
-        app = new HelicoMandateSwap(IAqua(address(aqua)));
+        app = new HelicoMandateSwap(IAqua(address(aqua)), address(0));
         implementation = new HelicoAccount(address(0));
         factory = new HelicoAccountFactory(address(implementation));
 

@@ -3,8 +3,9 @@ pragma solidity 0.8.30;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {AquaApp} from "@1inch/aqua/AquaApp.sol";
 import {IAqua} from "@1inch/aqua/interfaces/IAqua.sol";
+
+import {UpgradeableAquaApp} from "./UpgradeableAquaApp.sol";
 
 import {ILendingVenue} from "./ILendingVenue.sol";
 // The same struct `HelicoMandateSwap` uses, imported rather than redeclared: two definitions of
@@ -73,7 +74,7 @@ interface IPriceFeed {
 ///      **What this does not do.** It has no view on whether the feed is right. A feed that is
 ///      manipulated inside its heartbeat is a loss here, exactly as it would be for anything else
 ///      quoting from it, and the spread is the only cushion.
-contract HelicoOracleBoard is AquaApp {
+contract HelicoOracleBoard is UpgradeableAquaApp {
     uint256 private constant BPS = 10_000;
 
     /// @param maker Whose wallet both sides come from. Aqua keys balances by the shipping
@@ -126,7 +127,7 @@ contract HelicoOracleBoard is AquaApp {
         address indexed maker, address indexed taker, bool takerSoldBase, uint256 amountIn, uint256 amountOut
     );
 
-    constructor(IAqua aqua) AquaApp(aqua) {}
+    constructor(IAqua aqua, address upgrader) UpgradeableAquaApp(aqua, upgrader) {}
 
     function hashOf(Board calldata board) public pure returns (bytes32) {
         return keccak256(abi.encode(board));

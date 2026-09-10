@@ -2,6 +2,8 @@
 pragma solidity 0.8.30;
 
 import {Script} from "forge-std/Script.sol";
+
+import {HelicoAppProxy} from "../src/HelicoAppProxy.sol";
 import {console} from "forge-std/console.sol";
 
 import {IAqua} from "@1inch/aqua/interfaces/IAqua.sol";
@@ -25,6 +27,11 @@ import {HelicoMandateSwap} from "../src/HelicoMandateSwap.sol";
 ///                      point at a different Aqua, which in practice means a local one.
 contract DeployMandateSwap is Script {
     uint256 constant ARBITRUM_ONE = 42161;
+
+    /// @dev The key that may replace this app's implementation, held apart from the deployer and
+    ///      the agent — the same separation `HelicoAccount` uses. Zero would freeze the app, which
+    ///      is a legitimate setting and not this one.
+    address public constant DEFAULT_UPGRADER = 0xaeE1F9d2c23730CA04Dd478830c2acc495536E9C;
 
     /// @dev The address 1inch names as canonical, confirmed by them directly in `#partner-1inch`
     ///      and published in their README: *"Only interact with these two contracts. Anything
@@ -69,7 +76,8 @@ contract DeployMandateSwap is Script {
         _requireAqua(aqua);
 
         vm.startBroadcast();
-        app = deploy(IAqua(aqua));
+        address upgrader = vm.envOr("APP_UPGRADER", DEFAULT_UPGRADER);
+        app = deploy(IAqua(aqua), upgrader);
         vm.stopBroadcast();
 
         console.log("mandate swap ", address(app));
@@ -79,8 +87,19 @@ contract DeployMandateSwap is Script {
 
     /// @dev Public so the fork test deploys through the same call the broadcast uses. A
     ///      rehearsal through a door production does not use is not a rehearsal.
-    function deploy(IAqua aqua) public returns (HelicoMandateSwap) {
-        return new HelicoMandateSwap(aqua);
+    /// @dev Implementation first, then a bare ERC-1967 proxy in front of it. **No initializer**,
+    ///      and none is missing: everything this app knows is either immutable in the
+    ///      implementation or arrives in calldata, so there is no state a proxy has to be handed.
+    ///      Calling `upgradeToAndCall` on the implementation directly is refused by UUPS's own
+    ///      `onlyProxy`, so leaving it uninitialised takes nothing from anybody.
+    ///
+    ///      **The address that matters is the proxy's.** A maker ships to it and Aqua keys every
+    ///      balance by it; the implementation is a place the proxy borrows code from and is not an
+    ///      app. Verifying only one of the two is how a judge finds unverified bytecode at the
+    ///      address the README names.
+    function deploy(IAqua aqua, address upgrader) public returns (HelicoMandateSwap) {
+        HelicoMandateSwap implementation = new HelicoMandateSwap(aqua, upgrader);
+        return HelicoMandateSwap(address(new HelicoAppProxy(address(implementation))));
     }
 
     /// @dev Code at the address is not enough — a wrong address on the right chain would pass
