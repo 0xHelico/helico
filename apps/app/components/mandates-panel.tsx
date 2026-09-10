@@ -79,7 +79,7 @@ export function MandatesPanel() {
   const body = () => {
     if (!maker) {
       return (
-        <Empty icon={<Wallet className="size-4 text-faint" />}>
+        <Empty icon={Wallet}>
           Connect a wallet, or paste any address. This answers for every maker
           on the chain, not just ours.
         </Empty>
@@ -98,7 +98,7 @@ export function MandatesPanel() {
     const data = mandates.data;
     if (data.rows.length === 0) {
       return (
-        <Empty icon={<ArrowLeftRight className="size-4 text-faint" />}>
+        <Empty icon={ArrowLeftRight}>
           No mandates for {short(maker)}. An answer, not a failure.
         </Empty>
       );
