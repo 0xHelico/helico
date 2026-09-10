@@ -27,6 +27,14 @@ export function useAccountState() {
 
   return useQuery<AccountState>({
     enabled: Boolean(client && address),
+    // Read again on a timer. Without one the query settled after its first success and never ran
+    // again, so the balances were as old as the page and the timestamp beside them sat still —
+    // honest, and indistinguishable from broken.
+    //
+    // A minute rather than something snappier because `readAccount` scans `VenuePermitted` logs
+    // from the factory's block to find where capital actually is. That is the read worth having
+    // and it is not the read to repeat every few seconds.
+    refetchInterval: 60_000,
     queryKey: ["account", factory, address],
     queryFn: async () => {
       if (!(client && address)) throw new Error("no client");
