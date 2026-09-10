@@ -12,8 +12,13 @@ import { chromium, type Page } from "playwright";
 import { toHex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { arbitrum } from "viem/chains";
+import { passOnboarding } from "./onboarding";
 
 const APP = process.env.APP_URL ?? "http://localhost:3100";
+
+// The front door is the conversation now, and it holds a connection open, so "networkidle" is a
+// condition that may never arrive there. Every visit to it waits for the document and then for
+// something on the page — which is what the checks were really waiting for anyway.
 const FORK = process.env.FORK_RPC_URL ?? "http://127.0.0.1:8545";
 
 const failures: string[] = [];
@@ -66,9 +71,12 @@ const wallet = (_key: `0x${string}`, address: string) => `
  * vault-address input. That form went with the vault it configured, and a check that depends on
  * an unrelated input is a check that fails for reasons it is not about — so this asks for the
  * page's own heading, which is the thing the gate is standing in front of.
+ *
+ * The heading moved when the conversation became the front door. It is the chat's own now, and
+ * the limits page's heading lives at `/limit` where check 5 asks for it.
  */
 const inTheApp = (page: Page) =>
-  page.getByRole("heading", { name: /limits it works inside/ });
+  page.getByRole("heading", { name: /what would you like to do/i });
 
 async function withWallet(page: Page) {
   watchCsp(page);
@@ -118,7 +126,7 @@ const watchCsp = (page: Page) => {
       calls.push(r.method());
     }
   });
-  await page.goto(APP, { waitUntil: "networkidle" });
+  await page.goto(APP, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(2500);
   check(
     "no wallet asks nothing of /api/session",
@@ -156,10 +164,11 @@ const watchCsp = (page: Page) => {
 {
   const page = watchCsp(await (await browser.newContext()).newPage());
   await withWallet(page);
-  await page.goto(APP, { waitUntil: "networkidle" });
+  await page.goto(APP, { waitUntil: "domcontentloaded" });
   await page
     .getByRole("button", { name: /Verify wallet/ })
     .click({ timeout: 20_000 });
+  await passOnboarding(page);
   await inTheApp(page).waitFor({ timeout: 30_000 });
   await page.reload({ waitUntil: "domcontentloaded" });
   let flashed = false;
@@ -184,10 +193,11 @@ const watchCsp = (page: Page) => {
   const ctx = await strict.newContext();
   const page = watchCsp(await ctx.newPage());
   await withWallet(page);
-  await page.goto(APP, { waitUntil: "networkidle" });
+  await page.goto(APP, { waitUntil: "domcontentloaded" });
   await page
     .getByRole("button", { name: /Verify wallet/ })
     .click({ timeout: 20_000 });
+  await passOnboarding(page);
   await inTheApp(page).waitFor({ timeout: 30_000 });
 
   const jar = (await ctx.cookies()).filter((c) => c.name === "helico_session");
@@ -198,7 +208,7 @@ const watchCsp = (page: Page) => {
     `SameSite=${jar[0]?.sameSite}`,
   );
 
-  await page.reload({ waitUntil: "networkidle" });
+  await page.reload({ waitUntil: "domcontentloaded" });
   await page.waitForTimeout(2500);
   check(
     "still signed in after a reload, third-party cookies blocked",
@@ -207,94 +217,98 @@ const watchCsp = (page: Page) => {
   await strict.close();
 }
 
-// 5. The front door leads with the mandate, not with a box offering to swap. This is the one a
-//    judge sees first, and it regressed once already by being the conversation.
+// 5. The front door is the conversation, and the limits are a page of their own at /limit.
+//
+//    This check used to assert the opposite, and most of it had stopped meaning anything long
+//    before the doors were swapped: five of its six assertions named text — "What it may be
+//    allowed to do", "What you can ask it", a `grants` test id, "Read the split" — that was
+//    deleted when the front page was simplified, and nothing failed, because nothing had run it.
+//    Rewritten against what the two pages actually render.
 {
   const page = watchCsp(await (await browser.newContext()).newPage());
   await withWallet(page);
-  await page.goto(APP, { waitUntil: "networkidle" });
+  await page.goto(APP, { waitUntil: "domcontentloaded" });
   await page
     .getByRole("button", { name: /Verify wallet/ })
     .click({ timeout: 20_000 });
+
+  // The first run stands here, and it is the check as much as it is in the way.
+  const agree = page.getByRole("checkbox", { name: /read this and I agree/i });
+  await agree.waitFor({ timeout: 30_000 });
+  const start = page.getByRole("button", { name: /^Start$/ });
+  check("a new wallet is asked to agree first", await agree.isVisible());
+  check("and cannot start until it has", await start.isDisabled());
+  check(
+    "unlock everything is offered, and defaults to on",
+    await page.getByRole("switch", { name: /unlock everything/i }).isChecked(),
+  );
+  await passOnboarding(page);
+
+  await inTheApp(page).waitFor({ timeout: 30_000 });
+  const front = (await page.locator("body").innerText()).trim();
+  check(
+    "the front door is the conversation",
+    /What would you like to do/.test(front),
+  );
+  check(
+    "with the composer on it",
+    (await page.getByPlaceholder(/Ask anything/i).count()) > 0,
+  );
+  check("and not the limits", !/limits it works inside/.test(front));
+
+  // Asked again on a reload. Agreeing once has to be enough, or the terms become a toll.
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await inTheApp(page).waitFor({ timeout: 30_000 });
+  check(
+    "and it is not asked again",
+    (await page
+      .getByRole("checkbox", { name: /read this and I agree/i })
+      .count()) === 0,
+  );
+
+  await page.goto(`${APP}/limit`, { waitUntil: "domcontentloaded" });
   await page
     .getByRole("heading", { name: /limits it works inside/ })
     .waitFor({ timeout: 30_000 });
-
-  const text = (await page.locator("body").innerText()).trim();
+  const limits = (await page.locator("body").innerText()).trim();
   check(
-    "the front door leads with the mandate",
-    /limits it works inside/.test(text),
+    "the limits have a page of their own",
+    /The limits you set/.test(limits),
   );
   check(
-    "it lists the authority on offer",
-    /What it may be allowed to do/.test(text),
+    "both of them are named",
+    /Who may move it/.test(limits) && /Where it may go/.test(limits),
+  );
+  check(
+    "the markets are listed",
+    /Aave v3/.test(limits) && /Morpho/.test(limits),
   );
   check(
     "the portfolio is summarised, not repeated",
-    /In your account/.test(text),
+    /In your account/.test(limits),
   );
   check(
     "and it links to the page that has it",
     (await page.getByRole("link", { name: /View full portfolio/ }).count()) > 0,
   );
-  // The factory is deployed now, so this is a measurement rather than an absence: a total, read
-  // from an account the chain can name before anyone opens it. The not-deployed path is still
-  // rendered and still reachable by clearing the override — it is just no longer what a visitor
-  // sees.
+  // The factory is deployed, so this is a measurement rather than an absence: a total, read from
+  // an account the chain can name before anyone opens it.
   check(
     "the summary totals an account rather than saying it cannot",
-    /In your account/.test(text) && !/deployed yet/.test(text),
+    /In your account/.test(limits) && !/deployed yet/.test(limits),
   );
-  // The panel that could not exist without an indexer. It renders for a wallet-less visitor too,
-  // because the claim is about any address rather than about theirs.
-
-  check("the limits themselves", /The limits you set/.test(text));
-  check("and the sentences it answers", /What you can ask it/.test(text));
-  check(
-    "which are the questions this product answers",
-    /What am I allowed to spend/.test(text),
-  );
-  check("and which capabilities are not wired", /not wired yet/.test(text));
   check(
     "the composer is not on it",
     (await page.getByPlaceholder(/Ask anything/i).count()) === 0,
   );
 
-  // A grant nobody has wired must be genuinely unmovable rather than merely dimmed. At most one
-  // switch in this list is operable — the real one — and it is only operable with an open account
-  // and a wallet, so "none" is also correct here.
-  //
-  // Scoped to the list rather than the page. The limits panel below has a switch of its own now,
-  // and a page-wide count would have failed here for a reason this check is not about the moment
-  // an account was open.
-  const switches = page.getByTestId("grants").getByRole("switch");
-  const total = await switches.count();
-  let operable = 0;
-  for (let i = 0; i < total; i++) {
-    if (await switches.nth(i).isEnabled()) {
-      operable++;
-    }
-  }
-  check("more than one capability is shown", total > 1, `${total} switches`);
+  // The old address still lands somewhere true rather than on a 404.
+  await page.goto(`${APP}/chat`, { waitUntil: "domcontentloaded" });
+  await inTheApp(page).waitFor({ timeout: 30_000 });
   check(
-    "and at most one of them can be operated",
-    operable <= 1,
-    `${operable} operable`,
+    "the old /chat address lands on the front door",
+    new URL(page.url()).pathname === "/",
   );
-
-  // Named for what the ask says rather than for the old product's verb. This was /Swap/ until
-  // the asks moved to the yield layer, and it would have gone on passing for the wrong reason
-  // had one of the new ones happened to contain the word.
-  await page
-    .getByRole("link", { name: /Read the split/ })
-    .first()
-    .click();
-  await page.waitForTimeout(2000);
-  check(
-    "an ask opens the conversation",
-    (await page.getByPlaceholder(/Ask anything/i).count()) > 0,
-  );
-  check("which lives at /chat", new URL(page.url()).pathname === "/chat");
 }
 
 // 6. The portfolio has its own page now, and the two panels that only an indexer can answer live
