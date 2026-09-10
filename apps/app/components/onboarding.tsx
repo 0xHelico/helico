@@ -97,13 +97,12 @@ function FirstRun({
       <Dialog open>
         <DialogContent className="sm:max-w-[440px]" showCloseButton={false}>
           <DialogTitle className="text-[16px]">
-            Your wallet asks one at a time
+            Your wallet signs one at a time
           </DialogTitle>
           <DialogDescription className="text-[13px] leading-relaxed">
-            It cannot send several calls in one confirmation, so opening
-            everything would be {unlock.steps} separate prompts. Nothing has
-            been sent. The same button is on the limits page whenever you want
-            it.
+            It cannot bundle these into a single signature, so turning
+            everything on would mean {unlock.steps} separate prompts. Nothing
+            has been sent yet. The same button is waiting on the Limits page.
           </DialogDescription>
           <div className="mt-2 flex justify-end">
             <Button onClick={onDone} size="sm">
@@ -119,10 +118,13 @@ function FirstRun({
     return (
       <Dialog open>
         <DialogContent className="sm:max-w-[440px]" showCloseButton={false}>
-          <DialogTitle className="text-[16px]">Opening everything</DialogTitle>
+          <DialogTitle className="text-[16px]">
+            Turning everything on
+          </DialogTitle>
           <DialogDescription className="text-[13px] leading-relaxed">
-            {unlock.steps} calls in one confirmation: your account, Helico's
-            agent, and all {MARKETS.length} markets. Confirm it in your wallet.
+            One signature, one transaction. It opens your account, names
+            Helico's agent, and allows all {MARKETS.length} markets. Have a look
+            at your wallet.
           </DialogDescription>
           <div className="mt-2 flex justify-end">
             <Button onClick={onDone} size="sm" variant="outline">
@@ -149,30 +151,30 @@ function FirstRun({
 
         <ul className="mt-1 space-y-2.5 text-[13px] text-soft leading-relaxed">
           <li>
-            <span className="text-ink">Your wallet is the account.</span> Helico
-            never holds your funds and never asks for a key. Every move ends at
-            an account whose owner is you, fixed when it was built.
+            <span className="text-ink">Your wallet is the account.</span> We
+            never hold your money and never ask for a key. Everything the agent
+            does ends up back in an account that belongs to you.
           </li>
           <li>
             <span className="text-ink">
-              The agent's reach is the list you allow.
+              The agent only goes where you let it.
             </span>{" "}
-            It can move idle capital between markets you named, and it is given
-            no recipient — so the worst it can do is move your money between
-            your own places.
+            It moves your idle money between the markets you picked. It cannot
+            send anything anywhere else, so the worst it can do is move your
+            money between your own places.
           </li>
           <li>
-            <span className="text-ink">You sign everything.</span> Nominating
-            the agent and allowing a market are owner-only calls on chain. No
-            batch and no relayer can make them for you, which is the whole
-            reason a compromised agent is harmless.
+            <span className="text-ink">You sign everything.</span> Naming the
+            agent and allowing a market are your calls to make, not ours, and
+            nobody can make them for you. That is what keeps your money safe
+            even if the agent is ever compromised.
           </li>
           <li>
             <span className="text-ink">
-              This is a hackathon build on Arbitrum One,
+              This is a hackathon build on Arbitrum One.
             </span>{" "}
-            with real funds and no warranty. The code is open — read it before
-            you trust it.
+            Real money, no warranty. The code is open, so read it before you
+            trust it.
           </li>
         </ul>
 
@@ -189,17 +191,17 @@ function FirstRun({
         <div className="mt-3 flex items-start justify-between gap-4 rounded-xl border border-line bg-shade p-3.5">
           <div>
             <p className="font-medium text-[13px] text-ink">
-              Unlock everything
+              Turn everything on
             </p>
             <p className="mt-1 text-[11.5px] text-soft leading-relaxed">
-              Nominate Helico's agent and allow all {MARKETS.length} markets now
+              Turn everything on now
               {unlock.canBatch
-                ? ", in one confirmation, instead of setting them one at a time on the limits page."
-                : ". Your wallet may ask for each one — you will be told before anything is sent."}
+                ? `, with one signature, instead of setting all ${MARKETS.length} markets yourself on the Limits page.`
+                : ". Your wallet may want to sign each step, and we will tell you before anything is sent."}
             </p>
           </div>
           <Switch
-            aria-label="Unlock everything"
+            aria-label="Turn everything on"
             checked={unlockAll}
             className="mt-0.5"
             onCheckedChange={setUnlockAll}

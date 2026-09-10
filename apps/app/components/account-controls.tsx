@@ -163,8 +163,8 @@ export function AccountControls() {
     <Card className="mt-4">
       {opened ? null : (
         <p className="mb-4 text-[11.5px] text-faint">
-          Your account is not deployed yet. Setting either of these deploys it
-          first, in the same step.
+          You do not have an account yet. Setting either of these creates it in
+          the same step.
         </p>
       )}
 
@@ -173,11 +173,11 @@ export function AccountControls() {
           changing one of them later should not touch the other. */}
       {canWrite && unlockAll.canBatch && !(nominated || permitted) ? (
         <div className="mb-4 rounded-2xl border border-line bg-shade p-4">
-          <p className="font-medium text-[13px] text-ink">Unlock everything</p>
+          <p className="font-medium text-[13px] text-ink">Turn everything on</p>
           <p className="mt-1 text-[11.5px] text-soft">
-            Your wallet can send these together, so nominating the agent and
-            allowing all {MARKETS.length} markets is one confirmation. Nothing
-            here can move money.
+            Your wallet can sign these together, so naming the agent and
+            allowing all {MARKETS.length} markets takes one signature. None of
+            it can move your money.
           </p>
           <Button
             className="mt-3"
@@ -187,7 +187,7 @@ export function AccountControls() {
           >
             {unlockAll.pending
               ? "Setting up…"
-              : `Unlock everything (${unlockAll.steps} calls, 1 confirmation)`}
+              : "Turn everything on with one signature"}
           </Button>
           {unlockAll.error ? (
             <p className="mt-2 text-[11px] text-destructive">
@@ -202,8 +202,8 @@ export function AccountControls() {
           detail={
             nominated
               ? isOurs
-                ? "Helico's enclave. Idle capital only."
-                : "An address you nominated."
+                ? "Helico's enclave, and only your idle money."
+                : "An address you named."
               : "Nobody. It moves only when you move it."
           }
           glyph="wings"
@@ -251,8 +251,8 @@ export function AccountControls() {
         <Limit
           detail={
             permittedCount
-              ? "Revoking one leaves the way out of it open."
-              : "Nowhere yet. Choose below."
+              ? "Revoke one and the agent can still pull your money back out of it."
+              : "Nowhere yet. Pick some below."
           }
           glyph="layers"
           name="Where it may go"
@@ -287,13 +287,13 @@ export function AccountControls() {
           <p className="text-[11px] text-faint">
             {best === null
               ? "Rates are read live from each market."
-              : `Best on offer ${(best / 100).toFixed(2)}% — the enclave moves to whichever pays most.`}
+              : `Best on offer right now is ${(best / 100).toFixed(2)}%. The agent moves to whichever pays most.`}
           </p>
         </div>
         <p className="mt-1 text-[11.5px] text-soft">
-          The agent may use any market you allow, and no others. It never gets a
-          recipient, so the worst it can do is move your money between your own
-          places.
+          The agent can use any market you allow here, and no others. It never
+          gets to name where money goes, so the worst it can do is move yours
+          between your own places.
         </p>
 
         <div className="mt-3 flex flex-col gap-2">
@@ -375,7 +375,7 @@ function MarketRow({
       </div>
       <div className="tabular shrink-0 text-right font-mono text-[12px]">
         {market.bps === null ? (
-          <span className="text-faint">—</span>
+          <span className="text-faint">no rate</span>
         ) : (
           <span className={top ? "text-ink" : "text-soft"}>
             {(market.bps / 100).toFixed(2)}%
