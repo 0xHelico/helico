@@ -54,7 +54,7 @@ Three things had to happen after the address existed, and each is somebody's tra
 | Step | Whose | Status |
 |---|---|---|
 | `config.production.json`: `delivery: forwarder`, `reportReceiver` and `agent` = the proxy | repo | done, commit `d7f2a50` |
-| The account's owner calls `setAgent(0x98c3…4463)` | the owner of `0x0acdfa21…` | pending — until then the enclave answers `HOLD (the account has not nominated this agent)`, which is the verdict it gave in simulation against the live chain with this config |
+| The account's owner calls `setAgent(0x98c3…4463)` | the owner of `0x0acdfa21…` | done, 11:25 UTC — until then the enclave answered `HOLD (the account has not nominated this agent)`, in simulation against the live chain and in the 11:25 run on the DON |
 | `cre workflow deploy ./workflow --target production-settings` — config travels with the binary | the CRE key | done, 11:20 UTC — below |
 
 The app's *Nominate Helico's agent* now names the proxy, and offers it over a stale nomination
@@ -86,6 +86,36 @@ nothing reads the key in production, but the record should say it), and
 [`0x60d44e0b…`](https://etherscan.io/tx/0x60d44e0b09baf9dbc341c9c61ac0770b19ec4512f481e5385752f56c29ae4ec8)
 set the working target to 100% with the demo-scale thresholds (floor 0.01 USDC, no cap, no rate
 minimum).
+
+### The first move, 11:30 UTC — and no key of ours in the transaction
+
+Five minutes after the nomination, the run at 11:30:01 UTC decided and the DON wrote it:
+
+```
+execution     f762c958-165d-4852-b9bc-8d7d6720482f    SUCCESS
+events        trigger · 6 × http SendRequest · consensus Report · evm:4949039107694359620 WriteReport
+tx            0x0668c698cf3d396e622a97bfa3e21016de44fb41863fa7cb69b47bd126f9ed27
+              block 504,035,561 on Arbitrum One, status 1, 934,736 gas at 0.020 gwei = 0.0000187 ETH
+from          0x3a8dbd6b352009a7f057a334b3ea9f7a3e15d169   a DON transmitter, which paid the gas
+to            0xF8344CFd…4482                             KeystoneForwarder
+```
+
+What the transaction's 21 logs say, read from the receipt rather than from the CLI:
+
+| Log | Says |
+|---|---|
+| `HelicoAccount.IdleCapitalMoved` | pool `0xBBa798A6…` (Morpho), USDC, `490081`, supplied |
+| `HelicoAgent.Carried` | the same move, under policy hash `0x84e5626f…` and workflow id `0x00f5df97…` — the id the registry holds |
+| `KeystoneForwarder.ReportProcessed` | receiver `0x98c3…4463`, report id `0x0007`, `success = true` |
+
+And the balances, which are the evidence: USDC `500081 → 10000` (the 0.01 USDC floor), `hmUSDC`
+`0 → 490081` shares, `previewRedeem(490081) → 490081` USDC. The old agent key's nonce is still
+`0`. The next simulation against the live chain answers `HOLD (already at the target split)`,
+which is the steady state: the enclave keeps looking every five minutes and has nothing to do
+until the balance, the rates, or the policy change.
+
+**This is the first time capital moved because the enclave said so.** Every earlier move in the
+record was a rehearsal on a fork, carried by a script impersonating the agent.
 
 ### How to know it moved, and what not to quote
 
