@@ -722,3 +722,41 @@ func TestMoneyInIsACardYouCanSend(t *testing.T) {
 	}
 	t.Fatal("no Money in card")
 }
+
+// TestDollarsAreNotConvertedHere is the line that keeps an unverifiable number out of a signature.
+//
+// A person who says "$5 of ETH" is asking for a token amount this package cannot compute: it has
+// no price, and a model asked to divide by a rate produces a figure nobody can check. So the
+// intent carries the dollars, `amountInWei` stays empty, and the wallet fills it in from its own
+// Chainlink read. The confirmation says "$5 of ETH" rather than naming a token figure with no
+// source behind it.
+func TestDollarsAreNotConvertedHere(t *testing.T) {
+	svc := New(fakeModel(t, http.StatusOK, `{"action":"swap","chain":"arbitrum","tokenIn":"ETH","tokenOut":"USDC","amount":"","amountUsd":"5","question":""}`))
+	got, err := svc.Interpret(context.Background(), "swap $5 ETH to USDC")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Intent == nil {
+		t.Fatalf("no intent: %+v", got)
+	}
+	if got.Intent.AmountUsd != "5" {
+		t.Errorf("amountUsd = %q, want 5", got.Intent.AmountUsd)
+	}
+	if got.Intent.AmountInWei != "" {
+		t.Errorf("a price was invented here: amountInWei = %q", got.Intent.AmountInWei)
+	}
+	if !strings.Contains(got.Reply, "$5 of ETH") {
+		t.Errorf("the reply names a token figure it did not compute: %q", got.Reply)
+	}
+}
+
+// TestADollarAmountStillHasToBeANumber keeps the one check that belongs here. The conversion is
+// the wallet's, but "$abc" must not reach it: a figure that is not a number would be divided by a
+// price and become one.
+func TestADollarAmountStillHasToBeANumber(t *testing.T) {
+	svc := New(fakeModel(t, http.StatusOK, `{"action":"swap","chain":"arbitrum","tokenIn":"ETH","tokenOut":"USDC","amount":"","amountUsd":"abc","question":""}`))
+	got, err := svc.Interpret(context.Background(), "swap $abc ETH to USDC")
+	if err == nil && got.Intent != nil {
+		t.Fatalf("built an intent from a dollar amount that is not a number: %+v", got.Intent)
+	}
+}

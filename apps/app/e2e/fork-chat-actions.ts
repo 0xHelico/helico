@@ -340,8 +340,19 @@ await page
 check("signed in and past the first run", true, taker.account.address);
 
 async function say(text: string) {
-  await page.fill("textarea", text);
-  await page.keyboard.press("Enter");
+  const box = page.locator("textarea");
+  await box.waitFor({ state: "visible", timeout: 30_000 });
+  // An Enter that arrives before React has hydrated is swallowed, and the only thing on screen
+  // afterwards is the empty chat with its starter list — which reads as "the answer never came"
+  // rather than "the question never went". That is how the account-maker check failed for a day,
+  // right after the one `page.reload()` in this file. The box clears on submit, so its own value
+  // is the evidence that the message went; keep asking until it does.
+  for (let attempt = 0; attempt < 15; attempt++) {
+    await box.fill(text);
+    await box.press("Enter");
+    await page.waitForTimeout(400);
+    if ((await box.inputValue()) === "") break;
+  }
   await page.waitForTimeout(1200);
 }
 
@@ -393,7 +404,7 @@ if (swapRendered) {
 
 // ── 2b. the same swap starting in native ETH, which has to wrap first ───────
 //
-// "Swap 0.1 ETH into USDC" is the Swap card's own suggested sentence and one of the six starters,
+// "Swap $5 ETH to USDC" is the Swap card's own suggested sentence and one of the starters,
 // and until now it could not work at any liquidity: Aqua positions hold WETH, so looking up
 // positions for `0x0000…0000` matched nothing and the card answered "no live Aqua position" — true
 // for the wrong reason. The plan wraps first, so this is three transactions rather than two.
@@ -423,6 +434,77 @@ if (ethRendered) {
     `+${formatUnits(usdcAfterEth - usdcBeforeEth, 6)} USDC`,
   );
 }
+
+// ── 2b-bis. a dollar amount, converted by the wallet's own feed ─────────────
+//
+// The starter is "Swap $5 ETH to USDC" because nobody thinks in 0.1 ETH. The backend reports the
+// dollars and does **not** divide: it has no price, and a model asked to convert produces a figure
+// nobody can check. The card reads Chainlink and fills in the units.
+//
+// This one request is stubbed because the classifier that returns `amountUsd` ships in the same
+// change and the chat's route forwards to the deployed backend. Everything the card then does is
+// real — the feed read, the conversion, the plan and the fill.
+await page.route("**/api/chat", (route) =>
+  route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({
+      action: "swap",
+      reply: "Swapping $25 of ETH into USDC on Arbitrum One.",
+      intent: {
+        chainId: 42161,
+        chain: "Arbitrum One",
+        tokenIn: {
+          symbol: "ETH",
+          address: "0x0000000000000000000000000000000000000000",
+          decimals: 18,
+          name: "Ether",
+        },
+        tokenOut: {
+          symbol: "USDC",
+          address: USDC,
+          decimals: 6,
+          name: "USD Coin",
+        },
+        amountIn: "",
+        amountInWei: "",
+        amountUsd: "25",
+      },
+      steps: [],
+    }),
+  }),
+);
+await page.waitForTimeout(2000);
+const usdcBeforeUsd = await bal(USDC, taker.account.address);
+await say("Swap $25 ETH to USDC");
+const dollarStep = page.getByText(/\$25\) for USDC|\$25 of ETH into WETH/);
+let dollarSized = false;
+try {
+  await dollarStep.first().waitFor({ timeout: 60_000 });
+  dollarSized = true;
+} catch {}
+check(
+  "a dollar amount is turned into tokens by the feed, and says both",
+  dollarSized,
+  dollarSized
+    ? (await dollarStep.first().innerText()).slice(0, 70)
+    : (await page.locator("body").innerText()).slice(-170),
+);
+if (dollarSized) {
+  await page
+    .getByRole("button", { name: /^(Sign and swap|Sign \d+ transactions)$/ })
+    .last()
+    .click();
+  await page.waitForTimeout(32_000);
+  const usdcAfterUsd = await bal(USDC, taker.account.address);
+  check(
+    "and $25 of ETH actually fills",
+    usdcAfterUsd > usdcBeforeUsd,
+    `+${formatUnits(usdcAfterUsd - usdcBeforeUsd, 6)} USDC`,
+  );
+}
+// Back to the real classifier for everything after this.
+await page.unroute("**/api/chat");
 
 // ── 2c. a swap the position cannot pay goes to Uniswap, not to a dead end ───
 //

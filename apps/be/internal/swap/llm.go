@@ -65,6 +65,9 @@ Rules:
 - tokenIn, tokenOut and amount are for "swap" only. Leave them empty for the other six.
 - tokenIn is what they are giving, tokenOut what they want. Use the ticker, not a name.
 - amount is how much of tokenIn, as a plain decimal number, no unit and no commas. "half an ETH" is "0.5". Never invent one.
+- amountUsd is for a dollar amount instead: "$5 of ETH", "5 dollars of ETH", "swap $5 ETH to USDC"
+  is amountUsd "5" with amount empty. Set one or the other, never both, and never convert between
+  them — you do not have a price and the application does.
 - Leave a field empty when the message does not say it. Do not guess.
 - question: one short sentence asking for whatever is empty, or "" when nothing is.
 - Never mention prices, rates, or what something is worth. You do not know them.
