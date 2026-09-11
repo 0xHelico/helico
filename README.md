@@ -74,7 +74,10 @@ them — it is kept below because it is part of what this product does, not beca
 
 The decision runs **inside the enclave**, over thresholds the Vault DON releases only there. The
 thresholds are the strategy — the one thing a competitor would want. Only the verdict comes back
-out.
+out — as a report the DON signs and writes to Arbitrum One through Chainlink's `KeystoneForwarder`,
+into [`HelicoAgent`](contracts/src/HelicoAgent.sol), the contract your account names as its agent.
+No key of ours is in that path: the forwarder is the only address that can call the agent, and the
+agent can only call the two functions the account lets an agent call.
 
 | What | Where |
 |---|---|
@@ -84,7 +87,9 @@ out.
 | The split, the deadband, and the market chosen | [`decision.ts#L152-L193`](https://github.com/0xHelico/helico/blob/f6f2fc6695e030d8a6918a863470299fcb8dd179/packages/plugins/cre/src/decision.ts#L152-L193) |
 | The policy, released only into the enclave | [`policy.ts#L146-L157`](https://github.com/0xHelico/helico/blob/f6f2fc6695e030d8a6918a863470299fcb8dd179/packages/plugins/cre/src/policy.ts#L146-L157) |
 | Its hash, which the enclave recomputes before touching the chain | [`policy.ts#L79-L91`](https://github.com/0xHelico/helico/blob/f6f2fc6695e030d8a6918a863470299fcb8dd179/packages/plugins/cre/src/policy.ts#L79-L91) |
-| The EIP-712 statement it signs | [`sign.ts#L76-L86`](https://github.com/0xHelico/helico/blob/f6f2fc6695e030d8a6918a863470299fcb8dd179/packages/plugins/cre/src/sign.ts#L76-L86) |
+| The report it writes through the forwarder | [`index.ts`, `deliver`](packages/plugins/cre/src/index.ts) |
+| The contract that receives it, and refuses everyone else | [`HelicoAgent.sol`](contracts/src/HelicoAgent.sol), on chain at [`0x98c3…4463`](https://arbiscan.io/address/0x98c3979358A4e5086Da432CfE91F45aE2A854463#code) |
+| The EIP-712 statement it signs instead, under `signature` delivery (staging) | [`sign.ts#L76-L86`](https://github.com/0xHelico/helico/blob/f6f2fc6695e030d8a6918a863470299fcb8dd179/packages/plugins/cre/src/sign.ts#L76-L86) |
 | The buffer sized from live Aqua mandates | [`subgraph.ts#L431-L449`](https://github.com/0xHelico/helico/blob/f6f2fc6695e030d8a6918a863470299fcb8dd179/packages/plugins/cre/src/subgraph.ts#L431-L449) |
 | Which may only raise the owner's floor, never lower it | [`subgraph.ts#L463-L466`](https://github.com/0xHelico/helico/blob/f6f2fc6695e030d8a6918a863470299fcb8dd179/packages/plugins/cre/src/subgraph.ts#L463-L466) |
 | The account that accepts it, and what it refuses | [`HelicoAccount.sol`](contracts/src/HelicoAccount.sol) |

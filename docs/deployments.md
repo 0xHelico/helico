@@ -4,6 +4,72 @@ Arbitrum One, chain id 42161. Every address below was read back from the chain a
 broadcast, not copied from a script's output — the third column is what the contract answers when
 asked about itself.
 
+## 11 September 2026 — the agent is a contract, and the DON writes the move
+
+Until today the enclave's decision never reached the chain. `supplyIdle` authorises by
+`msg.sender`, so the nominated agent has to send the transaction itself; in production that agent
+was the key `0x84C3891a…fcAf`, which nothing ever spent — its nonce on Arbitrum One is still
+zero. The workflow signed an EIP-712 statement and handed it to the DON, and the statement stopped
+there. From 10:40 UTC, when the demo policy went live, every five-minute run decided
+`SUPPLY 400064 to 0xBBa798A6…` (later `490081`, at the 100% target) and moved nothing. It shows in
+the execution events: the runs from 10:40 on carry a `consensus Report` and a sixth HTTP call (the
+model's explanation, which only runs on a move) that the holds before 10:40 do not — and no
+transaction after either.
+
+`HelicoAgent` is the fix. An `IReceiver` behind a UUPS proxy; the account nominates the proxy, the
+only path into `onReport` is the production `KeystoneForwarder`, and the report has to come from a
+workflow deployed by Helico's CRE key. It decodes the report `encodeReport` produces and makes the
+one call it names. No storage, no setters.
+
+| Contract | Address | Answers | Verified |
+|---|---|---|---|
+| `HelicoAgent` (proxy) | [`0x98c3979358A4e5086Da432CfE91F45aE2A854463`](https://arbiscan.io/address/0x98c3979358A4e5086Da432CfE91F45aE2A854463#code) | `FORWARDER()` → `0xF8344CFd…4482`, `WORKFLOW_OWNER()` → `0x6DCd7485…439E`, `UPGRADER()` → `0xaeE1F9d2…6E9C`, `supportsInterface(0x805f2132)` → true | `HelicoAppProxy`, explorer marks it a proxy of the implementation |
+| `HelicoAgent` (implementation) | [`0x6Cb8B55E9749EcCc746225f835A610895DfA606b`](https://arbiscan.io/address/0x6Cb8B55E9749EcCc746225f835A610895DfA606b#code) | the same three | verified |
+
+```
+implementation  0x0b6398beb45a393f28e675bc190e6eec99d95fd383961bbcfda75b9e95ead080
+proxy           0xd0e21d36f63d646225b13808a1e706a0d7b6236c9b4e26e2627f9f6ce7171882
+deployer        0x6DCd7485…439E   0.0073660 -> 0.0073466 ETH
+ERC-1967 slot   0x…6cb8b55e9749eccc746225f835a610895dfa606b   (read back, not assumed)
+```
+
+**The forwarder was asked what it is before anything was pinned to it.** The CRE directory lists
+two Arbitrum One addresses, and `cre workflow supported-chains` prints the production one under a
+column headed *MOCK FORWARDER*. On chain: `0xF8344CFd…` answers `typeAndVersion()` with
+`KeystoneForwarder 1.0.0`, `0xd7704990…` with `MockKeystoneForwarder 1.0.0`. The deploy script
+requires the first string and refuses otherwise, so the mock cannot be deployed against by mistake
+— a receiver pinned to the mock accepts unsigned reports from anyone who calls it.
+
+**Proven on a fork before it was deployed**, against the live account and the deployed
+`MorphoVenue`, called from the real forwarder's address: all but the 0.01 USDC floor leaves the
+account, the receipt `previewRedeem`s to what left within 2 units, a withdraw report brings it
+back, and a wrong sender, an unpermitted venue and a revoked nomination each move nothing
+(`contracts/test/ForkHelicoAgent.t.sol`). The report bytes in the unit test are the ones the
+TypeScript encoder emits, decoded by the contract (`HelicoAgent.t.sol`).
+
+### Deploying was not the last step
+
+Three things had to happen after the address existed, and each is somebody's transaction:
+
+| Step | Whose | Status |
+|---|---|---|
+| `config.production.json`: `delivery: forwarder`, `reportReceiver` and `agent` = the proxy | repo | done, commit `d7f2a50` |
+| The account's owner calls `setAgent(0x98c3…4463)` | the owner of `0x0acdfa21…` | pending — until then the enclave answers `HOLD (the account has not nominated this agent)`, which is the verdict it gave in simulation against the live chain with this config |
+| `cre workflow deploy ./workflow --target production-settings` — config travels with the binary | the CRE key | pending |
+
+The app's *Nominate Helico's agent* now names the proxy, and offers it over a stale nomination
+in one `setAgent` rather than asking the owner to remove first.
+
+### How to know it moved, and what not to quote
+
+`KeystoneForwarder.route` calls the receiver with a low-level `call` and returns the boolean; the
+transaction succeeds either way. So a `writeReport` that reports `SUCCESS`, and the hash it
+returns, say only that the DON delivered — not that the account moved anything. The evidence is
+the account's balances, the account's `IdleCapitalMoved` event, and the agent's `Carried` event.
+The forwarder's `getTransmissionInfo(receiver, executionId, reportId)` says which of `SUCCEEDED`,
+`FAILED` and `INVALID_RECEIVER` a delivery ended in, and is the thing to read when a balance did
+not change.
+
 ## 10 September 2026 — the workflow catches up with the contracts
 
 The workflow on the DON had been the **8 September** build since 8 September: one asset, one

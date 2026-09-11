@@ -77,11 +77,14 @@ product being usable rests on.
 
 ## ⚠️ A transaction hash is not evidence here
 
-This section is about **forwarder delivery**, which the deployed workflow does not use — it signs
-instead, and `delivery: signature` is what `config.production.json` names. It is kept because the
-forwarder path still exists in the code and the rule below generalises. `rehearse-idle.sh` applies
-that rule for a different reason: it checks the account's balances rather than the transaction, because a
-call that succeeds and moves nothing is indistinguishable from one that worked.
+This section is about **forwarder delivery**, which is what the deployed workflow uses since
+11 September: `delivery: forwarder` in `config.production.json`, written to `HelicoAgent` at
+`0x98c3…4463`, the contract the account nominates as its agent. Until that day production used
+`delivery: signature` — the enclave signed a statement and nothing carried it, which is why the
+account's balance never changed however often the enclave decided. Staging and `rehearse-idle.sh`
+still use `signature`, and the rehearsal applies the rule below for a different reason: it checks
+the account's balances rather than the transaction, because a call that succeeds and moves nothing
+is indistinguishable from one that worked.
 
 `KeystoneForwarder` calls the receiver inside a `try`. **If `onReport` reverts, the forwarder
 swallows it and the transaction still succeeds.** So the workflow prints
