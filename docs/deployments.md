@@ -126,6 +126,42 @@ the account's balances, the account's `IdleCapitalMoved` event, and the agent's 
 The forwarder's `getTransmissionInfo(receiver, executionId, reportId)` says which of `SUCCEEDED`,
 `FAILED` and `INVALID_RECEIVER` a delivery ended in, and is the thing to read when a balance did
 not change.
+## 11 September 2026 — the subgraph indexes the fifth event
+
+1inch's own Aqua documentation asks for an indexer over **five** registry/router events. We had
+four; `Swapped` lives on the router, and there was no router data source at all. #410 added one,
+and this is the deployment that makes the README's sentence about it true rather than early.
+
+```
+subgraph        helico-arbitrum-one
+version         v0.3.0                (v0.2.0 was 8 September)
+build           QmbhmRoR9C7Eo6RGRdM4kCd6iBhWvRWcLXXAx4SSd5WSfe
+router source   0x111111338c…  startBlock 489,290,882 — the router's own first log
+```
+
+**Read back from Studio after sync, at `version/latest`:**
+
+```
+deployment            QmbhmRoR9C…       ← `latest` now serves v0.3.0
+block                 504,018,404       against a chain head of 504,018,412
+hasIndexingErrors     false
+fills                 340               ← the number the README names, measured rather than copied
+unique takers         3
+accounts              1                 ← the one opened on the 11th, still indexed
+```
+
+Before deploy: `graph codegen`, `graph build`, and the subgraph's own suite — 12 tests, four of
+them new for the router handler. Nothing goes to Studio that does not build.
+
+### What `version/latest` did while the new version synced
+
+It kept serving v0.2.0. That is Studio's behaviour rather than ours, and it is the right one:
+`config.production.json` and the app both name `version/latest`, so the enclave kept reading a
+complete index for the minutes v0.3.0 was catching up, and switched only once it had. No run saw a
+half-built index.
+
+The catch-up itself was fast — 18.5 million blocks in under two minutes — because the router
+source filters on one event signature and Graph Node skips ranges that carry none.
 
 ## 10 September 2026 — the workflow catches up with the contracts
 
