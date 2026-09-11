@@ -347,7 +347,7 @@ export function Chat({ conversationId }: { conversationId?: string }) {
 
         <div className="sticky bottom-0 z-1 mx-auto flex w-full max-w-4xl flex-col gap-2.5 bg-background px-2 pb-3 md:px-4 md:pb-4">
           {/* Always, and smaller once the conversation has started. */}
-          <SuggestedActions compact={!empty} onSelect={send} />
+          <SuggestedActions onSelect={send} />
 
           <PromptInput
             className="[&>div]:rounded-2xl [&>div]:border [&>div]:border-border/30 [&>div]:bg-card/70 [&>div]:shadow-[var(--shadow-composer)] [&>div]:transition-shadow [&>div]:duration-300 [&>div]:focus-within:shadow-[var(--shadow-composer-focus)]"

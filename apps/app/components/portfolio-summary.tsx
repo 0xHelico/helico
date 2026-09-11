@@ -114,7 +114,10 @@ export function PortfolioSummary() {
                   : "No account factory deployed yet, so there is nothing to total."}
           </p>
         </div>
-        {days.length > 0 ? (
+        {/* Hidden entirely when there is nothing in it, unlike the hero's, which keeps its axis
+            and explains the zero. Two cards drawing the same empty line on one page is the
+            reading twice and the explanation nowhere. */}
+        {days.length > 0 && days.some((d) => d.count > 0) ? (
           <div className="w-full sm:max-w-[300px]">
             <Sparkline days={days} label="Aqua movements per day" />
           </div>

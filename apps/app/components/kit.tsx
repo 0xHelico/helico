@@ -162,12 +162,16 @@ export function AssetTile({
   note,
   tint,
   mark,
+  share,
 }: {
   symbol: string;
   value: string;
   note?: string;
   tint?: string;
   mark?: ReactNode;
+  /** This row's share of the total, already formatted. Sits at the end, so the column of
+   *  percentages reads down the card without competing with the amounts. */
+  share?: string;
 }) {
   return (
     <div
@@ -180,7 +184,7 @@ export function AssetTile({
       {/* Two lines, not three. The note used to stack under the figure, which made every tile a
           third taller than it needed to be and pushed the grid out of the rhythm the rest of the
           page keeps. It belongs beside the symbol: both are labels for the number below. */}
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-1.5 font-medium text-soft text-xs">
           <span className="truncate">{symbol}</span>
           {note ? <span className="truncate text-faint">· {note}</span> : null}
@@ -189,6 +193,11 @@ export function AssetTile({
           {value}
         </div>
       </div>
+      {share ? (
+        <span className="tabular shrink-0 self-center font-mono text-[12.5px] text-soft">
+          {share}
+        </span>
+      ) : null}
     </div>
   );
 }
