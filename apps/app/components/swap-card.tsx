@@ -1,5 +1,6 @@
 "use client";
 
+import { planSwap } from "@helico/plugin-uniswap";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ArrowDown, Check, Loader2 } from "lucide-react";
 import { erc20Abi, formatUnits, type Hex, zeroAddress } from "viem";
@@ -159,7 +160,7 @@ export function SwapCard({ intent }: { intent: Intent }) {
       if (!(publicClient && address)) {
         throw new Error("No client");
       }
-      // Aqua first, 1inch's aggregation route when Aqua cannot fill.
+      // Aqua first, then 1inch's aggregation route, then Uniswap v4 — #400's ordering.
       //
       // Aqua's liquidity is not thin, it is **absent**. Thirty-five active mandates were scanned
       // across every pair and both directions and **none** would price at any size — for
@@ -175,8 +176,8 @@ export function SwapCard({ intent }: { intent: Intent }) {
       // needs a key and we had none**, while the v4 Quoter is an on-chain call. We have a key now,
       // and Uniswap has not been a submitted track since 7 September (#125), so the product's most
       // visible action was ending at a protocol we do not submit while the partner we do submit sat
-      // behind a refusal. `@helico/plugin-uniswap` is not deleted and its tests stay green; it is
-      // simply not in this path. (#401)
+      // behind a refusal. Uniswap is not removed, though: it stays last, because it is the only
+      // one of the three that needs no key and no service. (#400)
       //
       // The route is named in the card either way. A swap that quietly changes venue is the kind
       // of thing that reads as a claim.
@@ -205,19 +206,45 @@ export function SwapCard({ intent }: { intent: Intent }) {
       // 1inch's own aggregation, reached through `/api/1inch/…` — a route handler on our server,
       // which is the only place the key exists. No `NEXT_PUBLIC_` here or anywhere: that prefix
       // inlines a value into the client bundle, and a bundled key is a public key.
-      const viaOneInch = await planOneInchSwap(publicClient, {
+      try {
+        const viaOneInch = await planOneInchSwap(publicClient, {
+          account: address,
+          amountIn: amountIn as bigint,
+          chainId: intent.chainId,
+          slippageBps: SLIPPAGE_BPS,
+          tokenIn: intent.tokenIn.address,
+          tokenOut: intent.tokenOut.address,
+        });
+        return {
+          amountOut: viaOneInch.amountOut,
+          minAmountOut: viaOneInch.minAmountOut,
+          steps: viaOneInch.steps as Step[],
+          route: `1inch aggregation · every venue it can reach`,
+          note: aquaWhy,
+        };
+      } catch {
+        // Swallowed rather than shown, because there is still an answer below and `aquaWhy` is the
+        // one a person can act on. The reason 1inch declined is a fact about our deployment — no
+        // key configured, a rate limit, their gateway — not about this swap.
+      }
+
+      // Uniswap v4, last, and Ghoza's call in #400: "Uniswap stays as the last resort." It needs
+      // no key and no service, because the v4 Quoter is an on-chain call, so it is the route that
+      // still answers when a deployment has no 1inch key at all or 1inch cannot be reached. A demo
+      // that goes silent because a third party rate-limited us is worse than one venue further
+      // down the list.
+      const viaUniswap = await planSwap(publicClient, {
         account: address,
-        amountIn: amountIn as bigint,
-        chainId: intent.chainId,
-        slippageBps: SLIPPAGE_BPS,
         tokenIn: intent.tokenIn.address,
         tokenOut: intent.tokenOut.address,
+        amountIn: amountIn as bigint,
+        slippageBps: SLIPPAGE_BPS,
       });
       return {
-        amountOut: viaOneInch.amountOut,
-        minAmountOut: viaOneInch.minAmountOut,
-        steps: viaOneInch.steps as Step[],
-        route: `1inch aggregation · every venue it can reach`,
+        amountOut: viaUniswap.amountOut,
+        minAmountOut: viaUniswap.minAmountOut,
+        steps: viaUniswap.steps as Step[],
+        route: `Uniswap v4 · ${viaUniswap.pool.key.fee / 10_000}% pool`,
         note: aquaWhy,
       };
     },
