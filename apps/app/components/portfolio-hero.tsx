@@ -164,6 +164,19 @@ export function PortfolioHero() {
                 Aqua movements per day
               </span>
             </div>
+            {/* **A flat line has to say why it is flat.** Keeping the axis rather than collapsing
+                to a gap is right, and on its own it reads as "no data" — which is what a reader
+                said it read as, on a day the account had just supplied half a dollar to Morpho.
+                Zero is the true answer to the question this series asks, and the question is
+                narrower than the page: `supplyIdle` moves money into a lending market and is not
+                an Aqua movement. Only a fill against a shipped position is. */}
+            {moves.data && days.every((d) => d.count === 0) ? (
+              <p className="mt-1 text-[11px] text-faint leading-relaxed">
+                {held && held.working > 0n
+                  ? "Nothing yet. Putting money into a lending market is not an Aqua movement — only a fill against a position you have shipped is."
+                  : "Nothing yet. Ship a position and the fills against it turn up here."}
+              </p>
+            ) : null}
             <div className="mt-2">
               <PriceChart
                 points={(days.length > 0

@@ -588,14 +588,30 @@ if (fellBack) {
     await page.waitForTimeout(1000);
   }
   const usdcAfterBig = await bal(USDC, taker.account.address);
+  // The drift, when it fails, because that is almost always the reason and it is invisible
+  // otherwise. 1inch builds its route against the chain head and this fork is pinned behind it, so
+  // a route through a pool whose state has moved reverts. `oneinch-repeat.ts` measures the same
+  // path twelve times and prints the same number; a red line here without it reads as a broken
+  // integration rather than a stale fork.
+  let drift = "";
+  if (!bigLanded) {
+    try {
+      const head = await createPublicClient({
+        chain: arbitrum,
+        transport: http("https://arb1.arbitrum.io/rpc"),
+      }).getBlockNumber();
+      drift = `fork is ${head - (await pub.getBlockNumber())} blocks behind the chain head · `;
+    } catch {}
+  }
   check(
     "and 0.1 ETH actually fills on 1inch",
     bigLanded,
     bigLanded
       ? `+${formatUnits(usdcAfterBig - usdcBeforeBig, 6)} USDC`
-      : (await page.locator("body").innerText())
-          .replace(/\n+/g, " · ")
-          .slice(-220),
+      : drift +
+          (await page.locator("body").innerText())
+            .replace(/\n+/g, " · ")
+            .slice(-140),
   );
 }
 

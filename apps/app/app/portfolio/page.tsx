@@ -2,11 +2,7 @@ import Link from "next/link";
 import { PageHeader } from "@/components/chat/page-header";
 import { MandatesPanel } from "@/components/mandates-panel";
 import { PortfolioHero } from "@/components/portfolio-hero";
-import {
-  Activity,
-  Allocation,
-  Holdings,
-} from "@/components/portfolio-sections";
+import { Activity, Holdings } from "@/components/portfolio-sections";
 
 export const metadata = { title: "Portfolio | Helico" };
 
@@ -30,8 +26,9 @@ export default function PortfolioPage() {
               `space-y` never reached the gap between its card and the first section — the two sat
               flush and read as one long card with a rule through it. */}
           <div className="mt-6 space-y-6">
+            {/* One card now: the rows carry their own share, so a second card printing
+                one percentage of the same numbers had nothing left to say. */}
             <Holdings />
-            <Allocation />
             <Activity />
             {/* Back on the page. This is the one panel that shows an indexer answering a question
                 the chain cannot — Aqua's balances are private and four levels deep, and no event
