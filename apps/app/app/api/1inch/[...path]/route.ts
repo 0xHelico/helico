@@ -21,18 +21,24 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> },
 ) {
-  const key = process.env.ONEINCH_API_KEY;
-  if (!key) {
-    return NextResponse.json(
-      { code: "NO_KEY", description: "This deployment has no 1inch API key." },
-      { status: 503 },
-    );
-  }
+  // The path first, then the key. The path is a fact about the request and the key is a fact about
+  // the deployment, so asking in this order is what makes the refusal honest: with the checks the
+  // other way round, a deployment with no key answered 503 "no key" for `portfolio/v5/anything` —
+  // which says "we would have forwarded this if we could", and that is false. It also means the
+  // allowlist can be confirmed from outside without a key, which is the only way anybody but us
+  // can see that it is there.
   const path = (await params).path.join("/");
   if (!forwards(path)) {
     return NextResponse.json(
       { code: "NOT_ALLOWED", description: "This proxy does not forward that." },
       { status: 404 },
+    );
+  }
+  const key = process.env.ONEINCH_API_KEY;
+  if (!key) {
+    return NextResponse.json(
+      { code: "NO_KEY", description: "This deployment has no 1inch API key." },
+      { status: 503 },
     );
   }
   const who =
