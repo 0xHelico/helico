@@ -2,6 +2,7 @@
 
 import {
   ARBITRUM_ONE,
+  aquaAddress,
   fillApproval,
   fillCall,
   type OpenOrder,
@@ -97,14 +98,42 @@ export type AquaPlan = {
  * strategies that decoded cleanly, **six hashed to something else**. Offering those to a wallet is
  * offering orders that do not exist, and the wallet finds out by paying gas.
  */
+/** Which of the three limits binds a position, and how much it can actually pay. */
+export type Wall = "ledger" | "wallet" | "allowance";
+
+/**
+ * The most a maker can pay of one token, and which limit says so.
+ *
+ * `pull` does `safeTransferFrom(maker, to, amount)`, so all three have to cover the amount: Aqua's
+ * ledger, the maker's balance, and their allowance to Aqua. The ledger is the only one Aqua itself
+ * enforces, and it is a number the maker shipped — it does not fall when they spend those tokens
+ * elsewhere or revoke the approval.
+ *
+ * Ties go to `ledger`, then `wallet`. Naming the outer limit when two are equal would send somebody
+ * to fix an allowance that is already large enough.
+ */
+export function fillableCap(
+  ledger: bigint,
+  wallet: bigint,
+  allowance: bigint,
+): { amount: bigint; limit: Wall } {
+  if (ledger <= wallet && ledger <= allowance)
+    return { amount: ledger, limit: "ledger" };
+  if (wallet <= allowance) return { amount: wallet, limit: "wallet" };
+  return { amount: allowance, limit: "allowance" };
+}
+
 async function candidates(
+  client: PublicClient,
   tokenIn: Address,
   tokenOut: Address,
 ): Promise<{
   orders: OpenOrder[];
   considered: number;
-  /** What each position has actually committed of `tokenOut`, by strategy hash. */
+  /** The most each position could actually pay of `tokenOut`, by strategy hash. */
   cap: Map<string, bigint>;
+  /** Which of the three limits bound, per hash. For a refusal that says something useful. */
+  bound: Map<string, "ledger" | "wallet" | "allowance">;
 }> {
   const mandates = await askGraph((subgraph) =>
     fillableFor(subgraph, [tokenIn, tokenOut]),
@@ -113,22 +142,92 @@ async function candidates(
     strategyHash: m.strategyHash,
     strategy: m.strategy,
   }));
-  // Carried rather than dropped, because the quote does not know about it.
+  // Carried rather than dropped, because the quote does not know about any of it.
   //
   // `concentrate` prices on virtual reserves — a band, not an inventory — so it will answer for
   // more than the maker committed and answer badly. Measured: a position holding 10 USDC quotes
   // 0.1 WETH at **72.06 USDC**, and the fill reverts when Aqua's ledger subtraction underflows.
   // A card that showed that price would have taken a signature for a transaction that cannot land,
   // which is the one thing this file's own docblock says a quote must never do.
+  //
+  // **And the ledger is only the first of three limits.** `pull` does
+  // `safeTransferFrom(maker, to, amount)`, so a fill needs the maker's wallet to hold the tokens
+  // and their allowance to Aqua to cover them — and the ledger is a number the maker shipped, which
+  // does not fall when they spend those tokens elsewhere or revoke the approval. Read off Arbitrum
+  // One on 11 September, three live positions with three different binding constraints (#393):
+  //
+  // ```
+  // 0xa9aa0af4…  WETH  ledger 0.0000811  wallet 0.000209  allowance 0.0000018  → allowance, 43× short
+  // 0xef9f7f40…  WETH  ledger 0.014624   wallet 0         allowance 0          → wallet, a ledger with no money
+  // 0xcdbde4f9…  WETH  ledger 0.010950   wallet 0.010950  allowance unlimited  → ledger, as intended
+  // ```
+  //
+  // The middle one cannot be filled at any size or any price, and nothing in Aqua's own state says
+  // so. Capping on the ledger alone offered it.
   const cap = new Map<string, bigint>();
+  const bound = new Map<string, "ledger" | "wallet" | "allowance">();
   const out = tokenOut.toLowerCase();
-  for (const m of mandates) {
+  const ledgers = mandates.map((m) => {
     const side = m.balances.find(
       (b) => b.token.toLowerCase() === out && b.spendable,
     );
-    cap.set(m.strategyHash.toLowerCase(), side?.amount ?? 0n);
+    return side?.amount ?? 0n;
+  });
+  // One multicall rather than two reads per candidate: this runs on every quote the chat offers,
+  // and the list is every live mandate for the pair.
+  const withMaker = mandates.map((m) => m.maker as Address | undefined);
+  const reads = withMaker.flatMap((maker) =>
+    maker
+      ? [
+          {
+            abi: erc20Abi,
+            address: tokenOut,
+            args: [maker],
+            functionName: "balanceOf",
+          } as const,
+          {
+            abi: erc20Abi,
+            address: tokenOut,
+            args: [maker, aquaAddress(ARBITRUM_ONE)],
+            functionName: "allowance",
+          } as const,
+        ]
+      : [],
+  );
+  const answers = reads.length
+    ? await client.multicall({ allowFailure: true, contracts: reads })
+    : [];
+  let at = 0;
+  for (const [i, m] of mandates.entries()) {
+    const ledger = ledgers[i] ?? 0n;
+    const key = m.strategyHash.toLowerCase();
+    if (!withMaker[i]) {
+      // No maker in the answer means the two reads were never made. Capping on the ledger is what
+      // this did before and it is the wrong side of safe, so say which limit was used.
+      cap.set(key, ledger);
+      bound.set(key, "ledger");
+      continue;
+    }
+    const walletAnswer = answers[at++];
+    const allowanceAnswer = answers[at++];
+    // A read that failed is treated as zero rather than as unlimited. An RPC that will not answer
+    // is not evidence that a maker can pay.
+    const wallet =
+      walletAnswer?.status === "success" ? (walletAnswer.result as bigint) : 0n;
+    const allowance =
+      allowanceAnswer?.status === "success"
+        ? (allowanceAnswer.result as bigint)
+        : 0n;
+    const { amount, limit } = fillableCap(ledger, wallet, allowance);
+    cap.set(key, amount);
+    bound.set(key, limit);
   }
-  return { orders: openOrders(shipped), considered: shipped.length, cap };
+  return {
+    orders: openOrders(shipped),
+    considered: shipped.length,
+    cap,
+    bound,
+  };
 }
 
 /**
@@ -239,7 +338,11 @@ export async function planAquaSwap(
   const wrapping = tokenIn === zeroAddress;
   const payWith = wrapping ? WETH : tokenIn;
 
-  const { orders, considered, cap } = await candidates(payWith, tokenOut);
+  const { orders, considered, cap, bound } = await candidates(
+    client,
+    payWith,
+    tokenOut,
+  );
   const picked = await best(client, orders, payWith, tokenOut, amountIn, cap);
 
   // Three different walls, and they used to arrive as one sentence.
@@ -275,6 +378,17 @@ export async function planAquaSwap(
     if (picked.overCap > 0 && picked.largestCap > 0n) {
       throw new Error(
         `The largest Aqua position for this pair can pay ${Number(formatUnits(picked.largestCap, 6)).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${outSymbolFor(tokenOut)} and this asks for more. Ask for a smaller amount, or provide liquidity of your own.`,
+      );
+    }
+    // Which of the three limits held every candidate back. A ledger that is the limit means the
+    // makers are simply small; a wallet or an allowance that is the limit means their positions are
+    // not backed at all, and no amount of asking for less will fix it. Saying which is the
+    // difference between advice that can work and advice that cannot (#393).
+    const walls = [...bound.values()];
+    const unbacked = walls.filter((w) => w !== "ledger").length;
+    if (unbacked > 0) {
+      throw new Error(
+        `${unbacked} of ${walls.length} Aqua position${walls.length === 1 ? "" : "s"} for this pair are not backed by the maker's own wallet or approval, so they cannot be filled at any size. Providing liquidity of your own is what fixes this.`,
       );
     }
     throw new Error(

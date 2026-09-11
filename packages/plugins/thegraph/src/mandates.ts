@@ -34,6 +34,7 @@ const FILLABLE = `
       active
       movementCount
       shippedAt
+      maker { id }
       app { id }
       balances { token amount tokensCount totalPulled totalPushed }
     }
@@ -67,6 +68,8 @@ type Raw = {
 		active: boolean
 		movementCount: number
 		shippedAt: string
+		/** Selected by `FILLABLE` and not by `MANDATES`, which already knows the maker. */
+		maker?: { id: string }
 		app: { id: string }
 		balances: {
 			token: string
@@ -90,6 +93,10 @@ export function toMandates(raw: Raw): Mandate[] {
 		strategyHash: m.strategyHash,
 		strategy: m.strategy,
 		active: m.active,
+		// Optional because `makerMandates` already knows whose mandates it asked for and its query
+		// does not select this. `fillableFor` does not know, and cannot check a wallet or an
+		// allowance without it — see #393.
+		maker: m.maker?.id,
 		app: m.app.id,
 		movementCount: m.movementCount,
 		shippedAt: Number(m.shippedAt),
