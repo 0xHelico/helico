@@ -507,25 +507,31 @@ if (dollarSized) {
 // Back to the real classifier for everything after this.
 await page.unroute("**/api/chat");
 
-// ── 2c. a swap the position cannot pay goes to Uniswap, not to a dead end ───
+// ── 2c. a swap the position cannot pay goes to 1inch, not to a dead end ─────
 //
 // Two things at once. `concentrate` prices on a band rather than on inventory, so it answers for
 // more than the maker committed: measured directly, a position holding 10 USDC quotes 0.1 WETH at
 // **72.06 USDC** and the fill reverts. The ledger is the cap now, so Aqua declines this.
 //
 // And declining is no longer the end of it. The stub commits 50 USDC, so 0.1 ETH — about $246 — is
-// more than Aqua can pay, and the card routes through Uniswap v4 instead and says so.
+// more than Aqua can pay, and the card routes through 1inch's aggregation instead and says so.
+//
+// **Nothing here is stubbed except the `Fillable` query.** The route comes from the live
+// aggregation API through our own proxy, with the real key, and the transaction 1inch built for
+// mainnet is signed and mined on this fork — which is the check worth having, because a quote that
+// cannot be filled is exactly the failure this path exists to avoid. Native ether needs no
+// wrapping on this route, so it is one transaction rather than three.
 await page.waitForTimeout(13_000);
 const usdcBeforeBig = await bal(USDC, taker.account.address);
 await say("Swap 0.1 ETH into USDC");
-const routeRow = page.getByText(/Uniswap v4 ·/);
+const routeRow = page.getByText(/1inch aggregation ·/);
 let fellBack = false;
 try {
   await routeRow.first().waitFor({ timeout: 60_000 });
   fellBack = true;
 } catch {}
 check(
-  "a swap Aqua cannot pay routes through Uniswap and names it",
+  "a swap Aqua cannot pay routes through 1inch and names it",
   fellBack,
   fellBack
     ? (await routeRow.first().innerText()).slice(0, 60)
@@ -544,7 +550,7 @@ if (fellBack) {
   await page.waitForTimeout(35_000);
   const usdcAfterBig = await bal(USDC, taker.account.address);
   check(
-    "and 0.1 ETH actually fills on Uniswap",
+    "and 0.1 ETH actually fills on 1inch",
     usdcAfterBig > usdcBeforeBig,
     `+${formatUnits(usdcAfterBig - usdcBeforeBig, 6)} USDC`,
   );
