@@ -70,12 +70,36 @@ const factoryAbi = parseAbi([
 ]);
 
 const pub = createPublicClient({ chain: arbitrum, transport: http(FORK) });
-const rpc = (method: string, params: unknown[]) =>
-  fetch(FORK, {
+/**
+ * An anvil cheat code, and it **throws when anvil says no**.
+ *
+ * This used to drop the error and return the body. The cost was not theoretical: the public
+ * Arbitrum endpoint is a pruned node, so a fork pinned an hour ago stops being servable — and
+ * `anvil_setBalance` then fails with "missing trie node … state is not available" while this
+ * helper returned it as if it were a result. The wallet stayed at zero, the first approval died
+ * with "gas required exceeds allowance: 0", and every check after it failed for a reason that had
+ * nothing to do with the product. Twice, at seven minutes a run.
+ *
+ * The fix when this throws is to restart anvil, not to retry: the fork block has aged out.
+ */
+const rpc = async (method: string, params: unknown[]) => {
+  const body = await fetch(FORK, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ id: 1, jsonrpc: "2.0", method, params }),
   }).then((r) => r.json());
+  if (body?.error) {
+    const detail = String(body.error.message ?? "");
+    throw new Error(
+      /missing trie node|state is not available|metadata is not found/.test(
+        detail,
+      )
+        ? `the fork block has aged out of the upstream node — restart anvil and run again\n  (${method}: ${detail})`
+        : `${method} failed: ${detail}`,
+    );
+  }
+  return body;
+};
 
 /** Impersonated rather than minted, so the token behaves as it does in production. */
 async function fund(
@@ -507,25 +531,31 @@ if (dollarSized) {
 // Back to the real classifier for everything after this.
 await page.unroute("**/api/chat");
 
-// ── 2c. a swap the position cannot pay goes to Uniswap, not to a dead end ───
+// ── 2c. a swap the position cannot pay goes to 1inch, not to a dead end ─────
 //
 // Two things at once. `concentrate` prices on a band rather than on inventory, so it answers for
 // more than the maker committed: measured directly, a position holding 10 USDC quotes 0.1 WETH at
 // **72.06 USDC** and the fill reverts. The ledger is the cap now, so Aqua declines this.
 //
 // And declining is no longer the end of it. The stub commits 50 USDC, so 0.1 ETH — about $246 — is
-// more than Aqua can pay, and the card routes through Uniswap v4 instead and says so.
+// more than Aqua can pay, and the card routes through 1inch's aggregation instead and says so.
+//
+// **Nothing here is stubbed except the `Fillable` query.** The route comes from the live
+// aggregation API through our own proxy, with the real key, and the transaction 1inch built for
+// mainnet is signed and mined on this fork — which is the check worth having, because a quote that
+// cannot be filled is exactly the failure this path exists to avoid. Native ether needs no
+// wrapping on this route, so it is one transaction rather than three.
 await page.waitForTimeout(13_000);
 const usdcBeforeBig = await bal(USDC, taker.account.address);
 await say("Swap 0.1 ETH into USDC");
-const routeRow = page.getByText(/Uniswap v4 ·/);
+const routeRow = page.getByText(/1inch aggregation ·/);
 let fellBack = false;
 try {
   await routeRow.first().waitFor({ timeout: 60_000 });
   fellBack = true;
 } catch {}
 check(
-  "a swap Aqua cannot pay routes through Uniswap and names it",
+  "a swap Aqua cannot pay routes through 1inch and names it",
   fellBack,
   fellBack
     ? (await routeRow.first().innerText()).slice(0, 60)
@@ -541,14 +571,78 @@ if (fellBack) {
     .getByRole("button", { name: /^(Sign and swap|Sign \d+ transactions)$/ })
     .last();
   await bigSwap.click();
-  await page.waitForTimeout(35_000);
+  // Waited for an outcome rather than for a fixed number of seconds. A plain wait reports "+0 USDC"
+  // whether the transaction reverted, was never sent, or simply had not landed yet, and those are
+  // three different bugs. The card either links the transaction it sent or prints why it did not.
+  let bigLanded = false;
+  for (let waited = 0; waited < 60_000; waited += 1000) {
+    if ((await bal(USDC, taker.account.address)) > usdcBeforeBig) {
+      bigLanded = true;
+      break;
+    }
+    await page.waitForTimeout(1000);
+  }
   const usdcAfterBig = await bal(USDC, taker.account.address);
   check(
-    "and 0.1 ETH actually fills on Uniswap",
-    usdcAfterBig > usdcBeforeBig,
-    `+${formatUnits(usdcAfterBig - usdcBeforeBig, 6)} USDC`,
+    "and 0.1 ETH actually fills on 1inch",
+    bigLanded,
+    bigLanded
+      ? `+${formatUnits(usdcAfterBig - usdcBeforeBig, 6)} USDC`
+      : (await page.locator("body").innerText())
+          .replace(/\n+/g, " · ")
+          .slice(-220),
   );
 }
+
+// ── 2d. and when 1inch cannot be reached, Uniswap still answers ─────────────
+//
+// The last resort, which is the reason it is still there (#400): Uniswap v4's Quoter is an
+// on-chain call, so it needs no key and no service and keeps answering when a deployment has no
+// 1inch key at all or 1inch rate-limits us. A demo that goes silent because a third party said no
+// is worse than one venue further down the list.
+//
+// The proxy is made to fail rather than the key removed, because that is the failure that actually
+// happens — 503 is what our own route answers with no key configured.
+await page.route("**/api/1inch/**", (route) =>
+  route.fulfill({
+    status: 503,
+    contentType: "application/json",
+    body: JSON.stringify({
+      code: "NO_KEY",
+      description: "This deployment has no 1inch API key.",
+    }),
+  }),
+);
+await page.waitForTimeout(13_000);
+const usdcBeforeLast = await bal(USDC, taker.account.address);
+await say("Swap 0.1 ETH into USDC");
+const lastRow = page.getByText(/Uniswap v4 ·/);
+let lastResort = false;
+try {
+  await lastRow.first().waitFor({ timeout: 60_000 });
+  lastResort = true;
+} catch {}
+check(
+  "with 1inch unreachable it falls to Uniswap rather than going silent",
+  lastResort,
+  lastResort
+    ? (await lastRow.first().innerText()).slice(0, 40)
+    : (await page.locator("body").innerText()).slice(-170),
+);
+if (lastResort) {
+  await page
+    .getByRole("button", { name: /^(Sign and swap|Sign \d+ transactions)$/ })
+    .last()
+    .click();
+  await page.waitForTimeout(35_000);
+  const usdcAfterLast = await bal(USDC, taker.account.address);
+  check(
+    "and that one fills too",
+    usdcAfterLast > usdcBeforeLast,
+    `+${formatUnits(usdcAfterLast - usdcBeforeLast, 6)} USDC`,
+  );
+}
+await page.unroute("**/api/1inch/**");
 
 // ── 3. status: a reading, and nothing to sign ────────────────────────────────
 await say("Check my portfolio");

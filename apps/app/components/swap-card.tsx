@@ -18,6 +18,7 @@ import { explorerTx, SLIPPAGE_BPS } from "@/lib/chain";
 import { amountFloor, amountShort } from "@/lib/format";
 import type { Intent } from "@/lib/intent";
 import { shortfall } from "@/lib/intent";
+import { planOneInchSwap } from "@/lib/oneinch-swap";
 import { unitsForDollars } from "@/lib/usd";
 
 /**
@@ -159,8 +160,7 @@ export function SwapCard({ intent }: { intent: Intent }) {
       if (!(publicClient && address)) {
         throw new Error("No client");
       }
-      // Aqua first, Uniswap when Aqua cannot fill. Ghoza's call on 11 September, reversing his
-      // own of the 10th, and the reason the decision changed is worth keeping:
+      // Aqua first, then 1inch's aggregation route, then Uniswap v4 — #400's ordering.
       //
       // Aqua's liquidity is not thin, it is **absent**. Thirty-five active mandates were scanned
       // across every pair and both directions and **none** would price at any size — for
@@ -170,7 +170,14 @@ export function SwapCard({ intent }: { intent: Intent }) {
       //
       // What Aqua keeps is everything it was doing: `provide` ships through it, the contracts are
       // ours, and the moment a position exists this path takes it — the fallback only runs when it
-      // cannot. What Uniswap adds is that the sentence works today.
+      // cannot.
+      //
+      // **The fallback was Uniswap v4 until 11 September, for one reason: the aggregation API
+      // needs a key and we had none**, while the v4 Quoter is an on-chain call. We have a key now,
+      // and Uniswap has not been a submitted track since 7 September (#125), so the product's most
+      // visible action was ending at a protocol we do not submit while the partner we do submit sat
+      // behind a refusal. Uniswap is not removed, though: it stays last, because it is the only
+      // one of the three that needs no key and no service. (#400)
       //
       // The route is named in the card either way. A swap that quietly changes venue is the kind
       // of thing that reads as a claim.
@@ -196,8 +203,36 @@ export function SwapCard({ intent }: { intent: Intent }) {
         aquaWhy = e instanceof Error ? e.message : String(e);
       }
 
-      // Uniswap v4, on chain and keyless: the Quoter is a call rather than a service, so this adds
-      // no key to configure and nothing that can rate-limit a demo.
+      // 1inch's own aggregation, reached through `/api/1inch/…` — a route handler on our server,
+      // which is the only place the key exists. No `NEXT_PUBLIC_` here or anywhere: that prefix
+      // inlines a value into the client bundle, and a bundled key is a public key.
+      try {
+        const viaOneInch = await planOneInchSwap(publicClient, {
+          account: address,
+          amountIn: amountIn as bigint,
+          chainId: intent.chainId,
+          slippageBps: SLIPPAGE_BPS,
+          tokenIn: intent.tokenIn.address,
+          tokenOut: intent.tokenOut.address,
+        });
+        return {
+          amountOut: viaOneInch.amountOut,
+          minAmountOut: viaOneInch.minAmountOut,
+          steps: viaOneInch.steps as Step[],
+          route: `1inch aggregation · every venue it can reach`,
+          note: aquaWhy,
+        };
+      } catch {
+        // Swallowed rather than shown, because there is still an answer below and `aquaWhy` is the
+        // one a person can act on. The reason 1inch declined is a fact about our deployment — no
+        // key configured, a rate limit, their gateway — not about this swap.
+      }
+
+      // Uniswap v4, last, and Ghoza's call in #400: "Uniswap stays as the last resort." It needs
+      // no key and no service, because the v4 Quoter is an on-chain call, so it is the route that
+      // still answers when a deployment has no 1inch key at all or 1inch cannot be reached. A demo
+      // that goes silent because a third party rate-limited us is worse than one venue further
+      // down the list.
       const viaUniswap = await planSwap(publicClient, {
         account: address,
         tokenIn: intent.tokenIn.address,

@@ -12,6 +12,7 @@
  * the remaining days are for.
  */
 export * from './addresses'
+export * from './api'
 export * from './calldata'
 export * from './mandate'
 export * from './price'
