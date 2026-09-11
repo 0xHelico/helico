@@ -31,7 +31,7 @@ Decide which of five things they are asking for, and for a swap also pull out th
 amount.
 
 Answer with JSON only, this shape:
-{"action":"","chain":"arbitrum","tokenIn":"","tokenOut":"","amount":"","question":""}
+{"action":"","chain":"arbitrum","tokenIn":"","tokenOut":"","amount":"","amountUsd":"","question":""}
 
 action is one of:
 - "swap"   — they want to exchange one token for another
