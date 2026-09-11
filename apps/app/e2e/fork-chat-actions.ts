@@ -27,6 +27,7 @@ import {
   ARBITRUM_ONE,
   aquaAddress,
   concentratedStrategy,
+  mandateSwapAddress,
   ONE,
   shipCall,
   strategyHash as strategyHashOf,
@@ -755,9 +756,19 @@ try {
   provideRendered = true;
 } catch {}
 check("provide offers a maker position, not a refusal", provideRendered);
+// Both cards answer a `provide`, and this says which one is missing when one is. The account card
+// renders its own "this needs an account" copy when `useAccountState` has not answered, so the
+// heading being present and the field absent is a different fault from the card not being there.
+check(
+  "and the account card is offered beside the wallet one",
+  (await page.getByText(/Provide from your account/).count()) > 0,
+  (await page.getByText(/This needs an account/).count()) > 0
+    ? "shown, but it cannot see the account"
+    : "",
+);
 if (provideRendered) {
   await amountASide.fill("10");
-  await page.getByRole("button", { name: /^Ship it$/ }).click();
+  await page.getByRole("button", { name: /^Ship from my wallet$/ }).click();
   // Two approvals and the ship.
   const shipped = page.getByText(/It is filed under/);
   let landed = false;
@@ -811,6 +822,136 @@ if (provideRendered) {
         "and the ledger holds the USDC side, spendable",
         amount === 10_000_000n && count > 0 && count < 255,
         `${formatUnits(amount, 6)} USDC, sentinel ${count}`,
+      );
+    }
+  }
+}
+
+// ── 9. the account is the maker, so one capital earns and is takeable ───────
+//
+// The thesis rather than two features side by side (#396). `provide-card` backs a position with
+// tokens in the wallet while `supplyIdle` moves only what the account holds; this ships from the
+// account, names the venues it has permitted, and puts the receipts in the shipped list — which is
+// what lets a fill be paid out of the lending position instead of only out of idle tokens.
+//
+// The account here holds USDC and has Aave permitted from the setup above. The stub is the same
+// `provide` action; everything the card then does is real.
+await fund(USDC, USDC_WHALE, helicoAccount, 40n * 10n ** 6n);
+{
+  // Permit Aave, so the mandate has a venue to name. Owner-only, so the owner sends it.
+  const hash = await takerWallet.writeContract({
+    abi: parseAbi(["function permitVenue(address,bool)"]),
+    address: helicoAccount,
+    args: ["0x794a61358D6845594F94dc1DB02A252b5b4814aD", true],
+    functionName: "permitVenue",
+  });
+  await pub.waitForTransactionReceipt({ hash });
+}
+// Asked again rather than reloaded. The card mounts with the answer, so its reads are fresh
+// without one — and the reload that used to be here took the wallet connection down with it,
+// which is the whole reason this check failed while the page looked fine. `.last()` throughout,
+// because the answer above is still on screen with a card of its own.
+const ceilings = page.getByRole("textbox", {
+  name: /ceiling a fill may take/i,
+});
+const before = await ceilings.count();
+await say("Provide liquidity for ETH and USDC");
+// The count, not the presence: the card above is still on screen, so `.last()` would point at it
+// and pass before this answer had rendered at all.
+let accountCard = false;
+for (let waited = 0; waited < 40_000; waited += 500) {
+  if ((await ceilings.count()) > before) {
+    accountCard = true;
+    break;
+  }
+  await page.waitForTimeout(500);
+}
+const ceiling = ceilings.last();
+check(
+  "the account can be the maker, not only the wallet",
+  accountCard,
+  accountCard
+    ? ""
+    : (await page.locator("body").innerText())
+        .replace(/\n+/g, " · ")
+        .slice(-260),
+);
+if (accountCard) {
+  await ceiling.fill("20");
+  // The card's own words when something goes wrong with it, rather than the tail of the page: it
+  // says whether it can see the account, what the account holds, and whether the ceiling is above
+  // that — which is the whole of why its button would refuse to be pressed.
+  const cardText = async () => {
+    const body = await page.locator("body").innerText();
+    const at = body.lastIndexOf("Provide from your account");
+    return (at < 0 ? body.slice(-300) : body.slice(at, at + 400)).replace(
+      /\n+/g,
+      " · ",
+    );
+  };
+  const button = page
+    .getByRole("button", { name: /^Ship from my account$/ })
+    .last();
+  let pressable = false;
+  try {
+    await button.click({ timeout: 45_000 });
+    pressable = true;
+  } catch {}
+  check(
+    "and its button is pressable",
+    pressable,
+    pressable ? "" : await cardText(),
+  );
+  const said = page.getByText(/Shipped from your account/).last();
+  let landed = false;
+  if (pressable) {
+    try {
+      await said.waitFor({ timeout: 90_000 });
+      landed = true;
+    } catch {}
+  }
+  check(
+    "and it ships from the account in one batch",
+    landed,
+    landed
+      ? (await said.innerText()).replace(/\n/g, " ").slice(0, 80)
+      : await cardText(),
+  );
+  if (landed) {
+    // Aqua's ledger, keyed by the **account** rather than the wallet. That is the whole claim:
+    // the maker is the contract the enclave manages, so the money being lent is the money on
+    // offer.
+    const events = await pub.getLogs({
+      address: aquaAddress(ARBITRUM_ONE),
+      event: parseAbiItem(
+        "event Shipped(address maker, address app, bytes32 strategyHash, bytes strategy)",
+      ),
+      fromBlock: "earliest",
+    });
+    const fromAccount = events.filter(
+      (e) => String(e.args.maker).toLowerCase() === helicoAccount.toLowerCase(),
+    );
+    check(
+      "and Aqua records the account as the maker",
+      fromAccount.length === 1,
+      `${fromAccount.length} Shipped event(s) from ${helicoAccount.slice(0, 10)}…`,
+    );
+    if (fromAccount.length === 1) {
+      const [amount, count] = (await pub.readContract({
+        abi: AQUA_ABI,
+        address: aquaAddress(ARBITRUM_ONE),
+        args: [
+          helicoAccount,
+          mandateSwapAddress(ARBITRUM_ONE),
+          fromAccount[0]?.args.strategyHash as `0x${string}`,
+          USDC,
+        ],
+        functionName: "rawBalances",
+      })) as [bigint, number];
+      check(
+        "under our own Aqua app, with the ceiling on the ledger",
+        amount === 20_000_000n && count > 0 && count < 255,
+        `${formatUnits(amount, 6)} USDC, sentinel ${count}, app ${mandateSwapAddress(ARBITRUM_ONE).slice(0, 10)}…`,
       );
     }
   }
