@@ -21,11 +21,14 @@ import {MorphoVenue} from "../src/MorphoVenue.sol";
 ///      chain is a transaction only the owner can send — and the forwarder's `route`, which only a
 ///      DON transmitter can reach, so the receiver is called from the forwarder's address directly.
 ///
-///      **The number in the anchor test is read from the chain, not written down.** The account
-///      holds whatever it holds at the block the fork pins; the test moves all but the policy's
-///      floor of it, which is what the 100% working target asks for, and checks the venue's
-///      `previewRedeem` of the shares it got back — the share count is not an amount of money
-///      (#323), the redeem preview is.
+///      **The account is topped up on the fork, and every assertion is a delta.** The first
+///      version read the live balance and moved "all but the floor" of it, which was true for
+///      exactly as long as the DON had not yet done that on the real chain — the 11:30 UTC move
+///      left the account holding the floor and nothing else, and the test failed with
+///      `NothingToSupply` against the very state it had helped bring about. So the fork now
+///      receives half a dollar from a real holder, the move is sized from that, and what is
+///      checked is the change on each side, with the venue's `previewRedeem` of the shares
+///      gained standing in for the money — a share count is not an amount (#323).
 contract ForkHelicoAgentTest is Test {
     /// @dev `KeystoneForwarder 1.0.0` — `typeAndVersion()` on chain answers exactly that.
     address constant FORWARDER = 0xF8344CFd5c43616a4366C34E3EEE75af79a74482;
@@ -39,6 +42,11 @@ contract ForkHelicoAgentTest is Test {
 
     /// @dev `SECRET_IDLE_MIN_IDLE_AMOUNT` in production: 0.01 USDC.
     uint256 constant FLOOR = 10_000;
+    /// @dev What the fork adds to whatever the account already holds. From the aUSDC contract,
+    ///      which holds real USDC, rather than written into a storage slot: the transfer has to
+    ///      pass through the token.
+    uint256 constant TOP_UP = 500_000;
+    address constant USDC_HOLDER = 0x724dc807b04555b71ed48a6896b6F41593b8C637;
 
     bytes32 constant POLICY = 0xa48db44df37fd9f13ef34f8d390ffa6915b577c9e4dce80921c43f7a8b921af1;
     bytes32 constant WORKFLOW_ID = keccak256("helico-production");
@@ -62,9 +70,18 @@ contract ForkHelicoAgentTest is Test {
         HelicoAgent implementation = new HelicoAgent(FORWARDER, WORKFLOW_OWNER, UPGRADER);
         agent = HelicoAgent(address(new HelicoAppProxy(address(implementation))));
 
-        // The one thing the chain still lacks: the owner naming the contract as the agent.
+        // The owner naming this fork's copy of the contract as the agent — on the chain the owner
+        // named the deployed one, which this test's fresh deployment is not.
         vm.prank(ACCOUNT.owner());
         ACCOUNT.setAgent(address(agent));
+
+        vm.prank(USDC_HOLDER);
+        USDC.transfer(address(ACCOUNT), TOP_UP);
+    }
+
+    /// @dev The move the 100% target asks for: everything above the floor.
+    function movable() internal view returns (uint256) {
+        return USDC.balanceOf(address(ACCOUNT)) - FLOOR;
     }
 
     function metadata() internal pure returns (bytes memory) {
@@ -86,16 +103,15 @@ contract ForkHelicoAgentTest is Test {
     function test_ThePreconditionsTheChainAlreadyHas() public view {
         assertEq(ACCOUNT.agent(), address(agent), "nominated in setUp");
         assertTrue(ACCOUNT.permittedVenue(address(MORPHO)), "the owner permitted Morpho on 10 September");
-        assertGt(USDC.balanceOf(address(ACCOUNT)), FLOOR, "there is something to move");
-        assertEq(MORPHO.balanceOf(address(ACCOUNT)), 0, "and nothing is in Morpho yet");
+        assertGe(USDC.balanceOf(address(ACCOUNT)), TOP_UP, "the top-up landed");
         assertGt(FORWARDER.code.length, 0, "the forwarder is a contract");
     }
 
     /// @dev The anchor. USDC leaves the account, the receipt appears, and the receipt is worth what
     ///      left — not a share count that happens to be near it.
     function test_TheDonsReportMovesTheIdleCapitalIntoMorpho() public {
-        uint256 idle = USDC.balanceOf(address(ACCOUNT));
-        uint256 amount = idle - FLOOR;
+        uint256 amount = movable();
+        uint256 sharesBefore = MORPHO.balanceOf(address(ACCOUNT));
 
         vm.prank(FORWARDER);
         vm.expectEmit(true, true, false, true, address(ACCOUNT));
@@ -103,9 +119,9 @@ contract ForkHelicoAgentTest is Test {
         agent.onReport(metadata(), report(amount, true));
 
         assertEq(USDC.balanceOf(address(ACCOUNT)), FLOOR, "the floor stays liquid, the rest went");
-        uint256 shares = MORPHO.balanceOf(address(ACCOUNT));
-        assertGt(shares, 0, "the account holds the venue's receipt");
-        uint256 worth = MORPHO.previewRedeem(shares);
+        uint256 gained = MORPHO.balanceOf(address(ACCOUNT)) - sharesBefore;
+        assertGt(gained, 0, "the account holds more of the venue's receipt");
+        uint256 worth = MORPHO.previewRedeem(gained);
         assertLe(worth, amount, "rounding never favours the supplier");
         assertGe(worth, amount - 2, "and costs at most dust");
         assertEq(USDC.balanceOf(address(agent)), 0, "the agent contract holds nothing");
@@ -115,25 +131,30 @@ contract ForkHelicoAgentTest is Test {
     /// @dev And back, through the same door: a withdraw report is the agent correcting itself.
     function test_AWithdrawReportBringsItBack() public {
         uint256 idle = USDC.balanceOf(address(ACCOUNT));
-        uint256 amount = idle - FLOOR;
+        uint256 amount = movable();
+        uint256 sharesBefore = MORPHO.balanceOf(address(ACCOUNT));
         vm.prank(FORWARDER);
         agent.onReport(metadata(), report(amount, true));
 
-        uint256 back = MORPHO.previewRedeem(MORPHO.balanceOf(address(ACCOUNT)));
+        uint256 back = MORPHO.previewRedeem(MORPHO.balanceOf(address(ACCOUNT)) - sharesBefore);
         vm.prank(FORWARDER);
         agent.onReport(metadata(), report(back, false));
 
         assertGe(USDC.balanceOf(address(ACCOUNT)), idle - 2, "all but dust is idle again");
         assertLe(
-            MORPHO.previewRedeem(MORPHO.balanceOf(address(ACCOUNT))), 2, "and the venue holds dust at most"
+            MORPHO.balanceOf(address(ACCOUNT)),
+            sharesBefore + 2,
+            "and the venue holds what it held before, plus dust at most"
         );
     }
 
     /// @dev Same bytes, wrong sender: the real account, the real venue, and nothing moves.
     function test_TheSameReportFromAnyoneElseMovesNothing() public {
         uint256 idle = USDC.balanceOf(address(ACCOUNT));
+        // Sized before `expectRevert`: it arms the next external call, and `movable()` makes one.
+        bytes memory r = report(movable(), true);
         vm.expectRevert(abi.encodeWithSelector(HelicoAgent.NotTheForwarder.selector, address(this)));
-        agent.onReport(metadata(), report(idle - FLOOR, true));
+        agent.onReport(metadata(), r);
         assertEq(USDC.balanceOf(address(ACCOUNT)), idle);
     }
 
@@ -160,9 +181,10 @@ contract ForkHelicoAgentTest is Test {
         ACCOUNT.setAgent(address(0));
 
         uint256 idle = USDC.balanceOf(address(ACCOUNT));
+        bytes memory r = report(movable(), true);
         vm.prank(FORWARDER);
         vm.expectRevert(abi.encodeWithSelector(HelicoAccount.NotOwnerOrAgent.selector, address(agent)));
-        agent.onReport(metadata(), report(idle - FLOOR, true));
+        agent.onReport(metadata(), r);
         assertEq(USDC.balanceOf(address(ACCOUNT)), idle);
     }
 }
