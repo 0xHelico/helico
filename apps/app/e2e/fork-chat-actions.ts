@@ -424,35 +424,48 @@ if (ethRendered) {
   );
 }
 
-// ── 2c. a swap the position cannot pay is refused, not mis-quoted ───────────
+// ── 2c. a swap the position cannot pay goes to Uniswap, not to a dead end ───
 //
-// `concentrate` prices on a band, not on inventory, so it answers for more than the maker
-// committed and answers badly. Measured directly: a position holding 10 USDC quotes 0.1 WETH at
-// **72.06 USDC**, and the fill reverts when Aqua's ledger subtraction underflows. The card used to
-// show that price. Signing it cost gas and got nothing.
+// Two things at once. `concentrate` prices on a band rather than on inventory, so it answers for
+// more than the maker committed: measured directly, a position holding 10 USDC quotes 0.1 WETH at
+// **72.06 USDC** and the fill reverts. The ledger is the cap now, so Aqua declines this.
 //
-// The stub above commits 50 USDC, so 0.1 ETH — about $246 — is more than it can pay.
+// And declining is no longer the end of it. The stub commits 50 USDC, so 0.1 ETH — about $246 — is
+// more than Aqua can pay, and the card routes through Uniswap v4 instead and says so.
 await page.waitForTimeout(13_000);
+const usdcBeforeBig = await bal(USDC, taker.account.address);
 await say("Swap 0.1 ETH into USDC");
-const refusal = page.getByText(
-  /can pay .* and this asks for more|none will price it/,
-);
-let refused = false;
+const routeRow = page.getByText(/Uniswap v4 ·/);
+let fellBack = false;
 try {
-  await refusal.first().waitFor({ timeout: 60_000 });
-  refused = true;
+  await routeRow.first().waitFor({ timeout: 60_000 });
+  fellBack = true;
 } catch {}
 check(
-  "a swap bigger than the position is refused with the size it can pay",
-  refused && /can pay/.test(await refusal.first().innerText()),
-  refused ? (await refusal.first().innerText()).slice(0, 110) : "no refusal",
+  "a swap Aqua cannot pay routes through Uniswap and names it",
+  fellBack,
+  fellBack
+    ? (await routeRow.first().innerText()).slice(0, 60)
+    : (await page.locator("body").innerText()).slice(-170),
 );
-check(
-  "and no transaction is offered",
-  (await page
+if (fellBack) {
+  // And it says why it is not on Aqua, rather than swallowing it.
+  const why = await page
+    .getByText(/can pay .* and this asks for more|will price it/)
+    .count();
+  check("and says why Aqua did not take it", why > 0);
+  const bigSwap = page
     .getByRole("button", { name: /^(Sign and swap|Sign \d+ transactions)$/ })
-    .count()) <= 2,
-);
+    .last();
+  await bigSwap.click();
+  await page.waitForTimeout(35_000);
+  const usdcAfterBig = await bal(USDC, taker.account.address);
+  check(
+    "and 0.1 ETH actually fills on Uniswap",
+    usdcAfterBig > usdcBeforeBig,
+    `+${formatUnits(usdcAfterBig - usdcBeforeBig, 6)} USDC`,
+  );
+}
 
 // ── 3. status: a reading, and nothing to sign ────────────────────────────────
 await say("Check my portfolio");
@@ -561,8 +574,10 @@ await page.route("**/api/chat", (route) =>
   }),
 );
 await say("Put my idle USDC to work");
+// The three one-liners the card can show. Shortened once already, and this check caught it, which
+// is the only reason it is worth being specific here rather than matching any text at all.
 const earnText = page.getByText(
-  /Nobody may move your money yet|nothing in the account to move|Everything it needs is set/,
+  /No agent, and nowhere to put it|the account is empty|It moves when the gain clears the gas/,
 );
 let earnRendered = false;
 try {

@@ -1,5 +1,6 @@
 "use client";
 
+import { planSwap } from "@helico/plugin-uniswap";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ArrowDown, Check, Loader2 } from "lucide-react";
 import { erc20Abi, formatUnits, type Hex, zeroAddress } from "viem";
@@ -11,6 +12,7 @@ import {
 } from "wagmi";
 import { ChainMark, TokenMark } from "@/components/token-mark";
 import { Button } from "@/components/ui/button";
+
 import { type AquaStep, planAquaSwap } from "@/lib/aqua-swap";
 import { explorerTx, SLIPPAGE_BPS } from "@/lib/chain";
 import { amountFloor, amountShort } from "@/lib/format";
@@ -21,13 +23,20 @@ import { shortfall } from "@/lib/intent";
  * The words for each transaction. The plugin returns what a step is; what a person reads about
  * it belongs here, next to the rest of the copy.
  */
-const label = (step: AquaStep, intent: Intent) =>
+/** Either planner's step. Uniswap has a Permit2 approval that Aqua does not; Aqua has a wrap. */
+type Step = {
+  kind: AquaStep["kind"] | "approve-permit2";
+  transaction: AquaStep["transaction"];
+};
+
+const label = (step: Step, intent: Intent) =>
   ({
     // Aqua positions hold WETH and the router pulls with `safeTransferFrom`, so ETH is wrapped
     // first. Named as its own step because it is the wallet's own ether moving, and a person
     // signing two transactions should be told which one is which.
     wrap: `Wrap ${intent.amountIn} ETH into WETH`,
-    "approve-token": `Allow 1inch's router to spend your ${intent.tokenIn.symbol === "ETH" ? "WETH" : intent.tokenIn.symbol}`,
+    "approve-token": `Allow the router to spend your ${intent.tokenIn.symbol === "ETH" ? "WETH" : intent.tokenIn.symbol}`,
+    "approve-permit2": `Allow Permit2 to spend your ${intent.tokenIn.symbol}`,
     swap: `Swap ${intent.amountIn} ${intent.tokenIn.symbol} for ${intent.tokenOut.symbol}`,
   })[step.kind];
 
@@ -94,36 +103,58 @@ export function SwapCard({ intent }: { intent: Intent }) {
       if (!(publicClient && address)) {
         throw new Error("No client");
       }
-      // Aqua, and only Aqua. The Uniswap fallback was dropped on 10 September at Ghoza's call.
+      // Aqua first, Uniswap when Aqua cannot fill. Ghoza's call on 11 September, reversing his
+      // own of the 10th, and the reason the decision changed is worth keeping:
       //
-      // Uniswap is a competitor's protocol on screen in a submission whose tracks are Chainlink,
-      // 1inch and The Graph, and the swap was the one part of the product where neither 1inch nor
-      // The Graph carried any weight. Through Aqua both do: the fill is 1inch's SwapVM, and the
-      // candidates exist only because the index can list them — `_balances` is private and four
-      // levels deep, and no event parameter is indexed.
+      // Aqua's liquidity is not thin, it is **absent**. Thirty-five active mandates were scanned
+      // across every pair and both directions and **none** would price at any size — for
+      // WETH/USDC, four positions refuse a quote at 0.0005 ETH as readily as at 0.1. So an
+      // Aqua-only swap is a swap that does not work for anybody who has not shipped a position of
+      // their own, which the front door cannot assume.
       //
-      // **What this costs, stated rather than discovered.** Live Aqua liquidity is thin and
-      // pair-specific: measured on Arbitrum One, of eleven valid live orders none would price
-      // USDC into WETH. So until a maker position exists for a pair, this card answers "nothing
-      // to fill against" rather than routing elsewhere. That is the honest answer for a product
-      // whose swap is an Aqua swap.
-      const viaAqua = await planAquaSwap(publicClient, {
+      // What Aqua keeps is everything it was doing: `provide` ships through it, the contracts are
+      // ours, and the moment a position exists this path takes it — the fallback only runs when it
+      // cannot. What Uniswap adds is that the sentence works today.
+      //
+      // The route is named in the card either way. A swap that quietly changes venue is the kind
+      // of thing that reads as a claim.
+      let aquaWhy: string | null = null;
+      try {
+        const viaAqua = await planAquaSwap(publicClient, {
+          account: address,
+          tokenIn: intent.tokenIn.address,
+          tokenOut: intent.tokenOut.address,
+          amountIn: BigInt(intent.amountInWei),
+          slippageBps: SLIPPAGE_BPS,
+        });
+        if (viaAqua) {
+          return {
+            amountOut: viaAqua.amountOut,
+            minAmountOut: viaAqua.minAmountOut,
+            steps: viaAqua.steps as Step[],
+            route: `1inch Aqua · ${viaAqua.valid} of ${viaAqua.considered} live orders quotable`,
+            note: null as string | null,
+          };
+        }
+      } catch (e) {
+        aquaWhy = e instanceof Error ? e.message : String(e);
+      }
+
+      // Uniswap v4, on chain and keyless: the Quoter is a call rather than a service, so this adds
+      // no key to configure and nothing that can rate-limit a demo.
+      const viaUniswap = await planSwap(publicClient, {
         account: address,
         tokenIn: intent.tokenIn.address,
         tokenOut: intent.tokenOut.address,
         amountIn: BigInt(intent.amountInWei),
         slippageBps: SLIPPAGE_BPS,
       });
-      // `planAquaSwap` names which wall it hit, so this no longer flattens three different facts
-      // into the one that happens to be false on Arbitrum One.
-      if (!viaAqua) {
-        throw new Error("Nothing to fill against right now.");
-      }
       return {
-        amountOut: viaAqua.amountOut,
-        minAmountOut: viaAqua.minAmountOut,
-        steps: viaAqua.steps,
-        route: `1inch Aqua · ${viaAqua.valid} of ${viaAqua.considered} live orders quotable`,
+        amountOut: viaUniswap.amountOut,
+        minAmountOut: viaUniswap.minAmountOut,
+        steps: viaUniswap.steps as Step[],
+        route: `Uniswap v4 · ${viaUniswap.pool.key.fee / 10_000}% pool`,
+        note: aquaWhy,
       };
     },
   });
@@ -244,6 +275,13 @@ export function SwapCard({ intent }: { intent: Intent }) {
           </>
         ) : null}
       </dl>
+
+      {/* Why it is not on Aqua, when it is not. Shown rather than swallowed: a swap that changes
+          venue without saying so is the kind of thing that reads as a claim, and the reason is
+          the interesting part — Aqua found the positions and the router refused them. */}
+      {plan.data?.note ? (
+        <p className="mt-2 text-muted-foreground text-xs">{plan.data.note}</p>
+      ) : null}
 
       <div className="mt-4 border-t pt-3">
         {!isConnected ? (
