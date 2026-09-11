@@ -24,7 +24,7 @@ func (s *SQLite) ActivityCursor(ctx context.Context, account string) (readTo int
 // Activity returns what this account did, newest first, at most limit rows.
 func (s *SQLite) Activity(ctx context.Context, account string, limit int) ([]activity.Event, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT block, log_index, kind, tx, pool, asset, amount, supplied, allowed, agent
+		`SELECT block, block_time, log_index, kind, tx, pool, asset, amount, supplied, allowed, agent
 		   FROM account_activity WHERE account = ?
 		  ORDER BY block DESC, log_index DESC LIMIT ?`, account, limit)
 	if err != nil {
@@ -35,8 +35,8 @@ func (s *SQLite) Activity(ctx context.Context, account string, limit int) ([]act
 	for rows.Next() {
 		var e activity.Event
 		var supplied, allowed int
-		if err := rows.Scan(&e.Block, &e.LogIndex, &e.Kind, &e.Tx, &e.Pool, &e.Asset, &e.Amount,
-			&supplied, &allowed, &e.Agent); err != nil {
+		if err := rows.Scan(&e.Block, &e.BlockTime, &e.LogIndex, &e.Kind, &e.Tx, &e.Pool, &e.Asset,
+			&e.Amount, &supplied, &allowed, &e.Agent); err != nil {
 			return nil, fmt.Errorf("scan activity: %w", err)
 		}
 		e.Supplied = supplied == 1
@@ -69,9 +69,9 @@ func (s *SQLite) SaveActivity(ctx context.Context, account string, events []acti
 		}
 		if _, err := tx.ExecContext(ctx,
 			`INSERT OR IGNORE INTO account_activity
-			   (account, block, log_index, kind, tx, pool, asset, amount, supplied, allowed, agent)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			account, int64(e.Block), int64(e.LogIndex), string(e.Kind), e.Tx,
+			   (account, block, block_time, log_index, kind, tx, pool, asset, amount, supplied, allowed, agent)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			account, int64(e.Block), int64(e.BlockTime), int64(e.LogIndex), string(e.Kind), e.Tx,
 			e.Pool, e.Asset, e.Amount, supplied, allowed, e.Agent); err != nil {
 			return fmt.Errorf("insert activity: %w", err)
 		}

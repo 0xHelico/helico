@@ -42,7 +42,13 @@ export type AccountEvent = {
   /** Block first, log index second. Two events in one transaction keep the order they happened. */
   key: string;
   what: string;
+  /** The amount, already formatted, for the rows that move money. Empty for the rest. */
+  amount: string;
+  /** The market, for the rows that name one. Empty for the rest. */
+  where: string;
   block: bigint;
+  /** Unix seconds, or null when the block's header could not be read. Never invented. */
+  at: number | null;
   tx: `0x${string}`;
 };
 
@@ -63,7 +69,7 @@ const marketName = (pool: string) => {
   return shared ? `${market.label} (${market.assetSymbol})` : market.label;
 };
 
-const amount = (v: bigint) =>
+const amount = (v: bigint | string) =>
   (Number(v) / 1e6).toLocaleString(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
@@ -89,6 +95,7 @@ export async function readAccountActivity(
 /** The shape `GET /api/activity` returns: the fields of the events, not sentences about them. */
 type ServedEvent = {
   block: number;
+  blockTime?: number;
   logIndex: number;
   kind: "moved" | "agent" | "venue" | "unknown";
   tx: string;
@@ -115,7 +122,10 @@ async function fromBackend(account: Address): Promise<AccountEvent[] | null> {
     return body.events.map((e) => ({
       key: `${e.block}-${e.logIndex}`,
       what: sentence(e),
+      amount: e.kind === "moved" ? `${amount(e.amount ?? "0")} USDC` : "",
+      where: e.pool ? marketName(e.pool) : "",
       block: BigInt(e.block),
+      at: e.blockTime ? e.blockTime : null,
       tx: e.tx as `0x${string}`,
     }));
   } catch {
@@ -130,22 +140,16 @@ async function fromBackend(account: Address): Promise<AccountEvent[] | null> {
  * drift from these, is the thing `graph.go` refuses for the same reason.
  */
 function sentence(e: ServedEvent): string {
-  const amount = (v: string) =>
-    (Number(v) / 1e6).toLocaleString(undefined, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
   switch (e.kind) {
     case "moved":
-      return e.supplied
-        ? `Put ${amount(e.amount ?? "0")} USDC to work in ${marketName(e.pool ?? "")}`
-        : `Took ${amount(e.amount ?? "0")} USDC back out of ${marketName(e.pool ?? "")}`;
+      // The amount and the market have columns of their own, so the sentence says the verb.
+      return e.supplied ? "Put money to work" : "Took money back out";
     case "agent":
       return e.agent === "0x0000000000000000000000000000000000000000"
         ? "Took the agent's permission away"
         : "Named the agent that may move capital";
     case "venue":
-      return `${e.allowed ? "Allowed" : "Revoked"} ${marketName(e.pool ?? "")}`;
+      return e.allowed ? "Allowed a market" : "Revoked a market";
     default:
       return "Something happened on this account";
   }
@@ -165,10 +169,13 @@ async function readFromChain(
   const rows: AccountEvent[] = [
     ...moved.map((l) => ({
       key: `${l.blockNumber}-${l.logIndex}`,
-      what: l.args.supplied
-        ? `Put ${amount(l.args.amount ?? 0n)} USDC to work in ${marketName(String(l.args.pool))}`
-        : `Took ${amount(l.args.amount ?? 0n)} USDC back out of ${marketName(String(l.args.pool))}`,
+      what: l.args.supplied ? "Put money to work" : "Took money back out",
+      amount: `${amount(l.args.amount ?? 0n)} USDC`,
+      where: marketName(String(l.args.pool)),
       block: l.blockNumber ?? 0n,
+      // The fallback has no timestamp: `eth_getLogs` does not carry one and fetching a header per
+      // block from a browser is the cost this whole path exists to avoid. No date beats a wrong one.
+      at: null,
       tx: l.transactionHash as `0x${string}`,
     })),
     ...agent.map((l) => ({
@@ -177,13 +184,19 @@ async function readFromChain(
         String(l.args.agent) === "0x0000000000000000000000000000000000000000"
           ? "Took the agent's permission away"
           : "Named the agent that may move capital",
+      amount: "",
+      where: "",
       block: l.blockNumber ?? 0n,
+      at: null,
       tx: l.transactionHash as `0x${string}`,
     })),
     ...venue.map((l) => ({
       key: `${l.blockNumber}-${l.logIndex}`,
-      what: `${l.args.allowed ? "Allowed" : "Revoked"} ${marketName(String(l.args.pool))}`,
+      what: l.args.allowed ? "Allowed a market" : "Revoked a market",
+      amount: "",
+      where: marketName(String(l.args.pool)),
       block: l.blockNumber ?? 0n,
+      at: null,
       tx: l.transactionHash as `0x${string}`,
     })),
   ];
