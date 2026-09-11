@@ -41,16 +41,16 @@ function Mark({
 function Aave({ size }: { size: number }) {
   return (
     <Mark label="Aave" size={size}>
-      <circle cx={16} cy={16} fill="#9896F0" r={16} />
-      {/* The ghost, simplified to the two things it is recognised by: a rounded top and two eyes.
-          These were on Morpho for a day, which is the wrong way round — Aave's mark is the pale
-          violet one. */}
+      <circle cx={16} cy={16} fill="#8C8AF0" r={16} />
+      {/* An arch rather than a dome: the ring is open at the bottom and its legs stop level with
+          the eyes, which is the shape the brand mark actually has. Drawn as one path so the
+          opening is part of the geometry instead of a second shape painted over it. */}
       <path
-        d="M5.8 22.4a10.2 10.2 0 1 1 20.4 0h-4a6.2 6.2 0 0 0-12.4 0Z"
+        d="M6.1 21.2A9.9 9.9 0 0 1 25.9 21.2L22.7 21.2A6.7 6.7 0 0 0 9.3 21.2Z"
         fill="#fff"
       />
-      <circle cx={12.8} cy={20.6} fill="#fff" r={1.9} />
-      <circle cx={19.2} cy={20.6} fill="#fff" r={1.9} />
+      <circle cx={12.9} cy={18.5} fill="#fff" r={2.2} />
+      <circle cx={19.1} cy={18.5} fill="#fff" r={2.2} />
     </Mark>
   );
 }
@@ -63,10 +63,10 @@ function Compound({ size }: { size: number }) {
       {/* Three cards, parallel, each shorter than the one above and to its right. One `skewX`
           over the group keeps them parallel by construction; rotating each about its own centre
           slid them onto the same diagonal and merged the three into one blob. */}
-      <g fill="#00D395" transform="translate(5.5 0) skewX(-20)">
-        <rect height="15" rx="2.6" width="6" x="18.6" y="5" />
-        <rect height="12.5" rx="2.6" width="6" x="12.3" y="9" />
-        <rect height="10" rx="2.6" width="6" x="6" y="13" />
+      <g fill="#00D395" transform="translate(6 0) skewX(-21)">
+        <rect height="15.5" rx="2.7" width="6.2" x="18.2" y="4.6" />
+        <rect height="12.8" rx="2.7" width="6.2" x="11.8" y="8.9" />
+        <rect height="10.1" rx="2.7" width="6.2" x="5.4" y="13.2" />
       </g>
     </Mark>
   );
@@ -76,17 +76,23 @@ function Compound({ size }: { size: number }) {
 function Morpho({ size }: { size: number }) {
   return (
     <Mark label="Morpho" size={size}>
-      <circle cx={16} cy={16} fill="#2F6BF6" r={16} />
-      {/* Two wings sweeping from the shoulders down to the centre. `Morpho` is a genus of blue
-          butterflies, which is the whole of the mark and the reason it is not the violet one. */}
-      <path
-        d="M9.6 7.4c1.9-.8 4 .2 4.6 2.1L16 15.6v9.8L8 12.6c-1-1.7-.3-4 1.6-5.2Z"
-        fill="#fff"
-      />
-      <path
-        d="M22.4 7.4c-1.9-.8-4 .2-4.6 2.1L16 15.6v9.8L24 12.6c1-1.7.3-4-1.6-5.2Z"
-        fill="#fff"
-      />
+      <circle cx={16} cy={16} fill="#2C6BF6" r={16} />
+      {/* **Four lobes, and both notches.** Two white wings above, two paler ones below, all four
+          radiating from the same centre — so there is a notch at the top *and* at the bottom.
+          That is what makes it read as a butterfly.
+
+          Three earlier attempts are the reason this is spelled out. Flat white with a single
+          bottom point read as a **V**; rounding the tops turned it into a **heart**; sharpening
+          them gave an arrowhead. Each was checked by rendering it at 150px and at the 22px it
+          actually ships at, rather than by looking at the path. */}
+      <g fill="#fff">
+        <path d="M16 17.2 15.3 6.6C13.6 4.6 9.4 5 8 7.6 6.6 10.4 7.2 14.2 9.2 16.4Z" />
+        <path d="M16 17.2 16.7 6.6C18.4 4.6 22.6 5 24 7.6 25.4 10.4 24.8 14.2 22.8 16.4Z" />
+      </g>
+      <g fill="#BFD3FC">
+        <path d="M16 17.2 9.5 15.9C8.6 18.6 10 22 12.4 23.6 14 24.6 15.4 24 16 22.4Z" />
+        <path d="M16 17.2 22.5 15.9C23.4 18.6 22 22 19.6 23.6 18 24.6 16.6 24 16 22.4Z" />
+      </g>
     </Mark>
   );
 }

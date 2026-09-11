@@ -1056,6 +1056,73 @@ if (accountCard) {
   }
 }
 
+// ── 10. earn, once everything is already on — the state nobody had tested ───
+//
+// Every earn check above runs with the setup missing, which is the state a new person is in. This
+// is the other one: agent named, venue permitted, money in the account. A person in it had **no
+// control at all** — the money-in card was gated on the balance being exactly zero, so the moment
+// an account held anything the card about putting money to work stopped offering the way to put
+// more in. Measured on the live chain, on an account holding 0.5 USDC with everything armed.
+{
+  // The agent was revoked in section 6 and this is the state that needs it back.
+  const hash = await takerWallet.writeContract({
+    abi: accountAbi,
+    address: helicoAccount,
+    args: [AGENT],
+    functionName: "setAgent",
+  });
+  await pub.waitForTransactionReceipt({ hash });
+}
+await page.route("**/api/chat", (route) =>
+  route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({
+      action: "earn",
+      reply:
+        "Your idle USDC earns in whichever of Aave v3, Compound v3 or Morpho pays best.",
+      steps: [],
+    }),
+  }),
+);
+await say("Put my idle USDC to work");
+const armedCard = page.getByText(/agent nominated/).last();
+let armed = false;
+try {
+  await armedCard.waitFor({ timeout: 40_000 });
+  armed = true;
+} catch {}
+check(
+  "earn answers on an account that is already set up",
+  armed,
+  armed ? "" : (await page.locator("body").innerText()).slice(-160),
+);
+if (armed) {
+  // The control, not a link to it. `FundAccount` renders an amount field and a button; either is
+  // proof it is on screen, and the field is the one a person reaches for.
+  const topUp = await page
+    .getByRole("textbox", { name: /how much|amount/i })
+    .count();
+  const sendIt = await page
+    .getByRole("button", { name: /send|move|money in/i })
+    .count();
+  check(
+    "and still offers the way to add more, with money already in it",
+    topUp + sendIt > 0,
+    `${topUp} field(s), ${sendIt} button(s)`,
+  );
+  // And it does not congratulate a balance that will never move. The agent acts when the gain
+  // clears the gas; a card that says "All set" over a balance far under that floor is telling
+  // somebody the thing is done when the thing cannot happen.
+  const congratulated = await page.getByText(/^All set\./).count();
+  check(
+    "and does not call it done",
+    congratulated === 0,
+    `${congratulated} "All set"`,
+  );
+}
+await page.unroute("**/api/chat");
+
 console.log(`\n${failed === 0 ? "all green" : `${failed} failed`}`);
 await browser.close();
 process.exit(failed === 0 ? 0 : 1);

@@ -1,10 +1,12 @@
 /**
  * The scenarios the canvas cycles through.
  *
- * **Real, read from Arbitrum One on 8 September** — Aave v3's USDC supply rate, 2.65% APR, from
- * `getReserveData().currentLiquidityRate`; the Aave pool `0x794a6135…` and its aUSDC
- * `0x724dc807…`; Aqua `0x1111113ccf…` and the SwapVM router `0x111111338c…`, which are the
- * addresses 1inch's own SDK names.
+ * **Real, read from Arbitrum One on 11 September** — Aave v3's USDC supply rate, **2.75% APR**,
+ * from `getReserveData().currentLiquidityRate` (`27528223034769606405950882`, which is 2.7528% at
+ * Aave's 27 decimals); the Aave pool `0x794a6135…` and its aUSDC `0x724dc807…`; Aqua
+ * `0x1111113ccf…` and the SwapVM router `0x111111338c…`, which are the addresses 1inch's own SDK
+ * names. It said 2.65% and 8 September until today — the rate moves, so re-read it rather than
+ * ageing it.
  *
  * **Scripted** — the conversations, the account address, the amounts, and the timings.
  *
@@ -15,7 +17,7 @@
 export type CycleSurface = 'tui' | 'tg'
 export type ToolStreamEntry = { tool: string; args?: string; status: 'ok' | 'failed' }
 export type CycleGreeting = { prompt: string; reply: string }
-export type Painting = 'mandate' | 'supply' | 'refuse' | 'hold'
+export type Painting = 'mandate' | 'supply' | 'refuse' | 'hold' | 'takeable'
 
 export type Cycle = {
 	id: string
@@ -58,7 +60,7 @@ The agent may move capital between the markets you allow-listed. It cannot name 
 		greeting: { prompt: 'gm', reply: 'gm ☀️ four fifths of your USDC is sitting still' },
 		prompt: 'put it to work then',
 		toolStream: [
-			{ tool: 'aave.getReserveData', args: 'USDC · 2.65% APR', status: 'ok' },
+			{ tool: 'aave.getReserveData', args: 'USDC · 2.75% APR', status: 'ok' },
 			{ tool: 'account.balances', args: 'idle 50,000 · working 0', status: 'ok' },
 			{ tool: 'decide', args: 'want 10,000 liquid · move 40,000', status: 'ok' },
 			{ tool: 'deadband', args: 'clears both halves', status: 'ok' },
@@ -70,7 +72,7 @@ The agent may move capital between the markets you allow-listed. It cannot name 
 		],
 		reply: `**SUPPLY 40,000 USDC**
 
-At **2.65%** — Aave's rate right now, not a projection.
+At **2.75%** — Aave's rate right now, not a projection.
 **Liquid** 10,000 · **Working** 40,000
 
 The tokens went from your account into the market and the receipt came back to your account. There was no step in between where anybody else held them.`,
@@ -102,7 +104,7 @@ So this is not a rule I am enforcing on your behalf. An agent that was entirely 
 		greeting: { prompt: 'still there?', reply: 'always.' },
 		prompt: 'status?',
 		toolStream: [
-			{ tool: 'aave.getReserveData', args: 'USDC · 2.65% APR', status: 'ok' },
+			{ tool: 'aave.getReserveData', args: 'USDC · 2.75% APR', status: 'ok' },
 			{ tool: 'account.balances', args: 'idle 10,180 · working 40,120', status: 'ok' },
 			{ tool: 'decide', args: 'move 180 · under the deadband', status: 'ok' },
 		],
@@ -113,6 +115,46 @@ Interest accrues every block, so the split drifts a little every block. Chasing 
 A move has to clear a fixed floor and a share of the account, and 180 clears neither. Nothing signed, no gas spent.`,
 		painting: 'hold',
 		durationMs: 9000,
+	},
+	{
+		id: 'takeable',
+		title: 'Takeable',
+		surface: 'tui',
+		/**
+		 * The one the other four do not show, and the only one that is the product's actual thesis:
+		 * **the capital that earns is the capital the mandate spends.**
+		 *
+		 * The first four are all about putting money to work and leaving it there. A vault makes you
+		 * choose — earning or available, not both — and this is the scenario where that choice does
+		 * not have to be made: a taker fills against the position, the wallet is short, and exactly
+		 * the shortfall is redeemed out of Aave inside the same transaction.
+		 *
+		 * **Real** — the shape and the mechanism. `ForkOracleBoardYield.t.sol` measures it against
+		 * the live feed, real USDC and a real Aave position: 500 liquid, 29,500 supplied, 2,493 paid
+		 * to a taker, 27,507 supplied afterwards. The amounts below are that run rounded to the
+		 * scenario's own 50,000, not new numbers.
+		 *
+		 * **Scripted** — the conversation and the timings, like every other cycle here.
+		 */
+		prompt: 'someone just filled against my position — where did the money come from?',
+		toolStream: [
+			{ tool: 'aqua.pull', args: 'maker → taker, under your mandate', status: 'ok' },
+			{ tool: 'account.balances', args: 'idle 10,180 · wanted 12,400', status: 'ok' },
+			{
+				tool: 'find the shortfall',
+				args: '2,220 short, so the wallet is not enough',
+				status: 'ok',
+			},
+			{ tool: 'aave.withdraw', args: '2,220 · exactly the shortfall, once', status: 'ok' },
+			{ tool: 'settle', args: 'inside the same transaction', status: 'ok' },
+		],
+		reply: `**FILLED 12,400 USDC** — and only 10,180 of it was liquid.
+
+The rest came out of Aave **mid-swap**: 2,220 redeemed, exactly the shortfall, once. **Working** 37,900 · **Liquid** 0
+
+This is the part a vault makes you choose between. Your money was earning the whole time it was also on offer — nobody had to move it back first, and nothing sat idle waiting to be taken.`,
+		painting: 'takeable',
+		durationMs: 10500,
 	},
 ]
 
@@ -125,4 +167,6 @@ export const PAINTINGS: Record<Painting, string> = {
 	refuse:
 		'radial-gradient(120% 90% at 30% 90%, #e9d6f4 0%, #b79cf0 35%, #5b74d6 75%, #1f2a55 100%)',
 	hold: 'radial-gradient(120% 100% at 50% 0%, #e6f0ff 0%, #b5cdff 40%, #9d90f5 80%, #d9b6ea 100%)',
+	takeable:
+		'radial-gradient(115% 95% at 70% 85%, #ffe9d6 0%, #f0a9c0 32%, #8b7cf6 72%, #2a3570 100%)',
 }
