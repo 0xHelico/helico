@@ -51,6 +51,17 @@ type Config struct {
 	GraphTTL time.Duration
 	// GraphRatePerMin is how many subgraph reads one address may make in a minute.
 	GraphRatePerMin int
+	// RPCURL is the chain this reads an account's own logs from. The default is Arbitrum One's
+	// public endpoint: it carries no key, a judge can curl it, and it is the same URL the dapp
+	// used to scan from every browser — which is the cost this endpoint exists to stop paying.
+	RPCURL string
+	// ActivityFrom is the first block worth scanning: `HelicoAccountFactory`'s own deployment.
+	// Nothing can predate the contract that creates these accounts, so it is exact rather than a
+	// safe underestimate, and it skips the 485 million blocks before it.
+	ActivityFrom uint64
+	// ActivityFresh is how long a watermark is trusted before the head is asked for again. The
+	// enclave acts every five minutes at most, so a quarter of that is generous.
+	ActivityFresh time.Duration
 }
 
 // Lookup is the shape of os.LookupEnv, so tests can feed a map.
@@ -66,6 +77,12 @@ type Lookup func(key string) (string, bool)
 // defaultSubgraph is Helico's Aqua deployment on Studio. It carries no key — a judge can curl it
 // — so it is a default rather than a secret.
 const defaultSubgraph = "https://api.studio.thegraph.com/query/1758877/helico-arbitrum-one/version/latest"
+
+// defaultRPC is Arbitrum One's public endpoint, and defaultActivityFrom is the factory's own
+// deployment block — the same two constants the dapp carried when it did this scan itself.
+const defaultRPC = "https://arb1.arbitrum.io/rpc"
+
+const defaultActivityFrom = 502_979_401
 
 const devOrigins = "http://localhost:3000,http://localhost:3100,http://localhost:4321,http://localhost:4322"
 
@@ -93,6 +110,9 @@ func FromEnv(lookup Lookup) (Config, error) {
 		SubgraphURL:     get("BE_SUBGRAPH_URL", defaultSubgraph),
 		GraphTTL:        60 * time.Second,
 		GraphRatePerMin: 120,
+		RPCURL:          get("BE_RPC_URL", defaultRPC),
+		ActivityFrom:    defaultActivityFrom,
+		ActivityFresh:   75 * time.Second,
 	}
 	for _, o := range strings.Split(get("BE_CORS_ORIGINS", devOrigins), ",") {
 		if o = strings.TrimSpace(o); o != "" {
