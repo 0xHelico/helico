@@ -11,8 +11,10 @@ import {
   useWriteContract,
 } from "wagmi";
 import { FundAccount } from "@/components/fund-account";
+import { Glyph } from "@/components/glyph";
 import { TokenMark } from "@/components/token-mark";
 import { Button } from "@/components/ui/button";
+import { VenueMark } from "@/components/venue-mark";
 import { CHAIN_ID, totals, useAccountState } from "@/hooks/use-account-state";
 import { useUnlock } from "@/hooks/use-unlock";
 import {
@@ -178,11 +180,12 @@ export function MandateCard({
    */
   const needsLimits = !nominated || venue.data === false;
   const needsMoney = !needsLimits && held !== null && held.total === 0n;
+  // One line each. These are read while deciding what to press, not studied.
   const earnNext = needsLimits
-    ? "Nobody may move your money yet, and it has nowhere to go. Naming the agent and allowing the markets are the two calls that change that."
+    ? "No agent, and nowhere to put it. Two calls fix both."
     : needsMoney
-      ? "The agent may move it and has somewhere to put it. There is nothing in the account to move."
-      : "Everything it needs is set. The agent looks every five minutes and moves when the gain clears the gas.";
+      ? "Ready, and the account is empty."
+      : "All set. It moves when the gain clears the gas.";
 
   const live = mandates.data?.rows.filter((m) => m.active) ?? [];
   const spendable = [...(mandates.data?.spendable ?? new Map())].filter(
@@ -195,30 +198,51 @@ export function MandateCard({
         {short(data.address)} · {nominated ? "agent nominated" : "no agent"}
       </p>
 
-      <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-muted-foreground text-xs">
-        <dt>Who may move it</dt>
-        <dd>
-          {nominated && data.kind === "open"
-            ? short(data.agent as string)
-            : "nobody but you"}
-        </dd>
-        <dt>Where it may go</dt>
-        <dd>{venue.data === true ? "Aave v3" : "nowhere yet"}</dd>
-        <dt>Holding</dt>
-        <dd>
-          {held
-            ? `${amount(held.idle, 6)} USDC liquid, ${amount(held.working, 6)} working`
-            : "nothing yet"}
-        </dd>
-        <dt>Aqua mandates</dt>
-        <dd>
-          {mandates.isPending
-            ? "reading the index…"
-            : mandates.error
-              ? "the index did not answer"
-              : `${live.length} live`}
-        </dd>
-      </dl>
+      {/* Four labelled rows of prose became four facts you can read at a glance. Each one carries
+          the mark of the thing it is about, because a column of words makes a reader parse every
+          line before they can tell which fact is which — and this card is answered by a glance
+          more often than it is read. */}
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11.5px]">
+        <span className="flex items-center gap-1.5">
+          <Glyph name="wings" size={13} />
+          <span className="text-faint">Agent</span>
+          <span className="tabular font-mono text-soft">
+            {nominated && data.kind === "open"
+              ? short(data.agent as string)
+              : "none"}
+          </span>
+        </span>
+        <span className="flex items-center gap-1.5">
+          {venue.data === true ? (
+            <VenueMark label="Aave v3" size={14} />
+          ) : (
+            <Glyph name="layers" size={13} />
+          )}
+          <span className="text-faint">Market</span>
+          <span className="text-soft">
+            {venue.data === true ? "Aave v3" : "none"}
+          </span>
+        </span>
+        <span className="flex items-center gap-1.5">
+          <TokenMark size={14} symbol="USDC" />
+          <span className="text-faint">Holding</span>
+          <span className="tabular font-mono text-soft">
+            {held
+              ? `${amount(held.idle, 6)} + ${amount(held.working, 6)}`
+              : "0"}
+          </span>
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="text-faint">Mandates</span>
+          <span className="tabular font-mono text-soft">
+            {mandates.isPending
+              ? "…"
+              : mandates.error
+                ? "unknown"
+                : String(live.length)}
+          </span>
+        </span>
+      </div>
 
       {action === "earn" ? (
         <div className="mt-3 border-t pt-3">

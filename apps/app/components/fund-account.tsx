@@ -22,8 +22,6 @@ const erc20 = parseAbi([
   "function balanceOf(address owner) view returns (uint256)",
 ]);
 
-const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
-
 /**
  * The step between "the agent is allowed to work" and "the agent is working".
  *
@@ -112,9 +110,8 @@ export function FundAccount({
         <>
           <p className="font-medium text-[15px] text-ink">Money in</p>
           <p className="mt-1.5 text-[12.5px] text-soft leading-relaxed">
-            The agent moves what your account holds, so this is the step that
-            gives it something to move. An ordinary transfer, with no approval
-            and nothing granted to anybody.
+            The agent moves what the account holds. An ordinary transfer, no
+            approval, nothing granted to anybody.
           </p>
         </>
       )}
@@ -180,18 +177,18 @@ export function FundAccount({
       ) : null}
 
       {/* Sending from somewhere else is the other half of this, and for most people the likely
-          half: an exchange withdrawal goes to an address, not through a wallet button. The address
-          exists before the contract does, which is why this is shown whether or not it is open. */}
-      <p className="mt-4 border-line border-t pt-3 text-[11.5px] text-soft leading-relaxed">
-        Or send USDC on Arbitrum One to{" "}
-        <span className="font-mono text-ink">{short(account)}</span>
-        {data?.kind === "unopened"
-          ? ". The contract is not deployed there yet, and that is safe: the address is fixed by CREATE2 and the first limit you set deploys it."
-          : "."}
-      </p>
-      <p className="tabular mt-1 select-all break-all font-mono text-[11px] text-faint">
-        {account}
-      </p>
+          half: an exchange withdrawal goes to an address, not through a wallet button. One copy of
+          the address, the selectable one — it was printed twice, short and long, which is a line of
+          text that tells a reader nothing the next line does not. */}
+      <div className="mt-4 border-line border-t pt-3">
+        <p className="text-[11.5px] text-faint">
+          Or pay in from anywhere, on Arbitrum One
+          {data?.kind === "unopened" ? " (safe before it is deployed)" : ""}
+        </p>
+        <p className="tabular mt-1 select-all break-all font-mono text-[11px] text-soft">
+          {account}
+        </p>
+      </div>
     </>
   );
 
