@@ -55,10 +55,37 @@ Three things had to happen after the address existed, and each is somebody's tra
 |---|---|---|
 | `config.production.json`: `delivery: forwarder`, `reportReceiver` and `agent` = the proxy | repo | done, commit `d7f2a50` |
 | The account's owner calls `setAgent(0x98c3…4463)` | the owner of `0x0acdfa21…` | pending — until then the enclave answers `HOLD (the account has not nominated this agent)`, which is the verdict it gave in simulation against the live chain with this config |
-| `cre workflow deploy ./workflow --target production-settings` — config travels with the binary | the CRE key | pending |
+| `cre workflow deploy ./workflow --target production-settings` — config travels with the binary | the CRE key | done, 11:20 UTC — below |
 
 The app's *Nominate Helico's agent* now names the proxy, and offers it over a stale nomination
 in one `setAgent` rather than asking the owner to remove first.
+
+### The workflow that carries it
+
+```
+name          helico-production      (updated, not re-registered)
+workflow id   00f5df9779e3c778971753a3e7f75c308883c8d409f2df504b9eb3ac4735da40
+binary hash   0e787012438de6c6bd219c1b9882f121f3f5d297ecbaf39c418eef078e4bae4d
+config hash   3dc52f743c05c544aa86913e24c7cbcbdb8c1f5a41a460191870991c43a95d97
+tx            0x34de1bf99d1402b0ed1ddb37cc45e49d880ef9b7b8ed01beda31e06cd1f091ab
+              block 25,953,828 on Ethereum mainnet, 117,678 gas, status 1
+registry      totalActiveWorkflowsByOwner(deployer) → 1
+```
+
+The config hash is `sha256` of `apps/cre/workflow/config.production.json` at commit `5dd6710`,
+byte for byte — the CLI prints the hash of the file it uploads, and the file in `main` hashes to
+the same. The artifact URL the CLI prints is **not** publicly readable (`403 MissingKey`); hashing
+what it returns gives the hash of an XML error, which is how the first attempt at this check
+"failed". The comparison that means something is the one above.
+
+Two policy updates preceded it, each a `cre secrets update` on the same `HELICO_VAULT` document:
+[`0x2d1ed7b2…`](https://etherscan.io/tx/0x2d1ed7b218d84eb5a6777e3ec7f65afafa76c60ffd355e5d7629d7e2121cb00c)
+put the real agent key in the document (it had held anvil's first account, so the statements the
+enclave signed under `signature` delivery recovered to `0x7099…79C8` — no consequence now that
+nothing reads the key in production, but the record should say it), and
+[`0x60d44e0b…`](https://etherscan.io/tx/0x60d44e0b09baf9dbc341c9c61ac0770b19ec4512f481e5385752f56c29ae4ec8)
+set the working target to 100% with the demo-scale thresholds (floor 0.01 USDC, no cap, no rate
+minimum).
 
 ### How to know it moved, and what not to quote
 
