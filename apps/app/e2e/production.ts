@@ -265,7 +265,13 @@ const open = async (url: string): Promise<{ page: Page; text: string }> => {
   //
   // Worth knowing beyond this file: there are six starters on the front door and six messages a
   // minute, so a person who presses every one of them and then types is at the limit.
-  const landed: { message: string; want: string; got: string }[] = [];
+  type Intent = { amountInWei?: string; amountUsd?: string };
+  const landed: {
+    message: string;
+    want: string;
+    got: string;
+    intent?: Intent;
+  }[] = [];
   const ask = async (message: string) => {
     const res = await fetch(`${API}/api/swap/intent`, {
       method: "POST",
@@ -281,10 +287,13 @@ const open = async (url: string): Promise<{ page: Page; text: string }> => {
       await new Promise((r) => setTimeout(r, (after + 1) * 1000));
       res = await ask(message);
     }
-    const got = res.ok
-      ? (((await res.json()) as { action?: string }).action ?? "(none)")
-      : `HTTP ${res.status}`;
-    landed.push({ message, want, got });
+    // The whole body, not just the action. A starter can land on the right action and still be
+    // answered by a build that does not understand it, which is exactly what happened below.
+    const body = res.ok
+      ? ((await res.json()) as { action?: string; intent?: Intent })
+      : null;
+    const got = body ? (body.action ?? "(none)") : `HTTP ${res.status}`;
+    landed.push({ message, want, got, intent: body?.intent });
   }
   const wrong = landed.filter((l) => l.got !== l.want);
   check(
@@ -293,6 +302,29 @@ const open = async (url: string): Promise<{ page: Page; text: string }> => {
     wrong.length === 0
       ? landed.map((l) => l.got).join(", ")
       : wrong.map((l) => `"${l.message}" → ${l.got}, not ${l.want}`).join("; "),
+  );
+
+  // **The action being right is not the same as the answer being right, and this is the check that
+  // says so.**
+  //
+  // "Swap $5 ETH to USDC" lands on `swap` whether or not the backend understands dollars — so the
+  // check above passes on a build that reads it as **five ETH**, about $12,300. That is what
+  // production was doing when this was written: #402 merged at 08:06, its `be` deploy was
+  // `completed/cancelled` by the shared concurrency queue (#390), and the starter went live in the
+  // dapp against a backend from ninety minutes earlier. Nothing was red.
+  //
+  // The shape is the tell. A build that understands dollars reports `amountUsd` and leaves
+  // `amountInWei` empty, because it has no price and must not invent one; the wallet reads
+  // Chainlink and fills in the units. A build that does not sends `amountInWei` of 5e18.
+  const dollars = landed.find((l) => l.message.includes("$5"));
+  const paidInDollars =
+    dollars?.intent?.amountUsd === "5" && !dollars?.intent?.amountInWei;
+  check(
+    "a dollar sentence comes back as dollars, not as five whole ETH",
+    paidInDollars,
+    dollars?.intent
+      ? `amountUsd ${dollars.intent.amountUsd ?? "(none)"}, amountInWei ${dollars.intent.amountInWei || "(empty)"}`
+      : "no intent came back at all",
   );
 
   // The allow-list is what stops it being an open proxy onto our own quota.

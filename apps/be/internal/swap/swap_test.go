@@ -760,3 +760,32 @@ func TestADollarAmountStillHasToBeANumber(t *testing.T) {
 		t.Fatalf("built an intent from a dollar amount that is not a number: %+v", got.Intent)
 	}
 }
+
+// TestTheModelIsShownEveryFieldItIsToldToFill is the check that would have saved a live bug.
+//
+// The prompt's rules told the model to use `amountUsd`, and the JSON shape it was shown did not
+// have the field. So it answered in the shape it was given, the dollars went into `question`, and
+// production replied "5" and asked for an amount — for the sentence that is a starter button on
+// the front door.
+//
+// The fork suite could not catch it: that one classifier response is stubbed, because the field
+// ships in the same change as the code that reads it. A stub is an honest way to test everything
+// downstream of the model and no way at all to test the model's instructions, and this is the
+// cheapest thing that does.
+func TestTheModelIsShownEveryFieldItIsToldToFill(t *testing.T) {
+	shape := ""
+	for _, line := range strings.Split(systemPrompt, "\n") {
+		if strings.HasPrefix(line, `{"action"`) {
+			shape = line
+			break
+		}
+	}
+	if shape == "" {
+		t.Fatal("the prompt no longer shows the model a JSON shape; this test cannot do its job")
+	}
+	for _, field := range []string{"action", "chain", "tokenIn", "tokenOut", "amount", "amountUsd", "question"} {
+		if !strings.Contains(shape, `"`+field+`"`) {
+			t.Errorf("the prompt names %q in its rules and not in the shape it shows: %s", field, shape)
+		}
+	}
+}
