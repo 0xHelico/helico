@@ -354,6 +354,113 @@ worse. `concentrate` requires `amountIn == 0 || amountOut == 0`, so it runs befo
 `_aquaYieldCoverXD` reads `ctx.swap.amountOut` and returns when it is zero, so it runs after one.
 Both failing orderings are pinned in that file beside the working one.
 
+#### A second 1inch surface: the aggregation route, for when no mandate can pay
+
+Everything above is our own Aqua app. This is the other half of the same partner, and the reason
+the product works for somebody who has not shipped a position of their own.
+
+**Until 11 September the swap fell through to Uniswap v4 when Aqua had nothing to fill against**,
+for one reason only: the aggregation API needs a key and we had none, while the v4 Quoter is an
+on-chain call. So the most visible action in the product ended at a protocol we do not submit while
+the partner we do submit sat behind a refusal. The chain is now:
+
+```
+Aqua  →  1inch aggregation  →  Uniswap v4
+```
+
+Aqua keeps everything it was doing — `provide` ships through it, the moment a position exists this
+path takes it, and the fallbacks only run when it cannot. Uniswap stays **last** because it needs
+no key and no service, so it still answers when a deployment has no 1inch key or 1inch rate-limits
+us. Every tier is named in the card, because a swap that quietly changes venue reads as a claim.
+
+| What | Where |
+|---|---|
+| The three tiers, and why each is where it is | [`swap-card.tsx`](apps/app/components/swap-card.tsx) |
+| The transaction 1inch builds, and why its simulation is skipped | [`api.ts#L136-L166`](https://github.com/0xHelico/helico/blob/c2d17bbf89641ee70868891d77aab15906d360e1/packages/plugins/1inch/src/api.ts#L136-L166) |
+| The plan: allowance read on chain, approval first, fill second | [`oneinch-swap.ts#L55-L132`](https://github.com/0xHelico/helico/blob/c2d17bbf89641ee70868891d77aab15906d360e1/apps/app/lib/oneinch-swap.ts#L55-L132) |
+| The six shapes the proxy forwards, anchored at both ends | [`oneinch-proxy.ts#L19-L26`](https://github.com/0xHelico/helico/blob/c2d17bbf89641ee70868891d77aab15906d360e1/apps/app/lib/oneinch-proxy.ts#L19-L26) |
+| Thirty a minute per caller, swept on a request rather than a timer | [`oneinch-proxy.ts#L45-L58`](https://github.com/0xHelico/helico/blob/c2d17bbf89641ee70868891d77aab15906d360e1/apps/app/lib/oneinch-proxy.ts#L45-L58) |
+
+**The key never reaches the browser.** `NEXT_PUBLIC_` inlines a value into the client bundle, so a
+prefixed key is a public key; the dapp asks `/api/1inch/…`, a route handler that adds the header.
+The proxy forwards six path shapes and answers 404 for everything else — a proxy that forwards any
+path is a way for anybody to spend our quota on anything 1inch sells. Both regex anchors on every
+pattern: without the end anchor, `quote/../../portfolio` is a quote.
+
+The check on that is the one worth reading, because **it is unsatisfiable if its claim is false.**
+[`apps/app/e2e/no-key-in-bundle.ts`](apps/app/e2e/no-key-in-bundle.ts) reads the real key out of the
+environment and searches the emitted client chunks for that exact string:
+
+```
+ok    the 1inch key is in none of 585 client files under .next/static
+```
+
+Handed a string the bundle *does* contain it fails on 16 chunks, which is how we know the search
+works rather than hoping it does. It refuses to run at all with no key in the environment, because a
+search for an empty string passes on nothing.
+
+**Twelve swaps, because once is not evidence.** The chat suite fills through 1inch once; one run of
+it reported `+0 USDC` and could not say whether the transaction reverted, was never sent, or had not
+landed. [`apps/app/e2e/oneinch-repeat.ts`](apps/app/e2e/oneinch-repeat.ts) answers the reliability
+question — a fresh wallet each time, every size from $25 to $12,000, both directions, nothing
+stubbed: the route and the calldata come from the live API through our own proxy and each
+transaction is signed and mined on a fork of Arbitrum One.
+
+```
+fork at 504000597, chain head 504002240, drift 1643 blocks
+
+ok  0.01 ETH → USDC    1 tx  quoted 24.655252    got 24.668022
+ok  1 ETH → USDC       1 tx  quoted 2465.479442  got 2465.479442
+ok  5000 USDC → WETH   2 tx  quoted 2.015104…    got 2.012674…
+…                                   12 of 12 filled at or above the floor
+```
+
+The assertion is the **floor** the card shows, not "more than zero": a fill below the minimum
+computed from the quote and the slippage is a promise we did not keep, and a fill of one wei would
+otherwise pass. Native ether is one transaction; a token is two, which is the approval the
+aggregation API refuses to build a swap without.
+
+#### What a live Aqua position can actually pay, which is not what its ledger says
+
+A position was capped on Aqua's ledger alone. `pull` does `safeTransferFrom(maker, to, amount)`, so
+a fill needs two more things the ledger knows nothing about: the maker's **wallet balance** and
+their **allowance to Aqua**. The ledger is a number the maker shipped, and it does not fall when
+they spend those tokens elsewhere or revoke the approval.
+
+Read off Arbitrum One, three live positions with three different binding constraints:
+
+| maker | ledger | wallet | allowance | binds on |
+|---|---|---|---|---|
+| `0xa9aa0af4…` | 0.0000811 WETH | 0.000209 | 0.0000018 | **allowance**, 43× short |
+| `0xef9f7f40…` | 0.014624 WETH | 0 | 0 | **wallet** — a ledger with no money |
+| `0xcdbde4f9…` | 0.010950 WETH | 0.010950 | unlimited | ledger, as intended |
+
+The middle one cannot be filled at any size or any price, and nothing in Aqua's own state says so.
+The cap is now `min(ledger, wallet, allowance)`, read in one multicall, and **a read that fails
+counts as zero rather than as unlimited** — an RPC that will not answer is not evidence that a maker
+can pay. The refusal names which of the three bound, because they need different fixes: a ledger
+that binds means asking for less may work, and a wallet or an allowance that binds means no smaller
+number ever will ([`aqua-swap.ts#L115-L124`](https://github.com/0xHelico/helico/blob/dc9e8bc219092093887883fcd820866e811ece0b/apps/app/lib/aqua-swap.ts#L115-L124)).
+
+#### The account is the maker, so one capital earns and is takeable
+
+`provide-card.tsx` ships a position backed by tokens in the **wallet**, while `supplyIdle` moves
+only what the **account** holds. That is a maker beside a yield optimiser: two pools of money doing
+one job each. [`provide-from-account-card.tsx`](apps/app/components/provide-from-account-card.tsx)
+makes the account the maker, so one pool does both — the account holds it, the enclave puts it in
+whichever market pays most, and a fill redeems exactly the shortfall on the way through.
+
+It lands as one `executeBatch`: three approvals to **Aqua**, never to a contract of ours, and a
+ship. The contract's own `mandateHash` is read and compared before anything is sent, because an
+encoding wrong by one field ships successfully under a hash nobody looks up. Driven through the
+chat on a fork, read back out of Aqua rather than out of our own card:
+
+```
+ok  and it ships from the account in one batch  — Shipped from your account, under 0x6c833488…
+ok  and Aqua records the account as the maker   — 1 Shipped event(s) from 0x0118F249…
+ok  under our own Aqua app, with the ceiling on the ledger  — 20 USDC, sentinel 2
+```
+
 ### The Graph
 
 Aqua cannot answer the first question an agent has to ask.
@@ -411,8 +518,33 @@ router's own bytecode — not by event counts, which pick the wrong contract, or
 counts, which pick the right one by luck.
 
 
+**And 1inch says the same thing, which is better evidence than our saying it.** Their Aqua
+documentation, under Data & Analytics:
+
+> A hosted subgraph is not currently available. Build a reference indexer over the five
+> registry/router events keyed on `(maker, app, strategyHash)`.
+
+We indexed four of those five. `Shipped`, `Docked`, `Pulled` and `Pushed` are on the Aqua registry;
+the fifth, `Swapped`, is on the router, and there was no router data source at all. There are
+**340** of them at `0x111111338c…` since Aqua's deployment — the most recent two minutes before the
+query — so the data source lands with 340 fills nobody could otherwise query.
+
+Its `startBlock` is the router's own first log, an `OwnershipTransferred`, so it is the deployment
+and exact rather than a safe underestimate. Bisected with `eth_getLogs`, never `eth_getCode`: a
+pruned archive answers *"state is not available"*, and a search that reads that as "no code yet"
+returns the node's pruning boundary instead of a deployment.
+
+**It is keyed honestly, and that is the part worth reading.** `Swapped` carries `orderHash` — the
+router's identifier for the order it executed, which is *not* the `strategyHash` everything else in
+the schema keys on and is not derivable from the event. So there is **no edge from `Fill` to
+`Mandate`**: a join on two hashes that are not the same hash would be a lie that reads as data. The
+`maker` edge is real, because the event carries the address.
+
 | What | Where |
 |---|---|
+| The fifth event, and the four before it | [`subgraph/subgraph.yaml`](subgraph/subgraph.yaml) |
+| A fill written as what the log carries, and nothing it does not | [`router.ts#L18-L45`](https://github.com/0xHelico/helico/blob/85fa79fa4d82f92b7f55c027c1fe2932043d716b/subgraph/src/router.ts#L18-L45) |
+| Why `Fill` has no edge to `Mandate` | [`subgraph/schema.graphql`](subgraph/schema.graphql) |
 | The question the chain cannot answer, asked and paged to the end | [`mandates.ts#L115-L141`](https://github.com/0xHelico/helico/blob/f6f2fc6695e030d8a6918a863470299fcb8dd179/packages/plugins/thegraph/src/mandates.ts#L115-L141) |
 | A docked mandate kept distinct from an empty one | [`mandates.ts#L62-L81`](https://github.com/0xHelico/helico/blob/f6f2fc6695e030d8a6918a863470299fcb8dd179/packages/plugins/thegraph/src/mandates.ts#L62-L81) |
 | What is still spendable, summed across live mandates | [`mandates.ts#L84-L94`](https://github.com/0xHelico/helico/blob/f6f2fc6695e030d8a6918a863470299fcb8dd179/packages/plugins/thegraph/src/mandates.ts#L84-L94) |

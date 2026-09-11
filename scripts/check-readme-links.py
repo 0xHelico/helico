@@ -25,7 +25,11 @@ LINK = re.compile(
     r"\]\(https://github\.com/0xHelico/helico/blob/([0-9a-f]{40})/([^\#\)]+)#L(\d+)-L(\d+)\)"
 )
 OPENERS = ("export ", "function ", "struct ", "Actions.", "const ")
-CLOSERS = ("}", "})")
+# `const ` is an opener, and an exported array or arrow constant can never close on a brace — so
+# the closers have to admit the ones those produce, or the checker rejects a pin it had already
+# agreed was a declaration. It did exactly that for an allowlist pinned as `export const ALLOWED
+# = [ … ];`.
+CLOSERS = ("}", "})", "];", "] as const;", ");")
 
 
 def main() -> int:
