@@ -8,3 +8,4 @@
    0   0  _reentrancyLocks  t_mapping(t_address,t_mapping(t_bytes32,t_struct(TransientLock)_storage))
 # HelicoOracleBoard
    0   0  _reentrancyLocks  t_mapping(t_address,t_mapping(t_bytes32,t_struct(TransientLock)_storage))
+# HelicoAgent

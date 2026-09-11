@@ -46,7 +46,11 @@ SNAPSHOT = CONTRACTS / "storage-layout.txt"
 # `_reentrancyLocks`, inherited from `AquaApp` and sitting at slot 0 — which is exactly why they
 # belong here rather than being waved through as "nearly stateless". A future field declared above
 # it moves the lock, and the lock is what stops a taker re-entering a maker's strategy mid-fill.
-UPGRADEABLE = ["HelicoAccount", "HelicoMandateSwap", "HelicoOracleBoard"]
+#
+# `HelicoAgent` has no storage at all — its identities are immutables, in the code — and it is
+# listed so that stays true on purpose: the first field somebody declares there shows up in this
+# diff instead of quietly becoming the thing an upgrade has to carry.
+UPGRADEABLE = ["HelicoAccount", "HelicoMandateSwap", "HelicoOracleBoard", "HelicoAgent"]
 
 
 def _shape(type_name: str) -> str:
