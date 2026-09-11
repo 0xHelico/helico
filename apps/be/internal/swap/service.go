@@ -218,10 +218,17 @@ func (s *Service) Interpret(ctx context.Context, message string, prior ...Turn) 
 
 	// The confirmation is composed here, from the checked values, so the sentence and the
 	// intent cannot disagree.
+	// A dollar amount says so rather than naming a token figure this package did not compute. The
+	// card fills the number in from the feed, and saying "$5 of ETH" until it does is the honest
+	// half-sentence; inventing "0.002 ETH" here would be a figure with no source.
+	said := fmt.Sprintf("%s %s", intent.AmountIn, intent.TokenIn.Symbol)
+	if intent.AmountUsd != "" {
+		said = fmt.Sprintf("$%s of %s", intent.AmountUsd, intent.TokenIn.Symbol)
+	}
 	return Answer{
 		Action: ActionSwap,
-		Reply: fmt.Sprintf("Swapping %s %s into %s on %s. Nothing has moved: this is what I understood, and you sign it yourself.",
-			intent.AmountIn, intent.TokenIn.Symbol, intent.TokenOut.Symbol, intent.Chain),
+		Reply: fmt.Sprintf("Swapping %s into %s on %s. Nothing has moved: this is what I understood, and you sign it yourself.",
+			said, intent.TokenOut.Symbol, intent.Chain),
 		Intent: &intent,
 		Steps:  steps,
 	}, nil

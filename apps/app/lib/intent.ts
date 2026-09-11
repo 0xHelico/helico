@@ -9,6 +9,8 @@ export type IntentToken = {
 };
 
 export type Intent = {
+  /** Set instead of `amountInWei` when the sentence named dollars. The card converts it. */
+  amountUsd?: string;
   chainId: number;
   chain: string;
   tokenIn: IntentToken;

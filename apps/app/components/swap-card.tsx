@@ -18,6 +18,7 @@ import { explorerTx, SLIPPAGE_BPS } from "@/lib/chain";
 import { amountFloor, amountShort } from "@/lib/format";
 import type { Intent } from "@/lib/intent";
 import { shortfall } from "@/lib/intent";
+import { unitsForDollars } from "@/lib/usd";
 
 /**
  * The words for each transaction. The plugin returns what a step is; what a person reads about
@@ -29,15 +30,24 @@ type Step = {
   transaction: AquaStep["transaction"];
 };
 
-const label = (step: Step, intent: Intent) =>
+/** What the person asked for, in the words they used. A dollar sentence has no token figure until
+ *  the feed has answered, and printing one before it does would be a number with no source. */
+const asked = (intent: Intent, sized: bigint | null) =>
+  intent.amountUsd
+    ? sized === null
+      ? `$${intent.amountUsd} of ${intent.tokenIn.symbol}`
+      : `${amountShort(sized, intent.tokenIn.decimals)} ${intent.tokenIn.symbol} ($${intent.amountUsd})`
+    : `${intent.amountIn} ${intent.tokenIn.symbol}`;
+
+const label = (step: Step, intent: Intent, sized: bigint | null) =>
   ({
     // Aqua positions hold WETH and the router pulls with `safeTransferFrom`, so ETH is wrapped
     // first. Named as its own step because it is the wallet's own ether moving, and a person
     // signing two transactions should be told which one is which.
-    wrap: `Wrap ${intent.amountIn} ETH into WETH`,
+    wrap: `Wrap ${asked(intent, sized)} into WETH`,
     "approve-token": `Allow the router to spend your ${intent.tokenIn.symbol === "ETH" ? "WETH" : intent.tokenIn.symbol}`,
     "approve-permit2": `Allow Permit2 to spend your ${intent.tokenIn.symbol}`,
-    swap: `Swap ${intent.amountIn} ${intent.tokenIn.symbol} for ${intent.tokenOut.symbol}`,
+    swap: `Swap ${asked(intent, sized)} for ${intent.tokenOut.symbol}`,
   })[step.kind];
 
 /**
@@ -69,8 +79,17 @@ function Side({ amount, symbol }: { amount: string; symbol: string }) {
 }
 
 /** The price, as one number a person can hold in their head. */
-function rate(intent: Intent, out: bigint): string | null {
-  const given = Number(intent.amountIn);
+function rate(
+  intent: Intent,
+  out: bigint,
+  sized: bigint | null,
+): string | null {
+  // From the resolved amount, not the sentence: a dollar sentence leaves `amountIn` empty, and
+  // reading it there returned NaN and quietly printed a dash where the price goes.
+  const given =
+    sized === null
+      ? Number(intent.amountIn)
+      : Number(formatUnits(sized, intent.tokenIn.decimals));
   if (!Number.isFinite(given) || given <= 0) {
     return null;
   }
@@ -85,6 +104,38 @@ export function SwapCard({ intent }: { intent: Intent }) {
   const { sendTransactionAsync } = useSendTransaction();
   const onRightChain = chainId === intent.chainId;
 
+  /**
+   * The amount to swap, in the input token's own units.
+   *
+   * A sentence that named dollars arrives without one: the backend reports the dollars and does
+   * not divide, because it has no price and a model asked to convert produces a figure nobody can
+   * check. So the number a person is about to sign is read here, from Chainlink, by the wallet
+   * that will sign it — and it is refused rather than guessed when there is no feed or the feed is
+   * stale.
+   */
+  const sized = useQuery({
+    enabled: Boolean(publicClient),
+    queryKey: [
+      "sized",
+      intent.chainId,
+      intent.tokenIn.address,
+      intent.amountInWei,
+      intent.amountUsd,
+    ],
+    // A price goes stale, and this one decides an amount rather than describing it.
+    staleTime: 20_000,
+    retry: false,
+    queryFn: async () => {
+      if (!intent.amountUsd) return amountOf(intent.amountInWei);
+      return await unitsForDollars(
+        publicClient as NonNullable<typeof publicClient>,
+        intent.tokenIn.address,
+        intent.tokenIn.decimals,
+        intent.amountUsd,
+      );
+    },
+  });
+
   const plan = useQuery({
     queryKey: [
       "swap-plan",
@@ -92,9 +143,14 @@ export function SwapCard({ intent }: { intent: Intent }) {
       intent.tokenIn.address,
       intent.tokenOut.address,
       intent.amountInWei,
+      intent.amountUsd,
       address,
     ],
-    enabled: Boolean(publicClient && address && onRightChain),
+    // Waits for the amount as well as the wallet: a dollar sentence has no units until the feed
+    // has answered, and planning against `null` is a crash rather than a refusal.
+    enabled: Boolean(
+      publicClient && address && onRightChain && sized.data !== undefined,
+    ),
     // A quote is a price, and a price goes stale. Refusing to reuse one for long is the
     // difference between the number shown and the number filled.
     staleTime: 20_000,
@@ -124,7 +180,7 @@ export function SwapCard({ intent }: { intent: Intent }) {
           account: address,
           tokenIn: intent.tokenIn.address,
           tokenOut: intent.tokenOut.address,
-          amountIn: BigInt(intent.amountInWei),
+          amountIn: amountIn as bigint,
           slippageBps: SLIPPAGE_BPS,
         });
         if (viaAqua) {
@@ -146,7 +202,7 @@ export function SwapCard({ intent }: { intent: Intent }) {
         account: address,
         tokenIn: intent.tokenIn.address,
         tokenOut: intent.tokenOut.address,
-        amountIn: BigInt(intent.amountInWei),
+        amountIn: amountIn as bigint,
         slippageBps: SLIPPAGE_BPS,
       });
       return {
@@ -183,7 +239,7 @@ export function SwapCard({ intent }: { intent: Intent }) {
     },
   });
 
-  const amountIn = amountOf(intent.amountInWei);
+  const amountIn = sized.data ?? null;
   const short = amountIn === null ? null : shortfall(balance.data, amountIn);
 
   const run = useMutation({
@@ -202,7 +258,7 @@ export function SwapCard({ intent }: { intent: Intent }) {
         sent.push(hash);
         const receipt = await publicClient.waitForTransactionReceipt({ hash });
         if (receipt.status !== "success") {
-          throw new Error(`${label(step, intent)} failed on chain`);
+          throw new Error(`${label(step, intent, amountIn)} failed on chain`);
         }
       }
       return sent;
@@ -229,10 +285,10 @@ export function SwapCard({ intent }: { intent: Intent }) {
           to lead with a row of symbols and then bury the number a person actually decides on
           seven rows down, between the token's full name and the size of its smallest unit. */}
       <div className="space-y-2">
-        <Side
-          amount={`${intent.amountIn} ${intent.tokenIn.symbol}`}
-          symbol={intent.tokenIn.symbol}
-        />
+        {/* The headline, through the same helper as the steps. Reading `amountIn` here printed a
+            bare " ETH" for a dollar sentence, which is the one figure on this card a person looks
+            at before signing. */}
+        <Side amount={asked(intent, amountIn)} symbol={intent.tokenIn.symbol} />
         <ArrowDown className="size-4 text-muted-foreground" />
         <Side
           amount={
@@ -250,7 +306,7 @@ export function SwapCard({ intent }: { intent: Intent }) {
             <dt>Rate</dt>
             <dd>
               1 {intent.tokenIn.symbol} ={" "}
-              {rate(intent, plan.data.amountOut) ?? "—"}{" "}
+              {rate(intent, plan.data.amountOut, amountIn) ?? "—"}{" "}
               {intent.tokenOut.symbol}
             </dd>
             {/* Floored rather than rounded: this is the number the swap guarantees, and rounding
@@ -325,7 +381,7 @@ export function SwapCard({ intent }: { intent: Intent }) {
                       i < sentCount ? "text-muted-foreground" : undefined
                     }
                   >
-                    {label(step, intent)}
+                    {label(step, intent, amountIn)}
                   </span>
                   {run.data?.[i] ? (
                     <a

@@ -16,6 +16,13 @@ type Intent struct {
 	TokenOut    Token  `json:"tokenOut"`
 	AmountIn    string `json:"amountIn"`
 	AmountInWei string `json:"amountInWei"`
+	// AmountUsd is set instead of AmountInWei when the person named dollars rather than tokens.
+	//
+	// The conversion is not done here, and that is deliberate: this package has no price and
+	// should not invent one. A model asked to divide by a rate produces a number nobody can check,
+	// which is the one thing an amount must never be. The wallet reads Chainlink for the token
+	// being spent and fills in the units, so the figure a person signs came from a feed.
+	AmountUsd string `json:"amountUsd,omitempty"`
 }
 
 // ErrNeeds is returned when the message did not carry enough to build an intent. The fields it
@@ -104,12 +111,13 @@ type Step struct {
 
 // draft is what the model is asked for: an action, and for a swap the symbols and an amount.
 type draft struct {
-	Action   string `json:"action"`
-	Chain    string `json:"chain"`
-	TokenIn  string `json:"tokenIn"`
-	TokenOut string `json:"tokenOut"`
-	Amount   string `json:"amount"`
-	Question string `json:"question"`
+	Action    string `json:"action"`
+	Chain     string `json:"chain"`
+	TokenIn   string `json:"tokenIn"`
+	TokenOut  string `json:"tokenOut"`
+	Amount    string `json:"amount"`
+	AmountUsd string `json:"amountUsd"`
+	Question  string `json:"question"`
 }
 
 // build checks a draft against the registry and turns it into an Intent, or says what is
@@ -134,7 +142,10 @@ func build(d draft) (Intent, []Step, error) {
 	if strings.TrimSpace(d.TokenOut) == "" {
 		needs = append(needs, "tokenOut")
 	}
-	if strings.TrimSpace(d.Amount) == "" {
+	// Either unit will do. A dollar amount is not a missing amount — it is one this package
+	// cannot turn into units, because it has no price and must not pretend to.
+	dollars := strings.TrimSpace(d.AmountUsd)
+	if strings.TrimSpace(d.Amount) == "" && dollars == "" {
 		needs = append(needs, "amount")
 	}
 	if len(needs) > 0 {
@@ -159,6 +170,27 @@ func build(d draft) (Intent, []Step, error) {
 	if in.Symbol == out.Symbol {
 		steps = append(steps, Step{Call: "build", Detail: "both sides are " + in.Symbol})
 		return Intent{}, steps, errSameToken
+	}
+
+	if dollars != "" && strings.TrimSpace(d.Amount) == "" {
+		// Checked as a number here even though it is converted elsewhere: a dollar figure that is
+		// not a number would otherwise reach the wallet and be divided by a price.
+		if _, err := baseUnits(dollars, 2); err != nil {
+			steps = append(steps, Step{Call: "baseUnits", Detail: err.Error()})
+			return Intent{}, steps, err
+		}
+		steps = append(steps, Step{
+			Call:   "dollars",
+			Detail: fmt.Sprintf("$%s of %s, priced by the wallet's own Chainlink read", dollars, in.Symbol),
+			OK:     true,
+		})
+		return Intent{
+			ChainID:   chain.ChainID,
+			Chain:     chain.Name,
+			TokenIn:   in,
+			TokenOut:  out,
+			AmountUsd: dollars,
+		}, steps, nil
 	}
 
 	wei, err := baseUnits(d.Amount, in.Decimals)

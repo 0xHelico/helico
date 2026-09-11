@@ -20,7 +20,9 @@ export const suggestions = [
   "Put my idle USDC to work", // earn
   "Move money into my account", // deposit
   "Provide liquidity for ETH and USDC", // provide
-  "Swap 0.1 ETH into USDC", // swap
+  // Dollars, because nobody thinks in 0.1 ETH. The backend reports the dollars and the card
+  // divides by a Chainlink read, so the token figure a person signs has a source.
+  "Swap $5 ETH to USDC", // swap
   "Why has nothing moved?", // status
   "Stop the agent", // revoke
   "Take everything back to my wallet", // withdraw
