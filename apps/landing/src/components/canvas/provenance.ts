@@ -148,4 +148,35 @@ export const PROVENANCE: Record<string, Provenance> = {
 			},
 		],
 	},
+	takeable: {
+		intro: INTRO,
+		outcome: 'Filled from a position that never stopped earning',
+		receipts: [
+			{
+				id: 't-aqua',
+				glyph: 'swap',
+				layer: 'Aqua',
+				narration:
+					'A taker filled against your mandate. Aqua pulled from your account, never into its own.',
+				proofHref: EVIDENCE,
+				delayMs: 2600,
+			},
+			{
+				id: 't-account',
+				glyph: 'lock',
+				layer: 'Account',
+				narration:
+					'The wallet was short, so exactly the shortfall came out of the lending market — once, inside the same transaction.',
+				delayMs: 4400,
+			},
+			{
+				id: 't-you',
+				glyph: 'sign',
+				layer: 'You',
+				narration:
+					'You never chose between earning and being available. The ceiling you set is still the only thing that bounds it.',
+				delayMs: 6000,
+			},
+		],
+	},
 }

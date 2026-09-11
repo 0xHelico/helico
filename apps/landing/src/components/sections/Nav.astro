@@ -1,5 +1,5 @@
 ---
-import { solidityTests } from '../../lib/solidity-tests'
+import { creTests, solidityTests } from '../../lib/solidity-tests'
 import { Image } from 'astro:assets'
 import logoNav from '../../assets/logo-nav.webp'
 const repo = 'https://github.com/0xHelico/helico'
@@ -61,7 +61,7 @@ const menus: Menu[] = [
 		id: 'developers',
 		label: 'Developers',
 		items: [
-			{ title: 'CRE plugin', badge: '208 tests', sub: 'Decide, size, and sign in the enclave', href: `${docs}/chainlink-cre`, icon: 'pills', external: true },
+			{ title: 'CRE plugin', badge: `${creTests} tests`, sub: 'Decide, size, and sign in the enclave', href: `${docs}/chainlink-cre`, icon: 'pills', external: true },
 			{ title: 'Contracts', badge: `${solidityTests} tests`, sub: 'Solidity, Foundry, fork tests', href: `${docs}/contracts`, icon: 'coins', external: true },
 			{ title: 'Plans and prompts', sub: 'Every plan committed before code', href: `${repo}/tree/main/docs/plans`, icon: 'bars', external: true },
 		],
