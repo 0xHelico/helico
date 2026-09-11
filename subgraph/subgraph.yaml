@@ -64,6 +64,50 @@ dataSources:
           handler: handlePushed
 
   - kind: ethereum/contract
+    name: AquaSwapVMRouter
+    network: arbitrum-one
+    source:
+      # 1inch's SwapVM router, read out of `@1inch/swap-vm-sdk` the same way the Aqua address is
+      # — `AQUA_SWAP_VM_CONTRACT_ADDRESSES[42161]`, not found by scanning for a contract that
+      # behaves like one.
+      #
+      # **This is the fifth event.** 1inch's own Aqua documentation, under Data & Analytics, says:
+      # "A hosted subgraph is not currently available. Build a reference indexer over the five
+      # registry/router events keyed on (maker, app, strategyHash)." Four of them — Shipped,
+      # Docked, Pulled, Pushed — are on Aqua above. `Swapped` is on the router and was missing.
+      address: "0x111111338c5091e8440b67b168bae16a668ac0de"
+      abi: AquaSwapVMRouter
+      # This contract's first log, an `OwnershipTransferred`, so this is its deployment: exact
+      # rather than a safe underestimate. Its first `Swapped` is 489,290,882, and starting 1.3
+      # million blocks earlier cannot be wrong, which is worth more than the saving.
+      #
+      # Bisected with `eth_getLogs`, never `eth_getCode`, for the reason recorded above: a pruned
+      # archive answers "state is not available", and a search that reads that as "no code yet"
+      # returns the node's pruning boundary instead of a deployment. The bisection treats an error
+      # as "window too wide" and moves the floor, so a pruning error cannot be mistaken for an
+      # absence.
+      #
+      # There are **340** `Swapped` logs at this address as of 11 September 2026, the most recent
+      # two minutes before the query. An earlier reading of "zero in the last 90,000 blocks" was a
+      # true measurement of a quiet window and a false conclusion — fills land about one every
+      # 47,000 blocks, so a 90,000-block sample legitimately contains none.
+      startBlock: 488001389
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/router.ts
+      entities:
+        - Maker
+        - Fill
+      abis:
+        - name: AquaSwapVMRouter
+          file: ./abis/AquaSwapVMRouter.json
+      eventHandlers:
+        - event: Swapped(bytes32,address,address,address,address,uint256,uint256)
+          handler: handleSwapped
+
+  - kind: ethereum/contract
     name: HelicoAccountFactory
     network: arbitrum-one
     source:
