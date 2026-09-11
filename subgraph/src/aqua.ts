@@ -23,6 +23,9 @@ function loadOrCreateMaker(address: Bytes): Maker {
     maker = new Maker(address);
     maker.mandateCount = 0;
     maker.activeMandateCount = 0;
+    // Non-nullable, and `router.ts` owns it. A maker created here has been filled against zero
+    // times so far, which is the truth and not a placeholder.
+    maker.fillCount = 0;
     maker.save();
   }
   return maker;

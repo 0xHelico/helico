@@ -15,6 +15,10 @@ type Maker @entity(immutable: false) {
   mandateCount: Int!
   "Strategies not yet docked."
   activeMandateCount: Int!
+  "Fills executed against this maker through the router. See `Fill` for why it is not per-mandate."
+  fills: [Fill!]! @derivedFrom(field: "maker")
+  "How many, so the count is one read rather than a page of them."
+  fillCount: Int!
 }
 
 "An app a maker has given spending rights to. Aqua namespaces every balance by this."
@@ -124,4 +128,41 @@ type Account @entity(immutable: true) {
   openedAt: BigInt!
   openedAtBlock: BigInt!
   openedTx: Bytes!
+}
+
+"""
+One fill through 1inch's SwapVM router, which is the fifth of the five events 1inch's own Aqua
+documentation asks an indexer to cover — and the one this subgraph did not have.
+
+> A hosted subgraph is not currently available. Build a reference indexer over the five
+> registry/router events keyed on `(maker, app, strategyHash)`.
+> — 1inch Business, Aqua → Data & Analytics
+
+**It is keyed on `orderHash`, and that is not `strategyHash`.** Everything else here hangs off
+`(maker, app, strategyHash)` because that is how Aqua keys its ledger; `Swapped` reports the hash
+of the *order the router executed*, which is a different thing and not derivable from the event.
+So there is no edge from `Fill` to `Mandate`, and inventing one would be a join on two hashes that
+are not the same hash. The `maker` edge is real — the event carries the address — and that is the
+join a reader actually asks for: what has been filled against this maker.
+
+Immutable: it records something that happened.
+"""
+type Fill @entity(immutable: true) {
+  "tx hash ‖ log index."
+  id: Bytes!
+  "The maker whose tokens moved. The one link the event actually supports."
+  maker: Maker!
+  "Whoever called the router. A contract by construction — the fill arrives as a callback."
+  taker: Bytes!
+  "The router's own identifier for the order it executed. Not a strategy hash."
+  orderHash: Bytes!
+  "What the taker gave."
+  tokenIn: Bytes!
+  "What the maker gave."
+  tokenOut: Bytes!
+  amountIn: BigInt!
+  amountOut: BigInt!
+  timestamp: BigInt!
+  block: BigInt!
+  tx: Bytes!
 }
