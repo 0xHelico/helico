@@ -424,6 +424,36 @@ if (ethRendered) {
   );
 }
 
+// ── 2c. a swap the position cannot pay is refused, not mis-quoted ───────────
+//
+// `concentrate` prices on a band, not on inventory, so it answers for more than the maker
+// committed and answers badly. Measured directly: a position holding 10 USDC quotes 0.1 WETH at
+// **72.06 USDC**, and the fill reverts when Aqua's ledger subtraction underflows. The card used to
+// show that price. Signing it cost gas and got nothing.
+//
+// The stub above commits 50 USDC, so 0.1 ETH — about $246 — is more than it can pay.
+await page.waitForTimeout(13_000);
+await say("Swap 0.1 ETH into USDC");
+const refusal = page.getByText(
+  /can pay .* and this asks for more|none will price it/,
+);
+let refused = false;
+try {
+  await refusal.first().waitFor({ timeout: 60_000 });
+  refused = true;
+} catch {}
+check(
+  "a swap bigger than the position is refused with the size it can pay",
+  refused && /can pay/.test(await refusal.first().innerText()),
+  refused ? (await refusal.first().innerText()).slice(0, 110) : "no refusal",
+);
+check(
+  "and no transaction is offered",
+  (await page
+    .getByRole("button", { name: /^(Sign and swap|Sign \d+ transactions)$/ })
+    .count()) <= 2,
+);
+
 // ── 3. status: a reading, and nothing to sign ────────────────────────────────
 await say("Check my portfolio");
 await page
