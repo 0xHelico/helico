@@ -2499,6 +2499,84 @@ READMEs.
   position held a balance, but nothing had quoted at all, so no smaller number was going to help. I
   had shipped that. It now says it only when something priced above what it could pay.
 
+### 2026-09-11 — Full 1inch, the account as maker, dollars, and the fifth Aqua event
+
+- **Done:** five things landed, in this order.
+
+  **Dollars mean dollars** (#399). "Swap $5 ETH to USDC" swapped five ETH — about $12,300. The
+  backend now reports the dollars and divides nothing; `apps/app/lib/usd.ts` reads Chainlink in the
+  wallet that will sign.
+
+  **The account can be the maker** (#396). `provide-from-account-card.tsx` ships a position from the
+  account rather than the wallet, so one capital earns and is takeable at once.
+
+  **1inch's aggregation replaces the Uniswap fallback** (#400). The chain is Aqua → 1inch → Uniswap,
+  with Uniswap last because it needs no key. The key lives in a Next route handler with a
+  six-shape allowlist and never reaches the browser.
+
+  **A position's cap is `min(ledger, wallet, allowance)`** (#393), not the ledger alone.
+
+  **`Swapped` is indexed** (#406) — the fifth of the five events 1inch's own documentation asks an
+  indexer to cover, and the one we did not have.
+
+- **AI's role:** Claude Opus 5 measured everything first, wrote the plan before the code, and built
+  all five. Two of them changed a decision rather than implementing one, and both times the
+  measurement came before the opinion. One of them **reversed something the AI had already
+  shipped**: removing Uniswap from the fallback chain overrode a decision Ghoza had written down in
+  #400 twenty-five minutes before the AI opened its own duplicate issue for the same work. Restored,
+  with his reason quoted in the code.
+
+- **Plan:** `docs/plans/2026-09-11-full-1inch.md`, committed before any of the 1inch code.
+
+- **Verified:** every endpoint called with the real key before a line was written, and three
+  separate layers of evidence rather than one.
+
+  Twelve swaps, fresh wallet each, $25 to $12,000, both directions, nothing stubbed
+  (`e2e/oneinch-repeat.ts`):
+
+  ```
+  fork at 504000597, chain head 504002240, drift 1643 blocks
+  ok  0.01 ETH → USDC   1 tx  quoted 24.655252    got 24.668022
+  ok  1 ETH → USDC      1 tx  quoted 2465.479442  got 2465.479442
+  ok  5000 USDC → WETH  2 tx  quoted 2.015104…    got 2.012674…
+  …                                  12 of 12 filled at or above the floor
+  ```
+
+  The assertion is the **floor the card shows**, not "more than zero" — a fill of one wei would
+  otherwise pass.
+
+  The chat suite, **33 of 33**, all three venues filling for real, including the last resort proven
+  by making our own proxy answer 503.
+
+  And production, after deploy:
+
+  ```
+  approve/spender        200  0x111111125421ca6dc452d289314280a0f8842a65
+  quote 0.1 WETH         200  {"dstAmount":"246602538"}
+  portfolio/v5           404  NOT_ALLOWED
+  quote/../../portfolio  404  NOT_ALLOWED
+  34 requests            27×200 then 7×429
+  ```
+
+  **The check written to be unsatisfiable if its claim is false.**
+  `e2e/no-key-in-bundle.ts` searches the emitted client chunks for the real key: none of 585 files
+  holds it, and handed a string the bundle *does* contain it fails on 16 chunks. It refuses to run
+  with no key in the environment, because a search for an empty string passes on nothing.
+
+- **Three corrections the AI made to its own published claims**, each because the second
+  measurement contradicted the first:
+
+  1. **"Their API reports 4,575 strategies against our 35, so our query is suspect."** Wrong.
+     `chainId` is ignored by `/aqua/v1.0` — ask for Base, get Arbitrum, and the cursor returns
+     `chainIds: null`. 4,575 is the all-chains total, and our subgraph is synced with no errors.
+  2. **"Zero `Swapped` logs, so the data source starts empty."** A true measurement of one quiet
+     90,000-block window and a false conclusion. There are **340**, the most recent two minutes
+     before the query; fills land about one every 47,000 blocks.
+  3. **"`ONEINCH_API_KEY` is not set in production."** It already was.
+
+  The first two are the mistake this repository has a section about — generalising from a sample
+  that could not have shown the opposite.
+
 <!--
 Template for the next entry:
 
