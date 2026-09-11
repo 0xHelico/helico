@@ -2433,6 +2433,38 @@ READMEs.
   going to resolve itself, and the only fix in our reach was to be the maker — which #346 had
   listed as a gap without anyone connecting it to the swap.
 
+### 2026-09-11 — A quote that answered for more than the position could pay
+
+- **Done:** the ledger is the cap on an Aqua quote, and a refusal that cannot be met names the size
+  that can.
+
+  Ghoza sent a screenshot of the swap still refusing and asked why. The message was right, but
+  measuring behind it turned up something worse than thin liquidity: `concentrate` prices on a band
+  rather than on inventory, so it answers for any amount. A position holding **10 USDC** quotes 0.1
+  WETH at **72.06 USDC** — and the fill reverts when Aqua's ledger subtraction underflows. The card
+  showed that price and would have taken a signature for it.
+
+- **AI's role:** Claude Opus 5 measured, found it, and fixed it. Ghoza's "tetep ga bisa" is what
+  sent me to measure rather than explain.
+
+- **Verified:** the lie first, then the fix. On a fork, a $10 position quoted 0.1 WETH at 72.06 USDC
+  and the fill came back `reverted` with the taker holding 0. After the fix, 22 checks in
+  `e2e/fork-chat-actions.ts` including:
+
+  ```
+  ok  a swap bigger than the position is refused with the size it can pay
+      — The largest Aqua position for this pair can pay 50 USDC and this asks for more.
+  ok  and no transaction is offered
+  ```
+
+  And the numbers that make a demo work rather than dead-end, measured at three position sizes: $50
+  a side fills 0.02 ETH at 44.08 USDC against a fair 49; 0.1 ETH needs about $250 a side. The
+  struck-through quotes in that table were the lying ones, which is how the bug surfaced at all —
+  a price that improved with a *smaller* position is not a price.
+
+  This is the invariant the repository states in its own words: a quote that answers for a swap
+  that would revert sends somebody to build a transaction that cannot land.
+
 <!--
 Template for the next entry:
 
