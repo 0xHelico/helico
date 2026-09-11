@@ -19,7 +19,7 @@ and passed to `cast` as `--private-key "$(…)"` at the moment of use — no key
 | Role | Address | Holds | If this key leaks |
 |---|---|---|---|
 | `DEPLOYER_PRIVATE_KEY` | `0x6DCd7485aB17e0CBD0723b8435a35bb8d029439E` | 0.0079 | Deploys contracts and spends its gas. Nearly idle once the deploy is done |
-| `AGENT_PRIVATE_KEY` | `0x84C3891a9693c891877aC474a90d17d29075fcAf` | 0.0100 | Moves capital between the account and permitted markets. **Cannot take it** — neither call has a recipient parameter |
+| `AGENT_PRIVATE_KEY` | `0x84C3891a9693c891877aC474a90d17d29075fcAf` | 0.0100 | **Retired 11 September.** Was to move capital between the account and permitted markets; never sent a transaction (nonce 0). The agent is now the `HelicoAgent` contract, which only the DON's report can move — see below. The key stays in the Vault document because the `signature` delivery path still reads it in staging |
 | `RELAYER_PRIVATE_KEY` | `0x96575074e509DAB29D56D83060c2438730aC582E` | 0.0050 | Opens accounts, which grants nothing, and carries calls the owner already signed. Almost no damage |
 | `UPGRADE_PRIVATE_KEY` | `0xaeE1F9d2c23730CA04Dd478830c2acc495536E9C` | 0.0020 | **Replaces an account's code, immediately.** The largest power in the system |
 
@@ -43,24 +43,31 @@ upgrade delay was removed for the hackathon, immediately. Separating them costs 
 
 Funded from the deployer: `0xa9282b81…` (agent), `0x77a6b0e6…` (relayer), `0x172eebbe…` (upgrader).
 
-### Why the agent needs gas at all
-
-Easy to miss, because it sounds like a key that only signs.
+### Why the agent needed gas, and why it no longer does
 
 `supplyIdle` and `withdrawIdle` check `msg.sender == agent`, so **the agent address sends its own
-transactions**. The EIP-712 statement the enclave produces is the enclave attesting to what it
-decided; it is not what authorises the call.
+transactions**. The EIP-712 statement the enclave produced under `signature` delivery was the
+enclave attesting to what it decided; it was not what authorised the call, and nothing carried it.
+That is exactly what happened in production: from the moment the demo policy allowed a move, every
+run decided `SUPPLY` and the agent key's nonce stayed at zero.
 
-That is a constraint on the design rather than a detail: making these moves relayable would need a
-signature-accepting variant of `supplyIdle`, the way `executeWithSignature` works for the owner —
-a contract change, not something the backend can absorb. At 0.02 gwei each move costs on the order
-of 0.00005 ETH, so the agent's balance covers hundreds.
+The resolution was not a signature-accepting `supplyIdle`. It was to make the agent a contract:
+`HelicoAgent` is an `IReceiver` behind a proxy, the account names it, and the `KeystoneForwarder`
+calls it with the DON's signed report. The DON's transmitter pays the gas for that transaction, so
+no Helico key needs a balance for moves at all. `deliver()` in the workflow — the forwarder path,
+written on 5 September and refused ever since because `reportReceiver` was zero — is what the
+production config now uses.
+
+Deploying the receiver is in `deployments.md` under 11 September. The three steps after it that
+each need somebody's transaction are listed there too, and one of them is the owner's.
 
 ## Still to answer
 
-- [ ] **The production agent key must eventually be the DON's.** For the hackathon it is a key on
-      a laptop, which is not what "the key never leaves the enclave" means. Fine for a demo, and
-      worth saying rather than implying otherwise — the video's do-not-say list already carries it.
+- [x] **The production agent key must eventually be the DON's.** It is, since 11 September: the
+      agent is `HelicoAgent` at `0x98c3…4463`, and the only thing that can make it act is a report
+      the DON signed, delivered through the production `KeystoneForwarder`. There is no agent key
+      in the production path any more. What remains true and worth saying: the *decision* is the
+      enclave's, the *delivery* is the DON's, and the *permission* is the owner's `setAgent`.
 - [ ] **Who runs the relayer, and where its key lives.** #186 gave the app the read half —
       `apps/app/lib/account.ts` calls `accountFor` and renders the account before it exists. The
       write half is still missing: nothing sends `open`, in either `apps/app` or `apps/be`, so
@@ -378,7 +385,7 @@ under ten, so the ten-item limit stops mattering and the subset upload files are
 ```bash
 python3 scripts/pack-cre-vault.py       # after changing any SECRET_* value
 python3 scripts/check-cre-secrets.py    # packed ids == ids the workflow reads
-cre secrets update secrets.yaml --target production-settlement
+cre secrets update secrets.yaml --target production-settings
 ```
 
 The agent key now shares a document with the policy. That is worse hygiene than keeping them

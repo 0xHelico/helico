@@ -1,7 +1,7 @@
 {
 	"schedule": "0 */5 * * * *",
 	"rpcUrl": "https://arb1.arbitrum.io/rpc",
-	"delivery": "signature",
+	"delivery": "forwarder",
 	"chainId": 42161,
 	"chainSelectorName": "ethereum-mainnet-arbitrum-1",
 	"account": "0x0000000000000000000000000000000000000000",
@@ -30,8 +30,8 @@
 		"0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
 		"0x82aF49447D8a07e3bd95BD0d56f35241523fBab1"
 	],
-	"agent": "0x84C3891a9693c891877aC474a90d17d29075fcAf",
-	"reportReceiver": "0x0000000000000000000000000000000000000000",
+	"agent": "0x98c3979358A4e5086Da432CfE91F45aE2A854463",
+	"reportReceiver": "0x98c3979358A4e5086Da432CfE91F45aE2A854463",
 	"policyHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
 	"gasLimit": "3000000",
 	"deadlineSeconds": 600,

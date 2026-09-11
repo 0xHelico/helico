@@ -222,21 +222,41 @@ export function AccountControls() {
           }
         >
           {nominated ? (
-            <Button
-              disabled={!canWrite || write.isPending}
-              onClick={() =>
-                write.mutate({
-                  functionName: "setAgent",
-                  args: [
-                    "0x0000000000000000000000000000000000000000" as Address,
-                  ],
-                })
-              }
-              size="sm"
-              variant="outline"
-            >
-              Remove
-            </Button>
+            <>
+              {/* An account naming any other address — the key the enclave used to sign as,
+                  before the agent became a contract — is managed by nobody. One `setAgent`
+                  replaces it; making the owner remove first would be two signatures for one
+                  intention. */}
+              {!isOurs && (
+                <Button
+                  disabled={!canWrite || write.isPending}
+                  onClick={() =>
+                    write.mutate({
+                      functionName: "setAgent",
+                      args: [HELICO_AGENT as Address],
+                    })
+                  }
+                  size="sm"
+                >
+                  Nominate Helico's agent
+                </Button>
+              )}
+              <Button
+                disabled={!canWrite || write.isPending}
+                onClick={() =>
+                  write.mutate({
+                    functionName: "setAgent",
+                    args: [
+                      "0x0000000000000000000000000000000000000000" as Address,
+                    ],
+                  })
+                }
+                size="sm"
+                variant="outline"
+              >
+                Remove
+              </Button>
+            </>
           ) : (
             <Button
               disabled={!canWrite || write.isPending}
