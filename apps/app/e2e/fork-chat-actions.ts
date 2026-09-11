@@ -239,6 +239,11 @@ const FILLABLE_STUB = {
         active: true,
         movementCount: 0,
         shippedAt: String(Math.floor(Date.now() / 1000)),
+        // The maker, because the card now reads their wallet and their allowance to Aqua as well
+        // as the ledger — all three have to cover a fill, and on Arbitrum One live positions exist
+        // where the ledger says one thing and the wallet holds nothing (#393). Without this field
+        // the new path is never exercised, and the stub would pass on the old behaviour.
+        maker: { id: maker.account.address.toLowerCase() },
         app: { id: "0x111111338c5091e8440b67b168bae16a668ac0de" },
         balances: [
           {

@@ -118,6 +118,16 @@ export type Mandate = {
 	/** The bytes the maker shipped, verbatim. Each app owns the ABI that decodes them. */
 	strategy: string
 	active: boolean
+	/**
+	 * The maker, when the query selected it.
+	 *
+	 * Absent from `makerMandates`, which already knows. Present in `fillableFor`, because a
+	 * candidate cannot be checked without it: Aqua's ledger is a number the maker shipped, and it
+	 * does not fall when they spend those tokens somewhere else or revoke the allowance. Measured on
+	 * Arbitrum One — a live position whose ledger holds 0.0146 WETH and 25.81 USDC, and whose wallet
+	 * holds nothing at all. See #393.
+	 */
+	maker?: string
 	/** The app the maker gave spending rights to. */
 	app: string
 	movementCount: number
