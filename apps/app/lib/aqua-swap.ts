@@ -147,13 +147,19 @@ async function best(
   amountIn: bigint,
   cap: Map<string, bigint>,
 ): Promise<{
-  chosen: OpenOrder;
+  /** Null when nothing priced within what it could pay. The rest still says why. */
+  chosen: OpenOrder | null;
   amountOut: bigint;
   /** The most any candidate had committed, for a refusal that can name a number. */
   largestCap: bigint;
-} | null> {
+  /** How many priced above what they could pay. Zero means size was never the problem. */
+  overCap: number;
+}> {
   let winner: { chosen: OpenOrder; amountOut: bigint } | null = null;
   let largestCap = 0n;
+  // Whether anything priced at all, and whether anything priced *above* what it could pay. They
+  // are different failures and only the second one means "ask for less".
+  let overCap = 0;
   for (const candidate of orders) {
     const committed = cap.get(candidate.strategyHash.toLowerCase()) ?? 0n;
     if (committed > largestCap) largestCap = committed;
@@ -173,7 +179,10 @@ async function best(
       );
       // The ledger is the cap, and `concentrate` does not consult it. Anything above what this
       // maker committed of `tokenOut` is a price nobody can pay.
-      if (amountOut > committed) continue;
+      if (amountOut > committed) {
+        overCap++;
+        continue;
+      }
       if (amountOut > 0n && (!winner || amountOut > winner.amountOut)) {
         winner = { chosen: candidate, amountOut };
       }
@@ -181,7 +190,12 @@ async function best(
       // Not fillable for this pair, direction or size. Ordinary, not an error.
     }
   }
-  return winner ? { ...winner, largestCap } : null;
+  return {
+    chosen: winner?.chosen ?? null,
+    amountOut: winner?.amountOut ?? 0n,
+    largestCap,
+    overCap,
+  };
 }
 
 export type PlanAquaSwapInput = {
@@ -227,7 +241,6 @@ export async function planAquaSwap(
 
   const { orders, considered, cap } = await candidates(payWith, tokenOut);
   const picked = await best(client, orders, payWith, tokenOut, amountIn, cap);
-  const largestCap = [...cap.values()].reduce((a, b) => (b > a ? b : a), 0n);
 
   // Three different walls, and they used to arrive as one sentence.
   //
@@ -242,7 +255,7 @@ export async function planAquaSwap(
   // pair" concludes the integration does not work. The truth is that the index found them, the
   // hash gate proved them, and the router refused them — which is three working parts and one
   // absent maker.
-  if (!picked) {
+  if (!picked.chosen) {
     if (considered === 0) {
       throw new Error(
         "No Aqua position holds both sides of this pair right now.",
@@ -253,15 +266,19 @@ export async function planAquaSwap(
         `${considered} position${considered === 1 ? "" : "s"} hold this pair, and none of them decodes to the order Aqua filed under its hash.`,
       );
     }
-    // Naming the size is the difference between "try again later" and "ask for less". A band
-    // prices any amount; the ledger pays only what was committed, and that number is knowable.
-    if (largestCap > 0n) {
+    // Only when something actually priced and priced too high. Saying "ask for less" when nothing
+    // priced at all is advice that cannot work, and I shipped exactly that for an afternoon:
+    // measured against Arbitrum One, every one of the four positions for WETH/USDC **refuses to
+    // quote** at 0.0005 ETH as readily as at 0.1, so no smaller number was ever going to help.
+    // Thirty-five active mandates were then scanned across every pair and both directions: zero
+    // fillable. Size was never the problem.
+    if (picked.overCap > 0 && picked.largestCap > 0n) {
       throw new Error(
-        `The largest Aqua position for this pair can pay ${Number(formatUnits(largestCap, 6)).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${outSymbolFor(tokenOut)} and this asks for more. Ask for a smaller amount, or provide liquidity of your own.`,
+        `The largest Aqua position for this pair can pay ${Number(formatUnits(picked.largestCap, 6)).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${outSymbolFor(tokenOut)} and this asks for more. Ask for a smaller amount, or provide liquidity of your own.`,
       );
     }
     throw new Error(
-      `${orders.length} Aqua position${orders.length === 1 ? "" : "s"} hold this pair and none will price it right now. Aqua's own liquidity is thin; a maker position of ours is what fixes this.`,
+      `${orders.length} Aqua position${orders.length === 1 ? "" : "s"} hold this pair and none of them will price it, at any size. Providing liquidity of your own is what fixes this.`,
     );
   }
 

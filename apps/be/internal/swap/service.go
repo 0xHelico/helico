@@ -181,10 +181,8 @@ func (s *Service) Interpret(ctx context.Context, message string, prior ...Turn) 
 	case ActionDeposit:
 		return Answer{
 			Action: ActionDeposit,
-			Reply: "Your account is a contract only you own, and the agent moves what it holds — so " +
-				"this is the step that gives it something to move. It is an ordinary transfer with no " +
-				"approval, and the card below sends it. If you would rather pay in from an exchange, " +
-				"the same card has the address.",
+			Reply: "Your account is a contract only you own, and the agent moves what it holds. An " +
+				"ordinary transfer, no approval. The card sends it, or pay in to the address on it.",
 			Steps: []Step{read},
 		}, nil
 	case ActionEarn:
@@ -193,10 +191,9 @@ func (s *Service) Interpret(ctx context.Context, message string, prior ...Turn) 
 			// Written for somebody who has not set anything up, because that is who asks this.
 			// The card beside it reads the account and names which of the three steps is missing;
 			// this sentence has no address and cannot.
-			Reply: "Your idle USDC can earn in Aave v3, Compound v3 or a Morpho vault, and the " +
-				"agent holds whichever pays best. Three things have to be true first: the agent is " +
-				"named, the market is allowed, and the money is in your account. Each one is a call " +
-				"you sign yourself, and the card below shows which is still missing.",
+			Reply: "Your idle USDC earns in whichever of Aave v3, Compound v3 or Morpho pays best. " +
+				"Three things first, each a call you sign: name the agent, allow the market, put the " +
+				"money in. The card shows which is missing.",
 			Steps: []Step{read},
 		}, nil
 	case ActionRevoke:

@@ -2465,6 +2465,40 @@ READMEs.
   This is the invariant the repository states in its own words: a quote that answers for a swap
   that would revert sends somebody to build a transaction that cannot land.
 
+### 2026-09-11 — Uniswap fills what Aqua cannot, and two things that were lying
+
+- **Done:** the swap routes Aqua first and Uniswap v4 when Aqua cannot fill. Ghoza's call,
+  reversing his own of 10 September, and the code records why it changed rather than only that it
+  did.
+
+  Also: the refusal stopped giving advice that could not work, and the earn card lost most of its
+  words.
+
+- **AI's role:** Claude Opus 5 measured, proposed the three options with their costs, and built the
+  one Ghoza picked. The decision was his both times.
+
+- **Verified:** `e2e/fork-chat-actions.ts`, **24 checks**, and the one that matters is the sentence
+  from his screenshot:
+
+  ```
+  ok  a swap Aqua cannot pay routes through Uniswap and names it  — Uniswap v4 · 0.05% pool
+  ok  and says why Aqua did not take it
+  ok  and 0.1 ETH actually fills on Uniswap  — +246.483276 USDC
+  ```
+
+  At $2,464/ETH that is a fair fill. Aqua still takes what it can: 5 USDC into 0.00204 WETH, and
+  0.01 ETH into 23.49 USDC through a position shipped in the same run.
+
+  **The measurement that made the reversal the right call.** "Aqua's liquidity is thin" was the
+  standing belief and it was wrong: it is **absent**. Thirty-five active mandates scanned across
+  every pair and both directions — zero fillable. For WETH/USDC, four positions refuse a quote at
+  0.0005 ETH as readily as at 0.1. So an Aqua-only swap works for nobody who has not shipped a
+  position of their own.
+
+  **And it caught my own bad advice.** The refusal said "ask for a smaller amount" whenever a
+  position held a balance, but nothing had quoted at all, so no smaller number was going to help. I
+  had shipped that. It now says it only when something priced above what it could pay.
+
 <!--
 Template for the next entry:
 

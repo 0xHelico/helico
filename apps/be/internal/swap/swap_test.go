@@ -652,7 +652,10 @@ func TestEarnIsItsOwnAction(t *testing.T) {
 	}
 	// The three conditions, in the order they have to happen in. A reply that named only the
 	// markets would send someone to enable a venue for an account holding nothing.
-	for _, want := range []string{"agent is named", "market is allowed", "money is in your account"} {
+	// The three conditions, in the order they have to happen in. Worded shorter than they were —
+	// the reply is read while deciding what to press, not studied — so the check names the verbs
+	// rather than the sentences, which is the part that must survive a rewrite.
+	for _, want := range []string{"name the agent", "allow the market", "put the money in"} {
 		if !strings.Contains(got.Reply, want) {
 			t.Errorf("reply does not name %q: %q", want, got.Reply)
 		}
