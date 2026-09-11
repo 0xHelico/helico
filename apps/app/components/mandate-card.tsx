@@ -181,11 +181,21 @@ export function MandateCard({
   const needsLimits = !nominated || venue.data === false;
   const needsMoney = !needsLimits && held !== null && held.total === 0n;
   // One line each. These are read while deciding what to press, not studied.
+  //
+  // **"All set" was wrong in both directions at a small balance.** It said the thing was done when
+  // the thing cannot happen: the agent moves only when the gain clears the gas, and a balance far
+  // under that floor will sit there for ever while the card congratulates it. Measured on the live
+  // chain — an account holding 0.5 USDC, fully armed, and nothing had moved in a day.
+  //
+  // The floor itself is **not** named here, and that is deliberate. It is `minMoveAmount` in the
+  // policy the owner seals into the Vault DON; this app cannot read it, and printing a number it
+  // cannot verify would be the same mistake one level down. So the sentence says what is true
+  // without the figure, and leaves the figure to whoever set it.
   const earnNext = needsLimits
     ? "No agent, and nowhere to put it. Two calls fix both."
     : needsMoney
       ? "Ready, and the account is empty."
-      : "All set. It moves when the gain clears the gas.";
+      : "Set up. The agent moves when the gain clears the gas, so a small balance may sit a long time.";
 
   const live = mandates.data?.rows.filter((m) => m.active) ?? [];
   const spendable = [...(mandates.data?.spendable ?? new Map())].filter(
@@ -268,8 +278,13 @@ export function MandateCard({
             </Link>
           ) : null}
           {/* The control itself, not a link to it. Money in lives in the conversation now, so the
-              step that is missing arrives with the thing that does it. */}
-          {needsMoney ? <FundAccount plain /> : null}
+              step that is missing arrives with the thing that does it.
+  
+              **Offered whenever the setup is done, not only at exactly zero.** It used to be gated
+              on `needsMoney`, so the moment an account held anything at all the card stopped
+              offering the one action that would make it work — a person with 0.5 USDC in a
+              fully-armed account had no way to add more from the card that is about adding more. */}
+          {needsLimits ? null : <FundAccount plain />}
           {unlock.error ? (
             <p className="mt-2 text-[11px] text-destructive">
               {unlock.error.message.split("\n")[0]}
