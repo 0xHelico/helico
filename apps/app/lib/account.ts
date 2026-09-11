@@ -43,15 +43,22 @@ export const accountWriteAbi = parseAbi([
 ]);
 
 /**
- * The agent the deployed workflow signs as, and the market it is configured to use.
+ * The agent an account nominates, and the market the workflow was first configured to use.
  *
- * Both are public addresses rather than configuration: the agent's is in the deploy runbook and
- * on chain in every authorisation it has ever signed, and the pool is Aave v3's on Arbitrum One.
- * A page that made the owner paste either of them would be asking for the one mistake — a
- * mistyped agent — that this contract cannot take back for them.
+ * The agent is a contract, `HelicoAgent` behind a proxy, deployed 11 September: the only thing
+ * that can make it call an account is a report the Chainlink DON signed, delivered through the
+ * production `KeystoneForwarder`. Before that day it was a key, `0x84C3…fcAf`, which nothing ever
+ * spent — the enclave decided and signed, and no process carried the call. An account that still
+ * names the key is managed by nobody, which is why the panel offers to nominate the contract over
+ * it rather than only to remove it.
+ *
+ * Both are public addresses rather than configuration: the agent's is in `deployments.md` and
+ * verified on Arbiscan, and the pool is Aave v3's on Arbitrum One. A page that made the owner
+ * paste either of them would be asking for the one mistake — a mistyped agent — that this
+ * contract cannot take back for them.
  */
 export const HELICO_AGENT =
-  "0x84C3891a9693c891877aC474a90d17d29075fcAf" as const;
+  "0x98c3979358A4e5086Da432CfE91F45aE2A854463" as const;
 export const AAVE_V3_POOL =
   "0x794a61358D6845594F94dc1DB02A252b5b4814aD" as const;
 
