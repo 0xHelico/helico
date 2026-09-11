@@ -207,7 +207,7 @@ export function ProvideCard() {
           onClick={() => ship.mutate()}
           size="sm"
         >
-          {ship.isPending ? "Shipping…" : "Ship it"}
+          {ship.isPending ? "Shipping…" : "Ship from my wallet"}
         </Button>
       </div>
 

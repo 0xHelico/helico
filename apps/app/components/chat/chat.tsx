@@ -24,6 +24,7 @@ import { Turn } from "@/components/chat/turn";
 import { FundAccount } from "@/components/fund-account";
 import { MandateCard } from "@/components/mandate-card";
 import { ProvideCard } from "@/components/provide-card";
+import { ProvideFromAccountCard } from "@/components/provide-from-account-card";
 import { SwapCard } from "@/components/swap-card";
 import { useHelicoSession } from "@/hooks/use-helico-session";
 import { api, type SwapConfig } from "@/lib/api";
@@ -326,7 +327,13 @@ export function Chat({ conversationId }: { conversationId?: string }) {
                     turn.intent.action === "deposit" ? (
                       <FundAccount />
                     ) : turn.intent.action === "provide" ? (
-                      <ProvideCard />
+                      <>
+                        {/* Both, and the account one first. It is the thesis — one capital that
+                            earns and stays takeable — and the wallet version is the honest answer
+                            for somebody who has no account yet (#396). */}
+                        <ProvideFromAccountCard />
+                        <ProvideCard />
+                      </>
                     ) : (
                       <MandateCard action={turn.intent.action} />
                     )
