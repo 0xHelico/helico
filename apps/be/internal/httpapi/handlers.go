@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/0xHelico/helico/apps/be/internal/activity"
 	"github.com/0xHelico/helico/apps/be/internal/blog"
 	"github.com/0xHelico/helico/apps/be/internal/chat"
 	"github.com/0xHelico/helico/apps/be/internal/graph"
@@ -48,6 +49,10 @@ type Options struct {
 	Graph *graph.Cache
 	// GraphRatePerMin bounds what one address may spend of the shared subgraph quota.
 	GraphRatePerMin int
+	// Activity owns one account's history, read from its own logs and kept. Nil means the route
+	// says so rather than answering an empty list, because "nothing happened" and "we cannot
+	// look" are different answers and only one of them is about the account.
+	Activity *activity.Service
 }
 
 // cacheControl is what a CDN or browser may do with a read: keep it for a minute, serve it
@@ -80,6 +85,7 @@ func New(svc *blog.Service, opt Options) http.Handler {
 		limit:      newLimiter(opt.SwapRatePerMin, opt.SwapDailyMax),
 		graph:      opt.Graph,
 		graphLimit: newLimiter(opt.GraphRatePerMin, 0),
+		activity:   opt.Activity,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", api.health)
@@ -111,6 +117,11 @@ func New(svc *blog.Service, opt Options) http.Handler {
 	// The subgraph, cached. A GraphQL endpoint like the one it stands in front of, so the client
 	// that speaks to Studio speaks to this by changing a URL and nothing else.
 	mux.HandleFunc("POST /api/graph", api.graphQuery)
+
+	// One account's own history, from the database. Shares the graph budget rather than the swap
+	// one: both are reads a page makes on load, and neither should be able to spend the allowance
+	// of the endpoint that costs money.
+	mux.HandleFunc("GET /api/activity", api.accountActivity)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { writeProblem(w, http.StatusNotFound, "") })
 
 	var h http.Handler = mux
@@ -135,6 +146,9 @@ type api struct {
 	now     func() time.Time
 	limit   *limiter
 	graph   *graph.Cache
+	// Owns an account's history rather than caching a question about it. Nil when this build has
+	// no chain endpoint, and the handler says so instead of answering with nothing.
+	activity *activity.Service
 	// A budget of its own. Sharing the swap limiter would let a page that reads mandates spend
 	// the allowance for the endpoint that costs money.
 	graphLimit *limiter

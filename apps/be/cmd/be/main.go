@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/0xHelico/helico/apps/be/internal/activity"
 	"github.com/0xHelico/helico/apps/be/internal/blog"
 	"github.com/0xHelico/helico/apps/be/internal/chat"
 	"github.com/0xHelico/helico/apps/be/internal/config"
@@ -59,6 +60,13 @@ func run() error {
 	// query to the frontend is a visible change to what this process will forward.
 	subgraph := graph.New(cfg.SubgraphURL, cfg.GraphTTL, []string{"Mandates", "Movements"}, 10*time.Second)
 
+	// An account's own history, owned rather than cached: the log is append-only, so the watermark
+	// in the database means the second read costs one narrow query instead of a scan from the
+	// factory's deployment block. The dapp was paying for that scan in every browser, three times
+	// over, on every page load.
+	accountActivity := activity.NewService(
+		db, activity.NewRPC(cfg.RPCURL, 15*time.Second), cfg.ActivityFrom, cfg.ActivityFresh, 50)
+
 	svc := blog.NewService(db)
 	chats := chat.NewService(db)
 	if cfg.SessionSecret == "" {
@@ -90,6 +98,7 @@ func run() error {
 			SwapDailyMax:    cfg.SwapDailyMax,
 			Graph:           subgraph,
 			GraphRatePerMin: cfg.GraphRatePerMin,
+			Activity:        accountActivity,
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
