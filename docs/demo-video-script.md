@@ -37,6 +37,35 @@ that exists, and #22 asks for a full-length take by **11 September** rather than
 A shot that has to fall back is not a weaker video. A shot that claims something untrue ends the
 submission.
 
+### Pre-flight, re-run 11 September — **read this one first**
+
+Five things landed today and one row above stopped being true. The layer below was accurate when
+it was written; where the two disagree, this one wins.
+
+| | State, measured 11 September |
+|---|---|
+| **An account exists on Arbitrum One** | The 10 September row says *"Still none opened on mainnet"* and that is no longer so. `0x0acdfa21…4a39`, owner `0x3B4f0135…85F5`, opened **10 September 17:58 UTC**, **agent set** to `0x84C3891a…fcAf`. The owner is not one of the four addresses this repository uses, so somebody opened it through the deployed dapp. It holds nothing: 0 USDC, 0 WETH, 0 aUSDC. Sayable: *"an account is open on the live chain and the agent is named."* **Not** sayable: that the workflow is managing money |
+| **The swap has three venues now, and a live demo will not use Aqua** | `Aqua → 1inch aggregation → Uniswap v4`. On Arbitrum One today **no Aqua position for WETH/USDC will quote at any size** — including the one whose ledger, wallet and allowance all cover the amount; it reverts with no return data. So a swap recorded at `app.helico.site` will route through **1inch aggregation** and the card will say so. Read the card aloud rather than the plan: saying "filled against an Aqua position" over a card that says `1inch aggregation` is the kind of claim that ends a submission |
+| **Dollars mean dollars, live** | `Swap $5 ETH to USDC` is a starter button and the backend answers `amountUsd 5` with `amountInWei` empty, priced by a Chainlink read in the wallet that signs. This was **broken in production for ninety minutes today** — a dropped deploy over a prompt bug — so check it on the day: `curl -s -X POST https://api.helico.site/api/swap/intent -H 'content-type: application/json' -d '{"message":"Swap $5 ETH to USDC"}'` must show `amountUsd` set |
+| **The account can be the maker** | A new card ships an Aqua position from the *account* rather than the wallet, so one capital earns and is takeable at once. Proven on a fork end to end, read back out of Aqua: `1 Shipped event(s) from` the account, `20 USDC, sentinel 2` under our own app. This is the thesis in one screen and **no shot currently uses it** |
+| **A second 1inch surface, and the key is not in the browser** | The aggregation route is live in production through a proxy on our own server: `approve/spender` answers `0x11111112…2a65`, a quote for 0.1 WETH answers 246.60 USDC, `portfolio/v5/anything` answers **404 NOT_ALLOWED**, and so does `quote/../../portfolio`. Twelve swaps on a fork, $25 to $12,000, both directions, **12 of 12 filled at or above the floor the card shows** |
+| **Not sayable: fills are queryable** | `Swapped` is indexed in the repository and **not deployed**. The live endpoint has no `fills` field — asking for one returns *"Type `Query` has no field `fills`"*. The subgraph shot is unaffected: mandates, balances and movements all answer as before. Say nothing about fills until a deploy lands |
+| **Quotable, and better than our own words** | 1inch's Aqua documentation, under Data & Analytics: *"A hosted subgraph is not currently available. Build a reference indexer over the five registry/router events keyed on `(maker, app, strategyHash)`."* That is the Graph shot's own argument, made by the protocol |
+
+#### A shot that became possible today, if there is room for it
+
+Nothing in the list below shows the dapp doing the thing the product is named for. The terminal
+shots are strong evidence and a judge cannot use them; `app.helico.site` is the thing they can open
+themselves.
+
+The shortest honest version is three sentences over one screen: type *"Swap $5 ETH to USDC"*, let
+the card resolve the dollars to tokens from the feed, and read the route line aloud — whichever of
+the three venues answers. It costs about twenty seconds and it is the only shot where the product
+is used rather than demonstrated.
+
+Whether that displaces something is Ghoza's call. It is written down here so the option exists on
+the day rather than being discovered in the edit.
+
 ### Pre-flight, re-run 10 September — **read this one first**
 
 Nothing moved to a new address today. What changed is what the addresses *are*, what one more of
@@ -280,8 +309,14 @@ Speak over the run. Cut the waiting, never speed it up.
 >
 > The run you just watched went through the simulator, not a real TEE. The deployed workflow is
 > a different thing — it registers a confidential handler and executes on Chainlink's DON every
-> five minutes, and it is holding rather than acting because no account exists yet for it to
-> manage. Every number in this video is in the repository with the command that reproduces it.
+> five minutes, and it is holding rather than acting because the account on the live chain is
+> empty. Every number in this video is in the repository with the command that reproduces it.
+
+**Changed 11 September, and it must be said the new way.** This line used to be *"because no
+account exists yet for it to manage"*, and one was opened on 10 September at 17:58 UTC by somebody
+outside the team, with the agent named. It holds nothing, so the workflow is still holding rather
+than acting — but the reason is the balance, not the absence, and saying the old sentence over a
+chain that contradicts it is a claim a judge can check in one query.
 
 End on the repo URL. No outro music.
 
@@ -302,6 +337,14 @@ End on the repo URL. No outro music.
 
 ## What must not be said
 
+- **"Filled against an Aqua position"** over a card that says something else. Added 11 September,
+  when the swap gained a third venue. No Aqua position for WETH/USDC on Arbitrum One will quote at
+  any size today, so a live swap in the dapp routes through **1inch aggregation** and the card
+  names it. Read the route line off the screen rather than off the plan. The Aqua path is real and
+  the evidence for it is the fork run and the contract suite, which is where it should be claimed
+- **Anything about fills being queryable.** `Swapped` is indexed in the repository and not
+  deployed; the live endpoint answers *"Type `Query` has no field `fills`"*. Mandates, balances and
+  movements are unaffected and answer as they always have
 - **"Deployed", "live", or "in production"** about anything that is not — check each one on the
   day, because this list changes as things land. As of 9 September **five** contracts are on
   Arbitrum One — the fifth, `HelicoOracleBoard`, landed that morning. The router is among them and
