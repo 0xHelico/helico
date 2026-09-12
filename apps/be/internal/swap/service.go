@@ -209,6 +209,40 @@ func (s *Service) Interpret(ctx context.Context, message string, prior ...Turn) 
 			Steps: []Step{read},
 		}, nil
 	case ActionEarn:
+		// "Swap $1 of ETH to USDC and put it all to work" is one sentence and one signature: the
+		// swap rides in the same batch as the ship, with the account as the swap's receiver. The
+		// swap half goes through build like any other, so a token the registry does not know or
+		// an amount that is not a number is refused here, by name, and not at the wallet.
+		if strings.TrimSpace(d.TokenIn) != "" {
+			if strings.TrimSpace(d.TokenOut) == "" {
+				d.TokenOut = "USDC"
+			}
+			intent, checks, err := build(d)
+			steps := append([]Step{read}, checks...)
+			if err != nil {
+				var needs *ErrNeeds
+				if errors.As(err, &needs) {
+					return Answer{Action: ActionEarn, Reply: question(d.Question, needs.Fields), Needs: needs.Fields, Steps: steps}, nil
+				}
+				return Answer{Action: ActionEarn, Reply: capitalise(err.Error()) + ".", Needs: faulty(err), Steps: steps}, nil
+			}
+			if !strings.EqualFold(intent.TokenOut.Symbol, "USDC") {
+				steps = append(steps, Step{Call: "Fund.tokenOut", Detail: intent.TokenOut.Symbol + " cannot be put to work; the agent places USDC"})
+				return Answer{Action: ActionEarn, Reply: "The account puts USDC to work, so the swap has to end in USDC.", Needs: []string{"tokenOut"}, Steps: steps}, nil
+			}
+			said := fmt.Sprintf("%s %s", intent.AmountIn, intent.TokenIn.Symbol)
+			if intent.AmountUsd != "" {
+				said = fmt.Sprintf("$%s of %s", intent.AmountUsd, intent.TokenIn.Symbol)
+			}
+			return Answer{
+				Action: ActionEarn,
+				Intent: &intent,
+				Reply: fmt.Sprintf("Swapping %s into USDC and putting all of it to work, in one signature: the swap "+
+					"lands in your account, the account ships it as a position on Aqua, and the agent "+
+					"places it in whichever market pays best. Nothing has moved: this is what I understood.", said),
+				Steps: steps,
+			}, nil
+		}
 		return Answer{
 			Action: ActionEarn,
 			// Written for somebody who has not set anything up, because that is who asks this.

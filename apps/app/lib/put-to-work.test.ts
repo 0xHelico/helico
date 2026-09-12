@@ -128,9 +128,13 @@ describe("putToWork", () => {
    */
   test("with a funding swap: open, swap with value, arm, ship for minAmountOut; no transfer", () => {
     const funding = {
-      to: ROUTER,
-      data: "0x07ed23790000" as `0x${string}`,
-      value: 400_000_000_000_000n,
+      calls: [
+        {
+          to: ROUTER,
+          data: "0x07ed23790000" as `0x${string}`,
+          value: 400_000_000_000_000n,
+        },
+      ],
       minAmountOut: 999_000n,
     };
     const { calls, ceiling, mandate } = putToWork({ ...fresh, funding });
@@ -174,14 +178,35 @@ describe("putToWork", () => {
     expect(shipped.args[1]).toBe(encodeMandate(mandate));
   });
 
+  test("a funding swap that needs an approval carries both calls, in order, before arming", () => {
+    const { calls } = putToWork({
+      ...fresh,
+      funding: {
+        calls: [
+          { to: WETH, data: "0x095ea7b3" },
+          { to: ROUTER, data: "0x07ed2379" },
+        ],
+        minAmountOut: 500_000n,
+      },
+    });
+    expect(shape(calls).map((s) => s.split(" ")[1])).toEqual([
+      OPEN,
+      "0x095ea7b3",
+      "0x07ed2379",
+      SET_AGENT,
+      PERMIT,
+      PERMIT,
+      EXECUTE_BATCH,
+    ]);
+    expect(calls.every((c) => (c.value ?? 0n) === 0n)).toBe(true);
+  });
+
   test("a wallet holding USDC and funding from ETH does both, and the ceiling is the sum", () => {
     const { calls, ceiling } = putToWork({
       ...fresh,
       wallet: 250_000n,
       funding: {
-        to: ROUTER,
-        data: "0x07ed2379",
-        value: 1n,
+        calls: [{ to: ROUTER, data: "0x07ed2379", value: 1n }],
         minAmountOut: 750_000n,
       },
     });

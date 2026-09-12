@@ -62,7 +62,12 @@ Rules:
 - "deposit" is money moving from their wallet into their own account. "Move 50 USDC into my
   account" is deposit. "Swap 50 USDC into WETH" is a swap: one is a transfer to themselves, the
   other is an exchange between two tokens.
-- tokenIn, tokenOut and amount are for "swap" only. Leave them empty for the other six.
+- tokenIn, tokenOut and amount are for "swap" — and for "earn" only when the person asks to swap
+  something into USDC first and then put it to work, in one sentence. The amount rules below apply
+  exactly as for a swap: "swap $1 of ETH to USDC and put it all to work" is earn with tokenIn "ETH",
+  tokenOut "USDC", amountUsd "1", amount empty; "swap 0.0004 ETH and put it to work" is earn with
+  tokenIn "ETH", amount "0.0004", amountUsd empty — a token amount never becomes a dollar amount.
+  Leave them empty for the other five, and for an earn that names nothing to swap.
 - tokenIn is what they are giving, tokenOut what they want. Use the ticker, not a name.
 - amount is how much of tokenIn, as a plain decimal number, no unit and no commas. "half an ETH" is "0.5". Never invent one.
 - amountUsd is for a dollar amount instead: "$5 of ETH", "5 dollars of ETH", "swap $5 ETH to USDC"

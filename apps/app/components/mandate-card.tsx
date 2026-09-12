@@ -26,6 +26,7 @@ import {
 import { readAccountActivity } from "@/lib/activity";
 import { explorerAddress, explorerTx } from "@/lib/chain";
 import { amountShort as held } from "@/lib/format";
+import type { Intent } from "@/lib/intent";
 import { amount, readMandates, token, WALLET_TOKENS } from "@/lib/mandates";
 import { cn } from "@/lib/utils";
 import { readVenues, sweepList } from "@/lib/venues";
@@ -52,8 +53,11 @@ const ZERO = "0x0000000000000000000000000000000000000000" as Address;
  */
 export function MandateCard({
   action,
+  fund,
 }: {
   action: "status" | "revoke" | "withdraw" | "earn";
+  /** For "earn": the swap the sentence asked for first, carried in the same batch. */
+  fund?: Intent;
 }) {
   const { address, isConnected, chainId } = useAccount();
   const client = usePublicClient({ chainId: CHAIN_ID });
@@ -351,7 +355,7 @@ export function MandateCard({
           breakdown cannot show, which is that a small balance may sit a long time. */}
       {action === "earn" ? (
         <div className="mt-3 border-t pt-3">
-          <PutToWorkCard plain />
+          <PutToWorkCard fund={fund} plain />
           <p className="mt-3 text-[11px] text-faint leading-relaxed">
             {earnNext}
           </p>

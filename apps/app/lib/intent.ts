@@ -54,6 +54,12 @@ export type Card = {
  */
 export type TurnAction = {
   action: "status" | "revoke" | "withdraw" | "earn" | "deposit" | "provide";
+  /**
+   * For "earn" only: a swap the sentence asked for first — "swap $1 of ETH to USDC and put it all
+   * to work" — checked by the backend like any swap. The put-to-work card carries it in the same
+   * batch as the ship, with the account as the swap's receiver.
+   */
+  fund?: Intent;
 };
 
 type Extras = { steps?: Step[]; cards?: Card[] };

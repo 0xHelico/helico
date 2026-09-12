@@ -54,3 +54,27 @@ Not touched: contracts, the enclave, the subgraph, `Interpret`, the swap card.
    the swap's output, Aqua's ledger holds the mandate at `minAmountOut`. The fork replays a batch
    non-atomically, which is the approximation `e2e/fork-put-to-work.ts` already documents.
 3. Ghoza's wallet on mainnet, one press, then the enclave's next run.
+
+## Second half, same night: the sentence says it
+
+Ghoza: *"there should be a chat that swaps first, then puts everything to work — one sentence.
+Pressing 'put all my money to work' and having it suddenly swap is an anomaly."* Right: the card
+offering a swap input is the card deciding to do something the person did not say.
+
+So the swap comes from the sentence. `Interpret`'s prompt allows `tokenIn`/`tokenOut`/amount on
+`earn` when the sentence asks to swap into USDC first; the service builds that half through
+`build` like any swap, refuses a swap that does not end in USDC, and answers `earn` with the
+checked intent beside it. The app stores that turn as `{action: "earn", fund: intent}` and the
+put-to-work card takes `fund` as a prop: the first line of the breakdown is the swap, quoted with
+the account as receiver; the input is gone. Without `fund` the card never swaps.
+
+Measured against the production model (gpt-4o-mini through the router), 12 September:
+`"swap $1 of ETH to USDC and put it all to work"` → earn, ETH→USDC $1;
+`"swap 0.0004 ETH and put everything to work"` → earn, ETH→USDC 0.0004;
+`"put all my money to work"` → earn, no swap; `"swap $1 of ETH to USDC"` → swap.
+
+One measurement error on the way, recorded because it cost twenty minutes: four runs "showed"
+the model turning `0.0004 ETH` into `$0.4`. They were answered by a backend process left behind
+by an earlier `go run` — `p.kill()` ends `go run`, not the binary it spawned — so the prompt
+edits under test were never the ones answering. A fresh binary on a free port answered right the
+first time. **Before blaming the model, check which process answered.**

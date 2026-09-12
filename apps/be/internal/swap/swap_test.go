@@ -662,6 +662,48 @@ func TestEarnIsItsOwnAction(t *testing.T) {
 	}
 }
 
+// TestEarnCanSwapFirst is the one-sentence, one-signature case: "swap $1 of ETH to USDC and put
+// it all to work". The action stays earn — the card is the put-to-work card — and the swap half
+// is built and checked exactly as a swap would be, so the intent beside it is a registry-checked
+// ETH → USDC for one dollar, not the model's words.
+func TestEarnCanSwapFirst(t *testing.T) {
+	svc := New(fakeModel(t, http.StatusOK, `{"action":"earn","chain":"arbitrum","tokenIn":"ETH","tokenOut":"USDC","amount":"","amountUsd":"1","question":""}`))
+	got, err := svc.Interpret(context.Background(), "swap $1 of ETH to USDC and put it all to work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Action != ActionEarn {
+		t.Fatalf("action = %q, want %q", got.Action, ActionEarn)
+	}
+	if got.Intent == nil || got.Intent.TokenIn.Symbol != "ETH" || got.Intent.TokenOut.Symbol != "USDC" || got.Intent.AmountUsd != "1" {
+		t.Fatalf("the swap half was not built: %+v", got.Intent)
+	}
+	if !strings.Contains(got.Reply, "one signature") || !strings.Contains(got.Reply, "$1 of ETH") {
+		t.Errorf("reply does not say what it does: %q", got.Reply)
+	}
+
+	// tokenOut left empty is USDC — that is the only thing the account puts to work.
+	svc = New(fakeModel(t, http.StatusOK, `{"action":"earn","chain":"arbitrum","tokenIn":"ETH","tokenOut":"","amount":"0.001","amountUsd":"","question":""}`))
+	got, err = svc.Interpret(context.Background(), "swap 0.001 ETH and put it to work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Intent == nil || got.Intent.TokenOut.Symbol != "USDC" {
+		t.Fatalf("an empty tokenOut did not default to USDC: %+v", got.Intent)
+	}
+
+	// A swap that ends anywhere but USDC is refused by name, and the action is still earn so the
+	// person is not bounced to a swap card they did not ask for.
+	svc = New(fakeModel(t, http.StatusOK, `{"action":"earn","chain":"arbitrum","tokenIn":"USDC","tokenOut":"WETH","amount":"5","amountUsd":"","question":""}`))
+	got, err = svc.Interpret(context.Background(), "swap 5 USDC to WETH and put it to work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Action != ActionEarn || got.Intent != nil || len(got.Needs) != 1 || got.Needs[0] != "tokenOut" {
+		t.Fatalf("a non-USDC funding swap was not refused: action=%q intent=%+v needs=%v", got.Action, got.Intent, got.Needs)
+	}
+}
+
 // TestEarnCardIsPressable keeps the Earn card from going back to being a link. Every card carries
 // exactly one of Try or Href, and the whole point of #387 is that this one is a sentence a person
 // can send rather than a page they have to go and read.
