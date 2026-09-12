@@ -9,6 +9,7 @@ import { GeneratedAvatar } from "@/components/generated-avatar";
 import { Card, Loading } from "@/components/kit";
 import { PriceChart } from "@/components/price-chart";
 import { CHAIN_ID, totals, useAccountState } from "@/hooks/use-account-state";
+import { useWethHeld } from "@/hooks/use-weth-held";
 import { configuredFactory } from "@/lib/account";
 import { readAccountActivity } from "@/lib/activity";
 import { cn } from "@/lib/utils";
@@ -86,6 +87,13 @@ export function PortfolioHero() {
   });
 
   const held = totals(account.data);
+  // The WETH side, priced off Chainlink. The chart below is USDC transfers and does not carry it;
+  // the headline does, and the line under the headline says so when there is any.
+  const weth = useWethHeld(
+    account.data && account.data.kind !== "unconfigured"
+      ? (account.data.address as `0x${string}`)
+      : null,
+  );
   const span = RANGES.find((r) => r.label === range) ?? RANGES[1];
   // Rendered after mount only, and this is why: the series ends at `Date.now()` and the window
   // starts a number of days before it, so the server and the browser would disagree on both. A
@@ -160,7 +168,7 @@ export function PortfolioHero() {
             {account.isPending ? (
               <Loading className="h-10 w-40" />
             ) : held ? (
-              <Amount value={held.total} />
+              <Amount value={held.total + (weth.data?.usdcUnits ?? 0n)} />
             ) : (
               <span className="font-sans text-soft text-base">
                 {factory
@@ -193,6 +201,11 @@ export function PortfolioHero() {
             ))}
           </div>
         </div>
+        {weth.data ? (
+          <p className="tabular mt-2 font-mono text-[11px] text-faint">
+            {`includes ${Number(formatUnits(weth.data.total, 18)).toFixed(5)} WETH at $${weth.data.price.toLocaleString(undefined, { maximumFractionDigits: 0 })} (Chainlink) · the chart tracks USDC`}
+          </p>
+        ) : null}
 
         {/* **Between the figure and the line, because it is about both.** The total says what is
             there and the chart says how it got there; these three say how much of it is new, which
