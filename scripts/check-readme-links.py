@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Verify every commit-pinned code permalink in README.md against the working tree.
+"""Verify every commit-pinned code permalink against the working tree.
+
+Reads `README.md` and every file in `docs/tracks/`. The root README was 633 lines and carried all
+39 pins; on 12 September the depth moved to the track pages so the README could be read in a few
+minutes, and twelve pins stayed with it. Checking only the README after that would have quietly
+stopped checking two thirds of them, which is the failure this script exists to prevent, one level
+up.
 
 Uniswap's fourth qualification requirement is that a reviewer can find the code behind each
 claim. A permalink to the wrong lines is worse than none, because it looks checked — and three
@@ -33,10 +39,13 @@ CLOSERS = ("}", "})", "];", "] as const;", ");")
 
 
 def main() -> int:
-    readme = (ROOT / "README.md").read_text()
-    links = LINK.findall(readme)
+    sources = [ROOT / "README.md", *sorted((ROOT / "docs" / "tracks").glob("*.md"))]
+    links: list[tuple[str, str, str, str]] = []
+    for source in sources:
+        if source.exists():
+            links.extend(LINK.findall(source.read_text()))
     if not links:
-        print("no pinned links found — has the README changed shape?")
+        print("no pinned links found: has the README changed shape?")
         return 1
 
     problems = 0
