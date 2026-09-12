@@ -128,22 +128,20 @@ worth the small overhead on anything substantial.
 automatically, so there is nothing to remember — GitHub skips the author, so each of us is
 asked only for the other's work.
 
-**The reviewer merges. The author does not.** @rifkyeasy merges @ghozzza's pull requests;
-@ghozzza merges @rifkyeasy's. Requesting a reviewer and then merging the moment CI goes green
-is a request, not a review — moving the button makes "somebody else looked" a fact rather than
-an intention.
+**CI is the gate; the other person reads.** A pull request merges when its checks are green —
+the author may press the button — and the other person reads it on `main`, where the audits
+that matter have happened: the review of #70 ran an independent mutation of the one line the
+whole forwarder path rests on, and the 12 September sweep (#422–#425) re-checked every claim in
+the repository against the chain. What a merge never skips is the pull request itself: every
+change arrives as one, with its checks, its description and its plan, so the history reads as
+the work rather than as a pile of commits.
 
-If a reviewer is unreachable and something is genuinely blocking, that goes to Ghoza. It is
-not the author's call to skip the review.
+Small and obvious changes merge as soon as CI agrees; larger ones say in the description what
+was verified and how, because that is what the reader on `main` starts from.
 
-Small and obvious changes can still merge as soon as the reviewer has looked; the point is
-that someone else looked, not that the process is heavy. Judges on the finalist track expect
-proper branch and pull request practice, and a history where authors merge their own work does
-not show what we want it to show.
-
-A second pair of eyes is also not a formality here. The review of #70 ran an independent
-mutation of the one line the whole forwarder path rests on. The review of #67 found five
-claims on the landing page that were not true. Neither would have come from a green tick.
+A second pair of eyes is not a formality here, whenever it lands. The review of #67 found five
+claims on the landing page that were not true, and the 12 September sweep found the same kind
+of drift a day after the DON's first move. Neither would have come from a green tick.
 
 ## Where things live
 
