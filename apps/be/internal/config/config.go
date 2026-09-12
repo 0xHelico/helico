@@ -65,6 +65,13 @@ type Config struct {
 	GraphMCPKey string
 	// GraphMCPTimeout bounds one whole question: every model and MCP call together.
 	GraphMCPTimeout time.Duration
+	// TelegramToken is the bot's credential. Empty means no bot and no webhook at all.
+	TelegramToken string
+	// TelegramSecret is the value Telegram echoes in X-Telegram-Bot-Api-Secret-Token. A token with
+	// no secret refuses every caller rather than accepting every caller.
+	TelegramSecret string
+	// TelegramRatePerMin is what one Telegram user may ask for in a minute.
+	TelegramRatePerMin int
 	// RPCURL is the chain this reads an account's own logs from. The default is Arbitrum One's
 	// public endpoint: it carries no key, a judge can curl it, and it is the same URL the dapp
 	// used to scan from every browser — which is the cost this endpoint exists to stop paying.
@@ -146,6 +153,9 @@ func FromEnv(lookup Lookup) (Config, error) {
 		GraphMCPSubgraphID: get("BE_GRAPH_MCP_SUBGRAPH_ID", ""),
 		GraphMCPKey:        get("BE_GRAPH_MCP_API_KEY", ""),
 		GraphMCPTimeout:    40 * time.Second,
+		TelegramToken:      get("BE_TELEGRAM_TOKEN", ""),
+		TelegramSecret:     get("BE_TELEGRAM_SECRET", ""),
+		TelegramRatePerMin: 12,
 		RPCURL:             get("BE_RPC_URL", defaultRPC),
 		ActivityFrom:       defaultActivityFrom,
 		ActivityFresh:      75 * time.Second,
@@ -174,7 +184,7 @@ func FromEnv(lookup Lookup) (Config, error) {
 	for _, n := range []struct {
 		key string
 		dst *int
-	}{{"BE_SWAP_RATE_PER_MIN", &cfg.SwapRatePerMin}, {"BE_SWAP_DAILY_MAX", &cfg.SwapDailyMax}, {"BE_GRAPH_RATE_PER_MIN", &cfg.GraphRatePerMin}} {
+	}{{"BE_SWAP_RATE_PER_MIN", &cfg.SwapRatePerMin}, {"BE_TELEGRAM_RATE_PER_MIN", &cfg.TelegramRatePerMin}, {"BE_SWAP_DAILY_MAX", &cfg.SwapDailyMax}, {"BE_GRAPH_RATE_PER_MIN", &cfg.GraphRatePerMin}} {
 		if v, ok := lookup(n.key); ok && strings.TrimSpace(v) != "" {
 			parsed, err := strconv.Atoi(strings.TrimSpace(v))
 			if err != nil || parsed < 0 {

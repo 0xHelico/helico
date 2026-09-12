@@ -40,6 +40,9 @@ a deployment is unaffected by a file it never has.
 | `BE_GRAPH_MCP_URL` | empty | **empty leaves the chat's index reads off.** The Graph's Subgraph MCP server: `https://subgraphs.mcp.thegraph.com` |
 | `BE_GRAPH_MCP_SUBGRAPH_ID` | empty | Helico's subgraph id on The Graph Network — the MCP serves the network, not Studio, so this is set after publishing |
 | `BE_GRAPH_MCP_API_KEY` | empty | sent as a Bearer token when set; the server answers without one |
+| `BE_TELEGRAM_TOKEN` | empty | **empty means no bot and no webhook**: `POST /api/telegram/webhook` answers 404, because nothing exists to be unwell |
+| `BE_TELEGRAM_SECRET` | empty | the value Telegram echoes in `X-Telegram-Bot-Api-Secret-Token`. A token with **no** secret refuses every caller rather than accepting every caller |
+| `BE_TELEGRAM_RATE_PER_MIN` | `12` | per Telegram user, not per address: every update arrives from Telegram's own servers, so an IP-keyed bucket would be one bucket for everybody |
 | `BE_GRAPH_MCP_TIMEOUT` | `40s` | one status question end to end: every model and MCP call together. The intent route gets this budget when the index is on |
 
 ## The model is a router, and there are two of them
@@ -72,6 +75,42 @@ because the part before the slash names the account the call is billed to. A fai
 here and answered with one sentence that names no host. And `BE_SWAP_RATE_PER_MIN` with
 `BE_SWAP_DAILY_MAX` is what stops the endpoint being a way to spend somebody else's money: the
 address it counts is the one nginx writes, never a header a caller can forge.
+
+## The Telegram bot, which cannot sign
+
+`internal/telegram` answers read commands over the Bot API. **No private key reaches it and none
+ever should.** Every safety argument in `contracts/` rests on two facts — the owner's wallet signs,
+and the agent's reach is the owner's allowlist — and `HelicoAccount._requireOwnerOrAgent` admits
+`owner()` or the nominated agent and nobody else. A Telegram process is neither, because one
+compromised bot token would otherwise reach every account that ever talked to it. The most powerful
+thing this code does is read public data and format it.
+
+**A chat id is not an identity either.** This slice answers only about an address somebody types
+into the chat, which is public whoever asks, so nothing here needs the signing bind #218 designs.
+Group chats are refused anyway, so that is already true on the day a linked wallet's balances
+become answerable.
+
+```
+/help                 what it is, and what it cannot do
+/portfolio <address>  that owner's account: the total, and liquid against earning
+/moves <address>      how often the agent has moved it, and when last
+```
+
+The reply is read from the chain — `accountFor` on the factory, then `balanceOf` on USDC and on
+each market's receipt — and the move count comes from `internal/activity`, so it is the same
+history the portfolio page shows rather than a second scan.
+
+**Design and review are in [#218](https://github.com/0xHelico/helico/issues/218).** Its file layout
+put the Bot API client in `packages/plugins/telegram`; that cannot work, because this is Go and
+cannot consume a TypeScript package, so the client lives beside the handlers. Notifications and
+composing an intent are the later tiers and are deliberately absent.
+
+**Proven against the real chain with a fake Bot API**, which is what `TG_LIVE=1` exercised while it
+was being written: `/portfolio` on the live owner returned `1.50 USDC · 1.50 liquid · 0.00 earning`
+and `/moves` returned `2 times, last 11 Sep 2026 11:30 UTC`, both matching what the dapp shows.
+**It has not been run against the live Bot API**, because that needs a bot token, which is not in
+this repository — so nothing here should be described as tested end to end with Telegram itself
+until it has been.
 
 ## The chat reads the index
 

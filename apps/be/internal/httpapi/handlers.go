@@ -21,6 +21,7 @@ import (
 	"github.com/0xHelico/helico/apps/be/internal/graph"
 	"github.com/0xHelico/helico/apps/be/internal/session"
 	"github.com/0xHelico/helico/apps/be/internal/swap"
+	"github.com/0xHelico/helico/apps/be/internal/telegram"
 )
 
 // Options tune the handler; zero values are safe.
@@ -62,6 +63,14 @@ type Options struct {
 	// says so rather than answering an empty list, because "nothing happened" and "we cannot
 	// look" are different answers and only one of them is about the account.
 	Activity *activity.Service
+	// Telegram answers the bot's read commands. Nil, or unconfigured, and the webhook is a 404
+	// rather than a 503: an unconfigured deployment has no bot, so there is nothing to be unwell.
+	Telegram *telegram.Service
+	// TelegramSecret is the value Telegram sends back in X-Telegram-Bot-Api-Secret-Token. Without
+	// it the webhook refuses every caller, because a webhook anybody may post to is a webhook.
+	TelegramSecret string
+	// TelegramRatePerMin bounds what one Telegram user may ask for in a minute.
+	TelegramRatePerMin int
 }
 
 // cacheControl is what a CDN or browser may do with a read: keep it for a minute, serve it
@@ -94,7 +103,10 @@ func New(svc *blog.Service, opt Options) http.Handler {
 		limit:      newLimiter(opt.SwapRatePerMin, opt.SwapDailyMax),
 		graph:      opt.Graph,
 		graphLimit: newLimiter(opt.GraphRatePerMin, 0),
-		activity:   opt.Activity,
+		// Per Telegram user rather than per address: every update arrives from Telegram's own
+		// servers, so an IP-keyed bucket would be one bucket for everybody.
+		telegramLimit: newLimiter(opt.TelegramRatePerMin, 0),
+		activity:      opt.Activity,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", api.health)
@@ -131,6 +143,10 @@ func New(svc *blog.Service, opt Options) http.Handler {
 	// one: both are reads a page makes on load, and neither should be able to spend the allowance
 	// of the endpoint that costs money.
 	mux.HandleFunc("GET /api/activity", api.accountActivity)
+
+	// The bot's webhook. Guarded by Telegram's own secret header and served only when a token is
+	// configured; `internal/telegram` holds no key and the most powerful thing it does is read.
+	mux.HandleFunc("POST /api/telegram/webhook", api.telegramWebhook)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { writeProblem(w, http.StatusNotFound, "") })
 
 	var h http.Handler = mux
@@ -181,7 +197,8 @@ type api struct {
 	activity *activity.Service
 	// A budget of its own. Sharing the swap limiter would let a page that reads mandates spend
 	// the allowance for the endpoint that costs money.
-	graphLimit *limiter
+	graphLimit    *limiter
+	telegramLimit *limiter
 }
 
 // postView is the JSON shape of a post. Full includes the body; list items omit it.
