@@ -134,9 +134,13 @@ func NewClient(baseURL, apiKey, model string, timeout time.Duration) *Client {
 func (c *Client) Configured() bool { return c != nil && c.APIKey != "" }
 
 type chatRequest struct {
-	Model          string        `json:"model"`
-	Messages       []chatMessage `json:"messages"`
-	Temperature    float64       `json:"temperature"`
+	Model       string        `json:"model"`
+	Messages    []chatMessage `json:"messages"`
+	Temperature float64       `json:"temperature"`
+	// Stream is false and said so. The OpenAI default is false, but at least one router this
+	// has been pointed at streams unless told not to, and a stream of chunks is not the one
+	// JSON object the parser below expects.
+	Stream         bool `json:"stream"`
 	ResponseFormat struct {
 		Type string `json:"type"`
 	} `json:"response_format"`
@@ -159,38 +163,54 @@ type chatResponse struct {
 // ask sends the message and returns the draft the model produced. Anything the model says that
 // is not the expected JSON is an error here rather than a guess further down.
 func (c *Client) ask(ctx context.Context, message string, prior []Turn) (draft, error) {
+	raw, err := c.complete(ctx, history(prior, message))
+	if err != nil {
+		return draft{}, err
+	}
+	var d draft
+	if err := json.Unmarshal([]byte(raw), &d); err != nil {
+		return draft{}, fmt.Errorf("the model's answer was not the shape asked for: %w", err)
+	}
+	return d, nil
+}
+
+// complete sends one conversation and returns the model's content, which is asked for as a JSON
+// object. `ask` builds the intent draft on it; `Ask` in ask.go runs its read loop on it. The HTTP
+// half is here once so that a status, a non-JSON body and an empty choice list are reported the
+// same way by both.
+func (c *Client) complete(ctx context.Context, messages []chatMessage) (string, error) {
 	if !c.Configured() {
-		return draft{}, ErrNotConfigured
+		return "", ErrNotConfigured
 	}
 
 	body := chatRequest{
 		Model:       c.Model,
 		Temperature: 0,
-		Messages:    history(prior, message),
+		Messages:    messages,
 	}
 	body.ResponseFormat.Type = "json_object"
 
 	buf, err := json.Marshal(body)
 	if err != nil {
-		return draft{}, err
+		return "", err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/chat/completions", bytes.NewReader(buf))
 	if err != nil {
-		return draft{}, err
+		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+c.APIKey)
 
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
-		return draft{}, fmt.Errorf("the model did not answer: %w", err)
+		return "", fmt.Errorf("the model did not answer: %w", err)
 	}
 	defer resp.Body.Close()
 
 	// A model that answers with a megabyte is a model that misunderstood.
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
-		return draft{}, err
+		return "", err
 	}
 	// The status comes first: a gateway answering 502 with an HTML page is a status to report,
 	// not a JSON shape to complain about.
@@ -201,18 +221,13 @@ func (c *Client) ask(ctx context.Context, message string, prior []Turn) (draft, 
 		if unmarshalErr == nil && out.Error != nil && out.Error.Message != "" {
 			detail = out.Error.Message
 		}
-		return draft{}, fmt.Errorf("the model refused: %s", detail)
+		return "", fmt.Errorf("the model refused: %s", detail)
 	}
 	if unmarshalErr != nil {
-		return draft{}, fmt.Errorf("the model's answer was not JSON: %w", unmarshalErr)
+		return "", fmt.Errorf("the model's answer was not JSON: %w", unmarshalErr)
 	}
 	if len(out.Choices) == 0 {
-		return draft{}, errors.New("the model answered with nothing")
+		return "", errors.New("the model answered with nothing")
 	}
-
-	var d draft
-	if err := json.Unmarshal([]byte(out.Choices[0].Message.Content), &d); err != nil {
-		return draft{}, fmt.Errorf("the model's answer was not the shape asked for: %w", err)
-	}
-	return d, nil
+	return out.Choices[0].Message.Content, nil
 }
