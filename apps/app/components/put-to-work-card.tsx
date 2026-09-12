@@ -218,7 +218,13 @@ export function PutToWorkCard({
   // cannot pay is told so in a sentence rather than by a reverted batch.
   const fundAsked = Boolean(fund);
   const funding = useQuery({
-    enabled: fundAsked && Boolean(account && address && client),
+    // **After the balances, not beside them.** This read the wallet's ether from `balances.data`,
+    // which is `undefined` until that query answers, so a quote asked in the same tick saw a
+    // wallet holding nothing, refused it, and — with `retry: false` and a key that did not change —
+    // stayed refused. Measured on the first live press: "1inch could not quote that" for a wallet
+    // holding 0.001 ETH.
+    enabled:
+      fundAsked && Boolean(account && address && client && balances.data),
     queryKey: [
       "put-to-work-funding",
       account,
@@ -407,11 +413,12 @@ export function PutToWorkCard({
           <Line
             label={`Swap ${fund.amountUsd ? `$${fund.amountUsd} of ` : `${fund.amountIn} `}${fund.tokenIn.symbol} into USDC`}
             detail={
-              funding.isPending
+              funding.isPending || !balances.data
                 ? "asking 1inch…"
                 : funding.data
                   ? `${Number(formatUnits(funding.data.amountIn, fund.tokenIn.decimals)).toFixed(fund.tokenIn.decimals === 18 ? 5 : 2)} ${fund.tokenIn.symbol} → at least ${usdc(funding.data.minAmountOut)} USDC, delivered to the account by 1inch`
-                  : "1inch could not quote that"
+                  : (funding.error?.message.split("\n")[0] ??
+                    "1inch could not quote that")
             }
           />
         ) : null}
@@ -504,6 +511,9 @@ export function PutToWorkCard({
         <div className="mt-4">
           <p className="text-[11.5px] text-soft leading-relaxed">
             This wallet cannot batch calls, so one press cannot do all of it.
+            {fundAsked
+              ? " The swap into the account needs a wallet that can (MetaMask can); with this one, swap on the swap card first, then come back."
+              : ""}
             {armed
               ? " Move money in here, and the agent takes it from there."
               : " Arm the account on the limits page first, then move money in here."}
