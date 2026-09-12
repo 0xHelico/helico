@@ -28,6 +28,20 @@ import { $ } from 'bun'
 
 const APPS = ['app', 'be', 'landing'] as const
 
+/**
+ * The branch a deploy is supposed to carry.
+ *
+ * Fetched first, quietly, because a stale local `origin/main` makes this check **understate**:
+ * a commit that is on the remote and not deployed would not be listed at all, and a detector
+ * that misses the thing it exists to find is worse than none. A fetch failure is not fatal — the
+ * answer is then as good as the last fetch, and the line below says so rather than pretending.
+ */
+const BASE = 'origin/main'
+const fetched = await $`git fetch --quiet origin main`.nothrow().quiet()
+if (fetched.exitCode !== 0) {
+	console.log(`  ..  could not fetch ${BASE}; comparing against the local ref, which may be behind`)
+}
+
 type Run = {
 	conclusion: string | null
 	status: string
@@ -68,8 +82,13 @@ for (const app of APPS) {
 	// Commits that touched this app's paths and are not in the deployed build. `--` separates the
 	// revision range from the pathspecs, so a path that also names a branch cannot be mistaken
 	// for one.
+	// **Against `origin/main`, not `HEAD`.** This said `HEAD`, and run from a feature branch it
+	// listed that branch's own unmerged commits as missing from production — true and useless,
+	// because production is not supposed to have them. I read my own output that way once and went
+	// looking for a dropped deploy that had not happened. What is deployed can only sensibly be
+	// compared against what is meant to be deployed.
 	const behind = (
-		await $`git log --oneline ${ok.headSha}..HEAD -- ${{ raw: paths.map((p) => `'${p}'`).join(' ') }}`.text()
+		await $`git log --oneline ${ok.headSha}..${BASE} -- ${{ raw: paths.map((p) => `'${p}'`).join(' ') }}`.text()
 	).trim()
 
 	if (!behind) {
