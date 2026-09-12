@@ -29,6 +29,35 @@ API="http://127.0.0.1:8000/api/v1"
 # a deploy that worked, which teaches everyone to stop reading them.
 TIMEOUT_SECONDS=1500
 
+# Which of the three a timeout is, from whatever `/deployments` answered.
+#
+# A function so `coolify-deploy.test.sh` exercises this code rather than a copy of it: the bug
+# below was a branch that could never be taken, and a test against a second copy of the branches
+# would have agreed with the original and proved nothing.
+timeout_reason() {
+	case "$1" in
+		"")
+			echo "and Coolify could not be reached to say which. Ask it by hand before concluding anything."
+			;;
+		*"Missing required permissions"*)
+			echo "and Coolify was not asked: the deploy token lacks the \`read\` scope, so this script cannot tell a stuck deploy from a slow one. Grant it and this line will mean something."
+			;;
+		*'"status":"in_progress"'*)
+			echo "and Coolify still reports a deployment in progress — slow, not stuck. The build will land without another push."
+			;;
+		*)
+			echo "and Coolify reports no deployment in progress. This one is stuck rather than slow."
+			;;
+	esac
+}
+
+# Sourced by `coolify-deploy.test.sh`, which wants the helpers and none of the work. A guard
+# rather than splitting the file: the thing worth testing is what the server runs, and a second
+# file to keep in step with it is the drift this script's own comments keep warning about.
+if [ -n "${COOLIFY_DEPLOY_SOURCE_ONLY:-}" ]; then
+	return 0 2>/dev/null || exit 0
+fi
+
 app="${SSH_ORIGINAL_COMMAND:-}"
 read -r _ uuid port url < <(awk -v a="$app" '$1 == a {print; exit}' "$MAP") || true
 if [ -z "${uuid:-}" ]; then
@@ -111,13 +140,26 @@ while [ "$SECONDS" -lt "$deadline" ]; do
 done
 
 # Say which of the two this is. "No new container" reads as broken and is usually still building,
-# and Coolify knows the difference: its own deployment row is the answer. Asking costs one call and
-# turns a bare failure into one a reader can act on.
-state="$(curl --silent --max-time 10 -H "Authorization: Bearer $(cat "$TOKEN_FILE")" \
-	"$API/deployments" 2>/dev/null | grep -o "\"status\":\"in_progress\"" | head -1 || true)"
-if [ -n "$state" ]; then
-	echo "$app: no new container within ${TIMEOUT_SECONDS}s, and Coolify still reports a deployment in progress — slow, not stuck. The build will land without another push." >&2
-else
-	echo "$app: no new container within ${TIMEOUT_SECONDS}s, and Coolify reports no deployment in progress. This one is stuck rather than slow." >&2
-fi
+# and Coolify knows the difference: its own deployment row is the answer.
+#
+# **Three outcomes, not two, because the call can be refused.** This asked `/deployments` and
+# grepped the body for `in_progress`; the deploy token carries the `deploy` permission and not
+# `read`, so the endpoint answers `{"message":"Missing required permissions: read"}` and the grep
+# has never matched. Every timeout since this was written has printed "Coolify reports no
+# deployment in progress" — not because Coolify said so, but because it was never asked. On
+# 12 September that sentence was true by luck: deployment 504 had failed at 17:24 and the script
+# said "stuck" at 17:47. A build that was merely slow would have printed the same words.
+#
+# A branch whose output is identical whether its claim is true or false is not a branch. So the
+# refusal now has a sentence of its own, and the two real answers only speak when the API actually
+# answered.
+#
+# **To make this say something, give the token the `read` scope** — Coolify's API tokens page, the
+# same token in `~/.config/coolify/deploy.token`. Nothing else here needs changing, and with it the
+# next step becomes possible: a deployment that has already *failed* can end the wait in two
+# minutes instead of twenty-five, which is what blocked a queued `be` deploy behind a dead `app`
+# one and cancelled two more.
+answer="$(curl --silent --max-time 10 -H "Authorization: Bearer $(cat "$TOKEN_FILE")" \
+	"$API/deployments" 2>/dev/null || true)"
+echo "$app: no new container within ${TIMEOUT_SECONDS}s, $(timeout_reason "$answer")" >&2
 exit 1
