@@ -1,6 +1,11 @@
 "use client";
 
 import {
+  ARBITRUM_ONE,
+  mandateSwapAddress,
+  swapVmAddress,
+} from "@helico/plugin-1inch";
+import {
   HELICO_AQUA,
   type MakerMandates,
   makerMandates,
@@ -89,6 +94,28 @@ export async function readMandates(maker: string): Promise<MandateView> {
     active: answer.active,
     spendable: answer.spendable,
   };
+}
+
+/**
+ * Has this maker already shipped a live position to one particular app?
+ *
+ * **Why this is a function and not three lines inside the card.** The card that ships used to
+ * answer it from `useSendCalls` state, which belongs to one press — so a reload showed a fresh
+ * `Execute` over a position that already existed, and pressing it shipped a *second* mandate
+ * under a new salt. The answer has to come from outside the session, and the two ways to get it
+ * wrong are worth a test each: counting a mandate on a different app, and counting one that is
+ * no longer active.
+ *
+ * `active` is Aqua's own flag as the subgraph carries it — a docked mandate and an expired one
+ * are both gone, and a card that ticked on either would report work that no longer exists.
+ */
+export function shipped(
+  rows: MandateRow[],
+  app: string,
+): { count: number; hash?: string } {
+  const want = app.toLowerCase();
+  const mine = rows.filter((r) => r.active && r.app.toLowerCase() === want);
+  return { count: mine.length, hash: mine[0]?.strategyHash };
 }
 
 /**
@@ -199,11 +226,20 @@ export async function readMovements(
  * Two of them are ours and one is 1inch's, and the table says which without the reader having to
  * recognise a hex prefix. Anything else stays an address: a wrong name beside a real balance is
  * the mistake this file avoids everywhere else.
+ *
+ * **`HelicoMandateSwap` is asked for rather than written down, and that is the whole point.** It
+ * used to be the literal `0xa16d3138…`, which is an address that appears nowhere in
+ * `docs/deployments.md` — the app went behind a proxy on 10 September and this copy stayed on the
+ * one before it. The live mandate shipped on 12 September therefore rendered as a hex prefix in
+ * the panel whose entire job is naming it. An address with a source should be read from the
+ * source; `@helico/plugin-1inch` is the source, and it is the same call the card that ships makes.
  */
 const APPS: Record<string, string> = {
-  "0xa16d313816247628deb7d89dc7a3cf4adb5287ed": "HelicoMandateSwap",
+  [mandateSwapAddress(ARBITRUM_ONE).toLowerCase()]: "HelicoMandateSwap",
+  // Ours, and no package holds it: `swapVmAddress` reads 1inch's own router out of their SDK, so
+  // there is nothing to derive our deployment from. Checked against `docs/deployments.md`.
   "0xb8c9f14d46bf387a6d70d796df30f11a0eb8c3be": "Helico SwapVM",
-  "0x111111338c5091e8440b67b168bae16a668ac0de": "1inch SwapVM",
+  [swapVmAddress(ARBITRUM_ONE).toLowerCase()]: "1inch SwapVM",
 };
 
 export function appName(address: string): string | null {
