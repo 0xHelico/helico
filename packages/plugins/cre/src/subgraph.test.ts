@@ -8,6 +8,7 @@ import {
 	demandFromResponse,
 	demandHttpRequest,
 	MANDATE_DEMAND,
+	MANDATE_DEMAND_EXCLUDING,
 	MAX_BALANCE_ROWS,
 	type MandateDemand,
 	withMandateBuffer,
@@ -89,6 +90,38 @@ describe('demandHttpRequest', () => {
 	test('never asks for more than one page', () => {
 		const { variables } = JSON.parse(atob(demandHttpRequest(config, MAKER, USDC).body))
 		expect(variables.first).toBe(MAX_BALANCE_ROWS)
+	})
+
+	/**
+	 * The covering apps, and the one shape that must never be sent.
+	 *
+	 * Measured on the live subgraph on 12 September: `app_not_in: []` matches **nothing**. A
+	 * configuration with no covering apps that still sent the excluding query would read every
+	 * maker as owing nothing, and the floor would never rise for anyone. So the excluding query
+	 * goes out only with entries in the list, and the plain query — byte for byte what every run
+	 * sent before — goes out otherwise.
+	 */
+	test('with covering apps, the excluding query goes out with them lower-cased', () => {
+		const req = demandHttpRequest(
+			{ ...config, coveringApps: ['0x0524a353dfab33CD362593ae8e97707764Fb6041'] },
+			MAKER,
+			USDC,
+		)
+		const body = JSON.parse(atob(req.body))
+		expect(body.query).toBe(MANDATE_DEMAND_EXCLUDING)
+		expect(body.query).toContain('app_not_in: $coveringApps')
+		expect(body.variables.coveringApps).toEqual(['0x0524a353dfab33cd362593ae8e97707764fb6041'])
+		expect(body.variables.maker).toBe(MAKER)
+		expect(body.variables.first).toBe(MAX_BALANCE_ROWS)
+	})
+
+	test('with no covering apps, the plain query goes out and no empty list is ever sent', () => {
+		for (const c of [config, { ...config, coveringApps: [] }]) {
+			const body = JSON.parse(atob(demandHttpRequest(c, MAKER, USDC).body))
+			expect(body.query).toBe(MANDATE_DEMAND)
+			expect(body.query).not.toContain('app_not_in')
+			expect('coveringApps' in body.variables).toBe(false)
+		}
 	})
 })
 

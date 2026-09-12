@@ -76,6 +76,9 @@ const config: Config = {
 	// assertion below was written against. `the Aqua buffer` covers the other path.
 	subgraphUrl: '',
 	subgraphTimeoutSeconds: 20,
+	// No covering apps: every mandate raises the floor, which is what every run did before the
+	// list existed. `subgraph.test.ts` pins what the list changes.
+	coveringApps: [],
 	schedule: '0 */5 * * * *',
 	rpcUrl: 'https://arb1.arbitrum.io/rpc',
 	delivery: 'forwarder',
@@ -277,6 +280,21 @@ describe('configSchema', () => {
 		// became plural keeps its meaning rather than failing on a field its author never wrote.
 		expect(parsed.assets).toEqual([USDC.toLowerCase()])
 		expect(parsed.agent).toBe(agent.toLowerCase())
+	})
+
+	/**
+	 * A configuration written before covering apps existed keeps its meaning: no list, every
+	 * mandate raises the floor. With a list, the addresses are lower-cased like every other one.
+	 */
+	test('coveringApps defaults to none and is lower-cased', () => {
+		expect(configSchema.parse(config).coveringApps).toEqual([])
+		expect(
+			configSchema.parse({
+				...config,
+				coveringApps: ['0x0524a353dfab33CD362593ae8e97707764Fb6041'],
+			}).coveringApps,
+		).toEqual(['0x0524a353dfab33cd362593ae8e97707764fb6041'])
+		expect(() => configSchema.parse({ ...config, coveringApps: ['0x0524'] })).toThrow()
 	})
 
 	test('ties chainId to signature delivery and chainSelectorName to the forwarder', () => {
