@@ -47,6 +47,11 @@ describe("showing an amount", () => {
   test("guessing the decimals would be wrong by a trillion", () => {
     expect(amount(1_000_000n, 6)).toBe("1");
     expect(amount(1_000_000n, 18)).toBe("0");
+    // An ether position is an amount, not nothing: two places read empty, so the first two
+    // significant digits are kept. Dust past eight places still reads as zero.
+    expect(amount(397_329_897_698_090n, 18)).toBe("0.00039");
+    expect(amount(2_500_000_000_000_000n, 18)).toBe("0.0025");
+    expect(amount(996_487n, 6)).toBe("0.99");
   });
 
   test("an unknown token shows the integer rather than a scaled lie", () => {

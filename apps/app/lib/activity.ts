@@ -82,6 +82,25 @@ const amount = (v: bigint | string) =>
   });
 
 /**
+ * The amount in the asset's own unit. `IdleCapitalMoved` names the asset, and the agent moves
+ * WETH as well as USDC since the account learned to hold it — an ether move printed through the
+ * USDC formatter read as 397,329,897.69 USDC on the first one.
+ */
+const ASSETS: Record<string, { symbol: string; decimals: number }> = {
+  "0xaf88d065e77c8cc2239327c5edb3a432268e5831": { symbol: "USDC", decimals: 6 },
+  "0x82af49447d8a07e3bd95bd0d56f35241523fbab1": {
+    symbol: "WETH",
+    decimals: 18,
+  },
+};
+const inAsset = (v: bigint | string, asset?: string): string => {
+  const known = asset ? ASSETS[asset.toLowerCase()] : undefined;
+  if (!known || known.decimals === 6) return `${amount(v)} USDC`;
+  const n = Number(BigInt(v)) / 10 ** known.decimals;
+  return `${n.toLocaleString(undefined, { maximumFractionDigits: 6 })} ${known.symbol}`;
+};
+
+/**
  * Newest first.
  *
  * `fromBlock` is the factory's own deployment block: nothing can predate the contract that creates
@@ -106,6 +125,7 @@ type ServedEvent = {
   kind: "moved" | "agent" | "venue" | "in" | "out" | "unknown";
   tx: string;
   pool?: string;
+  asset?: string;
   amount?: string;
   supplied?: boolean;
   allowed?: boolean;
@@ -131,7 +151,11 @@ async function fromBackend(account: Address): Promise<AccountEvent[] | null> {
       into: e.kind === "out" ? false : Boolean(e.supplied),
       key: `${e.block}-${e.logIndex}`,
       what: sentence(e),
-      amount: carriesMoney(e.kind) ? `${amount(e.amount ?? "0")} USDC` : "",
+      amount: carriesMoney(e.kind)
+        ? e.kind === "moved"
+          ? inAsset(e.amount ?? "0", e.asset)
+          : `${amount(e.amount ?? "0")} USDC`
+        : "",
       where: e.pool ? marketName(e.pool) : "",
       block: BigInt(e.block),
       at: e.blockTime ? e.blockTime : null,
@@ -189,7 +213,7 @@ async function readFromChain(
       into: Boolean(l.args.supplied),
       key: `${l.blockNumber}-${l.logIndex}`,
       what: l.args.supplied ? "Put money to work" : "Took money back out",
-      amount: `${amount(l.args.amount ?? 0n)} USDC`,
+      amount: inAsset(l.args.amount ?? 0n, l.args.asset),
       where: marketName(String(l.args.pool)),
       block: l.blockNumber ?? 0n,
       // The fallback has no timestamp: `eth_getLogs` does not carry one and fetching a header per

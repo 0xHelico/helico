@@ -202,11 +202,16 @@ export function amount(value: bigint, decimals: number | null): string {
   const whole = value / base;
   const rest = value % base;
   if (rest === 0n) return whole.toLocaleString();
-  const frac = rest
-    .toString()
-    .padStart(decimals, "0")
-    .slice(0, 2)
-    .replace(/0+$/, "");
+  const digits = rest.toString().padStart(decimals, "0");
+  // Two places, as a dollar reads. But 0.000397 WETH is not "0": when the two places are empty
+  // and there is nothing before the point, keep the first two significant digits instead (to at
+  // most eight places), so an ether position reads as an amount rather than as nothing.
+  let frac = digits.slice(0, 2).replace(/0+$/, "");
+  if (!frac && whole === 0n) {
+    const first = digits.search(/[1-9]/);
+    if (first >= 0 && first < 8)
+      frac = digits.slice(0, first + 2).replace(/0+$/, "");
+  }
   return frac ? `${whole.toLocaleString()}.${frac}` : whole.toLocaleString();
 }
 
