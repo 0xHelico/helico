@@ -427,11 +427,15 @@ export function PutToWorkCard({
       )}
       data-testid="put-to-work"
     >
-      <p className="font-medium text-sm">Put everything to work</p>
+      <p className="font-medium text-sm">
+        {wrapAsked && fund
+          ? `Put ${fund.amountUsd ? `$${fund.amountUsd} of ` : `${fund.amountIn} `}ETH to work`
+          : "Put everything to work"}
+      </p>
       <p className="mt-1 text-[11.5px] text-soft leading-relaxed">
-        One signature, one transaction: all of it or none of it. The same money
-        is quotable on 1inch Aqua and earning in a lending market at the same
-        time.
+        {wrapAsked
+          ? "One signature: the ETH is wrapped, moved into your account beside your USDC, and shipped as a second position with both sides. The agent lends the WETH in whichever ETH market pays most."
+          : "One signature, one transaction: all of it or none of it. The same money is quotable on 1inch Aqua and earning in a lending market at the same time."}
       </p>
 
       <div className="mt-3 flex flex-col gap-2 border-t pt-3 text-[11.5px]">
@@ -477,42 +481,50 @@ export function PutToWorkCard({
             }
           />
         ) : null}
+        {wrapAsked ? null : (
+          <Line
+            done={!reading && wallet === 0n}
+            label="Move your USDC in"
+            detail={
+              reading
+                ? "reading your wallet…"
+                : wallet > 0n
+                  ? `${usdc(wallet)} USDC from your wallet`
+                  : fundAsked
+                    ? "none in your wallet; the swap above funds it"
+                    : idle + working > 0n
+                      ? "already in"
+                      : "your wallet holds none"
+            }
+          />
+        )}
         <Line
-          done={!reading && wallet === 0n}
-          label="Move your USDC in"
-          detail={
-            reading
-              ? "reading your wallet…"
-              : wallet > 0n
-                ? `${usdc(wallet)} USDC from your wallet`
-                : fundAsked
-                  ? "none in your wallet; the swap above funds it"
-                  : idle + working > 0n
-                    ? "already in"
-                    : "your wallet holds none"
-          }
-        />
-        <Line
-          done={already}
-          label="Ship the position"
+          done={already && !wrapAsked}
+          label={wrapAsked ? "Ship a second position" : "Ship the position"}
           detail={
             position.isPending
               ? "asking the index…"
-              : already
-                ? position.data?.count === 1
-                  ? "already shipped"
-                  : `${position.data?.count} already shipped`
-                : reading
-                  ? "reading the account…"
-                  : wrapIn > 0n
-                    ? `up to ${usdc(ceiling)} USDC and ${Number(formatUnits((balances.data?.weth ?? 0n) + wrapIn, 18)).toFixed(5)} WETH quotable on Aqua — both sides, so it prices`
+              : wrapAsked
+                ? wrapIn > 0n
+                  ? `${usdc(ceiling)} USDC + ${Number(formatUnits((balances.data?.weth ?? 0n) + wrapIn, 18)).toFixed(5)} WETH — both sides, so it prices; the ${position.data?.count ?? 0} shipped before stay as they are`
+                  : "sizing…"
+                : already
+                  ? position.data?.count === 1
+                    ? "already shipped"
+                    : `${position.data?.count} already shipped`
+                  : reading
+                    ? "reading the account…"
                     : `up to ${usdc(ceiling)} USDC quotable on Aqua`
           }
         />
         {/* Not in this batch, and it does not pretend to be. */}
         <Line
           label="Put it to work"
-          detail="the agent does this, into whichever market pays most"
+          detail={
+            wrapAsked
+              ? "the agent does this on its next run, lending the WETH where it pays most"
+              : "the agent does this, into whichever market pays most"
+          }
           theirs
         />
       </div>
@@ -538,14 +550,16 @@ export function PutToWorkCard({
               </>
             ) : done ? (
               addable ? (
-                wrapAsked ? (
-                  "Execute"
+                wrapAsked && wrapping.data ? (
+                  `Put ${Number(formatUnits(wrapping.data.amount, 18)).toFixed(5)} ETH to work`
                 ) : (
                   `Ship ${usdc(wallet)} USDC more`
                 )
               ) : (
                 "Done"
               )
+            ) : wrapAsked && wrapping.data ? (
+              `Put ${Number(formatUnits(wrapping.data.amount, 18)).toFixed(5)} ETH to work`
             ) : (
               "Execute"
             )}

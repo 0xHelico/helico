@@ -50,6 +50,41 @@ const STALE_AFTER_SECONDS = 3600n;
  * Throws rather than guessing: no feed, a non-positive answer, or an answer too old to be a price.
  * A swap card that refuses is cheap; one that sizes a signature off a stale number is not.
  */
+/**
+ * The dollar price of one whole token, from its Chainlink feed, with the same staleness rule as
+ * `unitsForDollars`. For turning a balance the account holds into the dollars the page shows.
+ */
+export async function priceUsd(
+  client: PublicClient,
+  token: Address,
+): Promise<number> {
+  const feed = FEEDS[token.toLowerCase()];
+  if (!feed) throw new Error("no price feed for that token");
+  const [round, feedDecimals] = await Promise.all([
+    client.readContract({
+      abi: feedAbi,
+      address: feed,
+      functionName: "latestRoundData",
+    }),
+    client.readContract({
+      abi: feedAbi,
+      address: feed,
+      functionName: "decimals",
+    }),
+  ]);
+  const answer = round[1];
+  const updatedAt = round[3];
+  const now = BigInt(Math.floor(Date.now() / 1000));
+  if (
+    answer <= 0n ||
+    updatedAt === 0n ||
+    now - updatedAt > STALE_AFTER_SECONDS
+  ) {
+    throw new Error("the price feed has not updated in over an hour");
+  }
+  return Number(answer) / 10 ** Number(feedDecimals);
+}
+
 export async function unitsForDollars(
   client: PublicClient,
   token: Address,

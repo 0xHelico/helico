@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { VenueMark } from "@/components/venue-mark";
 import { CHAIN_ID, totals, useAccountState } from "@/hooks/use-account-state";
 import { useUnlock } from "@/hooks/use-unlock";
+import { useWethHeld } from "@/hooks/use-weth-held";
 import {
   AAVE_V3_POOL,
   accountReadAbi,
@@ -63,6 +64,10 @@ export function MandateCard({
   const client = usePublicClient({ chainId: CHAIN_ID });
   const { data, refetch } = useAccountState();
   const { writeContractAsync } = useWriteContract();
+  // Above the early returns, as every hook must be. Null until there is an account to read.
+  const weth = useWethHeld(
+    data && data.kind !== "unconfigured" ? (data.address as Address) : null,
+  );
 
   const account =
     data && data.kind === "open" ? (data.address as Address) : undefined;
@@ -282,6 +287,14 @@ export function MandateCard({
             ? `${amount(held.idle, 6)} liquid · ${amount(held.working, 6)} earning`
             : "nothing in it yet"}
         </p>
+        {/* The second asset, on its own line and in its own unit. Folding it into the USDC
+            figure would need a price in a place that reads balances, and the total in dollars
+            is the portfolio's job. */}
+        {weth.data ? (
+          <p className="tabular mt-1 font-mono text-[11px] text-faint">
+            {`${amount(weth.data.total, 18)} WETH · ${amount(weth.data.idle, 18)} liquid · ${amount(weth.data.working, 18)} earning`}
+          </p>
+        ) : null}
       </div>
 
       {/* **A list, not a wrapping row.** Five facts in one flex row wrapped mid-way, orphaning

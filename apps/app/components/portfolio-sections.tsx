@@ -10,7 +10,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { useState } from "react";
-import { formatUnits } from "viem";
+import { type Address, formatUnits } from "viem";
 import { useAccount, usePublicClient } from "wagmi";
 
 import {
@@ -23,6 +23,7 @@ import {
 import { TokenMark } from "@/components/token-mark";
 import { VenueMark } from "@/components/venue-mark";
 import { CHAIN_ID, totals, useAccountState } from "@/hooks/use-account-state";
+import { useWethHeld, WETH } from "@/hooks/use-weth-held";
 import { pageOf, readAccountActivity, withoutVenueLegs } from "@/lib/activity";
 import { amount, collapse, readMovements, token } from "@/lib/mandates";
 import { MARKETS, readVenues } from "@/lib/venues";
@@ -81,6 +82,10 @@ export function Holdings() {
   const held = totals(data);
   const client = usePublicClient({ chainId: CHAIN_ID });
   const [tab, setTab] = useState<(typeof SPLITS)[number]>("All assets");
+  // The second asset, priced. Null for a USDC-only account, which then renders as it always did.
+  const weth = useWethHeld(
+    data && data.kind !== "unconfigured" ? (data.address as Address) : null,
+  );
 
   // The account's own address, which left the page with the panel this replaced. It is the one
   // fact here a person cannot get anywhere else: CREATE2 gives it before the contract exists.
@@ -101,12 +106,35 @@ export function Holdings() {
     staleTime: 30_000,
   });
 
-  const share = (v: bigint) =>
-    held && held.total > 0n
-      ? `${(Number((v * 1000n) / held.total) / 10).toFixed(1)}%`
+  // Shares are of the dollar total, so a WETH row and a USDC row divide the same pie. The WETH
+  // side is carried in USDC micro-units by the hook, priced off Chainlink.
+  const grand = (held?.total ?? 0n) + (weth.data?.usdcUnits ?? 0n);
+  const share = (usdcUnits: bigint) =>
+    grand > 0n
+      ? `${(Number((usdcUnits * 1000n) / grand) / 10).toFixed(1)}%`
       : "";
+  const isWeth = (asset: string) => asset.toLowerCase() === WETH.toLowerCase();
+  const wethUnits = (v: bigint) =>
+    weth.data
+      ? BigInt(
+          Math.round(Number(formatUnits(v, 18)) * weth.data.price * 1_000_000),
+        )
+      : 0n;
+  const eth = (v: bigint) =>
+    Number(formatUnits(v, 18)).toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 5,
+    });
 
-  type Row = { key: string; note: string; tint: string; value: bigint };
+  type Row = {
+    key: string;
+    note: string;
+    tint: string;
+    value: bigint;
+    symbol: "USDC" | "WETH";
+    /** The row's worth in USDC micro-units, for its share. */
+    usdcUnits: bigint;
+  };
   const working: Row[] = (venues.data?.positions ?? [])
     .filter((position) => position.supplied > 0n)
     .map((position) => ({
@@ -117,6 +145,10 @@ export function Holdings() {
         )?.label ?? "working",
       tint: "bg-[#ecf5f0]",
       value: position.supplied,
+      symbol: isWeth(position.asset) ? ("WETH" as const) : ("USDC" as const),
+      usdcUnits: isWeth(position.asset)
+        ? wethUnits(position.supplied)
+        : position.supplied,
     }));
   // The fallback is the total rather than nothing. `useAccountState` is the floor on what is at
   // work — it reads the receipt directly — so a venue sweep that failed or has not answered must
@@ -131,20 +163,37 @@ export function Holdings() {
               note: "working",
               tint: "bg-[#ecf5f0]",
               value: held.working,
+              symbol: "USDC" as const,
+              usdcUnits: held.working,
             },
           ]
         : [];
-  const liquidRows: Row[] =
-    held && held.idle > 0n
+  const liquidRows: Row[] = [
+    ...(held && held.idle > 0n
       ? [
           {
             key: "liquid",
             note: "liquid",
             tint: "bg-[#eef3fb]",
             value: held.idle,
+            symbol: "USDC" as const,
+            usdcUnits: held.idle,
           },
         ]
-      : [];
+      : []),
+    ...(weth.data && weth.data.idle > 0n
+      ? [
+          {
+            key: "liquid-weth",
+            note: "liquid",
+            tint: "bg-[#eef3fb]",
+            value: weth.data.idle,
+            symbol: "WETH" as const,
+            usdcUnits: wethUnits(weth.data.idle),
+          },
+        ]
+      : []),
+  ];
   const rows =
     tab === "Liquid"
       ? liquidRows
@@ -198,12 +247,12 @@ export function Holdings() {
           {rows.map((r) => (
             <AssetTile
               key={r.key}
-              mark={<TokenMark size={22} symbol="USDC" />}
+              mark={<TokenMark size={22} symbol={r.symbol} />}
               note={r.note}
-              share={share(r.value)}
-              symbol="USDC"
+              share={share(r.usdcUnits)}
+              symbol={r.symbol}
               tint={r.tint}
-              value={usdc(r.value)}
+              value={r.symbol === "WETH" ? eth(r.value) : usdc(r.value)}
             />
           ))}
         </div>
