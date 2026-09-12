@@ -10,9 +10,10 @@ const BE_API_URL = process.env.BE_API_URL ?? "https://api.helico.site";
 export async function POST(request: Request) {
   let message: unknown;
   let history: unknown;
+  let address: unknown;
 
   try {
-    ({ message, history } = await request.json());
+    ({ message, history, address } = await request.json());
   } catch {
     return NextResponse.json(
       { error: 'send {"message": "…"}' },
@@ -38,8 +39,16 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         message,
         history: Array.isArray(history) ? history : [],
+        // The connected wallet, when there is one. The backend uses it for exactly one thing:
+        // telling the index whose account a status question is about. It is public data and a
+        // filter, not an identity — the session cookie is the identity, and this is not it.
+        ...(typeof address === "string" && /^0x[0-9a-fA-F]{40}$/.test(address)
+          ? { address }
+          : {}),
       }),
-      signal: AbortSignal.timeout(30_000),
+      // A status question that reads the index makes several model and MCP calls in a row;
+      // the backend bounds that at 40 seconds, so this has to outlast it.
+      signal: AbortSignal.timeout(50_000),
     });
 
     const body = await upstream.json().catch(() => null);

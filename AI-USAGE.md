@@ -2631,6 +2631,41 @@ READMEs.
      cover them. Whether that is what 1inch's router actually threw remains unproven, and #393 is
      still open.
 
+### 2026-09-12 — The chat reads the index through Subgraph MCP
+
+- **Done:** a second Graph product, composed with the first. `apps/be/internal/graphmcp` is a
+  client for The Graph's Subgraph MCP server over its SSE transport; `Ask` in
+  `internal/swap/ask.go` is a read loop beside `Interpret`, untouched: the model is handed the
+  subgraph's schema through MCP and writes its own GraphQL against Helico's subgraph, at most
+  five queries, pinned to one subgraph id, results capped, the whole question bounded. A `status`
+  question in the chat gains one card, *From the index*, and one step per MCP call; a failure
+  adds a failed step and leaves the reply as it was; unset, the code path is never entered. The
+  app sends the connected wallet as an optional `address` so the answer can be about that
+  person's account. Plan first: `docs/plans/2026-09-12-the-chat-reads-the-index.md`.
+
+- **AI's role:** Claude Opus 5 measured the server before designing against it — handshake,
+  nine tools, queries on network subgraphs executing without a key, a Studio-only deployment
+  answering "subgraph not found" — then wrote the client, the loop, the fake server, the tests
+  and the docs. Ghoza chose to submit for both Graph prizes, which is what made the second
+  product necessary, and set the constraint that nothing already working be touched: the
+  intent's prompt, checks and request body are byte-for-byte what they were, and the only edit
+  to `llm.go` is the HTTP half of `ask` moved into `complete` so both loops report a status, a
+  non-JSON body and an empty choice the same way, plus `stream: false` said explicitly.
+
+- **Plan:** `docs/plans/2026-09-12-the-chat-reads-the-index.md`, committed before the code.
+
+- **Verified:** 6 client tests against a fake that speaks the measured transport, including a
+  dying stream and a wrong content type; 6 loop tests with a scripted model — refusal fed back
+  and recovered from, the query cap, result truncation, schema cached across questions; 5 route
+  tests — the card and steps on a status question, the reply unchanged when the index fails,
+  nothing entered when unconfigured or when the question is not a status. Then live, twice:
+  `TestLiveSubgraphMCP` against the real server (`subgraph-mcp 0.1.1`, Aave V3 Arbitrum head
+  block via MCP), and `TestLiveAsk` plus the real HTTP route with the production model
+  (`ag/claude-opus-4-6-thinking` through the router) on the same public subgraph — a 65 KB
+  schema read, two to four queries, a correct sentence with the index's rates in it, 20–37
+  seconds. Not yet verified, because it cannot be until the subgraph is published to the
+  network: the same loop against Helico's own subgraph.
+
 <!--
 Template for the next entry:
 

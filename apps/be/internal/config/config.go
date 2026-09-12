@@ -51,6 +51,16 @@ type Config struct {
 	GraphTTL time.Duration
 	// GraphRatePerMin is how many subgraph reads one address may make in a minute.
 	GraphRatePerMin int
+	// GraphMCPURL is The Graph's Subgraph MCP server. Empty — the default — means the chat does
+	// not read the index and the status answer is exactly what it was before 12 September.
+	GraphMCPURL string
+	// GraphMCPSubgraphID is the id of Helico's subgraph on The Graph Network (not the Studio
+	// deployment: the MCP serves the network only). Empty means off, like the URL.
+	GraphMCPSubgraphID string
+	// GraphMCPKey is sent as a Bearer token when set. The server answers without one.
+	GraphMCPKey string
+	// GraphMCPTimeout bounds one whole question: every model and MCP call together.
+	GraphMCPTimeout time.Duration
 	// RPCURL is the chain this reads an account's own logs from. The default is Arbitrum One's
 	// public endpoint: it carries no key, a judge can curl it, and it is the same URL the dapp
 	// used to scan from every browser — which is the cost this endpoint exists to stop paying.
@@ -94,25 +104,29 @@ func FromEnv(lookup Lookup) (Config, error) {
 		return def
 	}
 	cfg := Config{
-		Addr:            get("BE_ADDR", ":8787"),
-		DBPath:          get("BE_DB_PATH", "data/helico.db"),
-		AdminToken:      get("BE_ADMIN_TOKEN", ""),
-		ContentDir:      get("BE_CONTENT_DIR", "content"),
-		RequestTimeout:  10 * time.Second,
-		ShutdownTimeout: 10 * time.Second,
-		SessionSecret:   get("BE_SESSION_SECRET", ""),
-		LLMBaseURL:      get("BE_LLM_BASE_URL", "https://api.openai.com/v1"),
-		LLMKey:          get("BE_LLM_API_KEY", ""),
-		LLMModel:        get("BE_LLM_MODEL", "gpt-4o-mini"),
-		LLMTimeout:      8 * time.Second,
-		SwapRatePerMin:  6,
-		SwapDailyMax:    500,
-		SubgraphURL:     get("BE_SUBGRAPH_URL", defaultSubgraph),
-		GraphTTL:        60 * time.Second,
-		GraphRatePerMin: 120,
-		RPCURL:          get("BE_RPC_URL", defaultRPC),
-		ActivityFrom:    defaultActivityFrom,
-		ActivityFresh:   75 * time.Second,
+		Addr:               get("BE_ADDR", ":8787"),
+		DBPath:             get("BE_DB_PATH", "data/helico.db"),
+		AdminToken:         get("BE_ADMIN_TOKEN", ""),
+		ContentDir:         get("BE_CONTENT_DIR", "content"),
+		RequestTimeout:     10 * time.Second,
+		ShutdownTimeout:    10 * time.Second,
+		SessionSecret:      get("BE_SESSION_SECRET", ""),
+		LLMBaseURL:         get("BE_LLM_BASE_URL", "https://api.openai.com/v1"),
+		LLMKey:             get("BE_LLM_API_KEY", ""),
+		LLMModel:           get("BE_LLM_MODEL", "gpt-4o-mini"),
+		LLMTimeout:         8 * time.Second,
+		SwapRatePerMin:     6,
+		SwapDailyMax:       500,
+		SubgraphURL:        get("BE_SUBGRAPH_URL", defaultSubgraph),
+		GraphTTL:           60 * time.Second,
+		GraphRatePerMin:    120,
+		GraphMCPURL:        get("BE_GRAPH_MCP_URL", ""),
+		GraphMCPSubgraphID: get("BE_GRAPH_MCP_SUBGRAPH_ID", ""),
+		GraphMCPKey:        get("BE_GRAPH_MCP_API_KEY", ""),
+		GraphMCPTimeout:    40 * time.Second,
+		RPCURL:             get("BE_RPC_URL", defaultRPC),
+		ActivityFrom:       defaultActivityFrom,
+		ActivityFresh:      75 * time.Second,
 	}
 	for _, o := range strings.Split(get("BE_CORS_ORIGINS", devOrigins), ",") {
 		if o = strings.TrimSpace(o); o != "" {
@@ -124,7 +138,7 @@ func FromEnv(lookup Lookup) (Config, error) {
 		key string
 		dst *time.Duration
 		set *bool
-	}{{"BE_REQUEST_TIMEOUT", &cfg.RequestTimeout, nil}, {"BE_LLM_TIMEOUT", &cfg.LLMTimeout, &llmTimeoutSet}, {"BE_GRAPH_TTL", &cfg.GraphTTL, nil}} {
+	}{{"BE_REQUEST_TIMEOUT", &cfg.RequestTimeout, nil}, {"BE_LLM_TIMEOUT", &cfg.LLMTimeout, &llmTimeoutSet}, {"BE_GRAPH_TTL", &cfg.GraphTTL, nil}, {"BE_GRAPH_MCP_TIMEOUT", &cfg.GraphMCPTimeout, nil}} {
 		if v, ok := lookup(d.key); ok && strings.TrimSpace(v) != "" {
 			parsed, err := time.ParseDuration(strings.TrimSpace(v))
 			if err != nil {

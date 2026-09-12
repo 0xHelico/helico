@@ -24,6 +24,7 @@ import (
 	"github.com/0xHelico/helico/apps/be/internal/config"
 	"github.com/0xHelico/helico/apps/be/internal/content"
 	"github.com/0xHelico/helico/apps/be/internal/graph"
+	"github.com/0xHelico/helico/apps/be/internal/graphmcp"
 	"github.com/0xHelico/helico/apps/be/internal/httpapi"
 	"github.com/0xHelico/helico/apps/be/internal/store"
 	"github.com/0xHelico/helico/apps/be/internal/swap"
@@ -55,6 +56,21 @@ func run() error {
 	defer db.Close()
 
 	swapSvc := swap.New(swap.NewClient(cfg.LLMBaseURL, cfg.LLMKey, cfg.LLMModel, cfg.LLMTimeout))
+
+	// The index the chat may read for a status question, through The Graph's Subgraph MCP. Off
+	// unless both the server and the subgraph's network id are set, and then the intent route
+	// gets a budget that fits several calls in a row.
+	index := &swap.Index{
+		MCP:          graphmcp.New(cfg.GraphMCPURL, cfg.GraphMCPKey, 15*time.Second),
+		SubgraphID:   cfg.GraphMCPSubgraphID,
+		MaxQueries:   5,
+		Timeout:      cfg.GraphMCPTimeout,
+		ModelTimeout: 25 * time.Second,
+	}
+	writeTimeout := cfg.RequestTimeout + 5*time.Second
+	if index.Configured() && index.Timeout+7*time.Second > writeTimeout {
+		writeTimeout = index.Timeout + 7*time.Second
+	}
 
 	// Only the two the app sends. The list is here rather than in the cache so that adding a
 	// query to the frontend is a visible change to what this process will forward.
@@ -99,6 +115,7 @@ func run() error {
 			Chats:           chats,
 			SessionSecret:   cfg.SessionSecret,
 			Swap:            swapSvc,
+			Index:           index,
 			SwapRatePerMin:  cfg.SwapRatePerMin,
 			SwapDailyMax:    cfg.SwapDailyMax,
 			Graph:           subgraph,
@@ -107,7 +124,7 @@ func run() error {
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
-		WriteTimeout:      cfg.RequestTimeout + 5*time.Second,
+		WriteTimeout:      writeTimeout,
 		IdleTimeout:       60 * time.Second,
 	}
 

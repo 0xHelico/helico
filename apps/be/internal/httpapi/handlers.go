@@ -4,9 +4,11 @@
 package httpapi
 
 import (
+	"context"
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -41,6 +43,9 @@ type Options struct {
 	Now func() time.Time
 	// Swap answers the swap conversation. Nil, or unconfigured, means that route says so.
 	Swap *swap.Service
+	// Index is the subgraph the chat may read through The Graph's Subgraph MCP, for a status
+	// question. Nil or unconfigured means the status answer is what it always was.
+	Index *swap.Index
 	// SwapRatePerMin and SwapDailyMax bound what the paid model costs.
 	SwapRatePerMin int
 	SwapDailyMax   int
@@ -128,7 +133,24 @@ func New(svc *blog.Service, opt Options) http.Handler {
 	h = gzipper(h)
 	h = cors(opt.CORSOrigins)(h)
 	if opt.RequestTimeout > 0 {
-		h = http.TimeoutHandler(h, opt.RequestTimeout, `{"type":"about:blank","title":"Service Unavailable","status":503,"detail":"request timed out"}`)
+		const timedOut = `{"type":"about:blank","title":"Service Unavailable","status":503,"detail":"request timed out"}`
+		timed := http.TimeoutHandler(h, opt.RequestTimeout, timedOut)
+		// A status question that reads the index makes several model and MCP calls in a row,
+		// which the request budget sized for one model call cannot hold. That one route gets the
+		// index's budget, and only when the index is configured; every other route, and this one
+		// when it is not, keeps the budget it always had.
+		if opt.Index.Configured() && opt.Index.Timeout > opt.RequestTimeout {
+			longer := http.TimeoutHandler(h, opt.Index.Timeout+2*time.Second, timedOut)
+			h = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodPost && r.URL.Path == "/api/swap/intent" {
+					longer.ServeHTTP(w, r)
+					return
+				}
+				timed.ServeHTTP(w, r)
+			})
+		} else {
+			h = timed
+		}
 	}
 	h = logging(opt.Logger)(h)
 	h = secureHeaders(h)
@@ -279,6 +301,47 @@ func (a *api) delete(w http.ResponseWriter, r *http.Request) {
 
 // requireAdmin gates writes behind the bearer token, and refuses them outright when none is
 // configured, so a deployment cannot be written to by accident.
+// readTheIndex adds the index's answer to a status reply: one card with the model's sentence and
+// one step per read, so the tree under the answer shows where the sentence came from. A failure
+// adds a failed step and changes nothing else — the reply the person would have had without the
+// index is the reply they get.
+func (a *api) readTheIndex(ctx context.Context, answer *swap.Answer, question, address string) {
+	owner := strings.ToLower(strings.TrimSpace(address))
+	if !isAddress(owner) {
+		owner = ""
+	}
+	got, steps, err := a.opt.Swap.Ask(ctx, a.opt.Index, question, owner)
+	answer.Steps = append(answer.Steps, steps...)
+	if err != nil {
+		a.opt.Logger.Warn("the index did not answer", "error", err)
+		return
+	}
+	answer.Cards = append(answer.Cards, swap.Card{
+		Title: "From the index",
+		Body:  got.Answer,
+		Tags:  []string{"The Graph", "Subgraph MCP", fmt.Sprintf("%d %s", got.Queries, plural(got.Queries, "query", "queries"))},
+	})
+}
+
+func isAddress(s string) bool {
+	if len(s) != 42 || !strings.HasPrefix(s, "0x") {
+		return false
+	}
+	for _, c := range s[2:] {
+		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
+}
+
 func (a *api) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if a.opt.AdminToken == "" {
@@ -340,6 +403,9 @@ func (a *api) swapIntent(w http.ResponseWriter, r *http.Request) {
 		// What was already on screen. Optional, bounded by the service, and only ever a hint to
 		// the model: every token and amount still goes through the registry afterwards.
 		History []swap.Turn `json:"history"`
+		// The connected wallet, optional. Used for one thing: telling the index whose account a
+		// status question is about. Nothing here trusts it — it is a filter on public data.
+		Address string `json:"address"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 16<<10)).Decode(&body); err != nil {
 		writeProblem(w, http.StatusBadRequest, "send {\"message\": \"…\"}")
@@ -347,6 +413,9 @@ func (a *api) swapIntent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	answer, err := a.opt.Swap.Interpret(r.Context(), body.Message, body.History...)
+	if err == nil && answer.Action == swap.ActionStatus && a.opt.Index.Configured() {
+		a.readTheIndex(r.Context(), &answer, body.Message, body.Address)
+	}
 	switch {
 	case errors.Is(err, swap.ErrNotConfigured):
 		writeProblem(w, http.StatusServiceUnavailable, "the swap conversation is off: BE_LLM_API_KEY is not set")

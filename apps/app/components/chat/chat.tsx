@@ -4,6 +4,7 @@ import { ArrowUpIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSWRConfig } from "swr";
+import { useAccount } from "wagmi";
 import {
   PromptInput,
   PromptInputFooter,
@@ -52,6 +53,7 @@ export function Chat({ conversationId }: { conversationId?: string }) {
   const router = useRouter();
   const { mutate } = useSWRConfig();
   const session = useHelicoSession();
+  const { address } = useAccount();
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -167,6 +169,9 @@ export function Chat({ conversationId }: { conversationId?: string }) {
           body: JSON.stringify({
             message: text,
             history: turns.map((t) => ({ role: t.from, body: t.text })),
+            // So a status question can be about this person's account rather than about the
+            // index in general. Absent when no wallet is connected, and the backend says so.
+            ...(address ? { address } : {}),
           }),
         });
         const body = await res.json();
@@ -226,7 +231,7 @@ export function Chat({ conversationId }: { conversationId?: string }) {
     },
     // `turns` is here because the request carries them. It is the value from before this
     // message was pushed, which is exactly what history means.
-    [busy, mutate, session.ready, turns],
+    [address, busy, mutate, session.ready, turns],
   );
 
   // Follow the bottom, and keep following while the answer grows.

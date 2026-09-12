@@ -35,6 +35,26 @@ a deployment is unaffected by a file it never has.
 | `BE_SWAP_RATE_PER_MIN` / `BE_SWAP_DAILY_MAX` | `6` / `500` | what the paid model may cost |
 | `BE_SUBGRAPH_URL` | Helico's Studio deployment | what `POST /api/graph` stands in front of |
 | `BE_GRAPH_TTL` / `BE_GRAPH_RATE_PER_MIN` | `60s` / `120` | how long an answer is kept, and per-address reads |
+| `BE_GRAPH_MCP_URL` | empty | **empty leaves the chat's index reads off.** The Graph's Subgraph MCP server: `https://subgraphs.mcp.thegraph.com` |
+| `BE_GRAPH_MCP_SUBGRAPH_ID` | empty | Helico's subgraph id on The Graph Network — the MCP serves the network, not Studio, so this is set after publishing |
+| `BE_GRAPH_MCP_API_KEY` | empty | sent as a Bearer token when set; the server answers without one |
+| `BE_GRAPH_MCP_TIMEOUT` | `40s` | one status question end to end: every model and MCP call together. The intent route gets this budget when the index is on |
+
+## The chat reads the index
+
+With `BE_GRAPH_MCP_URL` and `BE_GRAPH_MCP_SUBGRAPH_ID` set, a `status` question — *"why has
+nothing moved?"*, *"check my portfolio"* — is answered from the subgraph as well as from the
+chain: the backend opens a session on The Graph's **Subgraph MCP** server, hands the model the
+subgraph's schema, and lets it write GraphQL, up to five queries, against Helico's subgraph and
+nothing else. What comes back is one card, *From the index*, tagged `The Graph` · `Subgraph MCP`
+· *n queries*, and one step per MCP call under the answer — so the sentence is labelled as the
+model's, and the reads that produced it are in the open. A failure adds a failed step and leaves
+the reply exactly what it was; with the variables unset the code path is never entered.
+
+That is two Graph products composed — the Subgraph and the MCP — and both load-bearing. Measured
+before it was written: `docs/plans/2026-09-12-the-chat-reads-the-index.md`. The client is
+`internal/graphmcp`; the loop is `Ask` in `internal/swap/ask.go`; the live tests
+(`GRAPH_MCP_LIVE=1`) run the real server and the real model against a public subgraph.
 
 ## Routes
 

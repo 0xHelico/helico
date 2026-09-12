@@ -86,8 +86,30 @@ the schema keys on and is not derivable from the event. So there is **no edge fr
 `Mandate`**: a join on two hashes that are not the same hash would be a lie that reads as data. The
 `maker` edge is real, because the event carries the address.
 
+## Two products, both load-bearing
+
+The Graph's *Composable* prize asks for two Graph products composed, and says that querying one
+Subgraph does not qualify. The second one here is The Graph's **Subgraph MCP** server, and it is
+in the product rather than beside it: a `status` question in the chat — *"why has nothing
+moved?"* — opens a session on `subgraphs.mcp.thegraph.com`, hands the model the subgraph's
+schema through MCP, and lets it write its own GraphQL against Helico's subgraph, up to five
+queries. The answer comes back as a card, *From the index*, and every MCP call as a step under
+it, so the reads are visible beside the sentence they produced. The model cannot reach any other
+subgraph, cannot write, and cannot change the reply that would have been given without it.
+
+Measured on 12 September, before the code (`docs/plans/2026-09-12-the-chat-reads-the-index.md`):
+the server executes queries on network subgraphs with no API key, and answers *"subgraph not
+found"* for a Studio-only deployment. So this composition goes live the moment the subgraph is
+published to The Graph Network and its id is set in the backend — until then the code path is
+off and the status answer is the chain's alone. Run against the real server and the production
+model on a public subgraph: two to four queries, twenty to forty seconds, a correct sentence with
+the index's numbers in it (`apps/be/internal/swap/ask_test.go`, `TestLiveAsk`).
+
 | What | Where |
 |---|---|
+| The MCP client, one session per question | [`apps/be/internal/graphmcp/client.go`](../../apps/be/internal/graphmcp/client.go) |
+| The read loop: schema in, JSON turns, a pinned subgraph, a query cap | [`apps/be/internal/swap/ask.go`](../../apps/be/internal/swap/ask.go) |
+| Where a status answer picks it up, and drops it on failure | [`apps/be/internal/httpapi/handlers.go`](../../apps/be/internal/httpapi/handlers.go), `readTheIndex` |
 | The fifth event, and the four before it | [`subgraph/subgraph.yaml`](../../subgraph/subgraph.yaml) |
 | A fill written as what the log carries, and nothing it does not | [`router.ts#L18-L45`](https://github.com/0xHelico/helico/blob/85fa79fa4d82f92b7f55c027c1fe2932043d716b/subgraph/src/router.ts#L18-L45) |
 | Why `Fill` has no edge to `Mandate` | [`subgraph/schema.graphql`](../../subgraph/schema.graphql) |

@@ -300,10 +300,15 @@ costs one slot, not several.
 
 **The Graph:**
 - [ ] **Two or more Graph products combined**, *or* meaningful work on a standardised schema
-      (they name Messari Standardized Subgraphs). Planned: a subgraph of our own plus the
-      Subgraph MCP server
-- [ ] **Live data consumed from a Graph provider** — Subgraph Studio for subgraphs, The Graph
-      Market for Substreams. A mocked dataset does not qualify
+      (they name Messari Standardized Subgraphs). This is the *Composable* prize's requirement;
+      the *AI Use Case* prize has none. Built 12 September: the chat composes our Subgraph with
+      The Graph's **Subgraph MCP** (`apps/be/internal/graphmcp`, `Ask` in `swap/ask.go`). It is
+      live only once the subgraph is **published to The Graph Network** and
+      `BE_GRAPH_MCP_SUBGRAPH_ID` is set — the MCP does not serve Studio deployments. Tick this
+      box when that has happened, not before
+- [x] **Live data consumed from a Graph provider** — Subgraph Studio for subgraphs, The Graph
+      Market for Substreams. A mocked dataset does not qualify. Studio, `version/latest`, read by
+      the enclave every five minutes and by the app
 - [ ] The Graph is **load-bearing**, not decorative. Ours is: Aqua's balances mapping is private
       and four levels deep and no event parameter is `indexed`, so "which mandates does this
       maker have?" has no on-chain answer at all
