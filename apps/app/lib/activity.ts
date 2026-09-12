@@ -39,6 +39,12 @@ const VENUE = parseAbiItem(
 );
 
 export type AccountEvent = {
+  /** What the chain said happened, kept beside the sentence so a fold does not read prose. */
+  kind: "moved" | "agent" | "venue" | "in" | "out" | "unknown";
+  /** Base units of the asset, for the rows that carry one. Zero for the rest. */
+  units: bigint;
+  /** True for money arriving: supplied to a market, or transferred into the account. */
+  into: boolean;
   /** Block first, log index second. Two events in one transaction keep the order they happened. */
   key: string;
   what: string;
@@ -97,7 +103,7 @@ type ServedEvent = {
   block: number;
   blockTime?: number;
   logIndex: number;
-  kind: "moved" | "agent" | "venue" | "unknown";
+  kind: "moved" | "agent" | "venue" | "in" | "out" | "unknown";
   tx: string;
   pool?: string;
   amount?: string;
@@ -120,9 +126,12 @@ async function fromBackend(account: Address): Promise<AccountEvent[] | null> {
     const body = (await res.json()) as { events?: ServedEvent[] };
     if (!Array.isArray(body.events)) return null;
     return body.events.map((e) => ({
+      kind: e.kind,
+      units: BigInt(e.amount ?? "0"),
+      into: e.kind === "out" ? false : Boolean(e.supplied),
       key: `${e.block}-${e.logIndex}`,
       what: sentence(e),
-      amount: e.kind === "moved" ? `${amount(e.amount ?? "0")} USDC` : "",
+      amount: carriesMoney(e.kind) ? `${amount(e.amount ?? "0")} USDC` : "",
       where: e.pool ? marketName(e.pool) : "",
       block: BigInt(e.block),
       at: e.blockTime ? e.blockTime : null,
@@ -132,6 +141,9 @@ async function fromBackend(account: Address): Promise<AccountEvent[] | null> {
     return null;
   }
 }
+
+const carriesMoney = (kind: ServedEvent["kind"]) =>
+  kind === "moved" || kind === "in" || kind === "out";
 
 /**
  * The English, composed here in both paths.
@@ -150,6 +162,10 @@ function sentence(e: ServedEvent): string {
         : "Named the agent that may move capital";
     case "venue":
       return e.allowed ? "Allowed a market" : "Revoked a market";
+    case "in":
+      return "Money in";
+    case "out":
+      return "Money out";
     default:
       return "Something happened on this account";
   }
@@ -168,6 +184,9 @@ async function readFromChain(
 
   const rows: AccountEvent[] = [
     ...moved.map((l) => ({
+      kind: "moved" as const,
+      units: l.args.amount ?? 0n,
+      into: Boolean(l.args.supplied),
       key: `${l.blockNumber}-${l.logIndex}`,
       what: l.args.supplied ? "Put money to work" : "Took money back out",
       amount: `${amount(l.args.amount ?? 0n)} USDC`,
@@ -179,6 +198,9 @@ async function readFromChain(
       tx: l.transactionHash as `0x${string}`,
     })),
     ...agent.map((l) => ({
+      kind: "agent" as const,
+      units: 0n,
+      into: false,
       key: `${l.blockNumber}-${l.logIndex}`,
       what:
         String(l.args.agent) === "0x0000000000000000000000000000000000000000"
@@ -191,6 +213,9 @@ async function readFromChain(
       tx: l.transactionHash as `0x${string}`,
     })),
     ...venue.map((l) => ({
+      kind: "venue" as const,
+      units: 0n,
+      into: false,
       key: `${l.blockNumber}-${l.logIndex}`,
       what: l.args.allowed ? "Allowed a market" : "Revoked a market",
       amount: "",
@@ -205,5 +230,28 @@ async function readFromChain(
     a.block === b.block
       ? b.key.localeCompare(a.key)
       : Number(b.block - a.block),
+  );
+}
+
+/**
+ * The same history with the mechanical halves taken out, for a list a person reads.
+ *
+ * Supplying to a market is one transaction that emits two things: `IdleCapitalMoved`, which says
+ * what happened, and the token transfer that carries it out. Both are needed to work out what the
+ * account is worth — one moves the working side, the other the liquid side — and showing both reads
+ * as the money leaving twice.
+ *
+ * The pairing is by transaction and figure rather than by counterparty, because the counterparty is
+ * not reliably a market's own address: Aave pulls to its receipt token, not to the pool the event
+ * names. A transfer matched by neither stays, which is the case that matters — that is the owner
+ * funding the account, or taking it back.
+ */
+export function withoutVenueLegs(events: AccountEvent[]): AccountEvent[] {
+  const legs = new Set(
+    events.filter((e) => e.kind === "moved").map((e) => `${e.tx}-${e.units}`),
+  );
+  return events.filter(
+    (e) =>
+      (e.kind !== "in" && e.kind !== "out") || !legs.has(`${e.tx}-${e.units}`),
   );
 }

@@ -15,24 +15,61 @@ type XY = { x: number; y: number };
 
 export type Point = { timestamp: number; value: number };
 
-const linePath = (pts: XY[]) =>
-  pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join("");
+const linePath = (pts: XY[], step = false) =>
+  pts
+    .map((p, i) =>
+      i === 0
+        ? `M${p.x},${p.y}`
+        : // **A balance holds until something changes it.** Sloping from one reading to the next
+          // draws a deposit as a gradual climb across the days either side of it, and the account
+          // was never worth any of the figures on that slope. Horizontal to the new moment, then
+          // vertical to the new value, is the shape the events actually describe.
+          step
+          ? `L${p.x},${pts[i - 1]?.y ?? p.y}L${p.x},${p.y}`
+          : `L${p.x},${p.y}`,
+    )
+    .join("");
 
-function areaPath(pts: XY[], height: number): string {
+function areaPath(pts: XY[], height: number, step = false): string {
   const last = pts.at(-1);
   return last
-    ? `${linePath(pts)}L${last.x},${height}L${pts[0]?.x ?? 0},${height}Z`
+    ? `${linePath(pts, step)}L${last.x},${height}L${pts[0]?.x ?? 0},${height}Z`
     : "";
 }
 
 const HEIGHT = 240;
 const MARGIN = { top: 16, right: 48, bottom: 28, left: 8 };
+/**
+ * The gutter the tick labels are written into, measured from the labels rather than assumed.
+ *
+ * 48px was enough for a count and not for money: `$80.0000` was drawn to the edge and the last
+ * character was cut off, on every tick, which looked like a rendering fault rather than a margin.
+ * Roughly 6.2px per character at 11px in this face, plus the 10px the text is offset by.
+ */
+const gutter = (labels: string[]) =>
+  Math.max(
+    MARGIN.right,
+    12 + Math.max(0, ...labels.map((l) => l.length)) * 6.2,
+  );
 const PX_PER_X_LABEL = 110;
 const TOOLTIP_HALF_WIDTH = 70;
 
-/** Helico's own line, rather than the reference's red-or-green: a movement count has no direction
- *  to be good or bad about, and a green line climbing would claim one. */
-const LINE = "#695cff";
+/**
+ * Helico's own line where the series has no direction, and the reference's red-or-green where it
+ * has one.
+ *
+ * A count of movements is not good or bad, so a green line climbing through it would claim
+ * something the data does not say. Money is the other case: a total that went up went up, and the
+ * colour is the fastest way to read that. `flat` is its own answer rather than a rounding of `up`.
+ */
+const LINE: Record<Trend, string> = {
+  none: "#695cff",
+  up: "#1DA66A",
+  down: "#E5484D",
+  flat: "#9CA1A6",
+};
+
+type Trend = "none" | "up" | "down" | "flat";
 
 const dateLabel = (ts: number) =>
   new Date(ts).toLocaleDateString(undefined, {
@@ -76,7 +113,24 @@ function niceTicks(
   return ticks;
 }
 
-export function PriceChart({ points }: { points: Point[] }) {
+export function PriceChart({
+  points,
+  trend = "none",
+  /**
+   * How a value reads on the axis and in the tooltip. The default is the bare number, because the
+   * series this started with is a count and a `$` in front of one would be a unit the page cannot
+   * source. A caller plotting money passes its own formatter rather than this file guessing which
+   * it has.
+   */
+  format = (v: number) => String(v),
+  /** True for a series that holds its value between readings, which every balance does. */
+  step = false,
+}: {
+  points: Point[];
+  trend?: Trend;
+  format?: (value: number) => string;
+  step?: boolean;
+}) {
   const id = useId();
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
@@ -98,12 +152,14 @@ export function PriceChart({ points }: { points: Point[] }) {
 
   // A constant by another name, so it is not a memo dependency.
   const plotLeft = MARGIN.left;
-  const plotW = Math.max(0, width - plotLeft - MARGIN.right);
   const plotH = HEIGHT - MARGIN.top - MARGIN.bottom;
 
-  const { pts, ticks, min, span } = useMemo(() => {
-    if (points.length < 2 || plotW <= 0) {
-      return { pts: [] as XY[], ticks: [] as number[], min: 0, span: 1 };
+  // **The scale is worked out before the width is.** Its ticks decide how wide the label gutter has
+  // to be, and the plot gets what is left. The other way round, the gutter is a guess: 48px fitted
+  // a count and cut the last character off every dollar figure.
+  const scale = useMemo(() => {
+    if (points.length < 2) {
+      return { ticks: [] as number[], min: 0, span: 1 };
     }
     const values = points.map((p) => p.value);
     const integral = values.every(Number.isInteger);
@@ -111,24 +167,35 @@ export function PriceChart({ points }: { points: Point[] }) {
     let high = Math.max(...values);
     if (low === high) {
       // A flat series still gets room around the line, so it reads as a measurement rather than
-      // as a chart that failed to draw. Never below zero, though: this counts movements, and a
-      // scale that runs to -1 puts a flat run of quiet days in the middle of the card with a
-      // gradient hanging under it, as if half the readings were negative.
+      // as a chart that failed to draw. Never below zero, though: a balance and a count are both
+      // things that cannot be negative, and a scale running to -1 puts a flat run in the middle of
+      // the card with a gradient hanging under it, as if half the readings were below nothing.
       low = Math.max(0, low - 1);
       high += 1;
     }
-    const range = high - low;
-    const step = plotW / (points.length - 1);
     return {
-      pts: values.map((v, i) => ({
-        x: +(plotLeft + i * step).toFixed(2),
-        y: +(MARGIN.top + (1 - (v - low) / range) * plotH).toFixed(2),
-      })),
       ticks: niceTicks(low, high, 5, integral),
       min: low,
-      span: range,
+      span: high - low,
     };
-  }, [points, plotW, plotH]);
+  }, [points]);
+
+  const { ticks, min, span } = scale;
+  const right = gutter(ticks.map(format));
+  const plotW = Math.max(0, width - plotLeft - right);
+
+  const pts = useMemo(() => {
+    if (points.length < 2 || plotW <= 0) {
+      return [] as XY[];
+    }
+    // Not `step`: the prop of that name is the geometry, and shadowing it here is how a stepped
+    // line quietly becomes a sloped one.
+    const dx = plotW / (points.length - 1);
+    return points.map((p, i) => ({
+      x: +(plotLeft + i * dx).toFixed(2),
+      y: +(MARGIN.top + (1 - (p.value - min) / span) * plotH).toFixed(2),
+    }));
+  }, [points, plotW, plotH, min, span]);
 
   const xTickIdx = useMemo(() => {
     if (pts.length === 0) {
@@ -179,8 +246,8 @@ export function PriceChart({ points }: { points: Point[] }) {
         >
           <defs>
             <linearGradient id={id} x1="0" x2="0" y1="0" y2="1">
-              <stop stopColor={LINE} stopOpacity="0.22" />
-              <stop offset="1" stopColor={LINE} stopOpacity="0" />
+              <stop stopColor={LINE[trend]} stopOpacity="0.22" />
+              <stop offset="1" stopColor={LINE[trend]} stopOpacity="0" />
             </linearGradient>
           </defs>
           {ticks.map((t) => {
@@ -200,10 +267,10 @@ export function PriceChart({ points }: { points: Point[] }) {
                   className="tabular"
                   fill="#83878b"
                   fontSize="11"
-                  x={width - MARGIN.right + 10}
+                  x={width - right + 10}
                   y={y + 4}
                 >
-                  {t}
+                  {format(t)}
                 </text>
               </g>
             );
@@ -224,15 +291,15 @@ export function PriceChart({ points }: { points: Point[] }) {
           ))}
           <path
             className="chart-area"
-            d={areaPath(pts, MARGIN.top + plotH)}
+            d={areaPath(pts, MARGIN.top + plotH, step)}
             fill={`url(#${id})`}
           />
           <path
             className="chart-line"
-            d={linePath(pts)}
+            d={linePath(pts, step)}
             fill="none"
             pathLength={1}
-            stroke={LINE}
+            stroke={LINE[trend]}
             strokeLinecap="round"
             strokeLinejoin="round"
             strokeWidth="2"
@@ -250,7 +317,7 @@ export function PriceChart({ points }: { points: Point[] }) {
               <circle
                 cx={hovered.x}
                 cy={hovered.y}
-                fill={LINE}
+                fill={LINE[trend]}
                 r="4.5"
                 stroke="#fff"
                 strokeWidth="2"
@@ -270,7 +337,7 @@ export function PriceChart({ points }: { points: Point[] }) {
           }}
         >
           <div className="tabular font-medium text-sm">
-            {hoveredPoint.value} {hoveredPoint.value === 1 ? "move" : "moves"}
+            {format(hoveredPoint.value)}
           </div>
           <div className="whitespace-nowrap text-[11px] text-soft">
             {tooltipLabel(hoveredPoint.timestamp)}

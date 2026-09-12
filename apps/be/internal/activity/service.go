@@ -6,6 +6,12 @@ import (
 	"time"
 )
 
+// USDC on Arbitrum One, which is the asset every balance on the portfolio page is denominated in.
+// A const rather than configuration: this is the same address `apps/app/lib/venues.ts` names, and an
+// environment variable for a value that would break the totals if it were changed is a setting that
+// exists to be got wrong.
+const USDC = "0xaf88d065e77c8cc2239327c5edb3a432268e5831"
+
 // Store is what the service needs from a database, and no more.
 type Store interface {
 	ActivityCursor(ctx context.Context, account string) (readTo int64, checkedAt int64, err error)
@@ -79,6 +85,22 @@ func (s *Service) For(ctx context.Context, account string) (Result, error) {
 				start = uint64(readTo) + 1
 			}
 			events, err := s.rpc.Logs(ctx, account, start, head)
+			if err == nil {
+				// The account's own events say what the agent did with capital already held. They
+				// do not say how it got there: funding an account is a plain token transfer, which
+				// emits nothing a Helico contract wrote. Both halves are needed before anything can
+				// add up to what the account is worth.
+				//
+				// **A failure here fails the whole scan**, rather than saving half of it. The cursor
+				// moves past everything it covers, so a partial save would put the range beyond
+				// reach and leave the deposit missing for ever.
+				transfers, tErr := s.rpc.Transfers(ctx, USDC, account, start, head)
+				if tErr != nil {
+					events, err = nil, tErr
+				} else {
+					events = append(events, transfers...)
+				}
+			}
 			if err == nil {
 				// One header per block that actually carries an event, which is far fewer than the
 				// range scanned — the onboarding batch is five events in one block. A block whose

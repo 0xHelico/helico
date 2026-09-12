@@ -16,7 +16,7 @@ import {
 import { TokenMark } from "@/components/token-mark";
 import { VenueMark } from "@/components/venue-mark";
 import { CHAIN_ID, totals, useAccountState } from "@/hooks/use-account-state";
-import { readAccountActivity } from "@/lib/activity";
+import { readAccountActivity, withoutVenueLegs } from "@/lib/activity";
 import { readMovements } from "@/lib/mandates";
 import { MARKETS, readVenues } from "@/lib/venues";
 
@@ -270,8 +270,10 @@ export function Activity() {
     staleTime: 15_000,
   });
 
+  // The transfer that carries a supply out of the account is the other half of the move beside it,
+  // and two rows for one transaction reads as the money leaving twice.
   const rows = [
-    ...(own.data ?? []).map((e) => ({
+    ...withoutVenueLegs(own.data ?? []).map((e) => ({
       key: e.key,
       what: e.what,
       amount: e.amount,

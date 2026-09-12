@@ -64,8 +64,13 @@ func run() error {
 	// in the database means the second read costs one narrow query instead of a scan from the
 	// factory's deployment block. The dapp was paying for that scan in every browser, three times
 	// over, on every page load.
+	//
+	// The cap is 200 rather than the 50 a list needs, because the dapp folds these rows into what
+	// the account was worth over time and a fold has to start where the money did. Truncated at the
+	// newest 50, the line would begin at whatever the 51st event left behind and claim the account
+	// appeared out of nothing at that figure.
 	accountActivity := activity.NewService(
-		db, activity.NewRPC(cfg.RPCURL, 15*time.Second), cfg.ActivityFrom, cfg.ActivityFresh, 50)
+		db, activity.NewRPC(cfg.RPCURL, 15*time.Second), cfg.ActivityFrom, cfg.ActivityFresh, 200)
 
 	svc := blog.NewService(db)
 	chats := chat.NewService(db)

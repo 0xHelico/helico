@@ -1,19 +1,18 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { formatUnits } from "viem";
 import { useAccount, usePublicClient } from "wagmi";
 
 import { GeneratedAvatar } from "@/components/generated-avatar";
 import { Card, Loading } from "@/components/kit";
 import { PriceChart } from "@/components/price-chart";
-import { windowDays } from "@/components/sparkline";
 import { CHAIN_ID, totals, useAccountState } from "@/hooks/use-account-state";
 import { configuredFactory } from "@/lib/account";
 import { readAccountActivity } from "@/lib/activity";
-import { readMovements } from "@/lib/mandates";
 import { cn } from "@/lib/utils";
+import { change, valueSeries, windowed } from "@/lib/value-history";
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
@@ -23,6 +22,30 @@ const usdc = (v: bigint) =>
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+
+/**
+ * The axis and the tooltip, in dollars, at whatever precision the series needs.
+ *
+ * Cents are right for an account holding tens of dollars and useless for the one this was built
+ * against: a market pays a fraction of a cent a day on half a dollar, and rounded to cents the
+ * whole earning disappears. Four decimals everywhere is the other failure, and it is the one that
+ * shipped first: `$80.0000` on a ninety-dollar account, four digits of noise per tick.
+ */
+const money = (v: number, decimals: 2 | 4) =>
+  `$${v.toLocaleString(undefined, {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  })}`;
+
+/** Cents unless the whole line lives inside a dollar, where cents would round it flat. */
+const precisionFor = (points: { value: number }[]): 2 | 4 =>
+  Math.max(0, ...points.map((p) => p.value)) < 1 ? 4 : 2;
+
+const CHANGE_INK: Record<"up" | "down" | "flat", string> = {
+  up: "text-[#1DA66A]",
+  down: "text-[#E5484D]",
+  flat: "text-soft",
+};
 
 const RANGES = [
   { label: "7D", days: 7 },
@@ -41,8 +64,16 @@ type RangeLabel = (typeof RANGES)[number]["label"];
  * account was read and found empty — and the two look identical unless the line underneath says
  * which one this is.
  *
- * The ranges are days, not prices. A value-over-time line would need a price feed and a history
- * nobody is keeping; movements per day is a thing that happened, and it is the series we have.
+ * **The line is what the account was worth, and it is measured rather than modelled.** This used to
+ * plot movements per day, because the comment here said a value line "would need a price feed and a
+ * history nobody is keeping". Half of that was wrong. There is no price feed to need: every balance
+ * on this page is USDC, so the total is already in dollars. And the history is kept, by the chain:
+ * the account's own events plus its USDC transfers account for every unit it has ever held, and
+ * logs are the one thing a pruned endpoint still answers. `lib/value-history.ts` does the fold and
+ * says why each half is there.
+ *
+ * Movements per day is not lost. `portfolio-summary.tsx` still carries it, which is the right place
+ * for it: it answers how busy the account has been, and this card answers what is in it.
  */
 export function PortfolioHero() {
   const { address, isConnected } = useAccount();
@@ -55,12 +86,7 @@ export function PortfolioHero() {
   const open =
     held0 && held0.kind === "open" ? (held0.address as `0x${string}`) : null;
 
-  const moves = useQuery({
-    enabled: Boolean(address),
-    queryKey: ["movements", address],
-    queryFn: () => readMovements(address as string),
-  });
-  // The account's own events, which is what this chart plots most of the time.
+  // The account's own events and its transfers, which are the two halves of the value line.
   const own = useQuery({
     enabled: Boolean(open && client),
     queryKey: ["account-activity", open],
@@ -73,37 +99,25 @@ export function PortfolioHero() {
     staleTime: 15_000,
   });
 
-  /**
-   * **Both kinds of move, in one series.**
-   *
-   * This plotted Aqua movements alone, and those are fills against a shipped mandate. So on an
-   * account that had been armed, funded, and had capital supplied to Morpho by the enclave, it drew
-   * a flat line at zero: true about the narrow question it was asking, and read by everyone as the
-   * product not working. Adding a sentence explaining the zero was the wrong fix, because the page
-   * had something to draw and was not drawing it.
-   *
-   * The account's own events carry a timestamp only when the backend served them, since a log does
-   * not have one and fetching a header per block from a browser is the cost `/api/activity` exists
-   * to avoid. Undated events are dropped from the series rather than stacked on today, which would
-   * invent a spike.
-   */
-  const stamps = [
-    ...(moves.data?.timestamps ?? []),
-    ...(own.data ?? [])
-      .map((e) => e.at)
-      .filter((at): at is number => typeof at === "number"),
-  ];
+  const held = totals(account.data);
   const span = RANGES.find((r) => r.label === range) ?? RANGES[1];
-  // The window, not the span of the data: two events two days apart should read as a quiet month
-  // with two busy days, which is what it is, rather than as a chart with two points in it.
-  const days = windowDays(stamps, span.days ?? null);
-
-  // Rendered after mount only. The server has no clock the browser agrees with to the second,
-  // and a timestamp is the one piece of a page guaranteed to differ between the two.
-  // `zeroDays` reads today's date, which the server and the browser need not agree on, so the
-  // chart waits for the client rather than risking a hydration mismatch over a tick label.
+  // Rendered after mount only, and this is why: the series ends at `Date.now()` and the window
+  // starts a number of days before it, so the server and the browser would disagree on both. A
+  // timestamp is the one piece of a page guaranteed to differ between the two.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+  const series = useMemo(
+    () =>
+      mounted
+        ? windowed(valueSeries(own.data ?? [], held), span.days ?? null)
+        : [],
+    [mounted, own.data, held, span.days],
+  );
+  // The precision first: it decides both how a figure is printed and how small a difference still
+  // counts as one, which have to be the same number or the label argues with the line.
+  const decimals = precisionFor(series);
+  const dollars = (v: number) => money(v, decimals);
+  const moved = change(series, decimals);
 
   const [read, setRead] = useState<string | null>(null);
   useEffect(() => {
@@ -116,8 +130,6 @@ export function PortfolioHero() {
         : null,
     );
   }, [account.dataUpdatedAt]);
-
-  const held = totals(account.data);
 
   return (
     <>
@@ -194,37 +206,63 @@ export function PortfolioHero() {
           </div>
         </div>
 
-        {/* A wallet with no movements still gets the line, flat at zero. That is the reading
-            rather than a placeholder — nothing moved on each of those days — and the card keeps
-            its shape instead of collapsing to a number and a gap. */}
+        {/* An account with nothing in it still gets the line, flat at zero. That is the reading
+            rather than a placeholder, and the card keeps its shape instead of collapsing to a
+            number and a gap. */}
         {mounted ? (
           <div className="mt-4">
             <div className="flex items-baseline justify-between gap-4">
-              <span className="text-[11.5px] text-soft">Moves per day</span>
+              <span className="text-[11.5px] text-soft">
+                What this account has been worth
+              </span>
+              {/* The change over the window, beside the window's own buttons. A total on its own
+                  says nothing about which way it got there, which is the question a range control
+                  invites somebody to ask. */}
+              {series.length > 1 ? (
+                <span
+                  className={cn(
+                    "tabular font-mono text-[11.5px]",
+                    CHANGE_INK[moved.trend],
+                  )}
+                >
+                  {moved.trend === "flat"
+                    ? "unchanged"
+                    : `${moved.absolute > 0 ? "+" : "−"}${dollars(Math.abs(moved.absolute))}${
+                        moved.percent === null
+                          ? ""
+                          : ` (${moved.percent > 0 ? "+" : "−"}${Math.abs(moved.percent).toFixed(2)}%)`
+                      }`}
+                </span>
+              ) : null}
             </div>
-            {/* **A flat line has to say why it is flat.** Keeping the axis rather than collapsing
-                to a gap is right, and on its own it reads as "no data" — which is what a reader
-                said it read as, on a day the account had just supplied half a dollar to Morpho.
-                Zero is the true answer to the question this series asks, and the question is
-                narrower than the page: `supplyIdle` moves money into a lending market and is not
-                an Aqua movement. Only a fill against a shipped position is. */}
-            {stamps.length === 0 && !own.isPending && !moves.isPending ? (
+            {/* **A line with one point is not a line.** The fold needs a dated event, and the
+                fallback that reads the chain directly has no dates to give: `eth_getLogs` does not
+                carry a timestamp and fetching a header per block from a browser is the cost
+                `/api/activity` exists to avoid. So say which of the two this is, rather than
+                drawing a flat line that would claim the account has always been worth this. */}
+            {series.length < 2 && !own.isPending && !account.isPending ? (
               <p className="mt-1 text-[11px] text-faint leading-relaxed">
-                Nothing has moved yet. What the agent does, and what a taker
-                fills against a position you have shipped, both land here.
+                Nothing dated to plot yet. Money arriving, and every move the
+                agent makes with it, both land on this line.
               </p>
             ) : null}
-            {/* `windowDays` already walks the whole range, so the empty case is a series of
-                zeroes rather than an empty array. The fallback that used to be here existed
-                because `byDay` returned nothing at all when there was nothing to draw. */}
             <div className="mt-2">
               <PriceChart
-                points={days.map((d) => ({
-                  timestamp: Date.parse(`${d.date}T00:00:00Z`),
-                  value: d.count,
-                }))}
+                format={dollars}
+                points={series}
+                step
+                trend={moved.trend}
               />
             </div>
+            {/* Said plainly, because the alternative was drawing it. Interest still inside a market
+                cannot be read at a past block — the endpoint keeps about an hour of state — so the
+                line carries principal and ends at the live reading. */}
+            <p className="mt-2 text-[11px] text-faint leading-relaxed">
+              Built from this account's own logs: every USDC transfer in or out,
+              and every move the agent made. The last point is what the chain
+              says right now, so anything a market has paid and nobody has taken
+              out yet is the step at the end.
+            </p>
           </div>
         ) : null}
       </Card>
