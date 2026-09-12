@@ -352,7 +352,8 @@ export function Chat({ conversationId }: { conversationId?: string }) {
                   ) : null}
                 </Turn>
               ))}
-              {busy ? <ThinkingMessage /> : null}
+              {/* The turn count picks the orb, so one wait does not look like the last one. */}
+              {busy ? <ThinkingMessage nth={turns.length} /> : null}
             </div>
           </div>
         </div>
