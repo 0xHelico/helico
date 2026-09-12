@@ -15,7 +15,7 @@ Plan: [`cre-manages-idle-capital`](../../../docs/plans/2026-09-08-cre-manages-id
 1. **Release the policy.** If the owner published `keccak256(abi.encode(policy))` in
    `config.policyHash`, the enclave recomputes it and stops on a mismatch *before touching the
    chain*.
-2. **Read the chain**, in two batched `eth_call` rounds however many markets there are: the
+2. **Read the chain**, in two batched `eth_call` rounds however many markets there are, and a third when a share-priced receipt needs converting: the
    account and the asset, then the receipt token each *market* named. Asking the receipt which
    market it belongs to reads like the same check and is not one — a forged receipt returns the
    real pool's address and passes.
@@ -97,9 +97,9 @@ and a market the owner allowlisted. It cannot transfer, approve, add a venue, or
 | Registers a TEE handler with `handlerInTee` | ✅ |
 | The decision is ours | ✅ policy hash, in-enclave reads, two-part deadband applied twice, a buffer sized from live Aqua mandates, a choice between permitted markets by live rate, a round-trip bar, a rate floor, a per-move ceiling |
 | Emits the call | ✅ `supplyIdle` / `withdrawIdle` calldata pinned to `cast calldata`, as a signed EIP-712 statement or a DON report |
-| Delivered on chain | ⚠️ **on a fork, not a live network.** [`rehearse-idle.sh`](../../../apps/cre/rehearse-idle.sh) forks Arbitrum One, funds an account with real USDC from a whale, and lands the enclave's signed call: 40,000 of 50,000 USDC into real Aave v3, agent balance zero at the end. The simulator is not a TEE |
-| Unit tests | ✅ 239 across 10 files — EIP-712 digests checked against the spec by hand, calldata pinned to `cast` vectors, the decision table, deadband boundaries, market choice, and every way a subgraph answer can fail |
-| Deployed | ❌ Confidential Workflows private beta requested (#41) |
+| Delivered on chain | ✅ **on Arbitrum One, by the DON.** Since 11 September `config.production.json` names `delivery: forwarder` and `HelicoAgent` (`0x98c3…4463`) as the receiver; the first move — 490,081 USDC into Morpho from the live account — is tx `0x0668c698…`, sent by a DON transmitter to the `KeystoneForwarder`. Before that, [`rehearse-idle.sh`](../../../apps/cre/rehearse-idle.sh) proved the path on a fork under `signature` delivery, and staging still runs that way |
+| Unit tests | ✅ 241 across 9 files — EIP-712 digests checked against the spec by hand, calldata pinned to `cast` vectors, the decision table, deadband boundaries, market choice, and every way a subgraph answer can fail |
+| Deployed | ✅ `helico-production` in Chainlink's `WorkflowRegistry 2.0.0` on Ethereum mainnet, DON `zone-a`, every five minutes — see [`docs/deployments.md`](../../../docs/deployments.md) |
 
 ## Use
 
@@ -113,8 +113,9 @@ await runner.run(initWorkflow)
 
 `pools` is a non-empty list with no repeats; a list of one behaves as the single-market
 configuration did. Leave `subgraphUrl` empty to skip the buffer step, exactly as an empty `aiUrl`
-skips the model. `secrets.yaml` maps the `IDLE_*` policy variables, and `AGENT_KEY` in signature
-mode.
+skips the model. `secrets.yaml` declares one Vault DON secret, `HELICO_VAULT`, a JSON document
+that carries the `IDLE_*` policy values, `AGENT_KEY` (read only in signature mode) and the model
+credentials — the DON answers one retrieval per execution, so they travel as one.
 
 ```bash
 bun run --filter @helico/plugin-cre typecheck

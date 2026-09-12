@@ -29,7 +29,7 @@ OWNER=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
 
 # What the app is hard-coded to nominate and permit. Read from the app rather than restated, so a
 # change there fails this script instead of silently making it test something else.
-AGENT=$(grep -oE '"0x84C3891a[0-9a-fA-F]+"' apps/app/lib/account.ts | head -1 | tr -d '"')
+AGENT=$(grep -A1 'export const HELICO_AGENT' apps/app/lib/account.ts | grep -oE '"0x[0-9a-fA-F]{40}"' | head -1 | tr -d '"')
 AAVE=$(grep -oE '"0x794a61358D[0-9a-fA-F]+"' apps/app/lib/account.ts | head -1 | tr -d '"')
 USDC=0xaf88d065e77c8cC2239327C5EDb3A432268e5831
 AUSDC=0x724dc807b04555b71ed48a6896b6F41593b8C637

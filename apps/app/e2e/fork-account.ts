@@ -27,7 +27,7 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { arbitrum } from "viem/chains";
-
+import { HELICO_AGENT } from "../lib/account";
 import { passOnboarding } from "./onboarding";
 
 const APP = process.env.APP_URL ?? "http://localhost:3100";
@@ -37,7 +37,9 @@ const KEY =
   "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
 
 const FACTORY = "0x01CC7d9FE8da79B61bcc5d3f7e3f0433DCE7E081" as const;
-const AGENT = "0x84C3891a9693c891877aC474a90d17d29075fcAf" as const;
+// The address the app nominates, read from the app rather than restated: since 11 September
+// it is the `HelicoAgent` contract, and a copy here is exactly what went stale last time.
+const AGENT = HELICO_AGENT;
 const AAVE = "0x794a61358D6845594F94dc1DB02A252b5b4814aD" as const;
 
 const factoryAbi = parseAbi([

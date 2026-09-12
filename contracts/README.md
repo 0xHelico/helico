@@ -3,9 +3,10 @@
 Four things ship, and one idea sits behind all of them: a user commits to rules, and an agent may
 act only inside them.
 
-They occupy **five addresses** on Arbitrum One, because the account is an implementation plus a
-factory and the proxies are deployed one per owner. Both counts are correct and they are not the
-same count — [`docs/deployments.md`](../docs/deployments.md) lists the addresses.
+They occupy **twelve addresses** on Arbitrum One — implementations and proxies counted separately,
+and the accounts themselves not counted at all, since those are deployed one per owner. Both
+counts are correct and they are not the same count —
+[`docs/deployments.md`](../docs/deployments.md) lists the addresses, read back from the chain.
 
 - **`HelicoAccount`**, with `HelicoAccountProxy` and `HelicoAccountFactory` — one account per
   owner, holding that owner's capital. The agent may only move it between lending markets the
@@ -15,12 +16,19 @@ same count — [`docs/deployments.md`](../docs/deployments.md) lists the address
 - **`HelicoAquaSwapVMRouter`**, in [`src/swapvm/`](src/swapvm/) — a 1inch SwapVM instruction that
   settles a swap out of capital still earning in a lending market.
 - **`HelicoOracleBoard`** — a second Aqua app, priced from Chainlink and braked by its own
-  inventory, for the maker who holds one token. Deployed 9 September at
+  inventory, for the maker who holds one token. Deployed 9 September; behind a proxy since 10
+  September at
   [`0xe8515af9…7d39`](https://arbiscan.io/address/0xe8515af92442A5CDa67D1F32D1c8a987ba7e7d39#code).
+- **`CompoundVenue`** and **`MorphoVenue`** — the two markets that are not Aave, made to answer
+  `ILendingVenue` the way Aave does and to be their own receipt token. Three deployed: Compound
+  USDC, Morpho USDC, Compound WETH.
+- **`HelicoAgent`** — the agent an account nominates: a contract, behind a proxy, that only a
+  report from Chainlink's DON can make act. It calls the account's `supplyIdle` and
+  `withdrawIdle` and nothing else, because the account lets an agent call nothing else.
 
 ## HelicoOracleBoard
 
-Built and deployed 9 September —
+Built and deployed 9 September, redeployed behind a proxy on the 10th —
 [`0xe8515af9…7d39`](https://arbiscan.io/address/0xe8515af92442A5CDa67D1F32D1c8a987ba7e7d39#code), verified. A second Aqua app, sitting beside `HelicoMandateSwap` rather
 than replacing it, and it exists because of a maker the first one cannot serve.
 
@@ -36,8 +44,9 @@ right to: its price *is* the ratio of two balances, so a zero side has no price 
 
 The last column was empty here for a day, and the gap mattered more than it looks: the maker this
 app exists for is exactly the one whose capital is **not** in their wallet. Without the unwind the
-board quotes a price nobody can be paid. `_cover` is now here too — the same one
-`HelicoMandateSwap` carries rather than a second version of it — so the wallet is spent first,
+board quotes a price nobody can be paid. `_cover` is now here too — the same logic
+`HelicoMandateSwap` carries, kept as a second copy rather than a shared base, so a change to one
+is a deliberate change to both — so the wallet is spent first,
 only the shortfall is unwound, and the receipt is pulled through Aqua so the budget stays a number
 the maker shipped and `dock` destroys.
 
@@ -259,9 +268,9 @@ The approval `supplyIdle` grants is for exactly `amount` and is taken back in th
 allowance outlives the nomination that justified it, and revoking an agent has to revoke
 something.
 
-Eleven of the account's tests are the negative space: the agent cannot make a general call, cannot
-use the escape hatch, cannot upgrade, cannot nominate another agent, and cannot introduce its own
-venue.
+Seven of the account's tests are the negative space: the agent cannot take USDC out, cannot make a
+general call, cannot use the escape hatch, cannot upgrade, cannot nominate another agent, cannot
+introduce its own venue, and cannot reach a venue the owner never named.
 
 ### Signed execution, so a first-time user signs once and sends nothing
 
@@ -304,22 +313,6 @@ verify again.
 
 Written down rather than glossed over.
 
-- **The agent picks the slippage bounds** on the withdrawal. `amount0Min`/`amount1Min` reach
-  the pool unmodified, so a dishonest agent can choose weak ones and let the re-range be
-  sandwiched. Bounding them from the mandate is the next thing to tighten.
-- **`DEFAULT_ADMIN_ROLE` can grant `AGENT_ROLE` to itself** in one transaction, with no
-  timelock. That reaches only what any agent can reach, which is the paragraph at the top of
-  this file — but it is admin power, and it should be held by a multisig.
-- **`maxLiquidity` is a cap on the whole position**, not on a slice of it. Re-centring always
-  moves everything, so a position above the cap cannot be re-centred at all rather than being
-  moved in parts. Set it above the position you intend to manage.
-- **A re-centre pays a swap through the position's own pool.** v4 fees are hundredths of a bip,
-  so a `fee` of `200000` is 20%, not 20 bps, and pools like that exist. On one of them a
-  re-centre can cost more than it recovers. Nothing in the contract can fix it — it is the pool
-  the user chose — so the mandate's pool is worth choosing with the fee in mind.
-- **Stray native sent to the vault is stuck.** `receive()` accepts from anyone, and a re-centre
-  measures only what it produced, so a loose transfer is never paid to somebody else — but
-  there is no path to recover it either. That is the trade for not adding a privileged sweep.
 - **The mandate ceiling is per swap, not a budget.** The reentrancy lock is released when each
   call returns, so a loop inside one transaction multiplies the ceiling freely. A test asserts
   this rather than a comment claiming otherwise. A real budget needs storage keyed per mandate,
@@ -332,12 +325,12 @@ Written down rather than glossed over.
   wallet, so a maker who moves their balance out breaks their own mandate. The quote still
   answers, because it reads the ledger. 1inch's `SafeERC20` swallows the token's revert reason,
   so every settlement failure looks like `SafeTransferFromFailed()`.
-- **The unwind assumes one receipt unit is one underlying unit.** True for a rebasing aToken,
-  which is what `ILendingVenue` is shaped for. False for a share-priced receipt — a cToken, or a
-  seasoned ERC-4626 share. Below parity the withdrawal reverts; above it the mandate's receipt
-  budget drains faster than the position does, and that direction is quiet. Only the owner can
-  add a venue, so this is a configuration hazard rather than an attack surface, and it is what
-  blocks a non-Aave market being added today.
+- **A venue's `ReceiptKind` is declared, not detected.** `Rebasing` treats one receipt unit as
+  one underlying unit, which is true of an aToken; `SharePriced` asks the receipt's own
+  `previewRedeem`, which is what the Compound and Morpho venues need. Declare a share-priced
+  receipt as rebasing and the mandate's receipt budget drains faster than the position does,
+  quietly. Only the owner can add a venue, so this is a configuration hazard rather than an
+  attack surface.
 - **Unwind dust returns to the maker's wallet, not to Aqua's ledger.** The ledger is debited the
   full amount pulled while any remainder goes back to the wallet, so the mandate's receipt budget
   shrinks by slightly more than the position does. Exactly zero for Aave aTokens, where the
@@ -346,9 +339,6 @@ Written down rather than glossed over.
 - **`expiry = 0` means permanently dead, not "no expiry".** Because a mandate is immutable and
   docking burns its hash, the typo cannot be repaired in place — only re-issued under a new
   salt.
-- **The mock is not Uniswap.** `RealisticPositionManager` models authorisation and settlement
-  faithfully; it does not model the sqrt-price curve, and `MockPoolManager` refuses to model a
-  swap at all. Anything asserted about the swap is asserted on a fork or not at all.
 
 ## Running
 
@@ -375,10 +365,10 @@ The fork tests run against **Arbitrum One** and do **not** pin a block: they for
 derive what they need from what they read, so a fixture cannot go stale and a pinned block
 cannot quietly stop testing what it claims.
 
-What is in them. `VaultAttacks.t.sol` holds the audit's findings as regression tests — each one was
-written before the contract could pass it, and the commit that added them is red on all nine.
-The hash agreement with the CRE workflow is pinned to a literal vector that
-`packages/plugins/cre` asserts too, generated with `cast` so neither side marks its own homework.
+What is in them. The report the enclave writes is decoded by `HelicoAgent` from the exact bytes
+the TypeScript encoder emits (`HelicoAgent.t.sol`), so the two sides are checked against each
+other rather than each against its own reading; and `ForkHelicoAgent.t.sol` drives the deployed
+`MorphoVenue` through the live account from the real forwarder's address.
 
 ## Deploying
 
@@ -399,22 +389,22 @@ Foundry asks for the keystore password each run. The key never reaches `.env`, s
 a process listing — which is worth the extra prompt, because `--private-key` on a command line
 puts it in all three.
 
-**Before the first one**, `AGENT_ADDRESS` has to be the enclave's signer, and it is the one value
-here you cannot guess: the key behind it exists only inside the Confidential Workflow's TEE. A
-wrong address deploys a vault that honours authorisations nobody can produce, and fixing it means
-granting `AGENT_ROLE` to the right one afterwards rather than a redeploy — recoverable, but only
-if you notice.
-
-`FORWARDER_ADDRESS` can be left unset. The report path is then off, and `setForwarder` turns it on
-later without redeploying.
+**The agent is deployed by `DeployHelicoAgent.s.sol`**, and its three identities are immutables
+of the code rather than settings: the production `KeystoneForwarder` (the script asks it for
+`typeAndVersion()` and refuses anything but `KeystoneForwarder 1.0.0`, because the mock deploys
+just as cleanly and checks no signatures), the CRE key that deploys Helico's workflows, and the
+upgrader. There is no setter; to change any of them, deploy another and upgrade to it.
 
 ### After it lands
 
-Three files want the address, and nothing reads it from the chain:
+Three places want the address, and nothing reads it from the chain:
 
 | | |
 |---|---|
-| `apps/cre/workflow/config.production.json` | `vault`, currently the zero address |
-| `apps/app` deployment | `NEXT_PUBLIC_VAULT_ADDRESS` |
-| `README.md` | wherever the deployment is described |
+| `apps/cre/workflow/config.production.json` | `agent` and `reportReceiver`, with `delivery: forwarder` — then the workflow is redeployed, because config travels with the binary |
+| `apps/app/lib/account.ts` | `HELICO_AGENT`, which is what *Nominate Helico's agent* sends to `setAgent` |
+| [`docs/deployments.md`](../docs/deployments.md) | the addresses read back from the chain |
+
+And one transaction that is the owner's alone: `setAgent(<proxy>)` on each account. Until it is
+sent the enclave answers `HOLD (the account has not nominated this agent)`.
 

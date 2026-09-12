@@ -8,16 +8,17 @@
 >
 > `@helico/plugin-cre` is rewritten for that, and **`rehearse-idle.sh` runs the new path end to
 > end** — deploys the factory, opens an account at an address predicted before it exists, funds it
-> with real USDC taken from a whale on the fork, lets the enclave decide and sign, and carries the
-> signed call to the chain. A recorded run, 8 September: 50,000 USDC in,
+> with real USDC taken from a whale on the fork, permits the four production markets, lets the
+> enclave decide and sign (staging still uses `signature` delivery), and carries the signed call
+> to the chain. A recorded run from 8 September, when it permitted Aave alone: 50,000 USDC in,
 > `SUPPLY 40000000000 to 0x794a…14ad`, and the account ends holding 39,999.999999 aUSDC against a
-> 10,000 USDC buffer. The agent's own balance is zero at the end, which is the half worth checking.
+> 10,000 USDC buffer. It prints the agent's own balance at the end, and it exits non-zero when the
+> position did not change or when the market the enclave chose is not the best-paying one.
 >
-> **`config.pools` is a list, and this script's has one entry.** The workflow compares the live
-> `currentLiquidityRate` at every market the owner permitted and moves capital to the best of
-> them; Aave v3 is the only market on Arbitrum we found answering that interface for USDC, so the
-> script exercises the choice with a list of one. Choosing between several, and the round-trip bar
-> a migration has to clear, are covered by the unit tests rather than by this script.
+> **`config.pools` is a list, and this script copies production's.** The four markets and two
+> assets come from `config.production.json`, all four are permitted on the fork, and the enclave
+> compares the live rate at each; on today's fork it picks Morpho. The round-trip bar a migration
+> has to clear is covered by the unit tests rather than by this script.
 >
 > **If your `.env` predates 8 September it has the vault's `MANDATE_*` names and none of the
 > `IDLE_*` ones.** `rehearse-idle.sh` checks and names the whole missing list; the CRE CLI names
@@ -31,7 +32,7 @@ The runnable CRE project. The workflow itself is
 [`@helico/plugin-cre`](../../packages/plugins/cre/); this directory is what the CRE CLI needs
 to compile, simulate and deploy it, plus a script that reproduces a whole run on a local fork.
 
-Keeping the logic in a package rather than in `workflow/main.ts` is deliberate: it is how 116
+Keeping the logic in a package rather than in `workflow/main.ts` is deliberate: it is how 241
 unit tests can cover the enclave's decision without the CLI in the loop.
 
 ## Run it
@@ -56,15 +57,17 @@ person actually takes.
 
 ## What a run proves, and what it does not
 
-**`rehearse-idle.sh`** proves the whole path for the workflow this package now runs. The
-workflow compiles for the CRE runtime, reads an account's state from inside the handler, decides
-against thresholds released only there, signs an EIP-712 statement, and the signed call lands and
-moves real USDC into the real Aave v3 pool at its real depth. A recorded run: 50,000 USDC funded,
-`SUPPLY 40000000000 to 0x794a6135…`, and the account ends holding 39,999.999999 aUSDC against a
-10,000 buffer.
+**`rehearse-idle.sh`** proves the whole path for the workflow this package now runs, on the
+staging path. The workflow compiles for the CRE runtime, reads an account's state from inside the
+handler, decides against thresholds released only there, signs an EIP-712 statement, and the
+signed call lands and moves real USDC into a real market at its real depth. A recorded run from
+when Aave was the only permitted market: 50,000 USDC funded, `SUPPLY 40000000000 to 0x794a6135…`,
+and the account ends holding 39,999.999999 aUSDC against a 10,000 buffer.
 
-The last thing it checks is the agent's own balance, which is zero. That is the assertion that
-matters, for the reason the section below gives about transaction hashes.
+What it asserts: that the position at the market the enclave chose actually changed, and that the
+market it chose is the best-paying of the four permitted. It prints the agent's own balance
+alongside. The first assertion is the one that matters, for the reason the section below gives
+about transaction hashes.
 
 It does **not** prove authorisation by a decentralised oracle network. The simulator is not a TEE
 — it says so itself when it runs, and names the enclave it would use in production. It is also a
@@ -86,16 +89,19 @@ still use `signature`, and the rehearsal applies the rule below for a different 
 the account's balances rather than the transaction, because a call that succeeds and moves nothing
 is indistinguishable from one that worked.
 
-`KeystoneForwarder` calls the receiver inside a `try`. **If `onReport` reverts, the forwarder
-swallows it and the transaction still succeeds.** So the workflow prints
-`RECENTER … tx 0x…`, the receipt says `status 1`, and nothing moved.
+`KeystoneForwarder.route` calls the receiver with a low-level `call` and returns the boolean.
+**If `onReport` reverts, the forwarder records the failure and the transaction still succeeds.**
+So `writeReport` answers `SUCCESS`, the receipt says `status 1`, and nothing moved.
 
-This is not hypothetical: it is what the first run of this script did. So the script reads
-`positionOf` **before and after**, and only a position that actually changed counts as a
-re-centre. When it has not, the script replays the transaction with `cast run` to show what the
-vault refused, and exits non-zero.
+This is not hypothetical: it is what the first run of the vault-era rehearsal did, in the
+contract this one replaced. So the script reads the position **before and after**, at the market
+the enclave chose, and only a position that actually changed counts as a move. When it has not,
+the script says so and exits non-zero. In production the same rule reads: the evidence is the
+account's balance and its `IdleCapitalMoved` event, and the forwarder's
+`getTransmissionInfo(receiver, executionId, reportId)` says whether a delivery ended
+`SUCCEEDED`, `FAILED` or `INVALID_RECEIVER`.
 
-**Never quote a transaction hash from this path as proof that a re-centre happened.** Not the
+**Never quote a transaction hash from this path as proof that a move happened.** Not the
 hash, and not the receipt status either — the receipt said `status 1` for a run in which
 nothing moved.
 
@@ -106,12 +112,12 @@ That check is what found [#78](https://github.com/0xHelico/helico/issues/78).
 | | |
 |---|---|
 | `project.yaml` | RPC per target. `staging-settings` is the local fork; `production-settings` is Arbitrum One |
-| `secrets.yaml` | Vault DON secret ids. The idle-capital policy, the agent key, and the model's two auth layers |
+| `secrets.yaml` | One Vault DON secret id, `HELICO_VAULT`: a JSON document `scripts/pack-cre-vault.py` packs from the seven policy values, the agent key (read only under `signature` delivery) and the model's three credentials — one item because the DON answers one retrieval per execution |
 | `workflow/workflow.yaml` | Workflow name and artefact paths per target |
-| `workflow/main.ts` | The entry point. Four lines around `@helico/plugin-cre` |
+| `workflow/main.ts` | The entry point. A dozen lines around `@helico/plugin-cre` |
 | `workflow/config.staging.json` | Public config for the fork. Rewritten in place by `rehearse-idle.sh`, and restored from a copy on exit |
 | `workflow/config.production.json` | Public config for Arbitrum One. `account` stays zero: the fleet is discovered from the subgraph |
-| `.env.example` | The private half of the mandate, and the keys. Copy to `.env`, which is gitignored |
+| `.env.example` | The policy values, the agent key and the model credentials, before packing. Copy to `.env`, which is gitignored |
 | `rehearse-idle.sh` | The whole run, end to end, on a fork |
 
 ## What is confidential, and what is not
