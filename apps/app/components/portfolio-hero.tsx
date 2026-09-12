@@ -102,6 +102,12 @@ export function PortfolioHero() {
   // Only for the colour. Green unless the window actually fell, which is what the chart's own
   // `LINE` table says; the figure itself is not printed beside the total any more.
   const moved = change(series);
+  // **Events with no dates are a different state from no events at all.** The first cannot be
+  // plotted and must say so; the second is a flat line at zero, which is the truth about an
+  // account that has never held anything.
+  const undated =
+    (own.data?.length ?? 0) > 0 &&
+    !own.data?.some((e) => typeof e.at === "number");
 
   const [read, setRead] = useState<string | null>(null);
   useEffect(() => {
@@ -196,15 +202,19 @@ export function PortfolioHero() {
               step
               trend={moved.trend}
             />
-            {/* **A line with no dated reading is not a line.** The fallback that reads the chain
-                directly has no timestamps to give: `eth_getLogs` does not carry one and fetching a
-                header per block from a browser is the cost `/api/activity` exists to avoid. Said
-                only in that case, because drawing a flat line through undated events would claim
-                the account has always been worth today's figure. */}
-            {series.length === 0 && !own.isPending && !account.isPending ? (
+            {/* **A flat line is a claim, when the readings have no dates.** The fallback that
+                reads the chain directly has no timestamps to give: `eth_getLogs` does not carry
+                one and fetching a header per block from a browser is the cost `/api/activity`
+                exists to avoid. The fold then has the live figure alone, and drawing that across
+                the window says the account has always been worth it.
+
+                An account with no history at all is the opposite case and needs no caption: it
+                has always been worth nothing, and the flat line at zero is the reading. */}
+            {undated ? (
               <p className="text-[11px] text-faint leading-relaxed">
-                Nothing dated to plot yet. Money arriving, and every move the
-                agent makes with it, both land on this line.
+                Read from the chain directly, which carries no dates, so only
+                today's figure is placed. The line fills in once the backend has
+                the history.
               </p>
             ) : null}
           </div>
