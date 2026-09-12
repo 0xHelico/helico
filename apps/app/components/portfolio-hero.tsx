@@ -12,45 +12,31 @@ import { CHAIN_ID, totals, useAccountState } from "@/hooks/use-account-state";
 import { configuredFactory } from "@/lib/account";
 import { readAccountActivity } from "@/lib/activity";
 import { cn } from "@/lib/utils";
-import { change, valueSeries, windowed } from "@/lib/value-history";
+import { change, sample, valueSeries } from "@/lib/value-history";
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
-/** Always two decimals here. The cents are set in a lighter ink, and a missing pair looks broken. */
-const usdc = (v: bigint) =>
-  Number(formatUnits(v, 6)).toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-
 /**
- * The axis and the tooltip, in dollars, at whatever precision the series needs.
+ * Dollars, with the sign outside the symbol.
  *
- * Cents are right for an account holding tens of dollars and useless for the one this was built
- * against: a market pays a fraction of a cent a day on half a dollar, and rounded to cents the
- * whole earning disappears. Four decimals everywhere is the other failure, and it is the one that
- * shipped first: `$80.0000` on a ninety-dollar account, four digits of noise per tick.
+ * `-$0.02` rather than `$-0.02`, which is what putting the sign inside gives and reads as a typo.
+ * The negative half of the scale is not hypothetical: a flat series opens the axis symmetrically
+ * around the line, so an empty account's ticks run below zero.
  */
-const money = (v: number, decimals: 2 | 4) =>
-  `$${v.toLocaleString(undefined, {
+const money = (v: number, decimals = 2) =>
+  `${v < 0 ? "-" : ""}$${Math.abs(v).toLocaleString(undefined, {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   })}`;
 
-/** Cents unless the whole line lives inside a dollar, where cents would round it flat. */
-const precisionFor = (points: { value: number }[]): 2 | 4 =>
-  Math.max(0, ...points.map((p) => p.value)) < 1 ? 4 : 2;
-
-const CHANGE_INK: Record<"up" | "down" | "flat", string> = {
-  up: "text-[#1DA66A]",
-  down: "text-[#E5484D]",
-  flat: "text-soft",
-};
+/** The same figure from base units, which is what the account is read in. */
+const usdc = (v: bigint) => money(Number(formatUnits(v, 6)));
 
 const RANGES = [
-  { label: "7D", days: 7 },
-  { label: "30D", days: 30 },
-  { label: "90D", days: 90 },
+  { label: "1D", days: 1 },
+  { label: "1W", days: 7 },
+  { label: "1M", days: 30 },
+  { label: "3M", days: 90 },
   { label: "1Y", days: 365 },
   { label: "ALL", days: null },
 ] as const;
@@ -79,7 +65,7 @@ export function PortfolioHero() {
   const { address, isConnected } = useAccount();
   const factory = configuredFactory();
   const account = useAccountState();
-  const [range, setRange] = useState<RangeLabel>("30D");
+  const [range, setRange] = useState<RangeLabel>("1D");
 
   const client = usePublicClient({ chainId: CHAIN_ID });
   const held0 = account.data;
@@ -109,15 +95,13 @@ export function PortfolioHero() {
   const series = useMemo(
     () =>
       mounted
-        ? windowed(valueSeries(own.data ?? [], held), span.days ?? null)
+        ? sample(valueSeries(own.data ?? [], held), span.days ?? null)
         : [],
     [mounted, own.data, held, span.days],
   );
-  // The precision first: it decides both how a figure is printed and how small a difference still
-  // counts as one, which have to be the same number or the label argues with the line.
-  const decimals = precisionFor(series);
-  const dollars = (v: number) => money(v, decimals);
-  const moved = change(series, decimals);
+  // Only for the colour. Green unless the window actually fell, which is what the chart's own
+  // `LINE` table says; the figure itself is not printed beside the total any more.
+  const moved = change(series);
 
   const [read, setRead] = useState<string | null>(null);
   useEffect(() => {
@@ -160,32 +144,27 @@ export function PortfolioHero() {
 
       <Card>
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            {/* No label above the figure. The page is the portfolio and the line under the number
-                already says which part is liquid, so a caption here only pushes the one thing
-                somebody came to read further down. */}
-            <div className="tabular font-medium text-4xl text-ink tracking-tight">
-              {account.isPending ? (
-                <Loading className="h-9 w-40" />
-              ) : held ? (
-                <Amount value={held.total} />
-              ) : (
-                "nothing yet"
-              )}
-            </div>
-            <div className="tabular mt-3 font-mono text-soft text-xs">
-              {held
-                ? `${usdc(held.idle)} liquid · ${usdc(held.working)} working`
-                : factory
+          {/* The one figure, and nothing above or below it. The split between liquid and working
+              lives in the Holdings card, and a second line of it here only pushed the thing
+              somebody came to read further down. */}
+          <div className="numeric tabular font-medium text-[44px] text-ink leading-none tracking-tight">
+            {account.isPending ? (
+              <Loading className="h-10 w-40" />
+            ) : held ? (
+              <Amount value={held.total} />
+            ) : (
+              <span className="font-sans text-soft text-base">
+                {factory
                   ? account.isError
                     ? "the chain did not answer"
                     : "reading the account…"
                   : "no account factory deployed yet, so there is nothing to total"}
-            </div>
+              </span>
+            )}
           </div>
 
           {/* Always here. It used to appear only once a wallet had movements, so an empty
-              account got a number and a hole where the reference has a control and a flat line. */}
+              account got a number and a hole where the design has a control and a flat line. */}
           <div className="flex shrink-0 rounded-xl bg-shade p-1">
             {RANGES.map((r) => (
               <button
@@ -206,63 +185,28 @@ export function PortfolioHero() {
           </div>
         </div>
 
-        {/* An account with nothing in it still gets the line, flat at zero. That is the reading
-            rather than a placeholder, and the card keeps its shape instead of collapsing to a
-            number and a gap. */}
+        {/* An account with nothing in it still gets the line, flat at zero, with the scale opened
+            symmetrically around it. That is the reading rather than a placeholder: an account that
+            has never held anything has always been worth nothing. */}
         {mounted ? (
-          <div className="mt-4">
-            <div className="flex items-baseline justify-between gap-4">
-              <span className="text-[11.5px] text-soft">
-                What this account has been worth
-              </span>
-              {/* The change over the window, beside the window's own buttons. A total on its own
-                  says nothing about which way it got there, which is the question a range control
-                  invites somebody to ask. */}
-              {series.length > 1 ? (
-                <span
-                  className={cn(
-                    "tabular font-mono text-[11.5px]",
-                    CHANGE_INK[moved.trend],
-                  )}
-                >
-                  {moved.trend === "flat"
-                    ? "unchanged"
-                    : `${moved.absolute > 0 ? "+" : "−"}${dollars(Math.abs(moved.absolute))}${
-                        moved.percent === null
-                          ? ""
-                          : ` (${moved.percent > 0 ? "+" : "−"}${Math.abs(moved.percent).toFixed(2)}%)`
-                      }`}
-                </span>
-              ) : null}
-            </div>
-            {/* **A line with one point is not a line.** The fold needs a dated event, and the
-                fallback that reads the chain directly has no dates to give: `eth_getLogs` does not
-                carry a timestamp and fetching a header per block from a browser is the cost
-                `/api/activity` exists to avoid. So say which of the two this is, rather than
-                drawing a flat line that would claim the account has always been worth this. */}
-            {series.length < 2 && !own.isPending && !account.isPending ? (
-              <p className="mt-1 text-[11px] text-faint leading-relaxed">
+          <div className="mt-2">
+            <PriceChart
+              format={money}
+              points={series}
+              step
+              trend={moved.trend}
+            />
+            {/* **A line with no dated reading is not a line.** The fallback that reads the chain
+                directly has no timestamps to give: `eth_getLogs` does not carry one and fetching a
+                header per block from a browser is the cost `/api/activity` exists to avoid. Said
+                only in that case, because drawing a flat line through undated events would claim
+                the account has always been worth today's figure. */}
+            {series.length === 0 && !own.isPending && !account.isPending ? (
+              <p className="text-[11px] text-faint leading-relaxed">
                 Nothing dated to plot yet. Money arriving, and every move the
                 agent makes with it, both land on this line.
               </p>
             ) : null}
-            <div className="mt-2">
-              <PriceChart
-                format={dollars}
-                points={series}
-                step
-                trend={moved.trend}
-              />
-            </div>
-            {/* Said plainly, because the alternative was drawing it. Interest still inside a market
-                cannot be read at a past block — the endpoint keeps about an hour of state — so the
-                line carries principal and ends at the live reading. */}
-            <p className="mt-2 text-[11px] text-faint leading-relaxed">
-              Built from this account's own logs: every USDC transfer in or out,
-              and every move the agent made. The last point is what the chain
-              says right now, so anything a market has paid and nobody has taken
-              out yet is the step at the end.
-            </p>
           </div>
         ) : null}
       </Card>
@@ -277,7 +221,6 @@ function Amount({ value }: { value: bigint }) {
     <>
       {whole}
       <span className="text-faint">.{cents}</span>
-      <span className="ml-2 font-normal text-[15px] text-soft">USDC</span>
     </>
   );
 }
