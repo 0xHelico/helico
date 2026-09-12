@@ -35,16 +35,17 @@ proves the address is yours; it costs no gas and moves nothing.
    account. An ordinary transfer: no approval, and nothing granted to anybody. The agent moves what
    the **account** holds, so this is the step that gives it something to move.
 3. **Say what you want.** Swap by sentence, ask what your position is doing, ask why nothing moved,
-   start earning, stop the agent, or take everything back. Six starters on the front door reach all
-   six things it can do.
+   start earning, stop the agent, or take everything back. Nine starters on the front door reach all
+   eight things it can do.
 
 Every one of those is a call you sign. Naming the agent and allowing a market are owner-only on
 chain, and no batch or relayer can make them for you — which is the property that makes a
 compromised agent harmless rather than a promise that it will behave.
 
-**What is not there yet, said here rather than discovered:** providing liquidity as a maker has no
-interface. The contracts do it and a script does it
-([`scripts/ship-maker-position.ts`](scripts/ship-maker-position.ts)); the app does not.
+**What is not there yet, said here rather than discovered:** a maker position from your own wallet
+has no interface. The account can be the maker from the app (the *Provide liquidity* starter, below
+under 1inch); a position backed by wallet tokens is a script
+([`scripts/ship-maker-position.ts`](scripts/ship-maker-position.ts)), not a screen.
 
 ## Layout
 
@@ -62,7 +63,7 @@ interface. The contracts do it and a script does it
 | [`subgraph/`](subgraph/) | The subgraph indexing Aqua and our factory |
 | [`docs/plans/`](docs/plans/) | Implementation plans, written before the code |
 
-The workflow's logic lives in a package rather than in `apps/cre`, which is what lets 200-odd unit
+The workflow's logic lives in a package rather than in `apps/cre`, which is what lets 241 unit
 tests cover the enclave's decision without the CRE CLI in the loop.
 
 ## Three tracks: Chainlink, 1inch, The Graph
@@ -97,10 +98,13 @@ agent can only call the two functions the account lets an agent call.
 **Run it:** `cp apps/cre/.env.example apps/cre/.env && cd apps/cre && ./rehearse-idle.sh`
 
 It forks Arbitrum One, opens an account at an address predicted before it existed, funds it with
-real USDC from a whale, lets the workflow decide and sign, and lands the signed call. A recorded
-run: 50,000 USDC in, `SUPPLY 40000000000`, ending at 39,999.999999 aUSDC against a 10,000 buffer —
-one unit short because Aave rounds against the supplier. It then checks the agent's own balance is
-zero, because a transaction that moves nothing reads in a log exactly like one that worked.
+real USDC from a whale, permits the four production markets, lets the workflow decide and sign
+(staging still uses `signature` delivery), and lands the signed call. A recorded run from when it
+permitted Aave alone: 50,000 USDC in, `SUPPLY 40000000000`, ending at 39,999.999999 aUSDC against
+a 10,000 buffer — one unit short because Aave rounds against the supplier. Today it picks whichever
+of the four pays most and refuses to pass unless the market it chose is the best-paying one. It
+prints the agent's own balance, and it exits non-zero when the position did not change, because a
+transaction that moves nothing reads in a log exactly like one that worked.
 
 > **What that run does not show.** The simulator is not a TEE — it says so while running. It
 > proves the workflow compiles for the runtime, reads the chain, decides, signs, and that the call
@@ -128,8 +132,8 @@ for free because its Pool owns the aToken; these earn it by being the token.
 
 **Rates arrive in three shapes and leave in one.** Aave publishes an annual ray, Comet a
 per-second wad, and Morpho publishes no rate at all — so `MorphoVenue` measures one, sampling its
-own share price against a `1e27` probe large enough that ten minutes of drift is 832,775,079 units
-rather than 1. Two independent methods, checked against each other on 10 September: the venue's
+own share price against a `1e27` probe large enough that five minutes of drift is about `4.36e8`
+units rather than less than one. Two independent methods, checked against each other on 10 September: the venue's
 trailing measurement reports **446 bps**, and Morpho's own API reports a net APY of **458 bps** for
 the same vault — arrived at without reading a rate from Morpho at all. Everything converts to
 Aave's units before the enclave sees it, so the decision never learns which protocol answered.
@@ -154,7 +158,7 @@ Forty-six checks against the addresses above rather than against a fresh copy of
 difference being whether what is shown is what is on chain. It opens an account through the live
 factory, reaches all three protocols from it, and puts five USDC and five dollars of ETH to work in
 both assets, then moves the clock thirty days and requires both positions to be worth more than
-they were.
+they were. On a fork, because it ships to Aqua and it should not do that to the live registry.
 
 ### 1inch Aqua
 
@@ -407,7 +411,7 @@ search for an empty string passes on nothing.
 **Twelve swaps, because once is not evidence.** The chat suite fills through 1inch once; one run of
 it reported `+0 USDC` and could not say whether the transaction reverted, was never sent, or had not
 landed. [`apps/app/e2e/oneinch-repeat.ts`](apps/app/e2e/oneinch-repeat.ts) answers the reliability
-question — a fresh wallet each time, every size from $25 to $12,000, both directions, nothing
+question — a fresh wallet each time, twelve sizes from $5 to about $2,500, both directions, nothing
 stubbed: the route and the calldata come from the live API through our own proxy and each
 transaction is signed and mined on a fork of Arbitrum One.
 
@@ -455,8 +459,8 @@ one job each. [`provide-from-account-card.tsx`](apps/app/components/provide-from
 makes the account the maker, so one pool does both — the account holds it, the enclave puts it in
 whichever market pays most, and a fill redeems exactly the shortfall on the way through.
 
-It lands as one `executeBatch`: three approvals to **Aqua**, never to a contract of ours, and a
-ship. The contract's own `mandateHash` is read and compared before anything is sent, because an
+It lands as one `executeBatch`: an approval to **Aqua** for each token and each receipt the
+account holds, never to a contract of ours, and a ship. The contract's own `mandateHash` is read and compared before anything is sent, because an
 encoding wrong by one field ships successfully under a hash nobody looks up. Driven through the
 chat on a fork, read back out of Aqua rather than out of our own card:
 
@@ -501,10 +505,10 @@ not ours:
 
 ```
 maker     0xef9f7f4006fe95afede04f6916e72556a957ebbc
-mandates  48, of which 11 still active, across 5 tokens
+mandates  54, of which 11 still active, across 5 tokens
 ```
 
-Forty-eight strategies under one address, and no way on chain to learn any of them exist. Docked
+Fifty-four strategies under one address (read 12 September), and no way on chain to learn any of them exist. Docked
 ones come back marked docked rather than merely empty, which is Aqua's own three-state sentinel.
 
 > **Two mistakes got it here, and one query catches both.** It indexed a real-but-wrong Aqua
@@ -530,9 +534,10 @@ documentation, under Data & Analytics:
 > registry/router events keyed on `(maker, app, strategyHash)`.
 
 We indexed four of those five. `Shipped`, `Docked`, `Pulled` and `Pushed` are on the Aqua registry;
-the fifth, `Swapped`, is on the router, and there was no router data source at all. There are
-**340** of them at `0x111111338c…` since Aqua's deployment — the most recent two minutes before the
-query — so the data source lands with 340 fills nobody could otherwise query.
+the fifth, `Swapped`, is on the router, and there was no router data source at all. There were
+**340** of them at `0x111111338c…` since Aqua's deployment when the data source was written — the
+most recent two minutes before the query — so it landed with 340 fills nobody could otherwise
+query, and the live index serves every one since.
 
 Its `startBlock` is the router's own first log, an `OwnershipTransferred`, so it is the deployment
 and exact rather than a safe underestimate. Bisected with `eth_getLogs`, never `eth_getCode`: a

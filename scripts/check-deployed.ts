@@ -674,6 +674,11 @@ for (const [name, venue, symbol] of [
 // the presence of a revert.
 console.log('')
 const snapshot = (await rpc('evm_snapshot', [])).result as string
+const compoundAssetsBefore = (await pub.readContract({
+	abi: venueAbi,
+	address: COMPOUND_VENUE,
+	functionName: 'totalAssets',
+})) as bigint
 const attacker = privateKeyToAccount(
 	'0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d',
 )
@@ -729,17 +734,31 @@ for (const [name, venue, donate] of [
 	],
 ] as const) {
 	venue_ = venue
-	// One wei in first, so the pool has exactly one share to be diluted against.
+	// The property is that a deposit worth zero shares is refused. On an empty venue that is set up
+	// by putting one wei in first, so there is exactly one share to dilute, and then trying a
+	// thousand dollars against a ten-thousand-dollar donation. On a venue that already holds money
+	// — the live MorphoVenue does, since the DON's first move on 11 September — one wei would itself
+	// mint nothing and the seed reverts before the check is reached, which is how this script
+	// stopped at check 28 on the day after. So the seed is skipped when there are shares already,
+	// and the attempt is one wei, which the donation makes worth less than a share either way.
 	await approveUsdc(venue)
-	await atk
-		.writeContract({
-			abi: venueAbi,
-			address: venue,
-			args: [USDC, 1n, attacker.address, 0],
-			functionName: 'supply',
-		})
-		.then((hash) => pub.waitForTransactionReceipt({ hash }))
+	const sharesAlready = (await pub.readContract({
+		abi: venueAbi,
+		address: venue,
+		functionName: 'totalSupply',
+	})) as bigint
+	if (sharesAlready === 0n) {
+		await atk
+			.writeContract({
+				abi: venueAbi,
+				address: venue,
+				args: [USDC, 1n, attacker.address, 0],
+				functionName: 'supply',
+			})
+			.then((hash) => pub.waitForTransactionReceipt({ hash }))
+	}
 	await donate()
+	const attempt = sharesAlready === 0n ? 1_000_000000n : 1n
 
 	let refusedByName = false
 	let saw = 'it accepted the deposit — this is a superseded venue'
@@ -748,7 +767,7 @@ for (const [name, venue, donate] of [
 			abi: venueAbi,
 			account: attacker.address,
 			address: venue,
-			args: [USDC, 1_000_000000n, attacker.address, 0],
+			args: [USDC, attempt, attacker.address, 0],
 			functionName: 'supply',
 		})
 	} catch (e) {
@@ -772,8 +791,8 @@ check(
 		abi: venueAbi,
 		address: COMPOUND_VENUE,
 		functionName: 'totalAssets',
-	})) as bigint) === 0n,
-	'CompoundVenue.totalAssets() back to 0',
+	})) as bigint) === compoundAssetsBefore,
+	`CompoundVenue.totalAssets() back to ${compoundAssetsBefore}`,
 )
 
 // The claim the whole venue exercise was for, made against the deployed addresses rather than

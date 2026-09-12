@@ -1,5 +1,5 @@
 ---
-import { forkTests } from '../../lib/solidity-tests'
+import { creTests, forkTests, solidityTests } from '../../lib/solidity-tests'
 const repo = 'https://github.com/0xHelico/helico'
 // Reading about Helico goes to the docs site; looking at the code goes to GitHub.
 const docs = 'https://docs.helico.site/docs'
@@ -36,7 +36,7 @@ const enclave = [
 	['Checks', 'that the rules it was given are the rules you published; if not, it stops before touching the chain'],
 	['Asks', 'the index what your live mandates could still be asked to pay, and holds that much back'],
 	['Decides', 'the split, then whether the difference is worth its own gas'],
-	['Leaves', 'only the decision, signed with a key that never leaves the sealed environment'],
+	['Leaves', 'only the decision, as a report Chainlink\'s network signs and writes to the chain — no key of ours'],
 ]
 const accountRows = [
 	['Admits', 'you, or the agent you named, checked on every call'],
@@ -46,11 +46,12 @@ const accountRows = [
 	['Cannot be walled up', 'the way out lives in the proxy, so replacing the code cannot remove it'],
 ]
 const evidence = [
-	['Deployed', 'the account factory, the Aqua app and the SwapVM router are live on Arbitrum One and verified'],
+	['Deployed', 'the account factory, two Aqua apps, three lending venues, the SwapVM router and the agent contract are live on Arbitrum One and verified'],
+	['Live', 'on 11 September the network carried its first move: idle USDC into Morpho, from an account its owner opened, with no key of ours in the transaction'],
 	['Rehearsal', 'on a snapshot of the real market, the sealed program moved 40,000 of 50,000 USDC into real Aave v3'],
 	['Left behind', '10,000 held liquid, and the agent\'s own balance zero, because a move that goes nowhere reads like one that worked'],
 	['Through the app', 'opening an account, naming the agent and permitting a market, all checked against the chain rather than the screen'],
-	['Tests', `240+ automated tests, ${forkTests} of them on a snapshot of the real market, and 32 browser checks`],
+	['Tests', `${solidityTests} Solidity tests, ${forkTests} of them on a snapshot of the real market, ${creTests} for the decision, and 32 browser checks`],
 	['Caveats', 'the rehearsal is a snapshot, not the live network, and the sealed environment was simulated'],
 ]
 const tabs = [
