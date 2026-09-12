@@ -5,10 +5,13 @@ import { Fill, Maker } from "../generated/schema";
  * A fill through 1inch's SwapVM router — the fifth of the five events their own Aqua documentation
  * asks an indexer to cover, and the one this subgraph did not have.
  *
- * **What is written and what is deliberately not.** `Swapped` carries `orderHash`, which is the
- * router's identifier for the order it executed. It is *not* the `strategyHash` everything else
- * here is keyed on, and it is not derivable from the event. So there is no edge from `Fill` to
- * `Mandate`: a join on two hashes that are not the same hash would be a lie that reads as data.
+ * **`orderHash` is the `strategyHash`.** For an order that settles through Aqua, SwapVM hashes
+ * `keccak256(abi.encode(order))`, and the bytes the maker shipped to Aqua are that encoding, so
+ * Aqua's `strategyHash` is the same number (1inch, Aqua → Data & Analytics; measured 12 September:
+ * 60 of 60 distinct `orderHash` values on Arbitrum One match a shipped mandate). An earlier
+ * version of this comment said they differed and drew no edge for that reason. The edge is still
+ * not drawn, now for a smaller reason: it is a schema change, and the deployed version is kept as
+ * it is until after the hackathon. Join on `fills.orderHash == mandates.strategyHash` meanwhile.
  * The maker edge is real, because the event carries the address.
  *
  * `Maker` is created here when it does not exist. A fill against a maker whose `Shipped` predates
