@@ -4,6 +4,135 @@ Arbitrum One, chain id 42161. Every address below was read back from the chain a
 broadcast, not copied from a script's output — the third column is what the contract answers when
 asked about itself.
 
+## 12 September 2026 — the network took it back out, and it came back with more
+
+Yesterday's entry ends by saying the enclave *"has nothing to do until the balance, the rates, or
+the policy change"*. The policy changed — not the secret, but what the policy's own floor resolves
+to — and at **13:55 UTC** the DON carried the opposite move. Why it changed is the last section
+here, and it is the most interesting thing in this file.
+
+```
+tx            0x6b37141bf0357a7c7b16d7288336bebdb1c091f3f5e40901addfc421fe7fb1b5
+              block 504,414,805 on Arbitrum One, status 1, 856,170 gas at 0.020132 gwei
+from          0xba218037ec4617358Efd89fffbBb4507b9965F0A   a DON transmitter, and not the one
+                                                           that carried the first move
+to            0xF8344CFd…4482                             KeystoneForwarder
+```
+
+What its 17 logs say, read from the receipt:
+
+| Log | Says |
+|---|---|
+| `HelicoAccount.IdleCapitalMoved` | pool `0xBBa798A6…` (Morpho), USDC, `490158`, **not** supplied |
+| `HelicoAgent.Carried` | the same move, policy hash `0x84e5626f…`, workflow id `0x00f5df97…` — the id the registry holds, unchanged from the first move |
+| `KeystoneForwarder.ReportProcessed` | receiver `0x98c3…4463`, report id `0x0008`, `success = true` |
+
+And the balances: `hmUSDC 490081 → 0`, USDC back at the account. Read at block 504,442,990 the
+account holds `1497196` USDC and no receipt of any kind.
+
+### The account has now done a round trip, and the difference is the yield
+
+| | Amount | When | Carried by |
+|---|---|---|---|
+| in | `490081` | 11 Sep 11:30 UTC | `0x3A8dBD6b…` |
+| out | `490158` | 12 Sep 13:55 UTC | `0xba218037…` |
+
+**77 base units over 95,099 seconds, which is 5.21% annualised.** Trivial in absolute terms — the
+principal was 0.49 USDC — and it is the only yield figure in this repository that is a subtraction
+between two transactions rather than a rate read off a contract. A quoted APY says what a market
+offers; this says what the account received.
+
+Two things are worth keeping about the pair beyond the arithmetic. **The transmitters differ**, so
+the two moves were carried by different nodes under one workflow id, which is the part that
+distinguishes a DON from a machine with a cron. And **the direction reversed with nobody asking**:
+until today every unwind anywhere in the record was a script, a fork, or an owner pressing
+something.
+
+### Why it withdrew, and it is the three tracks in one causal chain
+
+The obvious reading is wrong and the repository already contains the number that refutes it. A
+liquid floor would explain a full unwind — except the floor the first move ran under was
+`10000`, 0.01 USDC, which is why the 11 September entry says it supplied *all but* that. A
+0.01 USDC floor does not pull 0.49 USDC home.
+
+**Fifty-four seconds earlier, the owner shipped a mandate.** One atomic transaction
+[`0x2ed147cf…`](https://arbiscan.io/tx/0x2ed147cfe956fe5f8fc9693acdcd3af2bbd8ce8b8ec3b5669cf5bbb9f219416c),
+block 504,414,589 at 13:54:27 UTC, eight `Executed` events out of the account: seven
+`approve(0x095ea7b3)` calls and then `0xf50b870f` on Aqua `0x1111113c…6a90a`. Aqua's own
+`Shipped` events say what landed — maker `0x0acdfa21…`, app `0x0524a353…6041`
+(`HelicoMandateSwap`), strategy hash `0x01f61bb8…`, and **`1497196` of USDC** alongside each of
+the four venue receipts.
+
+Then the next five-minute run reversed a decision that had held for twenty-six hours.
+
+The link is `withMandateBuffer`, and it is the reason `packages/plugins/cre/src/subgraph.ts`
+exists: a swap taken against one of the maker's mandates is served **out of the wallet first**,
+so the liquid floor has to follow the mandates rather than a number set once. Asked the exact
+query the enclave sends — `MANDATE_DEMAND`, this maker, USDC — the live subgraph answers:
+
+```json
+{"data":{"balances":[{"amount":"1497196","tokensCount":7}]}}
+```
+
+And the arithmetic closes on the unit:
+
+| | |
+|---|---|
+| what the mandate could spend, per The Graph | `1497196` |
+| liquid in the account when the mandate landed | `1007038` |
+| **the shortfall** | **`490158`** |
+| what the DON withdrew, 54 seconds later | **`490158`** |
+| liquid after it landed | `1497196` — the buffer exactly |
+
+**And the question has no on-chain answer at all.** Aqua's `_balances` is `private` and four
+levels deep, `rawBalances` needs a hash you already hold, and not one parameter of Aqua's four
+events is `indexed` — so "what could this maker's mandates still spend?" is not reachable by
+`eth_call` or by `eth_getLogs`. The number that moved the money exists in the index and nowhere
+else. That is what load-bearing means here, and it is measurable rather than claimed.
+
+### The mandate it covered cannot be filled, and neither half is wrong
+
+Worth writing down because it looks like a bug from either side and is not one.
+
+The ship is **one-sided**. The subgraph lists one active mandate for this maker, and its seven
+balances are `1497196` on USDC and every USDC receipt — Aave's aUSDC `0x724dc807…`, the Compound
+venue `0x1eC57cE1…`, the Morpho venue `0xBBa798A6…` — and **zero** on WETH and both WETH
+receipts.
+
+`HelicoMandateSwap` refuses that, at `HelicoMandateSwap.sol:501`:
+
+```solidity
+require(s.balanceIn > 0 && s.balanceOut > 0, DegenerateReserves(s.balanceIn, s.balanceOut));
+```
+
+Which is correct, and the struct's own docs say why: `_quote` is
+`amountInWithFee * balanceOut / (balanceIn + amountInWithFee)`, so a zero input side returns the
+**whole opposite reserve for two wei** — 1.497196 USDC for one wei of WETH. `DegenerateReserves`
+is the guard against exactly that, and `ForkOneSidedFixedPrice.t.sol` and
+`HelicoMandateSwap.t.sol:397` both hold it.
+
+So the enclave is holding the account's entire balance liquid to cover a mandate no taker can
+take. **Both halves are behaving as designed**: the buffer only ever raises the floor and cannot
+know the shape of the strategy behind the hash, and the app refuses a curve that would pay out
+everything. What it argues for is `HelicoOracleBoard`, which prices a one-sided maker off a
+Chainlink feed rather than off a ratio that does not exist — built on 9 September for this exact
+maker, deployed, and still with nothing shipped to it.
+
+**Not sayable:** that the mandate is fillable, or that a live swap in the dapp fills against Aqua.
+**Sayable:** that the account shipped a real mandate to a real Aqua deployment, that the index
+knows what it could spend, and that the network acted on it.
+
+### The one link that is not measured, and what would settle it
+
+The shortfall and the position were the same size — the mandate shipped the account's whole
+value, so `demand − liquid` and "the entire position" are the same `490158`. On amount alone a
+rate floor crossing in the same 54 seconds would look identical. What discriminates them is not
+on chain: `bufferNote` prints which of the two floors the run used, so the 13:55 UTC execution's
+own verdict line says it outright. Worth pasting in here when somebody with CRE access reads it.
+
+Every other link is measured: the ship, the demand, the shortfall, the amount withdrawn, the
+resulting balance, and the workflow id in the agent's event.
+
 ## 12 September 2026 — the subgraph is on The Graph Network
 
 Until today the subgraph lived on Subgraph Studio only, which is a Graph provider and enough for

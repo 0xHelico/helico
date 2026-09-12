@@ -37,7 +37,39 @@ that exists, and #22 asks for a full-length take by **11 September** rather than
 A shot that has to fall back is not a weaker video. A shot that claims something untrue ends the
 submission.
 
-### Pre-flight, re-run 12 September, after the first move — **read this one first**
+### Pre-flight, re-run 12 September 16:00 UTC, after the money came back — **read this one first**
+
+The layer below was written between the two halves of one round trip, and it names a balance the
+screen no longer shows. Where they disagree, this one wins.
+
+| | State, measured at block 504,442,990 |
+|---|---|
+| **The network moves it both ways, and that is the story now** | Two `IdleCapitalMoved` events exist on the live account and no others. `490081` **supplied** at block 504,035,561 (11 Sep 11:30 UTC, [`0x0668c698…`](https://arbiscan.io/tx/0x0668c698cf3d396e622a97bfa3e21016de44fb41863fa7cb69b47bd126f9ed27), transmitter `0x3A8dBD6b…`); `490158` **withdrawn** at block 504,414,805 (12 Sep 13:55 UTC, [`0x6b37141b…`](https://arbiscan.io/tx/0x6b37141bf0357a7c7b16d7288336bebdb1c091f3f5e40901addfc421fe7fb1b5), transmitter `0xba218037…`). **Sayable, and it is the shot:** *"the network decided to put it to work, and a day later the network decided to take it back out — different node, same workflow, and no key of ours in either transaction."* One direction is what a script can do; both is what an agent does |
+| **It earned, and the number is on chain** | `490158` came back for `490081` that went in: **77 base units over 95,099 seconds, 5.21% annualised.** Sayable exactly like that, including that the principal was 0.49 USDC. **Not** sayable: any APY quoted off a rate feed — this is the one figure the two transactions prove by subtraction |
+| **Why it came out is all three tracks in one chain, and this is the best thirty seconds available** | 13:54:27 — the owner ships a mandate to `HelicoMandateSwap` on **Aqua**, `1497196` of USDC ([`0x2ed147cf…`](https://arbiscan.io/tx/0x2ed147cfe956fe5f8fc9693acdcd3af2bbd8ce8b8ec3b5669cf5bbb9f219416c)). 13:55:21 — the enclave asks **The Graph** what that maker's live mandates could spend, gets `1497196`, raises the liquid floor to it, and **Chainlink's** DON writes the unwind that covers the shortfall to the unit: `1497196 − 1007038 = 490158`, and `490158` is what came out. **Sayable:** *"nobody told it to do that. It shipped a position on 1inch, and a minute later the network read the index, saw what the position could owe, and pulled the money out of Morpho to cover it."* Three logos, one arrow, two hashes |
+| **And the number that moved it has no on-chain answer** | Aqua's `_balances` is `private` and four levels deep, and not one parameter of its four events is `indexed` — so *"what could this maker's mandates still spend?"* is unreachable by `eth_call` and by `eth_getLogs` alike. **Sayable, and it is the whole Graph argument:** *"this is not a dashboard reading the chain more prettily. The number the money moved on cannot be got from the chain at all."* The subgraph's own schema opens with this, so it is quotable on screen |
+| **The account holds nothing at work** | `USDC 1497196`, `hmUSDC 0`. The row below saying it holds `10000 USDC and 490081 hmUSDC` is **retired**, and so is its closing line about the enclave *"holding because the account is already at its target split"* — there is no position; everything is idle |
+| **Do not wait for a move on camera** | At 1.497196 USDC the vault's liquid floor is what decides, and an account this size sits under any floor worth setting. The evidence is the two transactions that already happened; a take that waits for a third one is a take that ends with the enclave saying `HOLD`. Show the account, then show Arbiscan |
+| **The agent is still the contract** | `agent()` → `0x98c3979358A4e5086Da432CfE91F45aE2A854463`, and all four venues answer `permittedVenue → true`. Nothing about the nomination changed; the money moving out did not un-nominate anything |
+| **The workflow that carried it is the one the registry holds** | `HelicoAgent.Carried` in the withdraw carries workflow id `0x00f5df9779…4735da40`, which is the id in `docs/deployments.md`. Worth saying, because it is the link between *"a workflow is registered"* and *"this transaction is that workflow"* — and it is readable from the receipt by anyone |
+
+What this changes in the shot list: **3:15 says the round trip**, not the target split, and
+**0:55–1:20 gains its proof.** The Graph shot has until now been *"here is a query that answers
+what the chain cannot"*, which is true and is an argument. It is now *"here is the query, and
+here is the transaction it caused"* — which is the same claim with a hash on the end of it.
+
+The account on screen is idle, and that is the honest picture and a better one than a static
+position: the point was never that money sits somewhere, it is that nobody pressed anything
+either time.
+
+**One caution on the causal chain.** The ship, the demand, the shortfall, the amount and the
+resulting balance are all measured, and `docs/deployments.md` carries each. The enclave's own
+*reason* is in its execution log rather than on chain, and the shortfall happened to equal the
+whole position — so say *"the network read the index and covered the mandate"*, which the numbers
+support, and not *"the enclave's verdict says the buffer came from the subgraph"* until somebody
+has read that line.
+
+### Pre-flight, re-run 12 September, after the first move
 
 One thing happened on 11 September at 11:30 UTC that changes what the video is about, and the
 layers below were written before it. Where they disagree with this one, this one wins.
@@ -226,9 +258,21 @@ No logo animation, no title card. Under 20 seconds, as the guidance asks.
 > So "which mandates does this wallet have, and what is left in each" has no on-chain answer at
 > all. The Graph is not making this faster. It is the only way to ask.
 
-> **Depends on:** the subgraph deployed and indexing. If it is not, cut this shot and say the
-> sentence about the mapping over shot 2 instead — the point is worth keeping even without the
-> query on screen.
+*Screen: the query's answer beside Arbiscan on
+[`0x6b37141b…`](https://arbiscan.io/tx/0x6b37141bf0357a7c7b16d7288336bebdb1c091f3f5e40901addfc421fe7fb1b5).*
+
+> And this is what it costs to be wrong about it. That number — one million four hundred and
+> ninety-seven thousand — is what this wallet's mandate could still spend. Fifty-four seconds
+> after it was shipped, the network read it here, saw the account was short, and pulled exactly
+> the difference out of Morpho. Nobody asked it to. The number it acted on cannot be read off
+> the chain.
+
+> **Added 12 September**, and it is the shot that turns this section from an argument into
+> evidence. `docs/deployments.md`, *"Why it withdrew"*, carries all six numbers.
+
+> **Depends on:** the subgraph deployed and indexing. If it is not, cut the second half and keep
+> the mapping sentence — the point survives without the query on screen, though it is much weaker
+> without the hash.
 
 ### 1:20–2:00 — Where the decision happens — Chainlink
 
@@ -332,16 +376,19 @@ Speak over the run. Cut the waiting, never speed it up.
 >
 > The run you just watched went through the simulator, not a real TEE. The deployed workflow is
 > a different thing — it registers a confidential handler and executes on Chainlink's DON every
-> five minutes. On 11 September it decided, the network signed the decision and wrote it to
-> Arbitrum, and the account's own event says what moved. Since then it holds, because the account
-> is already where the strategy wants it. Every number in this video is in the repository with
-> the command that reproduces it.
+> five minutes. On 11 September it decided to put the account's capital to work, the network
+> signed the decision and wrote it to Arbitrum, and the account's own event says what moved. On
+> 12 September it decided to take it back out, and a different node carried that one. It came
+> back with 77 units more than went in. Every number in this video is in the repository with the
+> command that reproduces it.
 
-**Changed 12 September, and it must be said the new way.** This line used to end with *"holding
-rather than acting because the account on the live chain is empty"*, and before that *"because no
-account exists yet"*. Both are now false in the direction that helps: the account was funded, the
-DON carried the move, and the hold is the steady state after a move rather than the absence of
-one. The 11 September layer also said the account was opened *"by somebody outside the team"* —
+**Changed twice on 12 September, and the second one matters more.** This line used to end with
+*"holding rather than acting because the account on the live chain is empty"*, and before that
+*"because no account exists yet"*, and then — for most of today — *"it holds, because the account
+is already where the strategy wants it"*. All three are false now, and the last one is the one to
+be careful about: it was true when it was written and stopped being true at 13:55 UTC, when the
+DON withdrew the position. A hold is a state, so a sentence about a hold expires; a transaction
+does not, which is why the line now names the two of them instead. The 11 September layer also said the account was opened *"by somebody outside the team"* —
 it was a teammate's wallet, and that phrase must not be said.
 
 End on the repo URL. No outro music.
@@ -350,6 +397,10 @@ End on the repo URL. No outro music.
 
 - [ ] `bun install`, `cp apps/cre/.env.example apps/cre/.env` — the run must be warm, so the first
       take is not spent on a dependency download
+- [ ] **Paste a key into the copied `.env`.** Since #472 the example carries no value for
+      `CRE_ETH_PRIVATE_KEY`, deliberately, so a fresh copy makes `rehearse-idle.sh` stop with a
+      sentence rather than run. Any anvil account does — the first key `anvil` prints at startup.
+      Five seconds if you know, a confusing take if you do not
 - [ ] `ARBITRUM_RPC_URL` set, and the fork suite run once beforehand: it forks `latest`, so the
       numbers differ every time and the spoken figures must match the take that ships
 - [ ] `./rehearse-idle.sh` run once to warm it — it takes about two minutes, and it rewrites
@@ -367,7 +418,16 @@ End on the repo URL. No outro music.
   when the swap gained a third venue. No Aqua position for WETH/USDC on Arbitrum One will quote at
   any size today, so a live swap in the dapp routes through **1inch aggregation** and the card
   names it. Read the route line off the screen rather than off the plan. The Aqua path is real and
-  the evidence for it is the fork run and the contract suite, which is where it should be claimed
+  the evidence for it is the fork run and the contract suite, which is where it should be claimed.
+
+  **Amended 12 September — the rule stands and its reason changed.** One of ours is now live:
+  the account shipped a mandate to `HelicoMandateSwap` at 13:54 UTC, strategy hash
+  `0x01f61bb8…`, and the subgraph serves it. It still will not quote, because it is **one-sided**
+  — `1497196` of USDC and zero of WETH — and `HelicoMandateSwap.sol:501` refuses a zero side with
+  `DegenerateReserves`, which is the guard that stops a constant product handing over the whole
+  opposite reserve for two wei. So *"a position of ours is live on Aqua and the index serves it"*
+  is now sayable and worth saying; *"a swap fills against it"* is not, and #468 is a second,
+  separate reason the dapp could not fill ours even if it did quote
 - ~~**Anything about fills being queryable.**~~ Retired 11 September: v0.3.0 serves `fills`, 342 of
   them. Sayable now, with the number read on the day
 - **"Deployed", "live", or "in production"** about anything that is not — check each one on the
