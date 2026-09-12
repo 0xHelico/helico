@@ -157,6 +157,8 @@ type fakeRPC struct {
 	headErr   error
 	logsErr   error
 	headCalls int
+	timed     []uint64
+	timesErr  error
 }
 
 func (f *fakeRPC) Head(context.Context) (uint64, error) {
@@ -166,6 +168,15 @@ func (f *fakeRPC) Head(context.Context) (uint64, error) {
 func (f *fakeRPC) Logs(_ context.Context, _ string, from, to uint64) ([]Event, error) {
 	f.asked = append(f.asked, [2]uint64{from, to})
 	return f.logs, f.logsErr
+}
+
+func (f *fakeRPC) Times(_ context.Context, blocks []uint64) (map[uint64]uint64, error) {
+	f.timed = append(f.timed, blocks...)
+	out := make(map[uint64]uint64, len(blocks))
+	for _, b := range blocks {
+		out[b] = 1_700_000_000 + b
+	}
+	return out, f.timesErr
 }
 
 const account = "0x0acdfa21a3cd075aee6583c8a8069f86ad3e4a39"
@@ -272,5 +283,49 @@ func TestABadAddressIsRefusedBeforeAnythingIsAsked(t *testing.T) {
 	}
 	if rpc.headCalls != 0 {
 		t.Error("it asked the chain about a string that is not an address")
+	}
+}
+
+// One header per block that carries an event, not one per event and not one per block scanned.
+// The onboarding batch is five events in a single block; asking five times for the same header is
+// four calls nobody needs.
+func TestTheTimestampIsAskedForOncePerBlock(t *testing.T) {
+	store := &fakeStore{}
+	rpc := &fakeRPC{head: 600, logs: []Event{
+		{Block: 500, LogIndex: 0}, {Block: 500, LogIndex: 1}, {Block: 500, LogIndex: 2},
+		{Block: 540, LogIndex: 0},
+	}}
+	s := NewService(store, rpc, 100, time.Minute, 50)
+	s.now = func() time.Time { return time.Unix(10_000, 0) }
+
+	if _, err := s.For(context.Background(), account); err != nil {
+		t.Fatal(err)
+	}
+	if len(rpc.timed) != 2 {
+		t.Errorf("asked for %d headers, want 2 (blocks 500 and 540)", len(rpc.timed))
+	}
+	for _, e := range store.rows {
+		if e.BlockTime == 0 {
+			t.Errorf("block %d has no time", e.Block)
+		}
+	}
+}
+
+// A header that will not come back is a missing date, not a failed read. The event still lands.
+func TestAMissingHeaderStillWritesTheEvent(t *testing.T) {
+	store := &fakeStore{}
+	rpc := &fakeRPC{head: 600, logs: []Event{{Block: 500}}, timesErr: errors.New("no")}
+	s := NewService(store, rpc, 100, time.Minute, 50)
+	s.now = func() time.Time { return time.Unix(10_000, 0) }
+
+	got, err := s.For(context.Background(), account)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Events) != 1 {
+		t.Fatalf("%d rows", len(got.Events))
+	}
+	if got.Events[0].BlockTime != 0 {
+		t.Error("a date that could not be read should be zero, not invented")
 	}
 }

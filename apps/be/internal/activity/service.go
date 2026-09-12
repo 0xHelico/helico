@@ -80,6 +80,15 @@ func (s *Service) For(ctx context.Context, account string) (Result, error) {
 			}
 			events, err := s.rpc.Logs(ctx, account, start, head)
 			if err == nil {
+				// One header per block that actually carries an event, which is far fewer than the
+				// range scanned — the onboarding batch is five events in one block. A block whose
+				// header will not come back leaves the date empty rather than failing the read.
+				stamps, tErr := s.rpc.Times(ctx, blocksOf(events))
+				if tErr == nil {
+					for i := range events {
+						events[i].BlockTime = stamps[events[i].Block]
+					}
+				}
 				if err := s.store.SaveActivity(ctx, account, events, int64(head), s.now().Unix()); err != nil {
 					return Result{}, fmt.Errorf("save activity: %w", err)
 				}
@@ -94,4 +103,17 @@ func (s *Service) For(ctx context.Context, account string) (Result, error) {
 		return Result{}, err
 	}
 	return Result{Events: events, ReadTo: readTo, Fetched: fetched}, nil
+}
+
+// blocksOf is the distinct blocks the events fall in, in the order they first appear.
+func blocksOf(events []Event) []uint64 {
+	seen := make(map[uint64]bool, len(events))
+	out := make([]uint64, 0, len(events))
+	for _, e := range events {
+		if !seen[e.Block] {
+			seen[e.Block] = true
+			out = append(out, e.Block)
+		}
+	}
+	return out
 }

@@ -49,10 +49,14 @@ const (
 
 // Event is one thing the account did. The fields are the log's, not a sentence about it.
 type Event struct {
-	Block    uint64 `json:"block"`
-	LogIndex uint64 `json:"logIndex"`
-	Kind     Kind   `json:"kind"`
-	Tx       string `json:"tx"`
+	Block uint64 `json:"block"`
+	// BlockTime is Unix seconds. Fetched once per block and kept for ever: a block's timestamp
+	// cannot change, so this is the one field here that never needs re-reading. Zero when the
+	// endpoint would not say, which the dapp renders as no date rather than as 1970.
+	BlockTime uint64 `json:"blockTime"`
+	LogIndex  uint64 `json:"logIndex"`
+	Kind      Kind   `json:"kind"`
+	Tx        string `json:"tx"`
 	// Pool is set for moved and venue. Asset and Amount for moved only.
 	Pool   string `json:"pool,omitempty"`
 	Asset  string `json:"asset,omitempty"`
@@ -82,10 +86,12 @@ func Normalise(address string) (string, error) {
 	return a, nil
 }
 
-// Reader fetches logs. One method, so a test hands over a function instead of a server.
+// Reader fetches logs. Small enough that a test hands over a struct instead of a server.
 type Reader interface {
 	Logs(ctx context.Context, address string, from, to uint64) ([]Event, error)
 	Head(ctx context.Context) (uint64, error)
+	// Times answers the timestamp of each block named, skipping any it cannot.
+	Times(ctx context.Context, blocks []uint64) (map[uint64]uint64, error)
 }
 
 // RPC reads an EVM endpoint over JSON-RPC.
@@ -186,6 +192,29 @@ func (c *RPC) Logs(ctx context.Context, address string, from, to uint64) ([]Even
 		}
 	}
 	return events, nil
+}
+
+// Times reads one block header per number, which is the only way to get a log's timestamp:
+// `eth_getLogs` does not carry one. Called once per block ever, because the answer is immutable
+// and the row it fills is written to the database beside the event.
+func (c *RPC) Times(ctx context.Context, blocks []uint64) (map[uint64]uint64, error) {
+	out := make(map[uint64]uint64, len(blocks))
+	for _, b := range blocks {
+		var header struct {
+			Timestamp string `json:"timestamp"`
+		}
+		// `false` asks for hashes rather than whole transactions: a busy block is megabytes of
+		// data for one field.
+		if err := c.call(ctx, "eth_getBlockByNumber",
+			[]any{"0x" + strconv.FormatUint(b, 16), false}, &header); err != nil {
+			// One block that will not answer is a missing date, not a failed read.
+			continue
+		}
+		if t, err := parseHex(header.Timestamp); err == nil {
+			out[b] = t
+		}
+	}
+	return out, nil
 }
 
 func parseHex(s string) (uint64, error) {

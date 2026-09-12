@@ -14,6 +14,7 @@ import {
   SectionTitle,
 } from "@/components/kit";
 import { TokenMark } from "@/components/token-mark";
+import { VenueMark } from "@/components/venue-mark";
 import { CHAIN_ID, totals, useAccountState } from "@/hooks/use-account-state";
 import { readAccountActivity } from "@/lib/activity";
 import { readMovements } from "@/lib/mandates";
@@ -229,6 +230,22 @@ export function Holdings() {
  * movements stay: a fill against a shipped mandate is not the same event as the agent moving idle
  * capital, and a reader wants both in one list, newest first.
  */
+/**
+ * What has happened, as a table with a column per fact.
+ *
+ * **It was a list of sentences and the facts were buried in them.** "Put 0.49 USDC to work in
+ * Morpho" reads fine once; eight of them is a paragraph a person scans for the number. The amount,
+ * the market and the date each get a column, so a column can be read down instead of every row
+ * being read across — which is what the reference Ghoza sent does.
+ *
+ * **The date comes from the backend or not at all.** A log carries no timestamp, so it is one block
+ * header per block, fetched once and kept for ever. The chain fallback does not fetch them: a
+ * header per block from every browser is the cost this path exists to avoid, and an empty date
+ * beats an invented one.
+ *
+ * Two questions are answered here. The account's own events come from its logs; Aqua movements are
+ * fills against a shipped mandate, which is a different thing, and both belong in one list.
+ */
 export function Activity() {
   const { address } = useAccount();
   const { data } = useAccountState();
@@ -257,18 +274,30 @@ export function Activity() {
     ...(own.data ?? []).map((e) => ({
       key: e.key,
       what: e.what,
-      when: null as number | null,
+      amount: e.amount,
+      where: e.where,
+      at: e.at,
       tx: e.tx as string | null,
     })),
     ...(moves.data?.timestamps ?? []).map((t) => ({
       key: `aqua-${t}`,
-      what: "Moved through a mandate",
-      when: t,
+      what: "Filled through a mandate",
+      amount: "",
+      where: "Aqua",
+      at: t,
       tx: null as string | null,
     })),
   ].slice(0, 10);
 
   const pending = (moves.isPending && Boolean(address)) || own.isPending;
+  const when = (at: number | null) =>
+    at
+      ? new Date(at * 1000).toLocaleDateString(undefined, {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+        })
+      : "—";
 
   return (
     <Card>
@@ -281,30 +310,60 @@ export function Activity() {
           capital all turn up here.
         </Empty>
       ) : (
-        <ul className="mt-4 divide-y divide-line">
-          {rows.map((r) => (
-            <li
-              className="flex items-center justify-between gap-3 py-2.5 text-[12.5px]"
-              key={r.key}
-            >
-              <span className="text-ink">{r.what}</span>
-              {r.tx ? (
-                <a
-                  className="tabular shrink-0 font-mono text-[11.5px] text-faint underline underline-offset-2 hover:text-ink"
-                  href={`https://arbiscan.io/tx/${r.tx}`}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  {r.tx.slice(0, 10)}…
-                </a>
-              ) : (
-                <span className="tabular shrink-0 text-faint">
-                  {r.when ? new Date(r.when * 1000).toLocaleDateString() : ""}
-                </span>
-              )}
-            </li>
-          ))}
-        </ul>
+        <div className="-mx-1 mt-4 overflow-x-auto px-1">
+          <table className="w-full min-w-[520px] border-collapse text-left">
+            <thead>
+              <tr className="border-line border-b text-[11.5px] text-faint">
+                <th className="pb-2 font-normal">What</th>
+                <th className="pb-2 text-right font-normal">Amount</th>
+                <th className="pb-2 pl-4 font-normal">Where</th>
+                <th className="pb-2 pl-4 font-normal">Date</th>
+                <th className="pb-2 pl-4 text-right font-normal">
+                  Transaction
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line">
+              {rows.map((r) => (
+                <tr className="text-[12.5px]" key={r.key}>
+                  <td className="py-2.5 text-ink">{r.what}</td>
+                  <td className="tabular py-2.5 text-right font-mono text-ink">
+                    {r.amount || "—"}
+                  </td>
+                  <td className="py-2.5 pl-4">
+                    {r.where ? (
+                      <span className="flex items-center gap-1.5 text-soft">
+                        {r.where === "Aqua" ? null : (
+                          <VenueMark label={r.where} size={14} />
+                        )}
+                        {r.where}
+                      </span>
+                    ) : (
+                      <span className="text-faint">—</span>
+                    )}
+                  </td>
+                  <td className="tabular py-2.5 pl-4 text-soft">
+                    {when(r.at)}
+                  </td>
+                  <td className="py-2.5 pl-4 text-right">
+                    {r.tx ? (
+                      <a
+                        className="tabular font-mono text-[11.5px] text-faint underline underline-offset-2 hover:text-ink"
+                        href={`https://arbiscan.io/tx/${r.tx}`}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        {r.tx.slice(0, 10)}…
+                      </a>
+                    ) : (
+                      <span className="text-faint">—</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </Card>
   );
