@@ -104,18 +104,13 @@ func TestAStatusQuestionReadsTheIndex(t *testing.T) {
 	if got.Action != "status" || !strings.Contains(got.Reply, "read straight from the chain") {
 		t.Fatalf("the status reply changed: %+v", got)
 	}
-	var card *struct {
-		Title string   `json:"title"`
-		Body  string   `json:"body"`
-		Tags  []string `json:"tags"`
-	}
-	for i := range got.Cards {
-		if got.Cards[i].Title == "From the index" {
-			card = &got.Cards[i]
+	// **The index does not put its own sentence on screen.** It used to, and it read as debug
+	// output: an address, a transaction hash and a UTC timestamp for a question nobody asked.
+	// What the index did is in the steps, which is where somebody looking for it will look.
+	for _, c := range got.Cards {
+		if c.Title == "From the index" {
+			t.Fatalf("the index answered with a card: %+v", c)
 		}
-	}
-	if card == nil || !strings.Contains(card.Body, "0x0acd") || len(card.Tags) != 3 || card.Tags[1] != "Subgraph MCP" || card.Tags[2] != "1 query" {
-		t.Fatalf("card = %+v", card)
 	}
 	var mcpSteps int
 	for _, s := range got.Steps {
@@ -128,6 +123,20 @@ func TestAStatusQuestionReadsTheIndex(t *testing.T) {
 	}
 	if mcpSteps != 3 { // initialize, schema, one query
 		t.Fatalf("mcp steps = %d in %+v", mcpSteps, got.Steps)
+	}
+	// Named rather than counted, because the count is what a reader cannot check. These are the
+	// calls that make The Graph load-bearing rather than mentioned, and they are the evidence the
+	// card used to paraphrase.
+	for _, want := range []string{"mcp.initialize", "mcp." + graphmcp.ToolSchemaBySubgraphID, "mcp." + graphmcp.ToolExecuteBySubgraphID} {
+		var seen bool
+		for _, s := range got.Steps {
+			if s.Call == want {
+				seen = true
+			}
+		}
+		if !seen {
+			t.Errorf("%s is not in the steps: %+v", want, got.Steps)
+		}
 	}
 	// The wallet reached the model lowercased, and the query went to the pinned subgraph.
 	calls := fake.Calls()
@@ -191,9 +200,21 @@ func TestOnlyAStatusQuestionReadsTheIndex(t *testing.T) {
 }
 
 func TestAMalformedAddressIsIgnoredNotRefused(t *testing.T) {
-	srv, _, _ := indexServer(t, "helico-sub", []string{`{"action":"status"}`, `{"answer":"General answer."}`}, answers)
+	srv, fake, _ := indexServer(t, "helico-sub", []string{`{"action":"status"}`, `{"answer":"General answer."}`}, answers)
 	res, body := do(t, http.MethodPost, srv.URL+"/api/swap/intent", map[string]string{"message": "status", "address": "not-an-address"}, nil)
-	if res.StatusCode != http.StatusOK || !strings.Contains(string(body), "General answer.") {
+	if res.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d: %s", res.StatusCode, body)
+	}
+	// Ignored, not refused: the answer is the one a status question always gets, and the index was
+	// still read — with no owner to filter by, which is what "ignored" means here.
+	//
+	// This used to look for the index's own sentence in the body. That sentence is no longer put
+	// on screen, and a test that reached for it was measuring where the answer was displayed
+	// rather than whether the bad address stopped anything.
+	if !strings.Contains(string(body), "read straight from the chain") {
+		t.Fatalf("the reply changed: %s", body)
+	}
+	if len(fake.Calls()) == 0 {
+		t.Fatal("the index was not read at all")
 	}
 }

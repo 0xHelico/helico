@@ -8,7 +8,6 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -310,26 +309,31 @@ func (a *api) delete(w http.ResponseWriter, r *http.Request) {
 
 // requireAdmin gates writes behind the bearer token, and refuses them outright when none is
 // configured, so a deployment cannot be written to by accident.
-// readTheIndex adds the index's answer to a status reply: one card with the model's sentence and
-// one step per read, so the tree under the answer shows where the sentence came from. A failure
-// adds a failed step and changes nothing else — the reply the person would have had without the
-// index is the reply they get.
+// readTheIndex adds one step per index read, so the tree under the answer shows that the subgraph
+// was asked and what was asked of it. A failure adds a failed step and changes nothing else — the
+// reply the person would have had without the index is the reply they get.
+//
+// **It no longer puts the index's own sentence on screen.** That was a card reading "The index
+// shows that you have a Helico account with the address 0x0acd…, it was opened on September 10,
+// 2026, at 17:58:38 UTC, the transaction that opened the account has the hash 0x0673…" — three
+// lines of address, hash and UTC timestamp, which is debug output wearing an answer's clothes.
+// Nobody asked when their account was created, and the number they did ask about is already in
+// the reply above it.
+//
+// The evidence that The Graph is load-bearing is not lost with it, and is better where it went:
+// the steps name `mcp.initialize`, `mcp.getSchemaBySubgraphId` and every query that was sent, in
+// order, with what each returned. A reader who wants to know where an answer came from gets the
+// calls rather than a paraphrase of them.
 func (a *api) readTheIndex(ctx context.Context, answer *swap.Answer, question, address string) {
 	owner := strings.ToLower(strings.TrimSpace(address))
 	if !isAddress(owner) {
 		owner = ""
 	}
-	got, steps, err := a.opt.Swap.Ask(ctx, a.opt.Index, question, owner)
+	_, steps, err := a.opt.Swap.Ask(ctx, a.opt.Index, question, owner)
 	answer.Steps = append(answer.Steps, steps...)
 	if err != nil {
 		a.opt.Logger.Warn("the index did not answer", "error", err)
-		return
 	}
-	answer.Cards = append(answer.Cards, swap.Card{
-		Title: "From the index",
-		Body:  got.Answer,
-		Tags:  []string{"The Graph", "Subgraph MCP", fmt.Sprintf("%d %s", got.Queries, plural(got.Queries, "query", "queries"))},
-	})
 }
 
 func isAddress(s string) bool {
@@ -342,13 +346,6 @@ func isAddress(s string) bool {
 		}
 	}
 	return true
-}
-
-func plural(n int, one, many string) string {
-	if n == 1 {
-		return one
-	}
-	return many
 }
 
 func (a *api) requireAdmin(next http.HandlerFunc) http.HandlerFunc {

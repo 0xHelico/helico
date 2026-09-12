@@ -93,18 +93,25 @@ Subgraph does not qualify. The second one here is The Graph's **Subgraph MCP** s
 in the product rather than beside it: a `status` question in the chat — *"why has nothing
 moved?"* — opens a session on `subgraphs.mcp.thegraph.com`, hands the model the subgraph's
 schema through MCP, and lets it write its own GraphQL against Helico's subgraph, up to five
-queries. The answer comes back as a card, *From the index*, and every MCP call as a step under
-it, so the reads are visible beside the sentence they produced. The model cannot reach any other
-subgraph, cannot write, and cannot change the reply that would have been given without it.
+queries. **Every MCP call is a step under the answer** — `mcp.initialize`, then
+`mcp.get_schema_by_subgraph_id`, then one `mcp.execute_query_by_subgraph_id` per query with the
+query's own first line — so what was asked of the subgraph is on screen beside the reply rather
+than paraphrased into it. The model cannot reach any other subgraph, cannot write, and cannot
+change the reply that would have been given without it.
+
+The index's own sentence used to be shown too, in a card titled *From the index*. It was dropped
+on 12 September: it read as debug output rather than an answer, reciting an account address, an
+opening transaction hash and a UTC timestamp for a question nobody had asked. The steps are the
+better evidence anyway — they are the calls, not a description of them.
 
 Measured on 12 September, before the code (`docs/plans/2026-09-12-the-chat-reads-the-index.md`):
 the server executes queries on network subgraphs with no API key, and answers *"subgraph not
 found"* for a Studio-only deployment. So the subgraph was published to The Graph Network the same
 day — id `7Qw2zNn9recjF81BvdiKHDAok7ec9yq9o9cPsyjjoeVL`, from `scripts/publish-subgraph.ts` — and
 the composition has been live on `api.helico.site` since 11:53 UTC. Ask the deployed chat *"why
-has nothing moved?"* with a wallet connected: the card *From the index* and the `mcp.*` steps under
-it are the two products at work, and `docs/deployments.md` (12 September) has the first answer
-verbatim.
+has nothing moved?"* with a wallet connected and open the checks under the answer: the `mcp.*`
+steps are the second product at work, and `docs/deployments.md` (12 September) has the first
+answer verbatim, from when the card was still shown.
 
 | What | Where |
 |---|---|
