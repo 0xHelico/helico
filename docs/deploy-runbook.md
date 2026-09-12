@@ -300,6 +300,7 @@ with a small amount before trusting it with a real one.
 | `assets` | USDC and WETH — every asset the enclave reads at every account |
 | `delivery` | `forwarder`. `signature` was the setting until 11 September and is what staging still uses |
 | `reportReceiver` | the same `HelicoAgent` proxy. `deliver` refuses to write to an address with no code, and the forwarder marks a receiver that fails its ERC165 probe invalid for that transmission |
+| `coveringApps` | `HelicoMandateSwap` `0x0524a353…6041`. Its mandates settle out of the venue inside the swap, so they do not raise the liquid floor; without this the enclave read the account's own position as a claim on the wallet and emptied Morpho (12 Sep 13:55). Never an app that pulls the asset itself — SwapVM mandates must keep raising the floor |
 | `policyHash` | zero means "no policy published", which is a valid state and disables only the cross-check |
 
 ## 4. The workflow

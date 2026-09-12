@@ -37,7 +37,26 @@ that exists, and #22 asks for a full-length take by **11 September** rather than
 A shot that has to fall back is not a weaker video. A shot that claims something untrue ends the
 submission.
 
-### Pre-flight, re-run 12 September 16:00 UTC, after the money came back — **read this one first**
+### Pre-flight, re-run 12 September 16:40 UTC, after the money went back to work — **read this one first**
+
+The layer below was written while the account held everything idle, and it says the withdrawal
+is the story. It is half of it. Where they disagree, this one wins.
+
+| | State, measured at block 504,453,076 and after |
+|---|---|
+| **Three moves, three transmitters, one policy hash** | `490081` supplied at block 504,035,561 (11 Sep, [`0x0668c698…`](https://arbiscan.io/tx/0x0668c698cf3d396e622a97bfa3e21016de44fb41863fa7cb69b47bd126f9ed27), `0x3A8dBD6b…`); `490158` withdrawn at 504,414,805 (12 Sep 13:55, [`0x6b37141b…`](https://arbiscan.io/tx/0x6b37141bf0357a7c7b16d7288336bebdb1c091f3f5e40901addfc421fe7fb1b5), `0xba218037…`); **`1487196` supplied at 504,453,076 (12 Sep 16:35, [`0x0beffeee…`](https://arbiscan.io/tx/0x0beffeee97ad8a0f11e19af59e763394d4838440796967357ef578299e1d3435), `0xf0ecfbfc…`)**. `HelicoAgent.Carried` carries `0x84e5626f…` on all three. **Sayable:** *"three moves, three different nodes carried them, and the policy they enforced never changed."* |
+| **The withdrawal was the enclave being more careful than the app needed, and that is sayable** | It read the mandate on `HelicoMandateSwap` as a claim on the wallet. It is not one: that app settles a fill out of the venue inside the swap (`_cover`, and the receipt lines on the mandate are its permission). A SwapVM mandate *is* a claim on the wallet, and for those the floor still rises. The build deployed at 16:30 (`0x41d81450…` on Ethereum, workflow id `0x00fa897b…`) tells the two apart, and the next run put the capital back. **Sayable:** *"the first time it saw its own position it pulled the money out to be safe; we taught it that this app can pay from the venue, and it put the money back — with the position still live."* **Not sayable:** that it was a bug in the contracts or the index; both answered correctly, and the replay in `docs/deployments.md` shows the decision to the unit |
+| **The account now** | `USDC 10000`, `hmUSDC 743598` shares = `1487196` USDC in Morpho. The mandate on Aqua is unchanged: active, `1497196` on USDC and on each receipt. This is the sentence the product is built on, on screen: **the mandate is live and the money behind it is earning** |
+| **Do not wait for a move on camera — still** | The account is at its target split (10,000 liquid, the rest working) and the next runs say `HOLD (already at the target split)`. The evidence is the three transactions. Show the account, then Arbiscan, then the CRE execution page for `b00b1e7c…` whose `WriteReport` is the third one — the execution id is in the forwarder's `ReportProcessed` log, so dashboard and chain are provably the same run |
+| **The workflow id changed and the record says so** | `Carried` in the third move carries `0x00fa897b…`, not `0x00f5df97…`. Both are in `docs/deployments.md`; a reader who checks the first two receipts against the third will see two ids, and the deploy record between them is the reason |
+| **The yield line still holds** | `490158` back for `490081` in, 5.21% annualised over the first round trip. The third move has earned nothing measurable yet; do not quote a number for it |
+
+What this changes in the shot list: **3:15 says the three moves and what the middle one taught
+the enclave**, and the Graph shot keeps its hash — the withdrawal is still the transaction the
+index caused. What it adds is the ending the layer below could not have: the money is back at
+work and the position is live at the same time.
+
+### Pre-flight, re-run 12 September 16:00 UTC, after the money came back
 
 The layer below was written between the two halves of one round trip, and it names a balance the
 screen no longer shows. Where they disagree, this one wins.
