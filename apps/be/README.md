@@ -1,6 +1,6 @@
 # Backend
 
-`@helico/be` — Go. Three jobs: the session behind the dapp, the conversation that turns a sentence
+`@helico/be`. Go. Three jobs: the session behind the dapp, the conversation that turns a sentence
 into a checked swap intent, and the blog. Plus a cache in front of our subgraph, so a hundred
 visitors asking the same question cost one query a minute.
 
@@ -13,7 +13,7 @@ go run ./cmd/be           # :8787
 ```
 
 It creates `data/helico.db` and seeds every `content/*.md` the database does not already hold word
-for word. `go build -o bin/be ./cmd/be` for a binary — no C toolchain, the SQLite driver is pure
+for word. `go build -o bin/be ./cmd/be` for a binary, no C toolchain, the SQLite driver is pure
 Go.
 
 `.env` is read for anything the environment does not set, and **the environment always wins**, so
@@ -44,7 +44,7 @@ a deployment is unaffected by a file it never has.
 | `GET /api/session/nonce` · `POST` · `GET` · `DELETE /api/session` | | sign in with a wallet signature, ask who you are, sign out |
 | `GET`/`POST`/`DELETE /api/chats…` | session | conversations, scoped to the wallet that owns them |
 | `POST /api/swap/intent` | | `{reply, action, intent, needs, steps}`; `503` with no model |
-| `POST /api/graph` | | a cached subgraph read — same body and JSON as Studio, `X-Cache: hit\|miss` |
+| `POST /api/graph` | | a cached subgraph read, same body and JSON as Studio, `X-Cache: hit\|miss` |
 | `GET /api/posts` · `GET /api/posts/{slug}` | | the blog, keyset-paginated, `ETag` and `304` |
 | `PUT` · `DELETE /api/posts/{slug}` | bearer | write the blog |
 
@@ -55,17 +55,17 @@ Errors are `application/problem+json`. JSON over 1 KiB is gzipped. Reads carry
 
 **The session is a cookie, `SameSite=Lax` and `HttpOnly`.** `localhost` and `helico.site` are
 different *sites*, so a local page pointed at `api.helico.site` signs in and is signed out by the
-next reload — the cookie is set and never sent. Point both at localhost.
+next reload, the cookie is set and never sent. Point both at localhost.
 
 **`POST /api/graph` knows no GraphQL beyond the operation name.** The queries live in
 [`@helico/plugin-thegraph`](../../packages/plugins/thegraph/); this forwards a body and remembers
 the answer. Only `Mandates` and `Movements` are forwarded, or it would be an open proxy onto our
-own rate limit. The cache is in memory, which is right for one process and wrong for two — the
+own rate limit. The cache is in memory, which is right for one process and wrong for two. The
 only state is a hash of a request to an answer, which is where Redis would go.
 
 **The model proposes; this checks.** Both symbols must resolve in a registry committed to
 [`internal/swap/tokens.go`](internal/swap/tokens.go), whose addresses were read from Arbitrum One
-with `symbol()` and `decimals()` — so an intent can never carry an address a model invented. The
+with `symbol()` and `decimals()`, so an intent can never carry an address a model invented. The
 amount must parse as a positive decimal within the token's decimals. The confirmation sentence is
 composed here from the checked numbers, not by the model, so the two cannot disagree.
 

@@ -3,11 +3,11 @@
 > **The workflow's job changed on 8 September, and part of this directory has not caught up.**
 >
 > CRE used to re-centre a Uniswap v4 position through `HelicoVault`. It now decides how much of
-> an account's idle capital should be earning in a lending market and moves it — see
+> an account's idle capital should be earning in a lending market and moves it, see
 > [`docs/plans/2026-09-08-cre-manages-idle-capital.md`](../../docs/plans/2026-09-08-cre-manages-idle-capital.md).
 >
 > `@helico/plugin-cre` is rewritten for that, and **`rehearse-idle.sh` runs the new path end to
-> end** — deploys the factory, opens an account at an address predicted before it exists, funds it
+> end**, deploys the factory, opens an account at an address predicted before it exists, funds it
 > with real USDC taken from a whale on the fork, permits the four production markets, lets the
 > enclave decide and sign (staging still uses `signature` delivery), and carries the signed call
 > to the chain. A recorded run from 8 September, when it permitted Aave alone: 50,000 USDC in,
@@ -25,7 +25,7 @@
 > one variable at a time.
 >
 > The vault-era rehearsal is gone. `rehearse.sh` called `Deploy.s.sol` and `Rehearse.s.sol`,
-> both deleted with `HelicoVault` in #247, so it had not been runnable since — and the README
+> both deleted with `HelicoVault` in #247, so it had not been runnable since, and the README
 > was still telling people to run it.
 
 The runnable CRE project. The workflow itself is
@@ -48,7 +48,7 @@ minutes. It forks Arbitrum One on `127.0.0.1:8546`, deploys the account factory 
 opens an owner an account, funds it with real USDC taken from a whale, permits Aave v3, packs the
 secrets, runs the workflow, and carries the statement it signs to the chain as the agent.
 
-It rewrites `workflow/config.staging.json` in place and restores it from a copy on exit — not
+It rewrites `workflow/config.staging.json` in place and restores it from a copy on exit, not
 with `git checkout`, which would also revert anything else you had changed in that file.
 
 There is a larger one a level up: `scripts/rehearse-end-to-end.sh` does the same thing but opens
@@ -70,12 +70,12 @@ alongside. The first assertion is the one that matters, for the reason the secti
 about transaction hashes.
 
 It does **not** prove authorisation by a decentralised oracle network. The simulator is not a TEE
-— it says so itself when it runs, and names the enclave it would use in production. It is also a
+and says so itself when it runs, and it names the enclave it would use in production. It is also a
 fork, not a live network.
 
 **A larger rehearsal lives a level up.** `scripts/rehearse-end-to-end.sh` runs the same path but
-opens the account **through the app's own interface** rather than with `cast` — connect, open,
-nominate, permit — which is the route a person actually takes, and the one a claim about the
+opens the account **through the app's own interface** rather than with `cast`, connect, open,
+nominate, permit, which is the route a person actually takes, and the one a claim about the
 product being usable rests on.
 
 ## ⚠️ A transaction hash is not evidence here
@@ -83,7 +83,7 @@ product being usable rests on.
 This section is about **forwarder delivery**, which is what the deployed workflow uses since
 11 September: `delivery: forwarder` in `config.production.json`, written to `HelicoAgent` at
 `0x98c3…4463`, the contract the account nominates as its agent. Until that day production used
-`delivery: signature` — the enclave signed a statement and nothing carried it, which is why the
+`delivery: signature`: the enclave signed a statement and nothing carried it, which is why the
 account's balance never changed however often the enclave decided. Staging and `rehearse-idle.sh`
 still use `signature`, and the rehearsal applies the rule below for a different reason: it checks
 the account's balances rather than the transaction, because a call that succeeds and moves nothing
@@ -102,7 +102,7 @@ account's balance and its `IdleCapitalMoved` event, and the forwarder's
 `SUCCEEDED`, `FAILED` or `INVALID_RECEIVER`.
 
 **Never quote a transaction hash from this path as proof that a move happened.** Not the
-hash, and not the receipt status either — the receipt said `status 1` for a run in which
+hash, and not the receipt status either, the receipt said `status 1` for a run in which
 nothing moved.
 
 That check is what found [#78](https://github.com/0xHelico/helico/issues/78).
@@ -112,7 +112,7 @@ That check is what found [#78](https://github.com/0xHelico/helico/issues/78).
 | | |
 |---|---|
 | `project.yaml` | RPC per target. `staging-settings` is the local fork; `production-settings` is Arbitrum One |
-| `secrets.yaml` | One Vault DON secret id, `HELICO_VAULT`: a JSON document `scripts/pack-cre-vault.py` packs from the seven policy values, the agent key (read only under `signature` delivery) and the model's three credentials — one item because the DON answers one retrieval per execution |
+| `secrets.yaml` | One Vault DON secret id, `HELICO_VAULT`: a JSON document `scripts/pack-cre-vault.py` packs from the seven policy values, the agent key (read only under `signature` delivery) and the model's three credentials, one item because the DON answers one retrieval per execution |
 | `workflow/workflow.yaml` | Workflow name and artefact paths per target |
 | `workflow/main.ts` | The entry point. A dozen lines around `@helico/plugin-cre` |
 | `workflow/config.staging.json` | Public config for the fork. Rewritten in place by `rehearse-idle.sh`, and restored from a copy on exit |
@@ -131,8 +131,8 @@ The account, the markets and the asset are public, because they are on chain and
 them.
 
 **Nothing on chain holds the policy, and that is a deliberate difference from the vault.**
-`HelicoAccount` enforces the *shape* of what an agent may do — capital moves between the account
-and a market the owner allowlisted, with no recipient anywhere in the call — and leaves *how
+`HelicoAccount` enforces the *shape* of what an agent may do, capital moves between the account
+and a market the owner allowlisted, with no recipient anywhere in the call, and leaves *how
 much* and *when* to the enclave. So a wrong secret produces a wrongly-sized move, never a stolen
 one. The check against that is `policyHash` in the config: publish the hash and the enclave
 refuses any secrets that do not produce it. Leave it zero and there is nothing to disagree with.
@@ -156,13 +156,13 @@ day after the second was true.
 
 The simulation is what `rehearse-idle.sh` produces. The deployment is `helico-production`,
 registered in Chainlink's `WorkflowRegistry 2.0.0` on Ethereum mainnet and executing on DON
-family `zone-a` every five minutes, reading a Vault DON secret before it does anything else —
-consecutive `SUCCESS` in `cre execution list` since 13:45 UTC on 8 September.
+family `zone-a` every five minutes, reading a Vault DON secret before it does anything else.
+Consecutive `SUCCESS` in `cre execution list` since 13:45 UTC on 8 September.
 
 What is still not ours to say is *"it runs in a TEE"*. The handler is registered with
 `handlerInTee` and the runs complete, and Chainlink's own description is that execution completes
 only after DON consensus verifies the enclave's attestations. We have not read an attestation
-document, so that is an inference from their mechanism rather than a measurement of ours — and
+document, so that is an inference from their mechanism rather than a measurement of ours, and
 `docs/demo-video-script.md` splits the two sentences for exactly that reason.
 
 ## Official references

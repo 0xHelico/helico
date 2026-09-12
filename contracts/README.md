@@ -3,32 +3,32 @@
 Four things ship, and one idea sits behind all of them: a user commits to rules, and an agent may
 act only inside them.
 
-They occupy **twelve addresses** on Arbitrum One — implementations and proxies counted separately,
+They occupy **twelve addresses** on Arbitrum One, implementations and proxies counted separately,
 and the accounts themselves not counted at all, since those are deployed one per owner. Both
-counts are correct and they are not the same count —
+counts are correct and they are not the same count.
 [`docs/deployments.md`](../docs/deployments.md) lists the addresses, read back from the chain.
 
-- **`HelicoAccount`**, with `HelicoAccountProxy` and `HelicoAccountFactory` — one account per
+- **`HelicoAccount`**, with `HelicoAccountProxy` and `HelicoAccountFactory`, one account per
   owner, holding that owner's capital. The agent may only move it between lending markets the
   owner permitted, and neither call it can make takes a recipient.
-- **`HelicoMandateSwap`** — an Aqua app: a mandate on an agent that swaps against a maker's own
+- **`HelicoMandateSwap`**, an Aqua app: a mandate on an agent that swaps against a maker's own
   wallet, through [1inch Aqua](https://github.com/1inch/aqua).
-- **`HelicoAquaSwapVMRouter`**, in [`src/swapvm/`](src/swapvm/) — a 1inch SwapVM instruction that
+- **`HelicoAquaSwapVMRouter`**, in [`src/swapvm/`](src/swapvm/), a 1inch SwapVM instruction that
   settles a swap out of capital still earning in a lending market.
-- **`HelicoOracleBoard`** — a second Aqua app, priced from Chainlink and braked by its own
+- **`HelicoOracleBoard`**, a second Aqua app, priced from Chainlink and braked by its own
   inventory, for the maker who holds one token. Deployed 9 September; behind a proxy since 10
   September at
   [`0xe8515af9…7d39`](https://arbiscan.io/address/0xe8515af92442A5CDa67D1F32D1c8a987ba7e7d39#code).
-- **`CompoundVenue`** and **`MorphoVenue`** — the two markets that are not Aave, made to answer
+- **`CompoundVenue`** and **`MorphoVenue`**, the two markets that are not Aave, made to answer
   `ILendingVenue` the way Aave does and to be their own receipt token. Three deployed: Compound
   USDC, Morpho USDC, Compound WETH.
-- **`HelicoAgent`** — the agent an account nominates: a contract, behind a proxy, that only a
+- **`HelicoAgent`**, the agent an account nominates: a contract, behind a proxy, that only a
   report from Chainlink's DON can make act. It calls the account's `supplyIdle` and
   `withdrawIdle` and nothing else, because the account lets an agent call nothing else.
 
 ## HelicoOracleBoard
 
-Built and deployed 9 September, redeployed behind a proxy on the 10th —
+Built and deployed 9 September, redeployed behind a proxy on the 10th, at
 [`0xe8515af9…7d39`](https://arbiscan.io/address/0xe8515af92442A5CDa67D1F32D1c8a987ba7e7d39#code), verified. A second Aqua app, sitting beside `HelicoMandateSwap` rather
 than replacing it, and it exists because of a maker the first one cannot serve.
 
@@ -38,15 +38,15 @@ right to: its price *is* the ratio of two balances, so a zero side has no price 
 
 |  | quotes a one-sided maker | brakes itself | settles out of a lending position |
 |---|---|---|---|
-| `HelicoMandateSwap` — constant product | no | yes, for free | yes |
-| a fixed price — `test/FixedPriceBoard.sol` | yes | no | no |
+| `HelicoMandateSwap`, constant product | no | yes, for free | yes |
+| a fixed price, `test/FixedPriceBoard.sol` | yes | no | no |
 | `HelicoOracleBoard` | yes | yes | yes |
 
 The last column was empty here for a day, and the gap mattered more than it looks: the maker this
 app exists for is exactly the one whose capital is **not** in their wallet. Without the unwind the
-board quotes a price nobody can be paid. `_cover` is now here too — the same logic
+board quotes a price nobody can be paid. `_cover` is now here too, the same logic
 `HelicoMandateSwap` carries, kept as a second copy rather than a shared base, so a change to one
-is a deliberate change to both — so the wallet is spent first,
+is a deliberate change to both, so the wallet is spent first,
 only the shortfall is unwound, and the receipt is pulled through Aqua so the budget stays a number
 the maker shipped and `dock` destroys.
 
@@ -69,12 +69,12 @@ ask = mid * (BPS + spread - skew) / BPS      the maker selling base
 
 Both sides shift **down** as base inventory accumulates, so selling into the board gets steadily
 worse while buying the inventory back gets steadily better. Inventory is pushed home by the price
-rather than by anyone watching — which is what a constant product gets for free, restored on top
+rather than by anyone watching, which is what a constant product gets for free, restored on top
 of a feed that knows nothing about who holds what.
 
 Measured against the live ETH/USD feed on Arbitrum One
 ([`0x639Fe6ab…ba612`](https://arbiscan.io/address/0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612),
-`"ETH / USD"`, 8 decimals — read from the chain rather than assumed):
+`"ETH / USD"`, 8 decimals, read from the chain rather than assumed):
 
 ```
 chainlink ETH/USD  2483.504394
@@ -101,12 +101,12 @@ is the only cushion.
 - **A maker with debt is refused.** Unwinding collateral can liquidate them, and Aave's own health
   checks do not run for us, so the refusal has to be ours.
 - **A receipt that aliases a traded token is refused** at check time, because the unwind would
-  spend the very reserve it is topping up — taking the ledger down twice for one fill.
+  spend the very reserve it is topping up, taking the ledger down twice for one fill.
 
 ### One thing a one-sided maker has to do that is easy to miss
 
 **Approve the token you do not hold yet.** The moment you acquire any base, you may be asked to
-sell it — and an approval covering only what you hold means you can buy and never sell. The fork
+sell it, and an approval covering only what you hold means you can buy and never sell. The fork
 test found this the hard way, as a `SafeTransferFromFailed` on the second fill.
 
 ## The vault, and why it is gone
@@ -119,7 +119,7 @@ Two things it documented still apply to what ships, so they moved rather than we
 
 - **A payable batcher lets one `msg.value` be spent by every call in the batch.** The guard is
   [`scripts/check-no-payable.py`](../scripts/check-no-payable.py), now reading `HelicoAccount`'s
-  ABI. A Solidity test cannot hold this line — it can only show that today's batcher rejects
+  ABI. A Solidity test cannot hold this line, it can only show that today's batcher rejects
   value, which stays true however the contract changes around it.
 - **A test that inherits the layout it checks proves nothing about the layout.** The vault's only
   upgrade-test target was a `V2` that inherited from it, so a shifted slot was invisible to every
@@ -154,7 +154,7 @@ struct SwapMandate {
 
 **Aqua never reads these bytes.** It files a strategy under `keccak256` of whatever the maker
 shipped and hands the app a ledger keyed by that hash. Every field above is therefore enforced
-here or nowhere — and a field nobody reads would be worse than a missing one, because it reads
+here or nowhere, and a field nobody reads would be worse than a missing one, because it reads
 as a promise and behaves as decoration.
 
 That also means tampering is not a threat worth a check: change any field and the hash changes,
@@ -168,7 +168,7 @@ Both halves of that were arrived at by being wrong first.
 An **input** ceiling bounds the output only through the curve, and the curve can be made to pay
 out everything. Aqua's `ship` validates nothing, so a strategy shipped with a zero amount on one
 side is active, and constant product then returns the *entire* opposite reserve for two wei of
-input. `DegenerateReserves` refuses that swap — but the limit a maker actually means is still
+input. `DegenerateReserves` refuses that swap, but the limit a maker actually means is still
 "never hand over more than this", which is a limit on the output.
 
 A **single** ceiling cannot mean anything across a pair, because either token can be the input.
@@ -182,7 +182,7 @@ so the taker callback can only land on a contract. A plain EOA reverts with or w
 
 Rotating it costs a `dock` and a re-ship under a new salt, because Aqua freezes a strategy for
 the lifetime of its hash and docking burns that hash permanently. If the agent key leaks, the
-response is one `dock` transaction — which is enough, and is not the same as being able to swap
+response is one `dock` transaction, which is enough, and is not the same as being able to swap
 the key out. An EIP-712 signature from the agent would fix that properly, with the key outside
 the strategy; it is not built.
 
@@ -202,13 +202,13 @@ Every guard on the swap path was removed, one at a time, and the suite re-run. A
 are caught.
 
 The unwind path was added later and its guards were checked the same way, but the one worth
-recording is the pool-to-receipt binding. Removing it does not merely turn a test red — the swap
+recording is the pool-to-receipt binding. Removing it does not merely turn a test red, the swap
 **succeeds**, and 90.66 of another party's receipt tokens leave the contract. A test that passes
 with a fix already in place has not been shown to catch anything; that number is what showed it.
 The reentrancy one needed care: deleting the modifier makes `_safeCheckAquaPush` revert with
 `MissingNonReentrantModifier`, so every test fails and none of them say anything about the
 attack. Removing the guard **and** inlining the same balance check leaves a contract that looks
-correct, and then exactly one test fails — because two overlapping swaps snapshot the same
+correct, and then exactly one test fails, because two overlapping swaps snapshot the same
 balance and a single payment satisfies both checks.
 
 Negative tests use funded, approved callback contracts, so deleting the rule under test would
@@ -220,7 +220,7 @@ succeeds once a mandate names it.
 One contract per owner, so a bug in the code that holds one person's money cannot reach anyone
 else's. The factory computes the address with `CREATE2` before anything is deployed, which means
 an owner can be paid before they have ever sent a transaction, and `open` is idempotent and
-permissionless — opening someone's account grants nothing, because the owner is fixed by the
+permissionless, opening someone's account grants nothing, because the owner is fixed by the
 address itself.
 
 ### The escape hatch lives in the proxy, and that is the whole design
@@ -229,7 +229,7 @@ A proxy forwards everything to its implementation. Put "send everything back to 
 implementation, and the same key that replaces the implementation can delete the way out. An exit
 that can be revoked is not an exit.
 
-So `escape` is the proxy's own function and `OWNER` is an `immutable` — in bytecode rather than
+So `escape` is the proxy's own function and `OWNER` is an `immutable`, in bytecode rather than
 storage, where no implementation can write it and no layout can shift it.
 
 **What that costs, written here rather than left to be discovered.** Two selectors belong to the
@@ -241,7 +241,7 @@ both and answers them in an attacker's favour. Ownership does not move and the o
 withdraws everything.
 
 The implementation address lives in each proxy's own ERC-1967 slot rather than a shared beacon. A
-beacon is cheaper — one write changes everyone's code — and that is exactly the shared fate this
+beacon is cheaper, one write changes everyone's code, and that is exactly the shared fate this
 architecture exists to avoid.
 
 ### The account stores no owner
@@ -264,7 +264,7 @@ The allowlist is the owner's alone. Deciding where money works was delegated; de
 as a market was not, because a contract that merely behaves like a lending pool is how an
 allowlist gets drained.
 
-The approval `supplyIdle` grants is for exactly `amount` and is taken back in the same call — an
+The approval `supplyIdle` grants is for exactly `amount` and is taken back in the same call, an
 allowance outlives the nomination that justified it, and revoking an agent has to revoke
 something.
 
@@ -280,7 +280,7 @@ in the same transaction.
 
 EIP-712 written out rather than inherited, because `EIP712Upgradeable` keeps its name and version
 in storage and needs an initializer this contract deliberately does not have. The domain binds
-`address(this)` — the owner's own proxy — and `block.chainid`, and there are tests for a signature
+`address(this)`, the owner's own proxy, and `block.chainid`, and there are tests for a signature
 travelling to the owner's *other* account and to another chain.
 
 The nonce is strictly sequential, which is a design choice rather than an implementation detail:
@@ -288,7 +288,7 @@ exactly one authorisation is valid at a time, and that is what makes `invalidate
 correct at `+1`.
 
 The digest lives in `AccountAuth` rather than on the account, because the owner has to be able to
-sign **before their account exists** — at signing time there is no contract to ask. The factory
+sign **before their account exists**, at signing time there is no contract to ask. The factory
 answers for the address the account *will* have, both route through one library so they cannot
 drift, and a test asserts the digest signed before deployment is the one verified after.
 
@@ -300,7 +300,7 @@ worth more than seeing one coming two days out, and a two-day delay would mean a
 the last day cannot be fixed at all.
 
 What it costs: the owner cannot review or refuse a specific upgrade before it lands. What remains
-are the two protections that do not depend on timing — `refuseAutoUpgrade`, which removes the
+are the two protections that do not depend on timing, `refuseAutoUpgrade`, which removes the
 upgrader for good, and the escape hatch, which no implementation can reach.
 
 **Restoring the delay is the first thing to do before this is used with real money.**
@@ -316,7 +316,7 @@ Written down rather than glossed over.
 - **The mandate ceiling is per swap, not a budget.** The reentrancy lock is released when each
   call returns, so a loop inside one transaction multiplies the ceiling freely. A test asserts
   this rather than a comment claiming otherwise. A real budget needs storage keyed per mandate,
-  incremented *before* the callback — and sibling mandates of the same maker are reachable from
+  incremented *before* the callback, and sibling mandates of the same maker are reachable from
   inside a callback, so a per-maker counter would be wrong.
 - **Fee-on-transfer and rebasing tokens desync Aqua's ledger.** `push` credits the nominal
   amount while the maker receives less, so the ledger overstates the wallet and pulls eventually
@@ -334,10 +334,10 @@ Written down rather than glossed over.
 - **Unwind dust returns to the maker's wallet, not to Aqua's ledger.** The ledger is debited the
   full amount pulled while any remainder goes back to the wallet, so the mandate's receipt budget
   shrinks by slightly more than the position does. Exactly zero for Aave aTokens, where the
-  transfer and the burn round identically — it only appears on the venue-agnostic paths the
+  transfer and the burn round identically, it only appears on the venue-agnostic paths the
   interface advertises.
 - **`expiry = 0` means permanently dead, not "no expiry".** Because a mandate is immutable and
-  docking burns its hash, the typo cannot be repaired in place — only re-issued under a new
+  docking burns its hash, the typo cannot be repaired in place, only re-issued under a new
   salt.
 
 ## Running
@@ -355,7 +355,7 @@ CI leaves `ARBITRUM_RPC_URL` unset, so the fork suite reports `SKIP` there rathe
 A green tick for tests that never ran is worth less than an honest gap, so the count CI prints
 is smaller than the count with an endpoint, on purpose.
 
-No total is written here. It was wrong three times in one day — corrected, and stale again
+No total is written here. It was wrong three times in one day, corrected, and stale again
 within the hour, twice by tests landing between the correction and its merge. The command above
 prints the true number, and the landing page derives it from `contracts/test/` at build time
 (`apps/landing/src/lib/solidity-tests.ts`). A figure a reader can produce in two seconds does
@@ -372,7 +372,7 @@ other rather than each against its own reading; and `ForkHelicoAgent.t.sol` driv
 
 ## Deploying
 
-`forge` reads `contracts/.env` on its own — copy `.env.example` and fill it in. The deployer's
+`forge` reads `contracts/.env` on its own, copy `.env.example` and fill it in. The deployer's
 key is **not** in that file: every deploy script calls `vm.startBroadcast()` with no argument, so
 the signer comes from the command line, and the safe place for it is Foundry's encrypted keystore.
 
@@ -386,7 +386,7 @@ forge script script/DeployAccountFactory.s.sol:DeployAccountFactory \
 ```
 
 Foundry asks for the keystore password each run. The key never reaches `.env`, shell history, or
-a process listing — which is worth the extra prompt, because `--private-key` on a command line
+a process listing, which is worth the extra prompt, because `--private-key` on a command line
 puts it in all three.
 
 **The agent is deployed by `DeployHelicoAgent.s.sol`**, and its three identities are immutables
@@ -401,7 +401,7 @@ Three places want the address, and nothing reads it from the chain:
 
 | | |
 |---|---|
-| `apps/cre/workflow/config.production.json` | `agent` and `reportReceiver`, with `delivery: forwarder` — then the workflow is redeployed, because config travels with the binary |
+| `apps/cre/workflow/config.production.json` | `agent` and `reportReceiver`, with `delivery: forwarder`, then the workflow is redeployed, because config travels with the binary |
 | `apps/app/lib/account.ts` | `HELICO_AGENT`, which is what *Nominate Helico's agent* sends to `setAgent` |
 | [`docs/deployments.md`](../docs/deployments.md) | the addresses read back from the chain |
 

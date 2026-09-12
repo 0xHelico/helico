@@ -17,7 +17,7 @@ partner keeps those references stable. It also keeps apps thin: what the product
 separable from how it talks to a protocol.
 
 The exception is anything deployed. `HelicoMandateSwap` is an Aqua app, so it is Solidity in
-[`contracts/`](../../contracts/) — wrapping it in a package would add a layer that proves nothing.
+[`contracts/`](../../contracts/), wrapping it in a package would add a layer that proves nothing.
 The rule is about where protocol knowledge lives, not about the directory.
 
 ## Adding one
