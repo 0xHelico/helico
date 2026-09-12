@@ -244,16 +244,34 @@ Permitted and encouraged. What is forbidden is **not understanding the result**.
 
 ### Pre-submission checklist
 
-- [ ] Repository public, code open source
-- [ ] README describes the project and **points to the contracts and lines of code** behind
-      each integration
-- [ ] `AI-USAGE.md` filled in honestly
-- [ ] Commit history clean and traceable
+Six of these were measured on 13 September and are ticked with what the measurement was, because
+an item left unchecked after its work is done makes the rest of the list look longer than it is —
+which is exactly what #85 did to the one thing that mattered.
+
+- [x] **Repository public, code open source** — `visibility: PUBLIC`, `private: false`,
+      MIT License, read from the GitHub API rather than from memory
+- [x] **README points to the contracts and lines of code** behind each integration — twelve
+      pointers, each **pinned to a commit SHA** so a line number cannot go stale. All twelve
+      verified three ways on 13 September: the blob resolves at that SHA, the SHA is an ancestor
+      of `origin/main` (a pointer into a deleted branch would 404 for a judge while resolving
+      locally), and GitHub serves it `200`. Each range lands on the declaration its label claims —
+      `onCronTrigger`, `struct SwapMandate`, `swapExactIn`, `handleSwapped`, and the rest
+- [x] **`AI-USAGE.md` filled in** — 2,711 lines. Honesty is not something a check can assert, so
+      what is claimed here is the size and the upkeep, not the virtue
+- [x] **Commit history clean and traceable** — 1,006 commits over eight days, between 79 and 232
+      a day, every one through a pull request. The rule this exists for is *"you cannot just have
+      three commits with a million lines"*
 - [ ] Demo video passes every rejection criterion (see below)
-- [ ] Every partner integration **tested and genuinely working**
+- [x] **Every partner integration tested and genuinely working** — and for the first time all
+      three are provable from the chain rather than from a test suite. Chainlink: three DON-carried
+      moves on Arbitrum One, by three different transmitters. 1inch: a mandate live on Aqua under
+      `HelicoMandateSwap`, strategy hash `0x01f61bb8…`. The Graph: the number that moved the money
+      exists only in the index — see the line below
 - [ ] At most **3 partner prizes**, each confirmed open to our track
-- [ ] For the finalist track: **deployed and usable by others without us running anything**
-      (localhost is not accepted; testnet is fine)
+- [x] **Deployed and usable by others without us running anything** — `helico.site`,
+      `app.helico.site` and `api.helico.site` all answer, and the one account on Arbitrum One was
+      opened through the deployed dapp by a wallet, not by a script. `bun run check:deploys`
+      answers whether what is deployed is what is on `main`
 
 ### Demo video — automatic rejections
 
@@ -309,9 +327,18 @@ costs one slot, not several.
 - [x] **Live data consumed from a Graph provider** — Subgraph Studio for subgraphs, The Graph
       Market for Substreams. A mocked dataset does not qualify. Studio, `version/latest`, read by
       the enclave every five minutes and by the app
-- [ ] The Graph is **load-bearing**, not decorative. Ours is: Aqua's balances mapping is private
-      and four levels deep and no event parameter is `indexed`, so "which mandates does this
-      maker have?" has no on-chain answer at all
+- [x] The Graph is **load-bearing**, not decorative — and since 12 September this is measured
+      rather than argued. Aqua's balances mapping is private and four levels deep and no event
+      parameter is `indexed`, so "which mandates does this maker have?" has no on-chain answer at
+      all. What that costs is now on chain twice over: at 13:54 UTC the account shipped a mandate
+      for `1497196` USDC, and 54 seconds later the DON withdrew `490158` from Morpho — exactly
+      `1497196 − 1007038`, the shortfall against a number that exists only in the index
+      ([`0x2ed147cf…`](https://arbiscan.io/tx/0x2ed147cfe956fe5f8fc9693acdcd3af2bbd8ce8b8ec3b5669cf5bbb9f219416c),
+      [`0x6b37141b…`](https://arbiscan.io/tx/0x6b37141bf0357a7c7b16d7288336bebdb1c091f3f5e40901addfc421fe7fb1b5)).
+      Replayed offline with the production policy, the counterfactual is the proof: **with** the
+      mandate the verdict is `withdraw 490158`, **without** it `supply 997038`, and
+      `minSupplyRateRay` is `0` so a rate floor is ruled out. An index that changes what the money
+      does is not a dashboard. `docs/deployments.md`, 12 September
 - [ ] Demo video, 2–4 minutes, and open source with a clear README
 
 > ⚠️ Two Graph tracks exist and **both cost one slot**, because a sponsor with several tracks
