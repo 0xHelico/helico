@@ -66,6 +66,14 @@ handled in code now, and the demo question carries one sentence the index cannot
 (#449): *the agent's moves into lending markets are not in this index; the portfolio reads those
 from the chain.*
 
+The card itself went the same evening (#455) and its sentence came back as the **last step**,
+`index.answer`, under the `mcp.*` calls (#464, #465): capped in code to two sentences with no hash
+and no full address. Production at 14:2x UTC, after the account's owner shipped its first
+mandate (#460, 13:54 UTC): three reads — the account, its mandates, the mandate's movements —
+and *"The agent's moves into lending markets are not in this index; the portfolio above reads
+those from the chain. The index shows that there is one active mandate with 7 recorded
+movements."*
+
 
 ## 11 September 2026 — the agent is a contract, and the DON writes the move
 
