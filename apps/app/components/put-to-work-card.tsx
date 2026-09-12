@@ -40,6 +40,7 @@ import {
   hasAgent,
 } from "@/lib/account";
 import { explorerTx } from "@/lib/chain";
+import { readMandates, shipped } from "@/lib/mandates";
 import { cn } from "@/lib/utils";
 import { MARKETS, readVenues } from "@/lib/venues";
 
@@ -158,6 +159,38 @@ export function PutToWorkCard({
         USDC,
         WETH,
       ]),
+  });
+
+  /**
+   * Whether this account has already shipped, asked of the index rather than remembered.
+   *
+   * **The bug this closes.** `done` was `batch.data?.status === "success"`, which is state
+   * belonging to one `useSendCalls` call — so a reload, a second tab, or another device showed a
+   * fresh `Execute` over a position that already existed, and pressing it shipped a *second*
+   * mandate under a new salt rather than doing nothing. A card about money may not forget what it
+   * did because the page was refreshed.
+   *
+   * Asked of The Graph because the chain cannot answer it: Aqua's `_balances` is private and four
+   * levels deep and none of its events is `indexed`, which is the same reason `lib/mandates.ts`
+   * exists. `readMandates` is reused as-is — a second query for the same question would be a
+   * second thing to keep true.
+   *
+   * Scoped to the app this card ships to. A mandate on the SwapVM router is a real position and
+   * not this one, and ticking on it would report work nobody did.
+   */
+  const position = useQuery({
+    enabled: Boolean(account),
+    queryKey: ["put-to-work-shipped", account],
+    queryFn: async () => {
+      const view = await readMandates(account as Address);
+      return shipped(view.rows, mandateSwapAddress(ARBITRUM_ONE));
+    },
+    // After a successful press, poll until the index has the block — and stop the moment it does.
+    // Without it the tick would arrive on the next mount rather than on the press, which is the
+    // one moment somebody is looking at it.
+    refetchInterval: (q) =>
+      batch.data?.status === "success" && !q.state.data?.count ? 5_000 : false,
+    staleTime: 15_000,
   });
 
   const wallet = balances.data?.wallet ?? 0n;
@@ -330,11 +363,22 @@ export function PutToWorkCard({
     });
   }
 
-  const done = batch.data?.status === "success";
+  const justDone = batch.data?.status === "success";
   const pending = send.isPending || batch.isLoading;
   const failed = send.error ?? batch.error;
   const receipt = batch.data?.receipts?.[0]?.transactionHash;
   const link = receipt ? explorerTx(CHAIN_ID, receipt) : undefined;
+
+  // Shipped in this session, or shipped at all. The second survives a reload and the first is
+  // what answers immediately — the index takes a few seconds to see a block, so a card that
+  // trusted only the query would flick back to `Execute` right after a successful press.
+  const already = (position.data?.count ?? 0) > 0;
+  const done = justDone || already;
+  // **Pressing again is only pointless when there is nothing new to ship.** A mandate is
+  // immutable, so money that arrived after one was shipped is not covered by it, and a second
+  // ship is the honest way to cover it. With an empty wallet there is nothing to add and the
+  // button says so rather than offering a duplicate under a fresh salt.
+  const addable = wallet > 0n;
 
   return (
     <div
@@ -379,11 +423,18 @@ export function PutToWorkCard({
           }
         />
         <Line
+          done={already}
           label="Ship the position"
           detail={
-            reading
-              ? "reading the account…"
-              : `up to ${usdc(ceiling)} USDC quotable on Aqua`
+            position.isPending
+              ? "asking the index…"
+              : already
+                ? position.data?.count === 1
+                  ? "already shipped"
+                  : `${position.data?.count} already shipped`
+                : reading
+                  ? "reading the account…"
+                  : `up to ${usdc(ceiling)} USDC quotable on Aqua`
           }
         />
         {/* Not in this batch, and it does not pretend to be. */}
@@ -398,7 +449,7 @@ export function PutToWorkCard({
         <>
           <Button
             className="mt-4 w-full"
-            disabled={!ready || pending || reading}
+            disabled={!ready || pending || reading || (done && !addable)}
             onClick={() => {
               setRefused(null);
               run().catch((e: unknown) =>
@@ -414,7 +465,11 @@ export function PutToWorkCard({
                 Signing…
               </>
             ) : done ? (
-              "Done"
+              addable ? (
+                `Ship ${usdc(wallet)} USDC more`
+              ) : (
+                "Done"
+              )
             ) : (
               "Execute"
             )}
@@ -441,6 +496,14 @@ export function PutToWorkCard({
         </div>
       )}
 
+      {/* A reload has no transaction to link — the index answers *that* a mandate exists, not
+          which transaction shipped it — so the strategy hash stands in. It is the identifier the
+          mandate is actually filed under, which is the more useful of the two anyway. */}
+      {!link && already && position.data?.hash ? (
+        <p className="tabular mt-2 font-mono text-[11px] text-faint">
+          {`${position.data.hash.slice(0, 6)}…${position.data.hash.slice(-4)}`}
+        </p>
+      ) : null}
       {done && link ? (
         <p className="mt-2 text-[11px]">
           <a
