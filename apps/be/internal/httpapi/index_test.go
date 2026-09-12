@@ -89,7 +89,7 @@ func TestAStatusQuestionReadsTheIndex(t *testing.T) {
 	srv, fake, _ := indexServer(t, "helico-sub", []string{
 		`{"action":"status"}`,
 		`{"query":"{ accounts(where:{owner:\"0x3b4f\"}) { id } }","why":"find the account"}`,
-		`{"answer":"The index shows your account 0x0acd, opened by your wallet, holding nothing idle."}`,
+		`{"answer":"The agent's moves into lending markets are not in this index. The index holds no mandates for 0x0acdfa21a3cd075aee6583c8a8069f86ad3e4a39, opened in tx 0x0673389b803b0b2a60c828ee0b1a7cb4984f00a0960e4b8b85fa66972181ce61. Nothing else."}`,
 	}, answers)
 	res, body := do(t, http.MethodPost, srv.URL+"/api/swap/intent", map[string]string{
 		"message": "why has nothing moved?", "address": "0x3B4F0135465d444A5BD06Ab90fC59B73916C85F5",
@@ -104,13 +104,29 @@ func TestAStatusQuestionReadsTheIndex(t *testing.T) {
 	if got.Action != "status" || !strings.Contains(got.Reply, "read straight from the chain") {
 		t.Fatalf("the status reply changed: %+v", got)
 	}
-	// **The index does not put its own sentence on screen.** It used to, and it read as debug
-	// output: an address, a transaction hash and a UTC timestamp for a question nobody asked.
-	// What the index did is in the steps, which is where somebody looking for it will look.
+	// **The index's sentence is a step, not a card** (#455, #464). No card; the model's reading
+	// is the last step under the calls that produced it, capped to two sentences with every
+	// hash and full address cut to its ends.
 	for _, c := range got.Cards {
 		if c.Title == "From the index" {
 			t.Fatalf("the index answered with a card: %+v", c)
 		}
+	}
+	last := got.Steps[len(got.Steps)-1]
+	if last.Call != "index.answer" || !last.OK {
+		t.Fatalf("the last step is not the index's answer: %+v", last)
+	}
+	if !strings.HasPrefix(last.Detail, "The agent's moves into lending markets are not in this index.") {
+		t.Fatalf("the sentence lost its first clause: %q", last.Detail)
+	}
+	if strings.Contains(last.Detail, "Nothing else") {
+		t.Fatalf("a third sentence survived: %q", last.Detail)
+	}
+	if strings.Contains(last.Detail, "0x0acdfa21a3cd075aee6583c8a8069f86ad3e4a39") || strings.Contains(last.Detail, "0x0673389b803b0b2a60c828ee0b1a7cb4984f00a0960e4b8b85fa66972181ce61") {
+		t.Fatalf("a full address or hash survived: %q", last.Detail)
+	}
+	if !strings.Contains(last.Detail, "0x0acd…4a39") {
+		t.Fatalf("the address was not shortened: %q", last.Detail)
 	}
 	var mcpSteps int
 	for _, s := range got.Steps {

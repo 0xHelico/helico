@@ -359,3 +359,18 @@ func TestAskRefusesAFieldlessQueryBeforeAskingTheIndex(t *testing.T) {
 		t.Fatalf("the model was not told why: %s", shown)
 	}
 }
+
+func TestSentenceCapsWhatAPersonReads(t *testing.T) {
+	for in, want := range map[string]string{
+		"One. Two. Three.":                "One. Two.",
+		"Only one sentence":               "Only one sentence",
+		"**Bold** and `code`\n- a bullet": "Bold and code a bullet",
+		"Opened on 2026-09-10 at 17:58:38 UTC. Then more. And more.":                                                               "Opened on 2026-09-10 at 17:58:38 UTC. Then more.",
+		"Tx 0x0673389b803b0b2a60c828ee0b1a7cb4984f00a0960e4b8b85fa66972181ce61 opened 0x0acdfa21a3cd075aee6583c8a8069f86ad3e4a39.": "Tx 0x0673…ce61 opened 0x0acd…4a39.",
+		"   spaced   out   ": "spaced out",
+	} {
+		if got := Sentence(in); got != want {
+			t.Errorf("Sentence(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

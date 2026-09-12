@@ -115,11 +115,19 @@ Rules:
 - State only what a query returned. Do not say "there are no fills" unless you asked for fills
   and got none. Do not report a count from a page you limited: "first: 1" tells you nothing
   about how many exist — fetch "first: 1000" and count, or say "at least N".
-- Answer in at most five plain sentences. No headings, no bullet points, no markdown. Say
-  where the answer came from in a few words ("the index shows…"), and give the concrete
-  things you found — dates as dates, counts as counts — rather than a summary word. If the question is not
-  something the index can answer — a price, a prediction, an instruction to move money — say so
-  in one sentence and stop.
+- The answer is shown as one line under the reads that produced it, so it is at most TWO
+  sentences, plain text: no headings, no bullets, no markdown, no first person, no hedging
+  about your own abilities. Give the concrete things you found — counts as counts, dates as
+  dates — rather than a summary word. If the question is not something the index can answer —
+  a price, a prediction, an instruction to move money — say so in one sentence and stop.
+- Never write a transaction hash or a full address; refer to an account or a mandate by its
+  shortened form ("0x0acd…4a39") and only when it is needed to tell two apart.
+- Never give a balance or a holding — the index does not hold them and the page reads them
+  from the chain; two figures on one screen with nothing to say which is right is worse than
+  one. Never say when the account was opened unless the question asks for it; the page already
+  links the opening transaction.
+- Do not restate what the page already shows ("you have a Helico account at…"). Say only what
+  the index adds.
 - You have at most %d queries. Answer as soon as you know. An answer is final: after it you
   cannot query again, so never write "I will now check…" — check first, then answer.`
 
@@ -285,6 +293,36 @@ func (i *Index) schemaFor(ctx context.Context, session *graphmcp.Session) (strin
 	i.mu.Unlock()
 	return res.Text, nil
 }
+
+// Sentence caps the answer the way the prompt asked for it, because a prompt is a request and
+// this line is what a person reads: whitespace folded, markdown markers dropped, any hex string
+// of forty or more digits cut to its ends, and no more than two sentences. The clause the demo
+// question needs — "not in this index" — survives all of it.
+func Sentence(answer string) string {
+	t := strings.Join(strings.Fields(answer), " ")
+	t = strings.NewReplacer("**", "", "`", "", "# ", "", "- ", "").Replace(t)
+	t = longHex.ReplaceAllStringFunc(t, func(h string) string { return h[:6] + "…" + h[len(h)-4:] })
+	// Two sentences: cut after the second terminal punctuation that is followed by a space or
+	// the end. "2026-09-10 at 17:58:38 UTC." counts once; "e.g." would count, and is not a
+	// phrase the prompt produces.
+	count := 0
+	for i := 0; i < len(t); i++ {
+		if t[i] != '.' && t[i] != '!' && t[i] != '?' {
+			continue
+		}
+		if i+1 < len(t) && t[i+1] != ' ' {
+			continue
+		}
+		count++
+		if count == 2 {
+			return strings.TrimSpace(t[:i+1])
+		}
+	}
+	return strings.TrimSpace(t)
+}
+
+// longHex is a transaction hash or an address: 0x and forty or more hex digits.
+var longHex = regexp.MustCompile(`0x[0-9a-fA-F]{40,}`)
 
 // wrapQuery gives a bare selection its braces. Smaller models write
 // `accounts(where:{…}) { id }` and the gateway answers "Expected {, query, mutation…" — twice,
