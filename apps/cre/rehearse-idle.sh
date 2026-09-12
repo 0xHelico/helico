@@ -44,6 +44,10 @@ for tool in anvil cast forge cre jq; do
 	command -v "$tool" >/dev/null || { echo "missing $tool"; exit 1; }
 done
 [ -f .env ] || { echo "no .env — cp .env.example .env first"; exit 1; }
+# The example carries no key on purpose (#471). Staging broadcasts to the fork below, so the CLI
+# needs one: anvil's first account, which `anvil` prints at startup and which holds nothing real.
+grep -qE '^CRE_ETH_PRIVATE_KEY=0x[0-9a-fA-F]{64}\s*$' .env ||
+	{ echo "CRE_ETH_PRIVATE_KEY is empty in .env — for a rehearsal, paste the first key anvil prints"; exit 1; }
 # The workflow asks the Vault DON for ONE secret, HELICO_VAULT, holding every value as JSON —
 # the DON answers one retrieval per execution. So the rehearsal has to build that item too, and
 # building it is the same act as checking for it: the packer names any SECRET_* that is absent,
