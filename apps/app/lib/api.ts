@@ -96,7 +96,16 @@ export type Challenge = {
   };
 };
 
-export type SwapConfig = { available: boolean; model: string };
+/**
+ * `models` is every model the backend is configured for, in the order it asks them, and it is the
+ * list the picker offers. `model` is the first of them, kept because a page can be newer than the
+ * backend it is talking to and an older one answers with that field alone.
+ */
+export type SwapConfig = {
+  available: boolean;
+  model: string;
+  models?: string[];
+};
 
 export const api = {
   /** What answers, and whether it can. Shown beside the composer. */

@@ -69,7 +69,9 @@ func run() error {
 		Timeout:      cfg.GraphMCPTimeout,
 		ModelTimeout: 25 * time.Second,
 	}
-	writeTimeout := cfg.RequestTimeout + 5*time.Second
+	// The swap route may hold a connection for the whole chain of models, so the server's own
+	// write deadline is sized from the longest route rather than from the general one.
+	writeTimeout := cfg.SwapBudget + 5*time.Second
 	if index.Configured() && index.Timeout+7*time.Second > writeTimeout {
 		writeTimeout = index.Timeout + 7*time.Second
 	}
@@ -114,6 +116,7 @@ func run() error {
 			CORSOrigins:     cfg.CORSOrigins,
 			Logger:          log,
 			RequestTimeout:  cfg.RequestTimeout,
+			SwapTimeout:     cfg.SwapBudget,
 			Chats:           chats,
 			SessionSecret:   cfg.SessionSecret,
 			Swap:            swapSvc,

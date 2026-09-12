@@ -13,7 +13,7 @@ func TestFromEnvDefaultsAndOverrides(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Addr != ":8787" || cfg.DBPath != "data/helico.db" || cfg.AdminToken != "" || len(cfg.CORSOrigins) != 4 || cfg.RequestTimeout != 30*time.Second {
+	if cfg.Addr != ":8787" || cfg.DBPath != "data/helico.db" || cfg.AdminToken != "" || len(cfg.CORSOrigins) != 4 || cfg.RequestTimeout != 10*time.Second {
 		t.Errorf("defaults: %+v", cfg)
 	}
 	// Named rather than counted. The dapp's own port was missing from this list for as long as
@@ -38,65 +38,78 @@ func TestFromEnvDefaultsAndOverrides(t *testing.T) {
 	}
 }
 
-// One set of variables is one model; a second set with a key is a fallback. An entry with no key
-// is not a model, so it must not spend a slice of the request's budget it can never use.
-func TestASecondModelIsOnlyConfiguredWhenItHasAKey(t *testing.T) {
+// **The swap route's budget is derived, so nothing has to be refused.** It used to be a check on
+// two numbers in tension: a model given longer than the request that wraps it could never finish.
+// The chain of models is now one whole call per model on a route with its own budget, so every
+// combination is reachable.
+func TestTheSwapBudgetHoldsTheWholeChainOfModels(t *testing.T) {
 	env := map[string]string{
 		"BE_LLM_API_KEY":           "primary",
 		"BE_LLM_FALLBACK_BASE_URL": "https://router.example/v1",
 	}
-	cfg, err := FromEnv(func(k string) (string, bool) { v, ok := env[k]; return v, ok })
-	if err != nil {
-		t.Fatal(err)
+	read := func() Config {
+		cfg, err := FromEnv(func(k string) (string, bool) { v, ok := env[k]; return v, ok })
+		if err != nil {
+			t.Fatal(err)
+		}
+		return cfg
 	}
-	// A base URL without a key is a half-written entry. The client drops it, so the budget check
-	// here must count one model rather than two.
-	if cfg.LLMTimeout != 12*time.Second {
-		t.Errorf("timeout %s, want the full budget for the one model that exists", cfg.LLMTimeout)
+
+	// A base URL with no key is a half-written entry, not a model. The client drops it, so the
+	// budget must count one rather than two or the route waits for an upstream that never runs.
+	one := read()
+	if one.SwapBudget != one.LLMTimeout+2*time.Second {
+		t.Errorf("budget %s for one model of %s", one.SwapBudget, one.LLMTimeout)
 	}
 
 	env["BE_LLM_FALLBACK_API_KEY"] = "second"
-	env["BE_REQUEST_TIMEOUT"] = "20s"
-	cfg, err = FromEnv(func(k string) (string, bool) { v, ok := env[k]; return v, ok })
-	if err != nil {
-		t.Fatal(err)
+	two := read()
+	if two.SwapBudget < two.LLMTimeout*2 {
+		t.Errorf("budget %s cannot hold two models of %s", two.SwapBudget, two.LLMTimeout)
 	}
-	// **Both have to fit.** Two models at twelve seconds each cannot finish inside twenty, and a
-	// fallback that can never be reached is worse than none: it looks like cover it does not give.
-	if cfg.LLMTimeout*2 >= cfg.RequestTimeout {
-		t.Errorf("two models of %s do not fit in %s", cfg.LLMTimeout, cfg.RequestTimeout)
+	// And it is the route's budget, not everyone's: nothing else should hold a connection that
+	// long because the chat may.
+	if two.RequestTimeout >= two.SwapBudget {
+		t.Errorf("request %s is not shorter than the swap route's %s", two.RequestTimeout, two.SwapBudget)
 	}
 
-	// And an operator who wrote that combination deliberately is told, not quietly corrected.
-	env["BE_LLM_TIMEOUT"] = "12s"
-	if _, err := FromEnv(func(k string) (string, bool) { v, ok := env[k]; return v, ok }); err == nil {
-		t.Error("two 12s models inside a 20s request must be refused")
+	// A combination that would once have been refused is simply reachable now.
+	env["BE_LLM_TIMEOUT"] = "45s"
+	env["BE_REQUEST_TIMEOUT"] = "5s"
+	wide := read()
+	if wide.SwapBudget < 90*time.Second {
+		t.Errorf("budget %s cannot hold two models of 45s", wide.SwapBudget)
+	}
+
+	// A status question reads the index between asks, so that budget is an alternative shape of
+	// the same request rather than a stage of it: the larger of the two, never the sum.
+	env["BE_LLM_TIMEOUT"] = "5s"
+	env["BE_GRAPH_MCP_URL"] = "https://subgraphs.mcp.thegraph.example/sse"
+	env["BE_GRAPH_MCP_TIMEOUT"] = "40s"
+	indexed := read()
+	if indexed.SwapBudget != 42*time.Second {
+		t.Errorf("budget %s, want the index's 40s plus two", indexed.SwapBudget)
+	}
+
+	// And an index nobody configured does not buy the route a budget it has no use for.
+	delete(env, "BE_GRAPH_MCP_URL")
+	if off := read(); off.SwapBudget == 42*time.Second {
+		t.Errorf("an unconfigured index still set the budget to %s", off.SwapBudget)
 	}
 }
 
-func TestFromEnvRefusesAModelTimeoutThatCannotBeReached(t *testing.T) {
-	// The request timeout wraps the model call, so a longer model timeout is unreachable and the
-	// failure looks exactly like an unset key.
-	env := map[string]string{"BE_REQUEST_TIMEOUT": "5s", "BE_LLM_TIMEOUT": "20s"}
-	if _, err := FromEnv(func(k string) (string, bool) { v, ok := env[k]; return v, ok }); err == nil {
-		t.Fatal("want an error for a model timeout at or above the request timeout")
-	}
-	env["BE_LLM_TIMEOUT"] = "4s"
+// The model's own timeout is still read from the environment, and a bad duration is still an error.
+func TestTheModelTimeoutIsStillConfigurable(t *testing.T) {
+	env := map[string]string{"BE_LLM_TIMEOUT": "4s"}
 	cfg, err := FromEnv(func(k string) (string, bool) { v, ok := env[k]; return v, ok })
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.LLMTimeout >= cfg.RequestTimeout {
-		t.Fatalf("llm=%s request=%s", cfg.LLMTimeout, cfg.RequestTimeout)
+	if cfg.LLMTimeout != 4*time.Second {
+		t.Errorf("llm timeout = %s", cfg.LLMTimeout)
 	}
-
-	// Shortening only the request timeout is not an error: the model timeout is fitted under it.
-	only := map[string]string{"BE_REQUEST_TIMEOUT": "3s"}
-	cfg, err = FromEnv(func(k string) (string, bool) { v, ok := only[k]; return v, ok })
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cfg.LLMTimeout != 2400*time.Millisecond {
-		t.Fatalf("llm timeout = %s, want it fitted under 3s", cfg.LLMTimeout)
+	env["BE_LLM_TIMEOUT"] = "whenever"
+	if _, err := FromEnv(func(k string) (string, bool) { v, ok := env[k]; return v, ok }); err == nil {
+		t.Error("a bad duration must be an error")
 	}
 }

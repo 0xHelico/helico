@@ -57,7 +57,7 @@ func TestADeadUpstreamFallsThroughToTheNextOne(t *testing.T) {
 		Upstream{BaseURL: dead.srv.URL, Key: "one", Model: "a/fast"},
 		Upstream{BaseURL: alive.srv.URL, Key: "two", Model: "b/slow"},
 	)
-	got, err := c.ask(context.Background(), "why has nothing moved?", nil)
+	got, answered, err := c.ask(context.Background(), "why has nothing moved?", nil)
 	if err != nil {
 		t.Fatalf("the fallback did not answer: %v", err)
 	}
@@ -71,6 +71,11 @@ func TestADeadUpstreamFallsThroughToTheNextOne(t *testing.T) {
 	if alive.body["model"] != "b/slow" {
 		t.Errorf("asked for %v", alive.body["model"])
 	}
+	// **Which one replied is reported back.** A fallback that answered invisibly would leave the
+	// picker naming a model that did not reply.
+	if answered != "slow" {
+		t.Errorf("answered by %q, want the one that replied", answered)
+	}
 }
 
 // The fallback costs money too, so it is only reached when the first one fails.
@@ -81,7 +86,7 @@ func TestAWorkingUpstreamNeverReachesTheFallback(t *testing.T) {
 		Upstream{BaseURL: first.srv.URL, Key: "one", Model: "a/fast"},
 		Upstream{BaseURL: second.srv.URL, Key: "two", Model: "b/slow"},
 	)
-	if _, err := c.ask(context.Background(), "status", nil); err != nil {
+	if _, _, err := c.ask(context.Background(), "status", nil); err != nil {
 		t.Fatal(err)
 	}
 	if first.calls != 1 || second.calls != 0 {
@@ -100,7 +105,7 @@ func TestAnUpstreamWithNoKeyIsNotAnUpstream(t *testing.T) {
 	if len(c.ups) != 1 {
 		t.Fatalf("kept %d upstreams", len(c.ups))
 	}
-	if _, err := c.ask(context.Background(), "status", nil); err != nil {
+	if _, _, err := c.ask(context.Background(), "status", nil); err != nil {
 		t.Fatal(err)
 	}
 	if !c.Configured() {
@@ -125,7 +130,7 @@ func TestBasicCredentialsTakeTheHeaderAndTheKeyMovesAside(t *testing.T) {
 		User:    "operator",
 		Pass:    "a-password",
 	})
-	if _, err := c.ask(context.Background(), "status", nil); err != nil {
+	if _, _, err := c.ask(context.Background(), "status", nil); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.HasPrefix(proxied.auth, "Basic ") {
@@ -150,7 +155,7 @@ func TestBasicCredentialsTakeTheHeaderAndTheKeyMovesAside(t *testing.T) {
 func TestWithoutBasicCredentialsTheKeyIsABearerToken(t *testing.T) {
 	plain := stub(t, http.StatusOK, reply)
 	c := NewClient(5*time.Second, Upstream{BaseURL: plain.srv.URL, Key: "router-key", Model: "x/y"})
-	if _, err := c.ask(context.Background(), "status", nil); err != nil {
+	if _, _, err := c.ask(context.Background(), "status", nil); err != nil {
 		t.Fatal(err)
 	}
 	if plain.auth != "Bearer router-key" {
@@ -168,7 +173,7 @@ func TestWithoutBasicCredentialsTheKeyIsABearerToken(t *testing.T) {
 func TestTheRequestAsksForOneObjectRatherThanAStream(t *testing.T) {
 	s := stub(t, http.StatusOK, reply)
 	c := NewClient(5*time.Second, Upstream{BaseURL: s.srv.URL, Key: "k", Model: "x/y"})
-	if _, err := c.ask(context.Background(), "status", nil); err != nil {
+	if _, _, err := c.ask(context.Background(), "status", nil); err != nil {
 		t.Fatal(err)
 	}
 	if s.body["stream"] != false {
@@ -195,5 +200,67 @@ func TestTheReportedModelIsTheFamilyNotTheRoutingString(t *testing.T) {
 	}
 	if NewClient(time.Second).Model() != "" {
 		t.Error("an unconfigured client names no model")
+	}
+}
+
+// **Picking a model reorders the chain; it never describes an endpoint.** The name is matched
+// against what `Models` published, so a caller cannot point this process at an address nobody
+// configured, and the rest of the chain stays behind the choice so a pick still falls back.
+func TestPickingAModelAsksItFirstAndKeepsTheFallback(t *testing.T) {
+	fast := stub(t, http.StatusOK, reply)
+	slow := stub(t, http.StatusOK, reply)
+	svc := New(NewClient(5*time.Second,
+		Upstream{BaseURL: fast.srv.URL, Key: "one", Model: "acct-a/gpt-4o-mini"},
+		Upstream{BaseURL: slow.srv.URL, Key: "two", Model: "acct-b/gemini-pro-agent"},
+	))
+	if got := svc.Models(); len(got) != 2 || got[0] != "gpt-4o-mini" || got[1] != "gemini-pro-agent" {
+		t.Fatalf("models = %v, want the family names in order", got)
+	}
+
+	// The second one, chosen by the name the config endpoint publishes.
+	if _, err := svc.Prefer("gemini-pro-agent").Interpret(context.Background(), "status"); err != nil {
+		t.Fatal(err)
+	}
+	if slow.calls != 1 || fast.calls != 0 {
+		t.Errorf("calls: chosen %d, other %d", slow.calls, fast.calls)
+	}
+
+	// A name matching nothing leaves the order alone rather than refusing: the list a page holds
+	// can be a deploy out of date.
+	if _, err := svc.Prefer("a-model-nobody-configured").Interpret(context.Background(), "status"); err != nil {
+		t.Fatal(err)
+	}
+	if fast.calls != 1 {
+		t.Errorf("an unknown name changed the order: fast %d", fast.calls)
+	}
+
+	// And the choice does not remove the fallback.
+	if !strings.Contains(svc.Prefer("gemini-pro-agent").Model(), "gemini") {
+		t.Error("the chosen model is not the one reported first")
+	}
+	// Preferring must not mutate the service it came from.
+	if svc.Model() != "gpt-4o-mini" {
+		t.Errorf("the original service changed to %q", svc.Model())
+	}
+}
+
+// A pick cannot be a URL, a key or a routing string. Anything that is not a published family name
+// is simply not a match, which is what makes choosing a model incapable of reaching a new host.
+func TestAPickThatIsNotAFamilyNameSelectsNothing(t *testing.T) {
+	fast := stub(t, http.StatusOK, reply)
+	other := stub(t, http.StatusOK, reply)
+	c := NewClient(5*time.Second,
+		Upstream{BaseURL: fast.srv.URL, Key: "one", Model: "acct-a/gpt-4o-mini"},
+		Upstream{BaseURL: other.srv.URL, Key: "two", Model: "acct-b/gemini-pro-agent"},
+	)
+	for _, pick := range []string{
+		"http://169.254.169.254/latest/meta-data",
+		"acct-b/gemini-pro-agent",
+		"",
+		"GEMINI-PRO-AGENT",
+	} {
+		if got := c.prefer(pick); got.ups[0].BaseURL != fast.srv.URL {
+			t.Errorf("%q reordered the chain", pick)
+		}
 	}
 }

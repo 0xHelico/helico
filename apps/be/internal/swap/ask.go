@@ -150,7 +150,7 @@ func (s *Service) Ask(ctx context.Context, idx *Index, question, owner string) (
 
 	queries := 0
 	for turn := 0; turn <= maxQ; turn++ {
-		raw, err := model.complete(ctx, msgs)
+		raw, _, err := model.complete(ctx, msgs)
 		if err != nil {
 			steps = append(steps, Step{Call: "model", Detail: err.Error(), OK: false})
 			return IndexAnswer{}, steps, err

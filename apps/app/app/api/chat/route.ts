@@ -11,9 +11,10 @@ export async function POST(request: Request) {
   let message: unknown;
   let history: unknown;
   let address: unknown;
+  let model: unknown;
 
   try {
-    ({ message, history, address } = await request.json());
+    ({ message, history, address, model } = await request.json());
   } catch {
     return NextResponse.json(
       { error: 'send {"message": "…"}' },
@@ -42,6 +43,12 @@ export async function POST(request: Request) {
         // The connected wallet, when there is one. The backend uses it for exactly one thing:
         // telling the index whose account a status question is about. It is public data and a
         // filter, not an identity — the session cookie is the identity, and this is not it.
+        // Which of the configured models to ask first, by the family name the config endpoint
+        // published. Shape-checked here and matched against that list by the backend, so the
+        // worst a forged value can do is leave the order as it was.
+        ...(typeof model === "string" && /^[\w.-]{1,64}$/.test(model)
+          ? { model }
+          : {}),
         ...(typeof address === "string" && /^0x[0-9a-fA-F]{40}$/.test(address)
           ? { address }
           : {}),

@@ -168,20 +168,69 @@ func NewClient(timeout time.Duration, ups ...Upstream) *Client {
 // Configured reports whether Ask can do anything.
 func (c *Client) Configured() bool { return c != nil && len(c.ups) > 0 }
 
-// Model is the family name of the model asked first, for the composer to show.
+// family is a router's model string with the account stripped off.
 //
-// The family rather than the routing string. A router's model reads `fajar-openai/gpt-4o-mini`,
-// where the part before the slash names the account the call is billed to — not a credential, and
-// not something a public endpoint has any reason to publish either.
+// A router's model reads `fajar-openai/gpt-4o-mini`, where the part before the slash names the
+// account the call is billed to. Not a credential, and not something a public endpoint has any
+// reason to publish either — so this is what `/api/swap/config` reports and what a caller names
+// when it picks one.
+func family(model string) string {
+	if i := strings.LastIndex(model, "/"); i >= 0 {
+		return model[i+1:]
+	}
+	return model
+}
+
+// Model is the family name of the model asked first, for the composer to show.
 func (c *Client) Model() string {
 	if !c.Configured() {
 		return ""
 	}
-	m := c.ups[0].Model
-	if i := strings.LastIndex(m, "/"); i >= 0 {
-		return m[i+1:]
+	return family(c.ups[0].Model)
+}
+
+// Models is every configured model's family name, in the order they are asked.
+func (c *Client) Models() []string {
+	if !c.Configured() {
+		return nil
 	}
-	return m
+	out := make([]string, 0, len(c.ups))
+	for _, u := range c.ups {
+		out = append(out, family(u.Model))
+	}
+	return out
+}
+
+// prefer returns a client that asks the named model first.
+//
+// **The name is matched against what we published, and nothing else is read from it.** A caller
+// picks by the family name `Models` reports; it never supplies an address, a key or a routing
+// string, so choosing a model cannot point this process at an endpoint nobody configured.
+//
+// An unknown name leaves the order alone rather than refusing. The list a page is holding can be
+// one deploy out of date, and answering with the model that does exist is better than an error
+// about a menu.
+//
+// The rest of the chain is kept behind the choice, so picking the slower model still falls back to
+// the other one when it is down.
+func (c *Client) prefer(model string) *Client {
+	if model == "" || len(c.ups) < 2 {
+		return c
+	}
+	for i, u := range c.ups {
+		if family(u.Model) != model {
+			continue
+		}
+		if i == 0 {
+			return c
+		}
+		ups := make([]Upstream, 0, len(c.ups))
+		ups = append(ups, c.ups[i])
+		ups = append(ups, c.ups[:i]...)
+		ups = append(ups, c.ups[i+1:]...)
+		return &Client{ups: ups, HTTP: c.HTTP}
+	}
+	return c
 }
 
 type chatRequest struct {
@@ -213,16 +262,16 @@ type chatResponse struct {
 
 // ask sends the message and returns the draft the model produced. Anything the model says that
 // is not the expected JSON is an error here rather than a guess further down.
-func (c *Client) ask(ctx context.Context, message string, prior []Turn) (draft, error) {
-	raw, err := c.complete(ctx, history(prior, message))
+func (c *Client) ask(ctx context.Context, message string, prior []Turn) (draft, string, error) {
+	raw, answered, err := c.complete(ctx, history(prior, message))
 	if err != nil {
-		return draft{}, err
+		return draft{}, answered, err
 	}
 	var d draft
 	if err := json.Unmarshal([]byte(raw), &d); err != nil {
-		return draft{}, fmt.Errorf("the model's answer was not the shape asked for: %w", err)
+		return draft{}, answered, fmt.Errorf("the model's answer was not the shape asked for: %w", err)
 	}
-	return d, nil
+	return d, answered, nil
 }
 
 // complete sends one conversation and returns the model's content, which is asked for as a JSON
@@ -237,19 +286,24 @@ func (c *Client) ask(ctx context.Context, message string, prior []Turn) (draft, 
 // There is no check on the caller's context between attempts: `net/http` refuses a request on a
 // cancelled context before it reaches the wire, so a guard here would decide nothing that a test
 // could tell apart from its absence.
-func (c *Client) complete(ctx context.Context, messages []chatMessage) (string, error) {
+func (c *Client) complete(ctx context.Context, messages []chatMessage) (string, string, error) {
 	if !c.Configured() {
-		return "", ErrNotConfigured
+		return "", "", ErrNotConfigured
 	}
 	var last error
+	var answered string
 	for _, u := range c.ups {
+		answered = family(u.Model)
 		content, err := c.completeOne(ctx, u, messages)
 		if err == nil {
-			return content, nil
+			return content, answered, nil
 		}
 		last = err
 	}
-	return "", last
+	// The name of the one that failed last, so a caller can say which model was reached rather
+	// than which one was asked for. A fallback that answered invisibly would leave the picker
+	// naming a model that did not reply.
+	return "", answered, last
 }
 
 // completeOne is one call to one upstream.

@@ -17,13 +17,33 @@ func New(c *Client) *Service { return &Service{client: c} }
 // Configured reports whether the endpoint should serve at all.
 func (s *Service) Configured() bool { return s != nil && s.client.Configured() }
 
-// Model is the model this service actually asks. The app shows it beside the composer, and a
-// name it read from its own environment would be a name that can drift from the truth.
+// Model is the model this service asks first. The app shows it beside the composer, and a name
+// it read from its own environment would be a name that can drift from the truth.
 func (s *Service) Model() string {
 	if s == nil || s.client == nil {
 		return ""
 	}
 	return s.client.Model()
+}
+
+// Models is every configured model, in the order they are asked. The picker offers these and
+// disables the rest, so the menu is what is wired rather than what could be.
+func (s *Service) Models() []string {
+	if s == nil || s.client == nil {
+		return nil
+	}
+	return s.client.Models()
+}
+
+// Prefer returns a Service that asks the named model first, keeping the others behind it.
+//
+// The name is one of `Models`; anything else leaves the order alone. A caller never supplies an
+// address, a key or a routing string, so picking a model cannot point this process anywhere new.
+func (s *Service) Prefer(model string) *Service {
+	if s == nil || s.client == nil {
+		return s
+	}
+	return &Service{client: s.client.prefer(model)}
 }
 
 // Answer is what a caller gets back: a sentence for the person, which action it is, and an
@@ -104,7 +124,7 @@ func (s *Service) Interpret(ctx context.Context, message string, prior ...Turn) 
 		trimmed = append(trimmed, Turn{Role: t.Role, Body: body})
 	}
 
-	d, err := s.client.ask(ctx, message, trimmed)
+	d, answered, err := s.client.ask(ctx, message, trimmed)
 	if err != nil {
 		return Answer{}, err
 	}
@@ -136,7 +156,10 @@ func (s *Service) Interpret(ctx context.Context, message string, prior ...Turn) 
 	if action == ActionSwap && strings.TrimSpace(d.TokenIn) == "" && strings.TrimSpace(d.TokenOut) == "" && strings.TrimSpace(d.Amount) == "" {
 		action = ActionAbout
 	}
-	read := Step{Call: "Client.ask", Detail: "read as " + action, OK: true}
+	// **The model that answered, not the one that was asked for.** When a router is down the next
+	// one replies, and a step naming the first would leave the picker saying a model that did not
+	// reply had read the sentence.
+	read := Step{Call: "Client.ask", Detail: "read as " + action + ", by " + answered, OK: true}
 
 	// None of these four needs a parameter, so none goes near build: there is nothing from the
 	// model to check, only a decision about which screen the person is asking for. The wallet
