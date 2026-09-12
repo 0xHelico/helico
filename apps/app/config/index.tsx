@@ -11,17 +11,41 @@ export const projectId =
 // a chain the product cannot act on would be a way to waste somebody's gas.
 export const networks = [arbitrum] as const;
 
-// Where the app reads the chain from. Unset falls back to the public endpoint the chain
-// declares, which is fine to develop against and rate-limits under any real traffic. It is
-// also how the app is pointed at a fork to be tested against real pool state.
-const rpcUrl = process.env.NEXT_PUBLIC_ARBITRUM_RPC_URL;
+/**
+ * Where the app reads the chain from.
+ *
+ * **A default in code rather than a variable a deployment can forget.** Leaving the transport
+ * unset does not fall back to the endpoint Arbitrum declares; it falls back to whatever the wallet
+ * adapter prefers, and that is Reown's own RPC, which refuses a browser request from this origin:
+ *
+ * ```
+ * FAILED https://rpc.walletconnect.org/v1/?chainId=eip155%3A42161&projectId=…
+ * Access to fetch … from origin 'https://app.helico.site' blocked by CORS policy
+ * ```
+ *
+ * Every read on the deployed dapp failed that way, which the portfolio rendered as "the chain did
+ * not answer" and the chart rendered as nothing at all. One unset variable should not cost a page
+ * its data, and `NEXT_PUBLIC_*` is baked at build time so the failure only appears once the image
+ * is already live.
+ *
+ * The same reasoning as the factory address and the subgraph URL: a public endpoint is not a
+ * secret, so it belongs in the repository and a clone works without being configured. Set the
+ * variable to override it — with a paid endpoint, which this one rate-limits under real traffic,
+ * or with a fork to test against real pool state. `next.config.ts` adds whatever is set to the
+ * content policy beside this one.
+ */
+const rpcUrl =
+  process.env.NEXT_PUBLIC_ARBITRUM_RPC_URL || "https://arb1.arbitrum.io/rpc";
 
 export const wagmiAdapter = new WagmiAdapter({
   storage: createStorage({ storage: cookieStorage }),
   ssr: true,
   projectId,
   networks: [arbitrum],
-  transports: rpcUrl ? { [arbitrum.id]: http(rpcUrl) } : undefined,
+  transports: { [arbitrum.id]: http(rpcUrl) },
 });
 
 export const config = wagmiAdapter.wagmiConfig;
+
+/** What the chain is actually read from, exported so a test can hold the build to it. */
+export const arbitrumRpcUrl = rpcUrl;
