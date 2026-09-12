@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { byDay } from "./sparkline";
+import { byDay, windowDays } from "./sparkline";
 
 const _DAY = 86_400;
 /** Noon by default. Pass a time when the test is about the time. */
@@ -66,5 +66,41 @@ describe("bucketing movements into days", () => {
       { date: "2026-08-01", count: 1 },
       { date: "2026-08-02", count: 2 },
     ]);
+  });
+});
+
+describe("windowDays", () => {
+  // The bug it was written for: two events two days apart drew two points on an axis labelled
+  // thirty days, which reads as a chart with no data rather than as a quiet month.
+  test("walks the window, not the span of the data", () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const days = windowDays([at(today) + 3600], 30);
+    expect(days).toHaveLength(30);
+    expect(days.at(-1)).toEqual({ count: 1, date: today });
+    expect(days.filter((d) => d.count === 0)).toHaveLength(29);
+  });
+
+  test("is all zeroes when nothing happened, and still fills the window", () => {
+    expect(windowDays([], 7)).toHaveLength(7);
+    expect(windowDays([], 7).every((d) => d.count === 0)).toBe(true);
+  });
+
+  test("counts several events on one day once per event", () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const days = windowDays([at(today), at(today) + 60, at(today) + 120], 7);
+    expect(days.at(-1)?.count).toBe(3);
+  });
+
+  test("drops what falls outside the window rather than stacking it on the edge", () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const days = windowDays([at(today) - 40 * 86_400], 7);
+    expect(days.every((d) => d.count === 0)).toBe(true);
+  });
+
+  // `null` means "all of it", and there the span of the data is the right window.
+  test("falls back to the data's own span for ALL", () => {
+    expect(windowDays([at("2026-08-01"), at("2026-08-05")], null)).toHaveLength(
+      5,
+    );
   });
 });

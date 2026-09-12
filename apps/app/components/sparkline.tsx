@@ -222,6 +222,34 @@ export function zeroDays(n: number): Day[] {
   return out;
 }
 
+/**
+ * The last `n` whole days ending today, each carrying whatever fell on it.
+ *
+ * **Why this exists beside `byDay`.** `byDay` spans the first event to the last, so two events two
+ * days apart draw two points. On a card whose axis is labelled thirty days that reads as a chart
+ * with almost no data rather than as a quiet month with two busy days, which is what it is. This
+ * walks the window instead, so every day in the range is a point and the quiet ones are zero.
+ *
+ * `n === null` means "all of it", and there the span of the data is the right window, so `byDay`
+ * answers that case unchanged.
+ */
+export function windowDays(timestamps: number[], n: number | null): Day[] {
+  if (n === null) return byDay(timestamps);
+  const day = (t: number) => new Date(t * 1000).toISOString().slice(0, 10);
+  const counts = new Map<string, number>();
+  for (const t of timestamps) counts.set(day(t), (counts.get(day(t)) ?? 0) + 1);
+  const ONE_DAY = 86_400_000;
+  const midnight = Date.parse(
+    `${new Date().toISOString().slice(0, 10)}T00:00:00Z`,
+  );
+  const out: Day[] = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const date = new Date(midnight - i * ONE_DAY).toISOString().slice(0, 10);
+    out.push({ date, count: counts.get(date) ?? 0 });
+  }
+  return out;
+}
+
 export function lastDays(days: Day[], n: number | null): Day[] {
   return n === null || days.length <= n ? days : days.slice(-n);
 }

@@ -3,14 +3,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { formatUnits } from "viem";
-import { useAccount } from "wagmi";
+import { useAccount, usePublicClient } from "wagmi";
 
 import { GeneratedAvatar } from "@/components/generated-avatar";
 import { Card, Loading } from "@/components/kit";
 import { PriceChart } from "@/components/price-chart";
-import { byDay, lastDays, zeroDays } from "@/components/sparkline";
-import { totals, useAccountState } from "@/hooks/use-account-state";
+import { windowDays } from "@/components/sparkline";
+import { CHAIN_ID, totals, useAccountState } from "@/hooks/use-account-state";
 import { configuredFactory } from "@/lib/account";
+import { readAccountActivity } from "@/lib/activity";
 import { readMovements } from "@/lib/mandates";
 import { cn } from "@/lib/utils";
 
@@ -49,14 +50,53 @@ export function PortfolioHero() {
   const account = useAccountState();
   const [range, setRange] = useState<RangeLabel>("30D");
 
+  const client = usePublicClient({ chainId: CHAIN_ID });
+  const held0 = account.data;
+  const open =
+    held0 && held0.kind === "open" ? (held0.address as `0x${string}`) : null;
+
   const moves = useQuery({
     enabled: Boolean(address),
     queryKey: ["movements", address],
     queryFn: () => readMovements(address as string),
   });
-  const all = moves.data ? byDay(moves.data.timestamps) : [];
+  // The account's own events, which is what this chart plots most of the time.
+  const own = useQuery({
+    enabled: Boolean(open && client),
+    queryKey: ["account-activity", open],
+    queryFn: () =>
+      readAccountActivity(
+        client as NonNullable<typeof client>,
+        open as `0x${string}`,
+      ),
+    retry: false,
+    staleTime: 15_000,
+  });
+
+  /**
+   * **Both kinds of move, in one series.**
+   *
+   * This plotted Aqua movements alone, and those are fills against a shipped mandate. So on an
+   * account that had been armed, funded, and had capital supplied to Morpho by the enclave, it drew
+   * a flat line at zero: true about the narrow question it was asking, and read by everyone as the
+   * product not working. Adding a sentence explaining the zero was the wrong fix, because the page
+   * had something to draw and was not drawing it.
+   *
+   * The account's own events carry a timestamp only when the backend served them, since a log does
+   * not have one and fetching a header per block from a browser is the cost `/api/activity` exists
+   * to avoid. Undated events are dropped from the series rather than stacked on today, which would
+   * invent a spike.
+   */
+  const stamps = [
+    ...(moves.data?.timestamps ?? []),
+    ...(own.data ?? [])
+      .map((e) => e.at)
+      .filter((at): at is number => typeof at === "number"),
+  ];
   const span = RANGES.find((r) => r.label === range) ?? RANGES[1];
-  const days = lastDays(all, span.days);
+  // The window, not the span of the data: two events two days apart should read as a quiet month
+  // with two busy days, which is what it is, rather than as a chart with two points in it.
+  const days = windowDays(stamps, span.days ?? null);
 
   // Rendered after mount only. The server has no clock the browser agrees with to the second,
   // and a timestamp is the one piece of a page guaranteed to differ between the two.
@@ -160,9 +200,7 @@ export function PortfolioHero() {
         {mounted ? (
           <div className="mt-4">
             <div className="flex items-baseline justify-between gap-4">
-              <span className="text-[11.5px] text-soft">
-                Aqua movements per day
-              </span>
+              <span className="text-[11.5px] text-soft">Moves per day</span>
             </div>
             {/* **A flat line has to say why it is flat.** Keeping the axis rather than collapsing
                 to a gap is right, and on its own it reads as "no data" — which is what a reader
@@ -170,19 +208,18 @@ export function PortfolioHero() {
                 Zero is the true answer to the question this series asks, and the question is
                 narrower than the page: `supplyIdle` moves money into a lending market and is not
                 an Aqua movement. Only a fill against a shipped position is. */}
-            {moves.data && days.every((d) => d.count === 0) ? (
+            {stamps.length === 0 && !own.isPending && !moves.isPending ? (
               <p className="mt-1 text-[11px] text-faint leading-relaxed">
-                {held && held.working > 0n
-                  ? "Nothing yet. Putting money into a lending market is not an Aqua movement — only a fill against a position you have shipped is."
-                  : "Nothing yet. Ship a position and the fills against it turn up here."}
+                Nothing has moved yet. What the agent does, and what a taker
+                fills against a position you have shipped, both land here.
               </p>
             ) : null}
+            {/* `windowDays` already walks the whole range, so the empty case is a series of
+                zeroes rather than an empty array. The fallback that used to be here existed
+                because `byDay` returned nothing at all when there was nothing to draw. */}
             <div className="mt-2">
               <PriceChart
-                points={(days.length > 0
-                  ? days
-                  : zeroDays(span.days ?? 30)
-                ).map((d) => ({
+                points={days.map((d) => ({
                   timestamp: Date.parse(`${d.date}T00:00:00Z`),
                   value: d.count,
                 }))}
