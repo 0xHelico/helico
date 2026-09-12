@@ -364,70 +364,77 @@ export function Activity() {
           capital all turn up here.
         </Empty>
       ) : (
-        <div className="-mx-1 mt-4 overflow-x-auto px-1">
-          <table className="w-full min-w-[520px] border-collapse text-left">
-            <thead>
-              <tr className="border-line border-b text-[11.5px] text-faint">
-                <th className="pb-2 font-normal">What</th>
-                <th className="pb-2 text-right font-normal">Amount</th>
-                <th className="pb-2 pl-4 font-normal">Where</th>
-                <th className="pb-2 pl-4 font-normal">Date</th>
-                <th className="pb-2 pl-4 text-right font-normal">
-                  Transaction
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {shown.map((r) => (
-                <tr className="text-[12.5px]" key={r.key}>
-                  <td className="py-2.5 text-ink">{r.what}</td>
-                  <td className="tabular py-2.5 text-right font-mono text-ink">
-                    {r.amount || "—"}
-                  </td>
-                  <td className="py-2.5 pl-4">
-                    {r.where ? (
-                      <span className="flex items-center gap-1.5 text-soft">
-                        {r.where === "Aqua" ? null : (
-                          <VenueMark label={r.where} size={14} />
-                        )}
-                        {r.where}
-                      </span>
-                    ) : (
-                      <span className="text-faint">—</span>
-                    )}
-                  </td>
-                  <td className="tabular py-2.5 pl-4 text-soft">
-                    {r.at ? (
-                      // The full stamp on hover, including the seconds the cell has no room
-                      // for — the two rows a minute apart are the ones somebody will want it on.
-                      <span title={new Date(r.at * 1000).toLocaleString()}>
-                        {day(r.at)}
-                        <span className="block text-[11px] text-faint">
-                          {clock(r.at)}
-                        </span>
-                      </span>
-                    ) : (
-                      <span className="text-faint">—</span>
-                    )}
-                  </td>
-                  <td className="py-2.5 pl-4 text-right">
-                    {r.tx ? (
-                      <a
-                        className="tabular font-mono text-[11.5px] text-faint underline underline-offset-2 hover:text-ink"
-                        href={`https://arbiscan.io/tx/${r.tx}`}
-                        rel="noreferrer"
-                        target="_blank"
-                      >
-                        {r.tx.slice(0, 10)}…
-                      </a>
-                    ) : (
-                      <span className="text-faint">—</span>
-                    )}
-                  </td>
+        <>
+          {/* **The table scrolls sideways; the pager must not.** `min-w-[520px]` is what keeps the
+              five columns legible on a phone, and the container that allows for it scrolls its
+              whole content — so a pager inside it is 520px wide too, and `Older` sits off the
+              right edge until the reader scrolls to find the control they were looking for. The
+              scroll box holds the wide thing and nothing else. */}
+          <div className="-mx-1 mt-4 overflow-x-auto px-1">
+            <table className="w-full min-w-[520px] border-collapse text-left">
+              <thead>
+                <tr className="border-line border-b text-[11.5px] text-faint">
+                  <th className="pb-2 font-normal">What</th>
+                  <th className="pb-2 text-right font-normal">Amount</th>
+                  <th className="pb-2 pl-4 font-normal">Where</th>
+                  <th className="pb-2 pl-4 font-normal">Date</th>
+                  <th className="pb-2 pl-4 text-right font-normal">
+                    Transaction
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {shown.map((r) => (
+                  <tr className="text-[12.5px]" key={r.key}>
+                    <td className="py-2.5 text-ink">{r.what}</td>
+                    <td className="tabular py-2.5 text-right font-mono text-ink">
+                      {r.amount || "—"}
+                    </td>
+                    <td className="py-2.5 pl-4">
+                      {r.where ? (
+                        <span className="flex items-center gap-1.5 text-soft">
+                          {r.where === "Aqua" ? null : (
+                            <VenueMark label={r.where} size={14} />
+                          )}
+                          {r.where}
+                        </span>
+                      ) : (
+                        <span className="text-faint">—</span>
+                      )}
+                    </td>
+                    <td className="tabular py-2.5 pl-4 text-soft">
+                      {r.at ? (
+                        // The full stamp on hover, including the seconds the cell has no room
+                        // for — the two rows a minute apart are the ones somebody will want it on.
+                        <span title={new Date(r.at * 1000).toLocaleString()}>
+                          {day(r.at)}
+                          <span className="block text-[11px] text-faint">
+                            {clock(r.at)}
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="text-faint">—</span>
+                      )}
+                    </td>
+                    <td className="py-2.5 pl-4 text-right">
+                      {r.tx ? (
+                        <a
+                          className="tabular font-mono text-[11.5px] text-faint underline underline-offset-2 hover:text-ink"
+                          href={`https://arbiscan.io/tx/${r.tx}`}
+                          rel="noreferrer"
+                          target="_blank"
+                        >
+                          {r.tx.slice(0, 10)}…
+                        </a>
+                      ) : (
+                        <span className="text-faint">—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           {pages > 1 ? (
             <Pages
               capped={moves.data?.capped ?? false}
@@ -439,7 +446,7 @@ export function Activity() {
               total={rows.length}
             />
           ) : null}
-        </div>
+        </>
       )}
     </Card>
   );
