@@ -1,5 +1,9 @@
 "use client";
 
+import { useId } from "react";
+
+import { areaPath, linePath } from "@/components/price-chart";
+
 /**
  * Movements per day, as one line.
  *
@@ -286,4 +290,76 @@ export function byDay(timestamps: number[]): Day[] {
     if (out.length >= 400) break;
   }
   return out;
+}
+
+/**
+ * A value series at summary size: a stepped line, a fill under it, and nothing else.
+ *
+ * **Not the sparkline above it.** That one plots a count of movements per day and keeps a rule at
+ * zero, because a run of quiet days hugging the bottom edge reads as no data rather than as no
+ * movement. This plots money, which has no such floor to explain, and it is the same geometry the
+ * full chart draws — `linePath` and `areaPath` come from `price-chart.tsx` rather than being
+ * written again, so the small chart cannot disagree with the large one about the same account.
+ */
+export function ValueSpark({
+  points,
+  trend,
+  label,
+}: {
+  points: { timestamp: number; value: number }[];
+  trend: "up" | "down" | "flat";
+  label: string;
+}) {
+  const id = useId();
+  if (points.length < 2) {
+    return null;
+  }
+  const w = 220;
+  const h = 34;
+  const values = points.map((p) => p.value);
+  let low = Math.min(...values);
+  let high = Math.max(...values);
+  if (low === high) {
+    // A flat series sits in the middle rather than on an edge, where it would read as a boundary
+    // of the box instead of as a reading.
+    low -= 0.06;
+    high += 0.06;
+  }
+  const span = high - low;
+  const step = w / (points.length - 1);
+  const pts = values.map((v, i) => ({
+    x: +(i * step).toFixed(2),
+    y: +(2 + (1 - (v - low) / span) * (h - 4)).toFixed(2),
+  }));
+  const colour = trend === "down" ? "#E5484D" : "#1DA66A";
+
+  return (
+    <svg
+      aria-label={label}
+      className="block h-full w-full"
+      height={h}
+      preserveAspectRatio="none"
+      role="img"
+      viewBox={`0 0 ${w} ${h}`}
+      width={w}
+    >
+      <title>{label}</title>
+      <defs>
+        <linearGradient id={id} x1="0" x2="0" y1="0" y2="1">
+          <stop stopColor={colour} stopOpacity="0.18" />
+          <stop offset="1" stopColor={colour} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={areaPath(pts, h, true)} fill={`url(#${id})`} />
+      <path
+        d={linePath(pts, true)}
+        fill="none"
+        stroke={colour}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.5"
+        vectorEffect="non-scaling-stroke"
+      />
+    </svg>
+  );
 }
