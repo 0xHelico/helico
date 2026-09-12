@@ -1,0 +1,20 @@
+-- Rescan every account's log once, because the reader learned to see something new.
+--
+-- **A forward-only cursor cannot pick up a new kind of event.** `0003_activity.sql` explains why
+-- the read never goes back below the watermark: an account's history is final there, so the second
+-- read costs one narrow query instead of a scan from the factory's deployment. That is true of the
+-- events the reader understood at the time it passed.
+--
+-- The reader now also counts the account's USDC transfers, which no Helico contract emits and
+-- which nothing therefore stored. Every account read before that change has a watermark at the
+-- head and a history missing its own funding: the live account showed seven rows, the supply to
+-- Morpho among them, and no sign of the 0.500081 that paid for it. Downstream, the value line
+-- started at what the agent had moved rather than at what the owner had put in.
+--
+-- Clearing the cursor is the whole fix. `SaveActivity` inserts with `OR IGNORE` on
+-- (account, block, log_index), so a rescan re-inserts nothing already held and adds only what was
+-- never asked for. The cost is one wide `eth_getLogs` per account on its next read, once.
+--
+-- The rows are deliberately left alone. Deleting them would throw away block timestamps that cost
+-- a header fetch each and cannot change, to re-fetch the identical values.
+DELETE FROM account_activity_cursor;
