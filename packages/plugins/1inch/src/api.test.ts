@@ -70,6 +70,32 @@ describe('the aggregation route', () => {
 		expect(tx.value).toBe(10n ** 16n)
 	})
 
+	it('sends receiver only when asked, so the output lands where the caller says', async () => {
+		const { f, asked } = stub({
+			dstAmount: '1009074',
+			tx: { to: TAKER, data: '0x07ed2379', value: '400000000000000', gas: 162640 },
+		})
+		await swapTransaction(f, {
+			chainId: 42161,
+			src: WETH,
+			dst: USDC,
+			amount: 4n * 10n ** 14n,
+			from: TAKER,
+			slippageBps: 100,
+			receiver: '0x8E0f7e6701c2e9b4F2591161B92c51b431591807',
+		})
+		expect(asked[0]).toContain('&receiver=0x8E0f7e6701c2e9b4F2591161B92c51b431591807')
+		await swapTransaction(f, {
+			chainId: 42161,
+			src: WETH,
+			dst: USDC,
+			amount: 4n * 10n ** 14n,
+			from: TAKER,
+			slippageBps: 100,
+		})
+		expect(asked[1]).not.toContain('receiver')
+	})
+
 	it('names the refusal, because an allowance is fixable and liquidity is not', async () => {
 		const { f } = stub(
 			{
