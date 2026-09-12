@@ -138,12 +138,13 @@ documentation asks an indexer to cover — and the one this subgraph did not hav
 > registry/router events keyed on `(maker, app, strategyHash)`.
 > — 1inch Business, Aqua → Data & Analytics
 
-**It is keyed on `orderHash`, and that is not `strategyHash`.** Everything else here hangs off
-`(maker, app, strategyHash)` because that is how Aqua keys its ledger; `Swapped` reports the hash
-of the *order the router executed*, which is a different thing and not derivable from the event.
-So there is no edge from `Fill` to `Mandate`, and inventing one would be a join on two hashes that
-are not the same hash. The `maker` edge is real — the event carries the address — and that is the
-join a reader actually asks for: what has been filled against this maker.
+**`orderHash` is the `strategyHash`.** For an order that settles through Aqua, SwapVM hashes
+`keccak256(abi.encode(order))` and the maker shipped exactly those bytes, so Aqua's hash of them is
+the same number — measured 12 September: 60 of 60 distinct `orderHash` values on Arbitrum One match
+a shipped mandate. An earlier version of this text said they differed. There is still no `mandate`
+edge on `Fill`, because adding one is a schema change and the deployed version is kept as it is
+until after the hackathon; join on `fills.orderHash == mandates.strategyHash` meanwhile. The
+`maker` edge is real — the event carries the address.
 
 Immutable: it records something that happened.
 """

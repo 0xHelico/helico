@@ -80,11 +80,16 @@ and exact rather than a safe underestimate. Bisected with `eth_getLogs`, never `
 pruned archive answers *"state is not available"*, and a search that reads that as "no code yet"
 returns the node's pruning boundary instead of a deployment.
 
-**It is keyed honestly, and that is the part worth reading.** `Swapped` carries `orderHash`, the
-router's identifier for the order it executed, which is *not* the `strategyHash` everything else in
-the schema keys on and is not derivable from the event. So there is **no edge from `Fill` to
-`Mandate`**: a join on two hashes that are not the same hash would be a lie that reads as data. The
-`maker` edge is real, because the event carries the address.
+**`Swapped.orderHash` is the `strategyHash`, and an earlier version of this paragraph said the
+opposite.** For an order that settles through Aqua, SwapVM's `hash()` is `keccak256(abi.encode(order))`
+(`SwapVM.sol:97-100`), and the bytes a maker ships to Aqua are that same `abi.encode(order)`, so Aqua's
+`keccak256(strategy)` is the same number — which is what 1inch's *Data & Analytics* page says in as
+many words. Measured on 12 September against the deployed subgraph: every one of the 60 distinct
+`orderHash` values in 343 fills on Arbitrum One equals the `strategyHash` of a shipped mandate. The
+`Fill` entity does not yet carry a `mandate` edge — adding one is a schema change, and a new
+version of the network subgraph hours before the deadline is not worth the indexing wait — so the
+join today is `fills.orderHash == mandates.strategyHash`, two queries, and the `maker` edge is the
+one the schema draws.
 
 ## Two products, both load-bearing
 
