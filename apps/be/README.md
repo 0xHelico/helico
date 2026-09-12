@@ -79,10 +79,13 @@ With `BE_GRAPH_MCP_URL` and `BE_GRAPH_MCP_SUBGRAPH_ID` set, a `status` question 
 nothing moved?"*, *"check my portfolio"* — is answered from the subgraph as well as from the
 chain: the backend opens a session on The Graph's **Subgraph MCP** server, hands the model the
 subgraph's schema, and lets it write GraphQL, up to five queries, against Helico's subgraph and
-nothing else. What comes back is one card, *From the index*, tagged `The Graph` · `Subgraph MCP`
-· *n queries*, and one step per MCP call under the answer — so the sentence is labelled as the
-model's, and the reads that produced it are in the open. A failure adds a failed step and leaves
-the reply exactly what it was; with the variables unset the code path is never entered.
+nothing else. What comes back is **one step per MCP call** under the answer, so the reads that
+informed it are in the open. A failure adds a failed step and leaves the reply exactly what it
+was; with the variables unset the code path is never entered.
+
+The index's own sentence is not put on screen. It was, in a card titled *From the index*, and it
+read as debug output: an account address, an opening transaction hash and a UTC timestamp, for a
+question nobody asked, above a reply that already carried the figure they did ask about.
 
 That is two Graph products composed — the Subgraph and the MCP — and both load-bearing. Measured
 before it was written: `docs/plans/2026-09-12-the-chat-reads-the-index.md`. The client is
