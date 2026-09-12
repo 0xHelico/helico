@@ -10,8 +10,8 @@ import {
   useReadContract,
   useWriteContract,
 } from "wagmi";
-import { FundAccount } from "@/components/fund-account";
 import { Glyph } from "@/components/glyph";
+import { PutToWorkCard } from "@/components/put-to-work-card";
 import { TokenMark } from "@/components/token-mark";
 import { Button } from "@/components/ui/button";
 import { VenueMark } from "@/components/venue-mark";
@@ -304,37 +304,20 @@ export function MandateCard({
         ) : null}
       </div>
 
+      {/* **One button, and a breakdown above it.** This used to be a sentence, then an unlock
+          button or a link to the limits page, then a funding control: three affordances for one
+          request, and a person had to work out which of them applied to them. `PutToWorkCard`
+          reads the account and says what it will do, in order, with what is already done ticked
+          off — and the last line is the agent's job rather than this press's, which it says.
+
+          The old sentence is kept where it belongs: under the button, as the one thing the
+          breakdown cannot show, which is that a small balance may sit a long time. */}
       {action === "earn" ? (
         <div className="mt-3 border-t pt-3">
-          <p className="text-[11.5px] text-soft leading-relaxed">{earnNext}</p>
-          {needsLimits && unlock.canBatch && unlock.ready ? (
-            <Button
-              className="mt-3"
-              disabled={unlock.pending}
-              onClick={unlock.unlock}
-              size="sm"
-            >
-              {unlock.pending
-                ? "Setting up…"
-                : "Turn everything on with one signature"}
-            </Button>
-          ) : null}
-          {needsLimits && !(unlock.canBatch && unlock.ready) ? (
-            <Link
-              className="mt-3 inline-block text-[11.5px] underline underline-offset-2 hover:text-ink"
-              href="/limit"
-            >
-              Set them on the limits page
-            </Link>
-          ) : null}
-          {/* The control itself, not a link to it. Money in lives in the conversation now, so the
-              step that is missing arrives with the thing that does it.
-  
-              **Offered whenever the setup is done, not only at exactly zero.** It used to be gated
-              on `needsMoney`, so the moment an account held anything at all the card stopped
-              offering the one action that would make it work — a person with 0.5 USDC in a
-              fully-armed account had no way to add more from the card that is about adding more. */}
-          {needsLimits ? null : <FundAccount plain />}
+          <PutToWorkCard plain />
+          <p className="mt-3 text-[11px] text-faint leading-relaxed">
+            {earnNext}
+          </p>
           {unlock.error ? (
             <p className="mt-2 text-[11px] text-destructive">
               {unlock.error.message.split("\n")[0]}
