@@ -19,14 +19,10 @@ COPY --from=deps /repo /repo
 # than deployment variables — and their defaults live here rather than in the workflow, because
 # the landing taught us that an argument passed only by CI silently does not arrive.
 #
-# The vault address is empty until #85 deploys it. Empty is not a placeholder: the mandate page
-# reads it and says the vault is not deployed rather than offering buttons that cannot work.
-ARG NEXT_PUBLIC_VAULT_ADDRESS=
 ARG NEXT_PUBLIC_ARBITRUM_RPC_URL=
 ARG NEXT_PUBLIC_PROJECT_ID=8cc38dcdd178b28a332ffb9750248a9d
 ARG NEXT_PUBLIC_BE_API_URL=https://api.helico.site
-ENV NEXT_PUBLIC_VAULT_ADDRESS=${NEXT_PUBLIC_VAULT_ADDRESS} \
-	NEXT_PUBLIC_ARBITRUM_RPC_URL=${NEXT_PUBLIC_ARBITRUM_RPC_URL} \
+ENV NEXT_PUBLIC_ARBITRUM_RPC_URL=${NEXT_PUBLIC_ARBITRUM_RPC_URL} \
 	NEXT_PUBLIC_PROJECT_ID=${NEXT_PUBLIC_PROJECT_ID} \
 	NEXT_PUBLIC_BE_API_URL=${NEXT_PUBLIC_BE_API_URL} \
 	NEXT_TELEMETRY_DISABLED=1

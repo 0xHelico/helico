@@ -9,7 +9,6 @@
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
-    "fixture": "bun run e2e/fork-fixture.ts",
     "test": "bun test",
     "e2e": "bun run e2e/browser-checks.ts",
     "e2e:account": "bun run e2e/fork-account.ts",
