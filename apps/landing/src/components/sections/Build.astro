@@ -1,7 +1,7 @@
 ---
 import { readFileSync } from 'node:fs'
 import { Code } from 'astro:components'
-import { solidityTests } from '../../lib/solidity-tests'
+import { creTests, solidityTests } from '../../lib/solidity-tests'
 const repo = 'https://github.com/0xHelico/helico'
 // Reading about Helico goes to the docs site; looking at the code goes to GitHub.
 const docs = 'https://docs.helico.site/docs'
@@ -35,9 +35,9 @@ const packages = [
 	},
 	{
 		name: '@helico/plugin-cre',
-		stat: '227',
+		stat: String(creTests),
 		unit: 'tests',
-		copy: 'Decides, sizes, and signs inside the enclave. The key never leaves it.',
+		copy: 'Decides and sizes inside the enclave. Chainlink\'s network writes the move.',
 		href: `${repo}/tree/main/packages/plugins/cre`,
 	},
 ]

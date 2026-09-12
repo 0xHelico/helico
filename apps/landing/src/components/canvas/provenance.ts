@@ -51,7 +51,8 @@ export const PROVENANCE: Record<string, Provenance> = {
 				id: 'm-enclave',
 				glyph: 'brain',
 				layer: 'Enclave',
-				narration: 'The thresholds are sealed into the Vault DON, released only inside the TEE.',
+				narration:
+					"The thresholds are sealed into the Vault DON, released only into the enclave Chainlink's network runs the program in.",
 				delayMs: 5700,
 			},
 			{
@@ -72,7 +73,7 @@ export const PROVENANCE: Record<string, Provenance> = {
 				id: 's-enclave',
 				glyph: 'brain',
 				layer: 'Enclave',
-				narration: 'The enclave read the account and the market rate from inside the TEE.',
+				narration: 'The enclave read the account and the market rate.',
 				delayMs: 2600,
 			},
 			{
@@ -135,7 +136,7 @@ export const PROVENANCE: Record<string, Provenance> = {
 				id: 'h-enclave',
 				glyph: 'brain',
 				layer: 'Enclave',
-				narration: 'The enclave read the split from inside the TEE.',
+				narration: 'The enclave read the split.',
 				delayMs: 2500,
 			},
 			{

@@ -9,7 +9,7 @@ const faqs = [
 	},
 	{
 		q: 'What do I need to start?',
-		a: 'A wallet and some stablecoins on Arbitrum. You get an account of your own at an address that is known before it is built, so you can fund it before it exists, and whatever arrives there was always yours. Eight contracts are deployed on Arbitrum One with their source published. One account has been opened on the live chain and it is empty, so what we can show you today is the code, those deployments, and a rehearsal on a copy of the market.',
+		a: 'A wallet and some stablecoins on Arbitrum. You get an account of your own at an address that is known before it is built, so you can fund it before it exists, and whatever arrives there was always yours. Nine contracts are deployed on Arbitrum One with their source published. One account is open on the live chain, and on 11 September the program moved its idle stablecoins into Morpho — the first move made because the program said so, carried to the chain by Chainlink\'s network rather than by any key of ours.',
 	},
 	{
 		q: 'Who holds my money?',
@@ -17,7 +17,7 @@ const faqs = [
 	},
 	{
 		q: 'What can the automation do to it?',
-		a: 'Two things. Put idle money into a market you allow-listed, and take it back out. Neither call has anywhere to put an address, so there is no way to write an instruction that sends your money somewhere else. An agent that was completely taken over could shuffle your money between the markets you chose, paying its own gas to do it, and nothing more.',
+		a: 'Two things. Put idle money into a market you allow-listed, and take it back out. Neither call has anywhere to put an address, so there is no way to write an instruction that sends your money somewhere else. An agent that was completely taken over could shuffle your money between the markets you chose, and nothing more.',
 	},
 	{
 		q: 'When does it do nothing?',
@@ -25,11 +25,11 @@ const faqs = [
 	},
 	{
 		q: 'What stays private?',
-		a: 'How the decision is made. The program that decides runs inside a sealed environment. Whose funds it watches, when it looks, and how it sizes a move never leave that environment. The rules themselves are public on the chain, so anyone can check that a move followed them.',
+		a: 'How the decision is made. The program that decides runs inside a sealed environment that Chainlink\'s network provides. Whose funds it watches, when it looks, and how it sizes a move never leave that environment. The rules themselves are public on the chain, so anyone can check that a move followed them.',
 	},
 	{
 		q: 'Is it live? Is it audited?',
-		a: 'Live, but not audited, and nobody is putting money through it yet. Eight contracts are deployed on Arbitrum One with their source published, and the program that decides runs on Chainlink\'s network every five minutes. One account has been opened on the live chain, on 10 September, and it is empty — so the program has nothing to manage and holds on every run. The whole flow has been run end to end on a copy of the real market: an account opened at an address predicted before it existed, real stablecoins moved into the real lending market, and the decision made inside the sealed environment. That copy was not the live network, and that sealed environment was simulated. Twelve AI reviewers went over the contracts, then six more. That is not a professional audit, and this page does not call it one.',
+		a: 'Live, but not audited. Nine contracts are deployed on Arbitrum One with their source published, and the program that decides runs on Chainlink\'s network every five minutes. One account is open on the live chain, opened on 10 September, and on 11 September the program moved its idle stablecoins into Morpho: the network signed the decision and wrote it to the chain, the account\'s own event says what moved, and no key of ours was in the transaction. Before that, the whole flow was rehearsed on a copy of the real market — an account opened at an address predicted before it existed, real stablecoins moved into the real lending market, the decision made inside a simulated sealed environment. Twelve AI reviewers went over the Aqua contracts. That is not a professional audit, and this page does not call it one.',
 	},
 ]
 ---

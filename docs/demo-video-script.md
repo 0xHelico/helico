@@ -37,7 +37,28 @@ that exists, and #22 asks for a full-length take by **11 September** rather than
 A shot that has to fall back is not a weaker video. A shot that claims something untrue ends the
 submission.
 
-### Pre-flight, re-run 11 September — **read this one first**
+### Pre-flight, re-run 12 September, after the first move — **read this one first**
+
+One thing happened on 11 September at 11:30 UTC that changes what the video is about, and the
+layers below were written before it. Where they disagree with this one, this one wins.
+
+| | State, measured 12 September |
+|---|---|
+| **The workflow has moved real money, and the DON carried it** | Account `0x0acdfa21…4a39` holds **10000 USDC and 490081 hmUSDC** (Morpho receipt, `previewRedeem` ≈ 490,110). The move is [`0x0668c698…`](https://arbiscan.io/tx/0x0668c698cf3d396e622a97bfa3e21016de44fb41863fa7cb69b47bd126f9ed27), block 504,035,561: sent by a **DON transmitter** `0x3a8dbd6b…` to the `KeystoneForwarder`, into `HelicoAgent` `0x98c3979358A4e5086Da432CfE91F45aE2A854463`, which called the account's `supplyIdle`. The account's own `IdleCapitalMoved` log says what moved. **Sayable, and it is the shot:** *"the decision was made in the enclave, the network signed it and wrote it to the chain, and the account's own event says what moved — no key of ours was in that transaction."* |
+| **The agent is a contract, not a key** | `agent()` on the live account answers the `HelicoAgent` proxy since 11:25 UTC. The key `0x84C3891a…` never sent a transaction (nonce 0) and is retired from production. Every line below that says *signs* or *the key never leaves* describes the **rehearsal footage** (`config.staging.json` still uses `signature` delivery), not production (`config.production.json`: `delivery: forwarder`). Say so when the footage is on screen |
+| **The account's owner is on the team** | Opened through the deployed dapp by a teammate's own wallet (`0x3B4f0135…`). The 11 September row's *"somebody outside the team"* was a guess from the address not being one of the four keys; it was wrong. **Do not say anyone outside the team has used it** |
+| **The deployed workflow is the 11 September build** | Workflow id `00f5df97…`, registry tx [`0x34de1bf9…`](https://etherscan.io/tx/0x34de1bf99d1402b0ed1ddb37cc45e49d880ef9b7b8ed01beda31e06cd1f091ab), config hash `3dc52f74…` = `sha256(config.production.json)` on `main`. Four markets, two assets, forwarder delivery. The *"still the 8 September build"* rows below are retired |
+| **Fills are queryable** | Subgraph v0.3.0 serves `fills`: 342 of them, `hasIndexingErrors: false`. The *"not sayable: fills"* rows below are retired |
+| **Nine contracts, verified** | The 9 September *"five"* and the landing's *"eight"* are both behind: the agent's proxy and implementation landed on the 11th, verified on Arbiscan. Count them off `docs/deployments.md` on the day rather than from any layer of this file |
+| **The live-address suite runs again** | `check-deployed.ts` stopped at check 28 on the 12th because the Morpho venue was no longer empty — the DON's own move broke the script's premise. Fixed the same day; **46 ok** on a fresh fork of today's chain |
+| **`bun run --filter @helico/app prod`** | **32 checks** today, not 23 |
+
+What this changes in the shot list: **3:15 no longer says "holding because the account is empty"**
+— it says the network moved the money and the enclave now holds because the account is already
+at its target split. **1:20 and 2:00 keep their footage** (the rehearsal signs and lands the call
+on a fork) and add one sentence each that names production's path. Both are rewritten below.
+
+### Pre-flight, re-run 11 September
 
 Five things landed today and one row above stopped being true. The layer below was accurate when
 it was written; where the two disagree, this one wins.
@@ -217,9 +238,10 @@ No logo animation, no title card. Under 20 seconds, as the guidance asks.
 > is how much of your capital should be earning and how much has to stay liquid to cover a swap.
 > The thresholds are secrets released only in there, because they are your strategy.
 >
-> What comes out is a signed statement and the call it is about. And the authority that call uses
-> has no recipient parameter anywhere in it — the agent can choose where your money works, and has
-> no way to send it somewhere else.
+> What comes out is only the decision. In production it leaves as a report the network signs and
+> writes to Arbitrum, into a contract your account names as its agent. And the authority that
+> contract uses has no recipient parameter anywhere in it — the agent can choose where your money
+> works, and has no way to send it somewhere else.
 >
 > So the enclave can be wrong and it still cannot take anything.
 
@@ -256,7 +278,8 @@ Speak over the run. Cut the waiting, never speed it up.
 > with real USDC, and lets the enclave decide.
 
 > Fifty thousand dollars arrives. The enclave decides forty thousand should be earning and ten
-> thousand should stay liquid to cover a swap. It signs that, and the call lands.
+> thousand should stay liquid to cover a swap. On this rehearsal it signs that and a script lands
+> the call; on the live chain the network itself wrote the first move, on 11 September.
 
 *Screen: the last three lines of the run.*
 
@@ -309,14 +332,17 @@ Speak over the run. Cut the waiting, never speed it up.
 >
 > The run you just watched went through the simulator, not a real TEE. The deployed workflow is
 > a different thing — it registers a confidential handler and executes on Chainlink's DON every
-> five minutes, and it is holding rather than acting because the account on the live chain is
-> empty. Every number in this video is in the repository with the command that reproduces it.
+> five minutes. On 11 September it decided, the network signed the decision and wrote it to
+> Arbitrum, and the account's own event says what moved. Since then it holds, because the account
+> is already where the strategy wants it. Every number in this video is in the repository with
+> the command that reproduces it.
 
-**Changed 11 September, and it must be said the new way.** This line used to be *"because no
-account exists yet for it to manage"*, and one was opened on 10 September at 17:58 UTC by somebody
-outside the team, with the agent named. It holds nothing, so the workflow is still holding rather
-than acting — but the reason is the balance, not the absence, and saying the old sentence over a
-chain that contradicts it is a claim a judge can check in one query.
+**Changed 12 September, and it must be said the new way.** This line used to end with *"holding
+rather than acting because the account on the live chain is empty"*, and before that *"because no
+account exists yet"*. Both are now false in the direction that helps: the account was funded, the
+DON carried the move, and the hold is the steady state after a move rather than the absence of
+one. The 11 September layer also said the account was opened *"by somebody outside the team"* —
+it was a teammate's wallet, and that phrase must not be said.
 
 End on the repo URL. No outro music.
 
@@ -342,12 +368,12 @@ End on the repo URL. No outro music.
   any size today, so a live swap in the dapp routes through **1inch aggregation** and the card
   names it. Read the route line off the screen rather than off the plan. The Aqua path is real and
   the evidence for it is the fork run and the contract suite, which is where it should be claimed
-- **Anything about fills being queryable.** `Swapped` is indexed in the repository and not
-  deployed; the live endpoint answers *"Type `Query` has no field `fills`"*. Mandates, balances and
-  movements are unaffected and answer as they always have
+- ~~**Anything about fills being queryable.**~~ Retired 11 September: v0.3.0 serves `fills`, 342 of
+  them. Sayable now, with the number read on the day
 - **"Deployed", "live", or "in production"** about anything that is not — check each one on the
-  day, because this list changes as things land. As of 9 September **five** contracts are on
-  Arbitrum One — the fifth, `HelicoOracleBoard`, landed that morning. The router is among them and
+  day, because this list changes as things land. As of 11 September **nine** contracts of ours are
+  on Arbitrum One, the newest being `HelicoAgent` and its implementation; count them off
+  `docs/deployments.md` on the day. (The 9 September count was five.) The router is among them and
   its opcode reads back from the chain. What is still not deployable-and-used is a different
   sentence: nothing has shipped a board to the oracle app, so *"deployed"* is true of it and
   *"in use"* is not
@@ -367,6 +393,16 @@ End on the repo URL. No outro music.
   of ours
 - **Anything about Uniswap being one of our tracks** — it is not, and the video should not imply
   a fourth
+- **"The enclave signs and the agent key carries it"**, or **"the key never leaves the enclave"**,
+  about production. That was the design until 11 September and it is what the rehearsal footage
+  shows, because staging still uses `signature` delivery. Production has no agent key: the DON
+  writes the report through the `KeystoneForwarder` into `HelicoAgent`, and the owner's `setAgent`
+  names that contract. Over rehearsal footage, say *"in this rehearsal it signs"*; over the live
+  chain, say *"the network wrote it"*
+- **A delivery hash as proof that money moved.** `KeystoneForwarder.route` calls the receiver with
+  a low-level call and the transaction succeeds whether or not the receiver did — `writeReport`
+  reporting `SUCCESS` says the DON delivered, not that the account moved. The evidence is the
+  account's balance and its `IdleCapitalMoved` event, which is what the 12 September row quotes
 - **"The AI decides where your money goes"** — it does not. A model turns the verdict into a
   sentence the owner can read, and the verdict is computed before it is called and never reads its
   answer back. Say *"the enclave decides, and a model explains it"*
@@ -388,16 +424,12 @@ End on the repo URL. No outro music.
   `config.production.json` now names them too, four markets and two assets, so that clause is
   retired rather than repeated.
 
-  What is true instead, and the only part that matters on camera: **no account exists.** Nobody
-  has opened one on Arbitrum One, so nobody has called `permitVenue`, so there is nothing for a
-  workflow to reach — and the deployed workflow is still the 8 September build besides. Every
-  protocol the product can reach, it reaches on a fork.
-
-  So the line stays and its reason does not. Say *"across the markets you permitted"* and
-  *"measured on a fork"*, never *"across protocols"* unqualified — the second is a claim about a
-  deployment that does not exist, which is disqualification reason 2 rather than a wording
-  preference. When an account is opened and the workflow redeployed before the take, this row is
-  rewritten again rather than dropped.
+  Rewritten 12 September, as the 11 September version promised. An account exists, its owner
+  permitted all four markets in the opening transaction, the workflow is the 11 September build,
+  and the DON has moved money into **one** of the three protocols — Morpho — on the live chain.
+  That is the sentence: *"on the live chain it has put money to work in Morpho; on a fork it
+  reaches all three."* *"Across protocols"* unqualified is still a claim about two protocols that
+  have held no live capital, and is still not said.
   `0xHelico/helico#179`
 - **"The Graph tells the agent what to work on"** — no. What is true, and sayable: *the workflow
   asks The Graph how much the maker's mandates could demand, and sizes the liquid buffer to it.*
