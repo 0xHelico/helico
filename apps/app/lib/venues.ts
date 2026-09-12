@@ -143,12 +143,26 @@ export async function readVenues(
   client: PublicClient,
   account: Address,
   assets: readonly Address[] = ACCOUNT_ASSETS,
+  /**
+   * Markets to read instead of the ones this account has permitted.
+   *
+   * **For the caller that is about to permit them.** The one-press card ships a mandate in the
+   * same batch that permits every market, and `SwapMandate.venues` is immutable — so a mandate
+   * built from the permits that exist *before* the batch names no venues at all, and
+   * `HelicoMandateSwap._cover` is then a no-op for the life of the mandate. Measured on 12
+   * September: a fresh account answers `0 positions, 0 pools` here, while the batch beside it
+   * permits four.
+   *
+   * Every other caller reads what the account has actually permitted, which is what a panel
+   * showing positions must do.
+   */
+  pools: readonly Address[] | null = null,
 ): Promise<VenueReadout> {
-  const found = await permittedVenues(client, account);
-  const pools = found ?? KNOWN_VENUES;
-  const source: VenueReadout["source"] = found ? "logs" : "fallback";
+  const found = pools ?? (await permittedVenues(client, account));
+  const source: VenueReadout["source"] = pools || found ? "logs" : "fallback";
 
-  const pairs = pools.flatMap((pool) =>
+  const resolved = found ?? KNOWN_VENUES;
+  const pairs = resolved.flatMap((pool) =>
     assets.map((asset) => ({ pool, asset })),
   );
   const positions = await Promise.all(

@@ -42,7 +42,7 @@ import {
 import { explorerTx } from "@/lib/chain";
 import { readMandates, shipped } from "@/lib/mandates";
 import { cn } from "@/lib/utils";
-import { MARKETS, readVenues } from "@/lib/venues";
+import { KNOWN_VENUES, MARKETS, readVenues } from "@/lib/venues";
 
 const USDC: Address = ACCOUNT_TOKENS.idle;
 const WETH: Address = "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1";
@@ -155,10 +155,17 @@ export function PutToWorkCard({
     queryKey: ["put-to-work-venues", account],
     staleTime: 0,
     queryFn: () =>
-      readVenues(client as NonNullable<typeof client>, account as Address, [
-        USDC,
-        WETH,
-      ]),
+      readVenues(
+        client as NonNullable<typeof client>,
+        account as Address,
+        [USDC, WETH],
+        // **Every market, which is what the comment in `run` already claimed.** The mandate's
+        // `venues` array is immutable and was built from the permits that existed *before* this
+        // batch — none, on a fresh account — so the first mandate anybody ships named no venues
+        // and `_cover` could never unwind anything for it. The batch permits these four in the
+        // same transaction, so naming them is not a promise about somebody else's permits.
+        KNOWN_VENUES,
+      ),
   });
 
   /**
@@ -212,10 +219,11 @@ export function PutToWorkCard({
       throw new Error("There is nothing to put to work");
     }
 
-    // **Every market, not the permitted ones.** `readVenues` derives permits from logs, and read
-    // before this batch a fresh account has none — so a mandate built from that list would name no
-    // venues and a fill could only be paid out of idle tokens. This batch permits every market, so
-    // by the time anyone can fill, the permits are on chain.
+    // **Every market, and the read above is what makes that true.** This comment used to end
+    // "this batch permits every market, so by the time anyone can fill, the permits are on
+    // chain" — which is true and does not help: `SwapMandate.venues` is immutable, so permits
+    // landing later cannot add a venue to a mandate that named none. `readVenues` is passed
+    // `KNOWN_VENUES` above for exactly that reason.
     const receipts = venues.data?.positions ?? [];
     const byPool = new Map<string, SwapMandate["venues"][number]>();
     for (const p of receipts) {

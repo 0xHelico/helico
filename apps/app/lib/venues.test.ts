@@ -420,3 +420,58 @@ describe("the markets an owner is offered", () => {
     expect(new Set(pools).size).toBe(pools.length);
   });
 });
+
+/**
+ * The one-press card ships a mandate in the same batch that permits the markets, and
+ * `SwapMandate.venues` is immutable — so a mandate built from the permits that exist *before*
+ * the batch names no venues, and `HelicoMandateSwap._cover` is a no-op for its whole life.
+ *
+ * Measured on the live chain, 12 September: a fresh account answers `0 positions, 0 pools` here
+ * while the batch beside it permits four. The comment in `run` used to argue that the permits
+ * landing in the same transaction covered it, which is true of the permits and irrelevant to an
+ * immutable array.
+ */
+describe("reading markets the account has not permitted yet", () => {
+  test("with no permits and no override, there is nothing to name", async () => {
+    const { client } = chain({ permitted: [], lists });
+    const { positions } = await readVenues(client, ACCOUNT, ACCOUNT_ASSETS);
+    expect(positions).toHaveLength(0);
+  });
+
+  test("an override names them anyway, which is what the mandate needs", async () => {
+    const { client } = chain({ permitted: [], lists });
+    const { positions } = await readVenues(client, ACCOUNT, ACCOUNT_ASSETS, [
+      AAVE,
+      COMPOUND,
+      COMPOUND_WETH,
+    ]);
+    expect(new Set(positions.map((p) => p.pool))).toEqual(
+      new Set([AAVE, COMPOUND, COMPOUND_WETH]),
+    );
+  });
+
+  // An empty override is a caller saying "these markets", not "fall back to the constant" — and
+  // silently reading four markets for a caller that asked for none is the shape of bug that
+  // `app_not_in: []` is on the enclave side.
+  test("an empty override is empty, not the constant", async () => {
+    const { client } = chain({
+      permitted: [{ pool: AAVE, allowed: true }],
+      lists,
+    });
+    const { positions } = await readVenues(client, ACCOUNT, ACCOUNT_ASSETS, []);
+    expect(positions).toHaveLength(0);
+  });
+});
+
+/**
+ * The mandate names `KNOWN_VENUES` and the batch permits `MARKETS`. If the two ever name
+ * different pools, a mandate would claim a venue the account never permitted — which
+ * `withdrawIdle` refuses — or miss one it did.
+ */
+describe("the permits and the mandate name the same markets", () => {
+  test("every market's pool is in KNOWN_VENUES and nothing else is", () => {
+    const fromMarkets = new Set(MARKETS.map((m) => m.pool.toLowerCase()));
+    const known = new Set(KNOWN_VENUES.map((p) => p.toLowerCase()));
+    expect(known).toEqual(fromMarkets);
+  });
+});
