@@ -106,8 +106,8 @@ Said here rather than left to be discovered.
   [`scripts/ship-maker-position.ts`](scripts/ship-maker-position.ts).
 - **Nothing has been shipped to `HelicoOracleBoard`.** It is deployed and verified; deployed is not
   in use.
-- **This is not audited.** Twelve automated reviewers went over the contracts, then six more. That
-  is not an audit and nothing here calls it one.
+- **This is not audited.** Twelve automated reviewers went over the two Aqua contracts on 8
+  September. That is not an audit and nothing here calls it one.
 
 ## Rules
 

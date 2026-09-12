@@ -12,7 +12,7 @@ The decision runs **inside the enclave**, over thresholds the Vault DON releases
 thresholds are the strategy, the one thing a competitor would want. Only the verdict comes back
 out, as a report the DON signs and writes to Arbitrum One through Chainlink's `KeystoneForwarder`,
 into [`HelicoAgent`](../../contracts/src/HelicoAgent.sol), the contract your account names as its agent.
-No key of ours is in that path: the forwarder is the only address that can call the agent, and the
+No key of ours is in that path: the forwarder is the only address that can reach the agent's `onReport`, and the
 agent can only call the two functions the account lets an agent call.
 
 | What | Where |
