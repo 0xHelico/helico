@@ -134,7 +134,7 @@ func TestAskReportsAStatusRatherThanAShape(t *testing.T) {
 		_, _ = w.Write([]byte("<html>bad gateway</html>"))
 	}))
 	t.Cleanup(srv.Close)
-	c := NewClient(srv.URL, "test-key", "test-model", 5*time.Second)
+	c := NewClient(5*time.Second, Upstream{BaseURL: srv.URL, Key: "test-key", Model: "test-model"})
 	_, err := c.ask(context.Background(), "swap 1 ETH into USDC", nil)
 	if err == nil || !strings.Contains(err.Error(), "refused") {
 		t.Fatalf("err = %v, want the status reported", err)
@@ -171,7 +171,7 @@ func fakeModel(t *testing.T, status int, content string) *Client {
 		_ = json.NewEncoder(w).Encode(body)
 	}))
 	t.Cleanup(srv.Close)
-	return NewClient(srv.URL, "test-key", "test-model", 5*time.Second)
+	return NewClient(5*time.Second, Upstream{BaseURL: srv.URL, Key: "test-key", Model: "test-model"})
 }
 
 func TestInterpretComposesItsOwnConfirmation(t *testing.T) {
@@ -236,7 +236,7 @@ func TestInterpretSurfacesAModelThatMisbehaves(t *testing.T) {
 }
 
 func TestInterpretWithoutAKey(t *testing.T) {
-	svc := New(NewClient("", "", "", 0))
+	svc := New(NewClient(0))
 	if _, err := svc.Interpret(context.Background(), "swap 1 ETH into USDC"); !errors.Is(err, ErrNotConfigured) {
 		t.Fatalf("err = %v, want ErrNotConfigured", err)
 	}
@@ -574,7 +574,7 @@ func TestPriorTurnsReachTheModelAndNothingElse(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	svc := New(NewClient(srv.URL, "test-key", "test-model", 5*time.Second))
+	svc := New(NewClient(5*time.Second, Upstream{BaseURL: srv.URL, Key: "test-key", Model: "test-model"}))
 	got, err := svc.Interpret(context.Background(), "make it two instead",
 		Turn{Role: "user", Body: "swap 1 ETH into USDC"},
 		Turn{Role: "assistant", Body: "Swapping 1 ETH into USDC on Arbitrum One."},
@@ -619,7 +619,7 @@ func TestPriorTurnsAreBounded(t *testing.T) {
 	for i := range prior {
 		prior[i] = Turn{Role: "user", Body: strings.Repeat("x", 5_000)}
 	}
-	if _, err := New(NewClient(srv.URL, "test-key", "m", 5*time.Second)).
+	if _, err := New(NewClient(5*time.Second, Upstream{BaseURL: srv.URL, Key: "test-key", Model: "m"})).
 		Interpret(context.Background(), "status", prior...); err != nil {
 		t.Fatal(err)
 	}

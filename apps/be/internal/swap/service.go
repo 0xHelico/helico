@@ -23,7 +23,7 @@ func (s *Service) Model() string {
 	if s == nil || s.client == nil {
 		return ""
 	}
-	return s.client.Model
+	return s.client.Model()
 }
 
 // Answer is what a caller gets back: a sentence for the person, which action it is, and an

@@ -48,7 +48,7 @@ func indexServer(t *testing.T, subgraphID string, script []string, handle graphm
 	h := New(blog.NewService(db), Options{
 		Logger:         slog.New(slog.NewTextHandler(io.Discard, nil)),
 		RequestTimeout: 5 * time.Second,
-		Swap:           swap.New(swap.NewClient(model.URL, "k", "test-model", 5*time.Second)),
+		Swap:           swap.New(swap.NewClient(5*time.Second, swap.Upstream{BaseURL: model.URL, Key: "k", Model: "test-model"})),
 		Index: &swap.Index{
 			MCP:        graphmcp.New(fake.URL(), "", 5*time.Second),
 			SubgraphID: subgraphID,

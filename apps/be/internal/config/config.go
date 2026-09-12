@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/0xHelico/helico/apps/be/internal/swap"
 )
 
 // Config is everything the process needs to know before it serves a request.
@@ -28,13 +30,12 @@ type Config struct {
 	// SessionSecret signs the session cookie. Empty means a random one at boot, which signs
 	// everyone out on every restart — the process says so rather than leaving it a mystery.
 	SessionSecret string
-	// LLMBaseURL is any OpenAI-compatible endpoint.
-	LLMBaseURL string
-	// LLMKey enables the swap conversation. Empty means the route answers 503.
-	LLMKey string
-	// LLMModel is the model asked for the swap JSON.
-	LLMModel string
-	// LLMTimeout bounds one call to the model.
+	// LLMs are the OpenAI-compatible endpoints the swap conversation may ask, in order. An entry
+	// with no key is dropped, so one set of variables is a single model and two is a fallback.
+	// Empty means the route answers 503.
+	LLMs []swap.Upstream
+	// LLMTimeout bounds one call to one model, not the chain. `RequestTimeout` is what bounds the
+	// chain, and the check at the bottom of FromEnv is what keeps the two in step.
 	LLMTimeout time.Duration
 	// SwapRatePerMin is how many swap messages one address may send in a minute.
 	SwapRatePerMin int
@@ -104,17 +105,33 @@ func FromEnv(lookup Lookup) (Config, error) {
 		return def
 	}
 	cfg := Config{
-		Addr:               get("BE_ADDR", ":8787"),
-		DBPath:             get("BE_DB_PATH", "data/helico.db"),
-		AdminToken:         get("BE_ADMIN_TOKEN", ""),
-		ContentDir:         get("BE_CONTENT_DIR", "content"),
-		RequestTimeout:     10 * time.Second,
-		ShutdownTimeout:    10 * time.Second,
-		SessionSecret:      get("BE_SESSION_SECRET", ""),
-		LLMBaseURL:         get("BE_LLM_BASE_URL", "https://api.openai.com/v1"),
-		LLMKey:             get("BE_LLM_API_KEY", ""),
-		LLMModel:           get("BE_LLM_MODEL", "gpt-4o-mini"),
-		LLMTimeout:         8 * time.Second,
+		Addr:            get("BE_ADDR", ":8787"),
+		DBPath:          get("BE_DB_PATH", "data/helico.db"),
+		AdminToken:      get("BE_ADMIN_TOKEN", ""),
+		ContentDir:      get("BE_CONTENT_DIR", "content"),
+		RequestTimeout:  30 * time.Second,
+		ShutdownTimeout: 10 * time.Second,
+		SessionSecret:   get("BE_SESSION_SECRET", ""),
+		LLMs: []swap.Upstream{
+			{
+				BaseURL: get("BE_LLM_BASE_URL", "https://api.openai.com/v1"),
+				Key:     get("BE_LLM_API_KEY", ""),
+				Model:   get("BE_LLM_MODEL", "gpt-4o-mini"),
+				User:    get("BE_LLM_USER", ""),
+				Pass:    get("BE_LLM_PASS", ""),
+			},
+			{
+				BaseURL: get("BE_LLM_FALLBACK_BASE_URL", ""),
+				Key:     get("BE_LLM_FALLBACK_API_KEY", ""),
+				Model:   get("BE_LLM_FALLBACK_MODEL", ""),
+				User:    get("BE_LLM_FALLBACK_USER", ""),
+				Pass:    get("BE_LLM_FALLBACK_PASS", ""),
+			},
+		},
+		// Twelve seconds because it was measured, not guessed. On 12 September, asked the real
+		// system prompt, one router answered in 1.3 to 2.2 seconds and the other in 6.3 to 7.1.
+		// Eight seconds fitted the first and would have timed the second out on a slow day.
+		LLMTimeout:         12 * time.Second,
 		SwapRatePerMin:     6,
 		SwapDailyMax:       500,
 		SubgraphURL:        get("BE_SUBGRAPH_URL", defaultSubgraph),
@@ -162,15 +179,33 @@ func FromEnv(lookup Lookup) (Config, error) {
 			*n.dst = parsed
 		}
 	}
-	// The handler wraps every request in RequestTimeout, so a model given longer than that can
-	// never finish: the request times out first, with a 503 that reads exactly like the one for
-	// an unset key. An operator who wrote that combination on purpose is told at startup; one who
-	// only shortened the request timeout gets a model timeout that fits under it.
-	if cfg.RequestTimeout > 0 && cfg.LLMTimeout >= cfg.RequestTimeout {
-		if llmTimeoutSet {
-			return Config{}, fmt.Errorf("BE_LLM_TIMEOUT (%s) must be shorter than BE_REQUEST_TIMEOUT (%s), or the request times out before the model answers", cfg.LLMTimeout, cfg.RequestTimeout)
+	// The handler wraps every request in RequestTimeout, so the whole chain of models has to fit
+	// inside it: a model given longer than what is left can never finish, and the request times
+	// out first with a 503 that reads exactly like the one for an unset key.
+	//
+	// **The budget is per attempt, times the number of attempts.** With two routers configured and
+	// eight seconds each, a request bounded at ten seconds cannot reach the second one at all —
+	// the fallback would be configuration that never runs, which is worse than no fallback,
+	// because it looks like cover it does not provide.
+	//
+	// An operator who wrote that combination on purpose is told at startup; one who only shortened
+	// the request timeout gets a model timeout that fits under it.
+	attempts := time.Duration(0)
+	for _, u := range cfg.LLMs {
+		if u.Key != "" {
+			attempts++
 		}
-		if cfg.LLMTimeout = cfg.RequestTimeout * 4 / 5; cfg.LLMTimeout < time.Second {
+	}
+	if attempts < 1 {
+		attempts = 1
+	}
+	if cfg.RequestTimeout > 0 && cfg.LLMTimeout*attempts >= cfg.RequestTimeout {
+		if llmTimeoutSet {
+			return Config{}, fmt.Errorf(
+				"BE_LLM_TIMEOUT (%s) × %d model(s) must be shorter than BE_REQUEST_TIMEOUT (%s), or the request times out before the last one answers",
+				cfg.LLMTimeout, attempts, cfg.RequestTimeout)
+		}
+		if cfg.LLMTimeout = cfg.RequestTimeout * 4 / 5 / attempts; cfg.LLMTimeout < time.Second {
 			cfg.LLMTimeout = time.Second
 		}
 	}
