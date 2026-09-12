@@ -80,20 +80,73 @@ const MONTHS = [
   "Dec",
 ];
 
+const HOUR = 3_600_000;
+const DAY = 24 * HOUR;
+
 /**
- * `10 Sep`, in that order, whatever the reader's locale is.
+ * The axis in the reader's own clock, day before month, and to the hour when the window is short
+ * enough for the hour to be the thing that differs.
  *
- * `toLocaleDateString` puts the month first in some locales and the day first in others, so an axis
- * built on it reads differently depending on who opens the page. A date on a chart is a tick label
- * rather than prose, and one shape for everyone is what makes the design match itself.
+ * **A date on its own made the short windows unreadable.** 1D drew nine labels across twenty-four
+ * hours and wrote the same date under four of them; moving the crosshair changed nothing a reader
+ * could see, because the value holds between events and the label held too. The hour is what tells
+ * two points of one day apart.
+ *
+ * Local rather than UTC, which is a change from the port this came from. A date is the same fact
+ * in any zone give or take a day, so UTC cost nothing; an hour is not. `14:00` shown to somebody
+ * in Jakarta for an event they watched happen at 21:00 is simply wrong, and reading the date from
+ * a different clock than the hour is worse still: `30 Sep 23:00` local is `1 Oct` in UTC, and the
+ * label would contradict itself.
+ *
+ * The order stays fixed at day-then-month rather than deferring to the locale. `toLocaleDateString`
+ * puts the month first in some places and the day first in others, so an axis built on it reads
+ * differently depending on who opens the page, and the design matches itself for nobody.
  */
-const dateLabel = (ts: number) => {
+const pad = (n: number) => String(n).padStart(2, "0");
+const date = (d: Date) => `${d.getDate()} ${MONTHS[d.getMonth()]}`;
+const clock = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+/**
+ * Which of those a tick gets, chosen from how much time the whole line covers.
+ *
+ * The thresholds are about what repeats. Under two days every label would carry the same one or
+ * two dates, so the date goes to the tooltip and the axis keeps the hour. Past ten days the hour
+ * is noise: the points are days apart and the date already separates them. Past a year even the
+ * day is more precision than the axis can place.
+ */
+export function labeller(points: Point[]): (ts: number) => string {
+  const first = points.at(0)?.timestamp ?? 0;
+  const last = points.at(-1)?.timestamp ?? 0;
+  const span = last - first;
+  if (span <= 2 * DAY) {
+    return (ts) => clock(new Date(ts));
+  }
+  if (span <= 10 * DAY) {
+    return (ts) => {
+      const d = new Date(ts);
+      return `${date(d)} ${clock(d)}`;
+    };
+  }
+  if (span <= 400 * DAY) {
+    return (ts) => date(new Date(ts));
+  }
+  return (ts) => {
+    const d = new Date(ts);
+    return `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+  };
+}
+
+/**
+ * The tooltip always carries the hour, whatever the axis decided.
+ *
+ * It is the one place a reader can ask what a particular point is, and on a balance that holds its
+ * value for days the timestamp is the only part that changes as the crosshair moves. A tooltip
+ * reading the same figure and the same date at both ends of a flat run looks like a chart that has
+ * stopped responding.
+ */
+export const tooltipLabel = (ts: number) => {
   const d = new Date(ts);
-  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
-};
-const tooltipLabel = (ts: number) => {
-  const d = new Date(ts);
-  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+  return `${date(d)} ${d.getFullYear()}, ${clock(d)}`;
 };
 
 /** Round a step size to a nice value (1/2/2.5/5 × 10^k) for axis ticks. */
@@ -203,6 +256,8 @@ export function PriceChart({
     }));
   }, [points, plotW, plotH, min, span, axis]);
 
+  const stamp = useMemo(() => labeller(points), [points]);
+
   const xTickIdx = useMemo(() => {
     if (pts.length === 0) {
       return [] as number[];
@@ -298,7 +353,7 @@ export function PriceChart({
               x={pts[i]?.x}
               y={HEIGHT - 8}
             >
-              {dateLabel(points[i]?.timestamp ?? 0)}
+              {stamp(points[i]?.timestamp ?? 0)}
             </text>
           ))}
           <path
