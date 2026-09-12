@@ -55,9 +55,9 @@ Two things to carry across when switching, because they do not follow the source
   the image without that volume starts with an empty database.
 - **`apps/app` bakes `NEXT_PUBLIC_*` at build time**, not at run time. They are build arguments in
   `apps/app/Dockerfile` with defaults, so a value set only in Coolify's environment **will not
-  reach the browser bundle**. `NEXT_PUBLIC_VAULT_ADDRESS` is the one that matters: it is empty
-  until the vault is deployed, and the mandate page reads it and says so rather than offering
-  buttons that cannot work. Setting it means rebuilding, not restarting.
+  reach the browser bundle**. The ones the app reads are `NEXT_PUBLIC_ACCOUNT_FACTORY` (a
+  default in code, since a deployed address is public) and `NEXT_PUBLIC_BE_API_URL`. Setting
+  either means rebuilding, not restarting.
 
 ## How to tell whether the move actually happened
 

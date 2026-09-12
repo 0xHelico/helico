@@ -126,20 +126,8 @@ export type IdleMoveParams = {
 
 // ─── One leftover from the Uniswap v4 path ───────────────────
 // CRE stopped re-centring LP ranges on 8 September and moved to the yield layer. `HelicoVault`
-// itself was deleted in #247, and with it `vaultAbi`, the `Mandate` tuple and everything in
-// `mandate.ts` that mirrored `setMandate`'s reverts — an ABI for a contract that does not exist
-// is worse than a missing one, because it typechecks.
-//
-// `positionManagerAbi` stays, and only because one thing still reads it:
-// `apps/app/e2e/fork-fixture.ts` builds a v4 position for the app's fork fixtures. When that
-// fixture goes, this goes with it. That sentence is checkable — `rg positionManagerAbi` — which
-// is the difference between this note and the one it replaces, which named three consumers and
-// two of them had already gone.
-
-export const positionManagerAbi = parseAbi([
-	'function getPositionLiquidity(uint256 tokenId) view returns (uint128)',
-	'function getPoolAndPositionInfo(uint256 tokenId) view returns ((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, uint256 info)',
-])
+// was deleted in #247 with its ABI; the Uniswap v4 position-manager ABI that one fork fixture
+// still read went on 12 September, with the fixture.
 
 export const stateViewAbi = parseAbi([
 	'function getSlot0(bytes32 poolId) view returns (uint160 sqrtPriceX96, int24 tick, uint24 protocolFee, uint24 lpFee)',

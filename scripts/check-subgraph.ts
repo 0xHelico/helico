@@ -17,7 +17,7 @@ import { endpoint, HELICO_AQUA, makerMandates } from '../packages/plugins/thegra
 
 // The busiest maker on the live Aqua — 48 shipped strategies as of block 502,288,683. Public,
 // on chain, and not ours, which is the point: this reads the real Aqua, not a fixture we
-// control. Forty-eight strategies under one wallet is also the argument for the subgraph
+// control. Dozens of strategies under one wallet (48 at that block, 54 by 12 September) is also the argument for the subgraph
 // existing: `_balances` is private and four levels deep, no event parameter is indexed, and
 // nothing on chain can list them.
 //
