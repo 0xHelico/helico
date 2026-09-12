@@ -112,11 +112,25 @@ const open = async (url: string): Promise<{ page: Page; text: string }> => {
     title("/limit"),
     title("/portfolio"),
   ]);
-  check("the front door is the app itself", front === "Helico", front);
-  check("the limits have their own route", limits === "Limits", limits);
+  // **The shape, not the string.** These two asserted `=== "Helico"` and `=== "Limits"`, which
+  // were the titles until the SEO pass gave `layout.tsx` a `template: "%s · Helico"` — after
+  // which the front door is `Helico | Your Funds, on Autopilot` and the route is
+  // `Limits · Helico`. Both checks went red against a correct deployment for a week, while the
+  // portfolio one beside them survived only because it was written as a regex.
+  //
+  // A production check that fails for the wrong reason is worse than no check: whoever runs it
+  // before recording either panics or learns to ignore the colour. So what is asserted now is
+  // what the metadata actually promises — the route names itself, and the brand is appended by
+  // the template — and a deliberate change to either is one edit here rather than three.
+  check("the front door is the app itself", /^Helico\b/.test(front), front);
+  check(
+    "the limits have their own route",
+    limits === "Limits · Helico",
+    limits,
+  );
   check(
     "and the portfolio still has its own",
-    /Portfolio/.test(portfolio),
+    portfolio === "Portfolio · Helico",
     portfolio,
   );
 
