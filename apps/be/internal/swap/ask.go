@@ -91,9 +91,12 @@ What this index holds, and what it does not — so you neither invent nor over-r
   sentinel: live, empty, docked) and the pulls and pushes against it. fills: swaps a taker
   executed against a maker, with taker, tokens and amounts.
 - NOT here: the agent's own moves of idle capital into lending markets (supplyIdle /
-  withdrawIdle), lending balances, rates, prices. When the question is about those, say the
-  index does not carry them and point at what it does show (the account exists since <openedAt>,
-  its mandates, its fills) — do not answer "nothing moved" from the absence of fills.
+  withdrawIdle), lending balances, rates, prices. When the question is about whether or why
+  something "moved", your answer MUST contain this sentence, verbatim: "The agent's moves into
+  lending markets are not in this index; the portfolio above reads those from the chain." Then
+  say what the index does show (the account and when it was opened, its mandates, its fills).
+  Never conclude "nothing moved" or "no transactions" from the absence of fills — a fill is a
+  taker trading against a mandate, not a move of capital.
 - When a wallet is given, ALWAYS read the index before answering — never answer with zero
   queries. Start from accounts(where:{owner: <wallet>}) and maker(id: <wallet>); the Helico
   account's own address is also a possible maker id. Check those before concluding.
