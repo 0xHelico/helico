@@ -307,32 +307,37 @@ func (a *api) delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// requireAdmin gates writes behind the bearer token, and refuses them outright when none is
-// configured, so a deployment cannot be written to by accident.
 // readTheIndex adds one step per index read, so the tree under the answer shows that the subgraph
-// was asked and what was asked of it. A failure adds a failed step and changes nothing else — the
-// reply the person would have had without the index is the reply they get.
+// was asked and what was asked of it, and then one more step with what the model concluded from
+// the results. A failure adds a failed step and changes nothing else — the reply the person would
+// have had without the index is the reply they get.
 //
-// **It no longer puts the index's own sentence on screen.** That was a card reading "The index
-// shows that you have a Helico account with the address 0x0acd…, it was opened on September 10,
-// 2026, at 17:58:38 UTC, the transaction that opened the account has the hash 0x0673…" — three
-// lines of address, hash and UTC timestamp, which is debug output wearing an answer's clothes.
-// Nobody asked when their account was created, and the number they did ask about is already in
-// the reply above it.
-//
-// The evidence that The Graph is load-bearing is not lost with it, and is better where it went:
-// the steps name `mcp.initialize`, `mcp.getSchemaBySubgraphId` and every query that was sent, in
-// order, with what each returned. A reader who wants to know where an answer came from gets the
-// calls rather than a paraphrase of them.
+// **The sentence is a step, not a card.** It was a card once, and #455 removed it for good
+// reason: the version it looked at read "you have a Helico account with the address 0x0acd…, it
+// was opened on September 10, 2026, at 17:58:38 UTC, the transaction that opened the account has
+// the hash 0x0673…" — three lines of address, hash and timestamp, debug output wearing an
+// answer's clothes, above steps that already carried the calls. But removing the sentence left
+// the loop paying for up to five model-written queries and discarding the result, which is a
+// state that cannot be defended either way (#464). So it is back where #455 said the evidence
+// belongs — under the `mcp.*` calls, last — capped in code to two sentences with no hash and no
+// full address, so the tree reads: what was asked, what came back, what was concluded.
 func (a *api) readTheIndex(ctx context.Context, answer *swap.Answer, question, address string) {
 	owner := strings.ToLower(strings.TrimSpace(address))
 	if !isAddress(owner) {
 		owner = ""
 	}
-	_, steps, err := a.opt.Swap.Ask(ctx, a.opt.Index, question, owner)
+	got, steps, err := a.opt.Swap.Ask(ctx, a.opt.Index, question, owner)
 	answer.Steps = append(answer.Steps, steps...)
 	if err != nil {
 		a.opt.Logger.Warn("the index did not answer", "error", err)
+		return
+	}
+	// The model's reading, as the last step under the calls that produced it — what was asked,
+	// what came back, what was concluded, in the order a reader checks them (#464). Capped here
+	// to two sentences with no hash and no full address, because the prompt asking for that is a
+	// request and this line is what a person reads.
+	if sentence := swap.Sentence(got.Answer); sentence != "" {
+		answer.Steps = append(answer.Steps, swap.Step{Call: "index.answer", Detail: sentence, OK: true})
 	}
 }
 
@@ -348,6 +353,8 @@ func isAddress(s string) bool {
 	return true
 }
 
+// requireAdmin gates writes behind the bearer token, and refuses them outright when none is
+// configured, so a deployment cannot be written to by accident.
 func (a *api) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if a.opt.AdminToken == "" {

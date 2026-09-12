@@ -83,9 +83,13 @@ nothing else. What comes back is **one step per MCP call** under the answer, so 
 informed it are in the open. A failure adds a failed step and leaves the reply exactly what it
 was; with the variables unset the code path is never entered.
 
-The index's own sentence is not put on screen. It was, in a card titled *From the index*, and it
-read as debug output: an account address, an opening transaction hash and a UTC timestamp, for a
-question nobody asked, above a reply that already carried the figure they did ask about.
+The index's own sentence is the **last step**, `index.answer`, under the calls that produced it —
+not a card. It was a card once and was dropped for reading as debug output (an address, a hash, a
+timestamp for a question nobody asked); dropping it left the loop paying for model-written
+queries and discarding the result, so it came back as a step (#455, #464): capped in code to two
+sentences, every hash and full address cut to its ends, and told in the prompt what it must not
+say — no balance the chain would answer differently, no claim about what the agent did, nothing
+the page already shows.
 
 That is two Graph products composed — the Subgraph and the MCP — and both load-bearing. Measured
 before it was written: `docs/plans/2026-09-12-the-chat-reads-the-index.md`. The client is
