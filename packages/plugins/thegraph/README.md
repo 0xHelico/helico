@@ -12,12 +12,12 @@ event Shipped(address maker, address app, bytes32 strategyHash, bytes strategy);
 ```
 
 `private` and four levels deep, so nothing enumerates it. **No event parameter is `indexed`**, so
-logs cannot be filtered by maker, app or token — only by topic0. And `rawBalances` needs a hash you
+logs cannot be filtered by maker, app or token, only by topic0. And `rawBalances` needs a hash you
 already hold.
 
 So *"which mandates does this maker have, and what is left in each?"* has **no on-chain answer**.
 Not a slow one. None. For an agent deciding what it may do for a wallet that just connected, that
-is the problem rather than a performance detail — which is what makes an indexer load-bearing here
+is the problem rather than a performance detail, which is what makes an indexer load-bearing here
 instead of decorative.
 
 ## Use it
@@ -35,7 +35,7 @@ answer.spendable         // token → total still spendable across the live ones
 |---|---|
 | [`mandates.ts`](src/mandates.ts) | `makerMandates`, paged; `toMandates`; `spendable` |
 | [`pool.ts`](src/pool.ts) | `poolHistory` and `drifted`, against Uniswap v4's published subgraph |
-| [`client.ts`](src/client.ts) | `query`, and `endpoint` — Studio takes no key, the gateway takes only a key |
+| [`client.ts`](src/client.ts) | `query`, and `endpoint`, Studio takes no key, the gateway takes only a key |
 | [`types.ts`](src/types.ts) | `HELICO_AQUA` and `UNISWAP_V4`, the subgraphs this package knows |
 
 The subgraph itself is in [`subgraph/`](../../../subgraph/). `bun scripts/check-subgraph.ts` shows

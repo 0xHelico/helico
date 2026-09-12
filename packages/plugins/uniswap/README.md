@@ -69,7 +69,7 @@ every one `status: success`:
 | Collect fees | [`0xfbbc…e3ed5`](https://sepolia.basescan.org/tx/0xfbbc73fe97ab91f532ec9e46b465352ea6589c3d1e51a630eb56cc6e162e3ed5) |
 | Decrease 100 % and burn the NFT | [`0xf98a…ad617`](https://sepolia.basescan.org/tx/0xf98a4ad77e81b07d7f15efcafa8f169e5d77b84d5bbb1bbe06568992223ad617) |
 
-**Robinhood Chain Testnet, 2026-09-05**, router 2.1.1, same wallet — a chain neither Uniswap's
+**Robinhood Chain Testnet, 2026-09-05**, router 2.1.1, same wallet, a chain neither Uniswap's
 deployments page nor the SDKs list, where v4 turned out to be live at the mainnet addresses:
 
 | Step | Transaction |
@@ -88,7 +88,7 @@ deployments page nor the SDKs list, where v4 turned out to be live at the mainne
 | Decrease 100 % and burn the NFT | [`0x7ab3…4397`](https://explorer.testnet.chain.robinhood.com/tx/0x7ab35c8ee3db057fdccfbd4e90cf1c20dfcc6aa6ba42e8cbb228942532fc4397) |
 
 Read-only runs elsewhere: Arbitrum One (router 2.0, ETH/USDC 0.05%, both swap shapes accepted via
-`eth_call`) and Robinhood Chain mainnet (router 2.1.1, ETH/USDG, same). No e2e on either — the
+`eth_call`) and Robinhood Chain mainnet (router 2.1.1, ETH/USDG, same). No e2e on either, the
 wallet holds nothing there.
 
 ## Do not forget
@@ -98,7 +98,7 @@ wallet holds nothing there.
 - The `V4_SWAP` input is `V4Planner.finalize()`. `RoutePlanner.inputs` is wrong for it, and wrong
   quietly.
 - Native-input exact-output swaps leave ETH in the router, so the encoders add a router-level
-  `SWEEP` back to the caller — the v4 action set has no sweep and the router rejects one.
+  `SWEEP` back to the caller, the v4 action set has no sweep and the router rejects one.
 - A route ending in its own input currency nets its deltas out and reverts. Use distinct endpoints.
 - Public RPCs lag across nodes and under-estimate gas for position-manager calls; the e2e retries
   with fresh builds and cushions gas.
