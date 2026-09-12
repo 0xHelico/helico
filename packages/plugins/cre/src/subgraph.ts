@@ -6,12 +6,25 @@ import type { IdlePolicy } from './policy'
  *
  * `policy.minIdleAmount` is the owner saying how much must stay liquid, and every run before this
  * one took that number as the whole answer. It is not: the reason the buffer exists is that a
- * swap taken against one of the maker's Aqua mandates is served out of the wallet first — the
- * account **is** the maker in Aqua's ledger — and `HelicoMandateSwap._cover` only unwinds a
- * lending position when the wallet cannot pay. That unwind is the slow path, it pays for a
- * `withdraw` inside somebody else's swap, and `_venueFor` can refuse it outright when no venue
- * can cover or the maker has borrowed. So the buffer ought to follow the mandates, and with a
- * fixed secret it does not: ship a larger mandate and the number the owner set stays where it was.
+ * swap taken against one of the maker's Aqua mandates is served out of the wallet — the account
+ * **is** the maker in Aqua's ledger — and a mandate on an app that pulls the asset itself, which
+ * every SwapVM position is, can only be paid from what the wallet holds. So the buffer ought to
+ * follow those mandates, and with a fixed secret it does not: ship a larger mandate and the
+ * number the owner set stays where it was.
+ *
+ * **It does not follow the mandates on a covering app.** `HelicoMandateSwap._cover` unwinds a
+ * lending position inside the swap when the wallet cannot pay, through the venues the mandate
+ * names, and the receipt lines on such a mandate are the permission for exactly that. Holding
+ * the wallet liquid for one of those is the product's thesis reversed by its own agent — which
+ * is what happened on 12 September, when the first mandate the account shipped emptied Morpho
+ * a minute later. `coveringApps` names those apps and `demandHttpRequest` leaves their mandates
+ * out. What that accepts: the unwind is the slow path, it pays for a `withdraw` inside somebody
+ * else's swap, and `_venueFor` can refuse it when no venue can cover or the maker has borrowed.
+ * That is the trade the owner makes by naming venues on the mandate, and a mandate on a
+ * covering app that names none (`venues: []`, which the contract does not forbid) is wallet-only
+ * and is still left out here — the app's own card names every market since #481, and an
+ * enclave-side rule keyed on the mandate's receipt balances rather than on its app is the finer
+ * answer, not built yet.
  *
  * **The question has no on-chain answer.** Aqua's `_balances` is `private` and four levels deep —
  * maker, app, strategyHash, token — `rawBalances` needs a hash you already hold, and not one
