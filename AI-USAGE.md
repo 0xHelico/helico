@@ -2729,6 +2729,35 @@ READMEs.
   four permits true, Aqua's ledger holding the mandate at `0.992008` = `minAmountOut`, the
   allowance exactly that. 1,316,122 gas in all, about 0.00003 ETH.
 
+### 2026-09-13 — The ether works too, and the pages say so
+
+- **Done:** "put $1 of ETH to work" wraps ether in the wallet, moves the WETH into the account,
+  and ships a second mandate whose WETH side is the wrapped amount — a two-sided position — and
+  the enclave lends the WETH on its next run. The backend tells the wrap shape (`tokenOut WETH`)
+  from the swap shape (`USDC`) and asks when the destination is missing. The pages were USDC-first
+  and would have shown the ether position as a twelve-digit dollar figure: `useWethHeld` reads and
+  prices the WETH side off Chainlink's ETH/USD feed; holdings rows, the hero total, the mandate
+  card header, the activity table and the put-to-work card all say ETH where it is ETH. Measured
+  end to end on mainnet by Ghoza: four transactions, two of them the network's, recorded in
+  `docs/deployments.md`.
+
+- **AI's role:** Claude Opus 5 wrote the wrap path, the backend shape, the tests, the fork
+  rehearsal against the live account, the five UI changes, and the record; each was measured
+  before it was written down — the wrap on a fork, the model's reading of five sentences on a
+  fresh binary, the deployed bundle scanned for the new strings before saying "live". Ghoza asked
+  for each step, pressed each signature, and read each screen back — the USDC-only card, the
+  wrong holdings row, the `0 WETH` activity line were all his readings of the live page, fixed
+  the same night. rifky was told first in #487; no file he touched that day was edited in the
+  same PR.
+
+- **Plan:** `docs/plans/2026-09-12-one-signature-from-eth.md`, appended before each half.
+
+- **Verified:** 8 lib tests (the wrap shape, ether alone, both sources), Go tests for the three
+  earn shapes, 144 app tests, `tsc`, biome, `next build`; a fork rehearsal wrapping 0.000396 ETH
+  into the live account and shipping the two-sided mandate; then mainnet — `0x50603768…` and the
+  DON's `0x7d346cc4…` two minutes later, `previewRedeem` on the Compound receipt already above
+  what went in.
+
 <!--
 Template for the next entry:
 

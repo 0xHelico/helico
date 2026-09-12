@@ -4,6 +4,91 @@ Arbitrum One, chain id 42161. Every address below was read back from the chain a
 broadcast, not copied from a script's output — the third column is what the contract answers when
 asked about itself.
 
+## 12–13 September 2026 — one sentence, one signature, and the ether works too
+
+A second owner, a fresh wallet holding 0.001 ETH and nothing else, put money to work from the chat
+in two sentences and two signatures — no USDC bought first, no page visited, no key of ours in
+any of the four transactions below. Wallet `0x43F9ee1f96D460D320A762e153ea66fBa355ffC0`, account
+`0x8E0f7e6701c2e9b4F2591161B92c51b431591807`, MetaMask as an EIP-7702 smart account.
+
+### "swap $1 of ETH to USDC and put it all to work" — 18:32 UTC
+
+The backend reads that as `earn` with a checked swap beside it (#492); the put-to-work card
+carries the swap in the same EIP-5792 batch as everything else, with the account as the swap's
+receiver (#488). One transaction:
+
+```
+tx            0x2742cb300e00e8345b5fb395c6732de9fcb4a1911c2b6de7b71d34b4e77f4814
+              block 504,480,861, 18:32:08 UTC, status 1, 1,244,156 gas at 0.020042 gwei, 34 logs
+from          0x43F9ee1f…ffC0   the owner, as a 7702 smart account — MetaMask's delegator code
+                                is on the address after this
+```
+
+In order, inside it: `open` (the account exists), the 1inch router swaps 0.0004 ETH into
+**996,487 USDC delivered straight to the account** (`receiver`, measured before it was built),
+`setAgent` → the `HelicoAgent` proxy, four `permitVenue`, and `executeBatch` as the account:
+approvals to Aqua and `ship` of mandate `0x8579e95a…` on `HelicoMandateSwap` — `991,504` on USDC
+and on each receipt, the quote's `minAmountOut`, so the mandate names nothing the account might
+not hold.
+
+The subgraph had the account and the mandate within the minute. The 18:35:01 run read the new
+account, found no floor to raise (the mandate is on a covering app, #479), and the DON carried:
+
+```
+tx            0xa99162965825d575b30809c2b073eac53079e3ac573bb732da6f695fb7a9866e
+              block 504,481,633, 18:35:20 UTC, status 1, 899,815 gas
+from          0x97ff5b93…deee   a fourth DON transmitter
+Carried       986,487 USDC → Morpho, supplied; policy 0x84e5626f…, workflow 0x00fa897b…
+ReportProcessed  execution 0xeebf8437…, success
+```
+
+Three minutes from the sentence to the money earning, and the owner paid for one transaction.
+
+### "put $1 of ETH to work" — 19:38 UTC
+
+The same owner, asked why the ether was not working too. The account had always been able to hold
+and lend WETH; nothing had put ether in. Now the sentence does (#501): the batch wraps in the
+wallet, moves the WETH into the account, and ships a second mandate whose WETH side is the
+wrapped amount.
+
+```
+tx            0x50603768ecd22ddd3313c9dedd6174f9a7187356d3471027cdca312bb3672aad
+              block 504,496,732, 19:38:45 UTC, status 1, 479,532 gas, 25 logs
+              WETH.deposit 0.000397 ETH → transfer to the account → executeBatch: approvals + ship
+mandate       0x576c16fb… on HelicoMandateSwap: 996,491 USDC and 397,329,897,698,090 wei WETH,
+              plus the receipts — two sides, which is what DegenerateReserves was refusing on the
+              one-sided mandates before it
+```
+
+The 19:40:01 run:
+
+```
+tx            0x7d346cc4815cc0dcb8fe9db62c1559201c00c46a195f4fe4f85f49cfc211fe25
+              block 504,497,103, 19:40:20 UTC, status 1, 304,503 gas
+from          0x97ff5b93…deee
+Carried       397,329,897,688,090 wei WETH → Compound v3 ETH (0xb0A125F5…), supplied;
+              policy 0x84e5626f…, workflow 0x00fa897b…; execution 0xb6fc9d85…, success
+```
+
+The account now: 10,000 USDC idle, 0.986 USDC in Morpho, 10,000 wei WETH idle, 0.000397 WETH in
+Compound v3 ETH (`previewRedeem` already 5,567 wei above what went in), two live mandates on
+Aqua. USDC and ETH both earning, both quotable, one policy hash across every move the DON has
+ever made.
+
+**What the screens got wrong, and fixed the same night.** Every page was USDC-first: the
+holdings rows formatted the WETH position as `USDC · Compound v3 397,329,906.44 · 39872904666.0%`,
+the activity table printed the ether move as `397,329,897.69 USDC`, and the second mandate's
+row read `0 WETH`. #502 and #503: rows carry their own symbol and decimals, the hero total prices
+the WETH side off Chainlink's ETH/USD feed and says under it that the chart still tracks USDC,
+small amounts keep their first significant digits, and the put-to-work card, when the sentence
+asked for ETH, says ETH in its title, its lines and its button.
+
+**Sayable:** two sentences, two signatures, four transactions, the last two by the network. A
+wallet with only ether reaches a two-sided, priced position with both assets lending, in under
+ten minutes, paying for exactly the two transactions it signed. **Not sayable:** that the
+sentence can take *all* the ether — an amount is required, because gas has to stay behind; and
+Rabby cannot do the one-signature batch (no EIP-5792 `atomic` capability), MetaMask can.
+
 ## 12 September 2026, 16:35 UTC — the enclave learns which mandates the wallet does not owe
 
 The section below records the withdrawal and ends on *"the one link that is not measured"* —
