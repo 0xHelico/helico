@@ -24,9 +24,10 @@ import {
   hasAgent,
 } from "@/lib/account";
 import { readAccountActivity } from "@/lib/activity";
-import { explorerTx } from "@/lib/chain";
+import { explorerAddress, explorerTx } from "@/lib/chain";
 import { amountShort as held } from "@/lib/format";
 import { amount, readMandates, token, WALLET_TOKENS } from "@/lib/mandates";
+import { cn } from "@/lib/utils";
 import { readVenues, sweepList } from "@/lib/venues";
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
@@ -217,6 +218,7 @@ export function MandateCard({
   // account did can predate the transaction that created it.
   const opened = own.data?.at(-1);
   const openedAt = opened ? explorerTx(CHAIN_ID, opened.tx) : undefined;
+  const accountAt = explorerAddress(CHAIN_ID, data.address);
 
   const live = mandates.data?.rows.filter((m) => m.active) ?? [];
   const spendable = [...(mandates.data?.spendable ?? new Map())].filter(
@@ -225,46 +227,80 @@ export function MandateCard({
 
   return (
     <div className="mt-3 w-full max-w-md rounded-xl border p-4">
-      <p className="font-medium text-sm">
-        {short(data.address)} · {nominated ? "agent nominated" : "no agent"}
-      </p>
-
-      {/* Four labelled rows of prose became four facts you can read at a glance. Each one carries
-          the mark of the thing it is about, because a column of words makes a reader parse every
-          line before they can tell which fact is which — and this card is answered by a glance
-          more often than it is read. */}
-      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11.5px]">
+      {/* **The state leads, not the address.** This card used to open with a truncated address
+          and the state after a middle dot, both in the same weight — so the first thing a reader
+          met was eight characters of hex, which is the least useful fact on the card and the one
+          they can do nothing with. The state is what they came for; the address is where it is,
+          and it belongs beside it as a link rather than in front of it as a headline. */}
+      <div className="flex items-start justify-between gap-3">
         <span className="flex items-center gap-1.5">
+          <span
+            className={cn(
+              "size-1.5 rounded-full",
+              nominated ? "bg-[#1DA66A]" : "bg-[#E5484D]",
+            )}
+          />
+          <span className="font-medium text-[13px] text-ink">
+            {nominated ? "Armed" : "No agent"}
+          </span>
+        </span>
+        {accountAt ? (
+          <a
+            className="tabular shrink-0 font-mono text-[11.5px] text-faint underline decoration-dotted underline-offset-2 hover:text-ink"
+            href={accountAt}
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            {short(data.address)}
+          </a>
+        ) : (
+          <span className="tabular shrink-0 font-mono text-[11.5px] text-faint">
+            {short(data.address)}
+          </span>
+        )}
+      </div>
+
+      {/* **What it holds, spelled out.** It read `Holding 0.01 + 0.49`, and nothing on the card
+          said what the plus was between. The total is the figure somebody wants; the split is the
+          thing the product does, and it reads as words rather than as arithmetic. */}
+      <div className="mt-3">
+        <p className="numeric tabular font-medium text-[22px] text-ink leading-none">
+          {held ? amount(held.total, 6) : "0"}
+          <span className="ml-1.5 font-sans font-normal text-[12px] text-soft">
+            USDC
+          </span>
+        </p>
+        <p className="tabular mt-1.5 font-mono text-[11px] text-faint">
+          {held
+            ? `${amount(held.idle, 6)} liquid · ${amount(held.working, 6)} earning`
+            : "nothing in it yet"}
+        </p>
+      </div>
+
+      {/* **A list, not a wrapping row.** Five facts in one flex row wrapped mid-way, orphaning
+          `Mandates` and `Opened` onto a second line where they read as an afterthought. Labels in
+          a column and values beside them cannot orphan, and a reader scanning for one of them
+          knows where to look. */}
+      <dl className="mt-4 flex flex-col gap-2 border-t pt-3 text-[11.5px]">
+        <Fact label="Agent">
           <Glyph name="wings" size={13} />
-          <span className="text-faint">Agent</span>
           <span className="tabular font-mono text-soft">
             {nominated && data.kind === "open"
               ? short(data.agent as string)
               : "none"}
           </span>
-        </span>
-        <span className="flex items-center gap-1.5">
+        </Fact>
+        <Fact label="Market">
           {venue.data === true ? (
             <VenueMark label="Aave v3" size={14} />
           ) : (
             <Glyph name="layers" size={13} />
           )}
-          <span className="text-faint">Market</span>
           <span className="text-soft">
             {venue.data === true ? "Aave v3" : "none"}
           </span>
-        </span>
-        <span className="flex items-center gap-1.5">
-          <TokenMark size={14} symbol="USDC" />
-          <span className="text-faint">Holding</span>
-          <span className="tabular font-mono text-soft">
-            {held
-              ? `${amount(held.idle, 6)} + ${amount(held.working, 6)}`
-              : "0"}
-          </span>
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="text-faint">Mandates</span>
+        </Fact>
+        <Fact label="Mandates">
           <span className="tabular font-mono text-soft">
             {mandates.isPending
               ? "…"
@@ -272,20 +308,18 @@ export function MandateCard({
                 ? "unknown"
                 : String(live.length)}
           </span>
-        </span>
+        </Fact>
         {/* **The transaction that opened this account, as a link rather than as a sentence.**
-            The index used to report it in prose — "the transaction that opened the account has the
-            hash 0x0673389b803b0b2a60c828ee0b1a7cb4984f00a0960e4b8b85fa66972181ce61" — sixty-six
-            characters nobody can check by reading them. Shortened and pointed at the explorer, it
-            is the same fact and one click from being verified.
+            The index used to report it in prose — sixty-six characters nobody can check by
+            reading them. Shortened and pointed at the explorer, it is the same fact and one click
+            from being verified.
 
             The oldest event the account emitted, because the list arrives newest first and an
             account cannot have done anything before the transaction that created it. Absent while
             the log is being read, and absent if it cannot be: a link to nowhere is worse than no
             link, and a hash this app invented would be worse than both. */}
         {opened ? (
-          <span className="flex items-center gap-1.5">
-            <span className="text-faint">Opened</span>
+          <Fact label="Opened">
             {openedAt ? (
               <a
                 className="tabular font-mono text-soft underline decoration-dotted underline-offset-2 hover:text-ink"
@@ -300,9 +334,9 @@ export function MandateCard({
                 {short(opened.tx)}
               </span>
             )}
-          </span>
+          </Fact>
         ) : null}
-      </div>
+      </dl>
 
       {/* **One button, and a breakdown above it.** This used to be a sentence, then an unlock
           button or a link to the limits page, then a funding control: three affordances for one
@@ -545,6 +579,28 @@ function Note({ children }: { children: React.ReactNode }) {
   return (
     <div className="mt-3 rounded-xl border p-4 text-muted-foreground text-xs">
       {children}
+    </div>
+  );
+}
+
+/**
+ * One labelled fact: the label in a fixed column, the value beside it.
+ *
+ * Fixed rather than intrinsic so the values line up down the card. Five of these in a wrapping
+ * flex row was the previous arrangement, and it orphaned the last two onto a second line where
+ * they read as an afterthought rather than as two of five equal facts.
+ */
+function Fact({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <dt className="w-[68px] shrink-0 text-faint">{label}</dt>
+      <dd className="flex min-w-0 items-center gap-1.5">{children}</dd>
     </div>
   );
 }

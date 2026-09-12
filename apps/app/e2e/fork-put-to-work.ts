@@ -13,6 +13,12 @@
  *   NEXT_PUBLIC_ARBITRUM_RPC_URL=http://127.0.0.1:8545 BE_API_URL=http://localhost:8787 bun run start -p 3100 &
  *   SP=<dir with fork.key and fork.addrs> bun run e2e/fork-put-to-work.ts
  *
+ * The shim answers `atomicRequired` by replaying the calls in order and reporting `atomic: true`.
+ * A fork node cannot be a 7702 wallet, so that is an approximation — what it still proves is that
+ * the calls are the right calls in the right order with the right `msg.sender`, and a revert
+ * part-way leaves a state the assertions catch. What it cannot prove is the wallet honouring
+ * atomicity, which is the wallet's to keep.
+ *
  * `anvil_autoImpersonateAccount` is not optional: the wallet is a generated key the node holds no
  * signer for, and without it every `eth_sendTransaction` from the browser comes back as
  * "Invalid parameters were provided to the RPC method" — which is what the first run of this

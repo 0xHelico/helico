@@ -98,6 +98,9 @@ export function PutToWorkCard({
 
   const capabilities = useCapabilities({ query: { enabled: isConnected } });
   const atomic = capabilities.data?.[CHAIN_ID]?.atomic?.status;
+  // Both are kept: `supported` guarantees atomicity, `ready` means the wallet can do it when
+  // asked, which is what `forceAtomic` asks. A wallet that can do neither says so below instead of
+  // being handed a batch it would split.
   const canBatch = atomic === "supported" || atomic === "ready";
 
   const send = useSendCalls();
@@ -251,6 +254,12 @@ export function PutToWorkCard({
     );
 
     send.sendCalls({
+      // **All of it or none of it.** Without this the wallet may accept the batch and send the
+      // calls as separate transactions: MetaMask showed "Includes 2 transactions" and one of them
+      // landed while the other did not, which left the money moved in and no position shipped.
+      // `atomicRequired` makes the wallet either do it as one transaction or refuse, and a refusal
+      // is something this card can say rather than a half-applied batch nobody is told about.
+      forceAtomic: true,
       calls: [
         // `open` has no access control and returns the existing address rather than reverting, so
         // this is skipped for the gas rather than for correctness.
@@ -337,8 +346,9 @@ export function PutToWorkCard({
     >
       <p className="font-medium text-sm">Put everything to work</p>
       <p className="mt-1 text-[11.5px] text-soft leading-relaxed">
-        One signature. The same money is quotable on 1inch Aqua and earning in a
-        lending market at the same time.
+        One signature, one transaction: all of it or none of it. The same money
+        is quotable on 1inch Aqua and earning in a lending market at the same
+        time.
       </p>
 
       <div className="mt-3 flex flex-col gap-2 border-t pt-3 text-[11.5px]">

@@ -135,7 +135,19 @@ func run() error {
 
 	errc := make(chan error, 1)
 	go func() {
-		log.Info("listening", "addr", cfg.Addr, "db", cfg.DBPath, "writes", cfg.AdminToken != "", "swap", swapSvc.Configured())
+		// **`models` is here so a paste can be checked without guessing.** The picker reports
+		// what /api/swap/config reports, which reports what this process holds — and when a model
+		// is missing from a deployment's environment the only symptom anywhere was a menu row
+		// reading "not configured", with nothing to say whether the variables had been set, set on
+		// the wrong application, or set without a restart. Family names only: the addresses and
+		// the keys are credentials, and a log is not the place for them.
+		log.Info("listening",
+			"addr", cfg.Addr,
+			"db", cfg.DBPath,
+			"writes", cfg.AdminToken != "",
+			"swap", swapSvc.Configured(),
+			"models", swapSvc.Models(),
+			"index", cfg.GraphMCPURL != "" && cfg.GraphMCPSubgraphID != "")
 		errc <- srv.ListenAndServe()
 	}()
 

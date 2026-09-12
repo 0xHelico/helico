@@ -4,7 +4,14 @@ import { MandatesPanel } from "@/components/mandates-panel";
 import { PortfolioHero } from "@/components/portfolio-hero";
 import { Activity, Holdings } from "@/components/portfolio-sections";
 
-export const metadata = { title: "Portfolio | Helico" };
+/** Wallet-gated, so what a crawler sees is the gate. See `app/limit/page.tsx` for the reasoning. */
+export const metadata = {
+  title: "Portfolio",
+  description:
+    "What your Helico account holds, what it has been worth, and every move the agent has made with it.",
+  alternates: { canonical: "/portfolio" },
+  robots: { index: false, follow: true },
+};
 
 /**
  * Everything true about a wallet right now, on its own page.
