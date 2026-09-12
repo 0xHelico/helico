@@ -98,6 +98,15 @@ export type AquaPlan = {
  * strategies that decoded cleanly, **six hashed to something else**. Offering those to a wallet is
  * offering orders that do not exist, and the wallet finds out by paying gas.
  */
+/**
+ * `TxOriginTokenBalanceIsZero(address,address)` on 1inch's deployed SwapVM, named from its verified
+ * ABI rather than guessed: 57 error signatures were computed and this is the one.
+ *
+ * It means the taker holds none of the ERC-721 SwapVM v3.1.2 requires. A gate, not a shortage —
+ * asking for less does not get past it.
+ */
+const TX_ORIGIN_TOKEN_BALANCE_IS_ZERO = "0x39c4052c";
+
 /** Which of the three limits binds a position, and how much it can actually pay. */
 export type Wall = "ledger" | "wallet" | "allowance";
 
@@ -245,6 +254,18 @@ async function best(
   tokenOut: Address,
   amountIn: bigint,
   cap: Map<string, bigint>,
+  /**
+   * Who is asking.
+   *
+   * **A quote without it asks the wrong question.** SwapVM v3.1.2 gates fills on an ERC-721 it
+   * calls "Access Token for SwapVM v3.1.2" (`0x26ffc7d3…`), and it checks by asking that token for
+   * `balanceOf(tx.origin)`. An `eth_call` with no `from` has `tx.origin` as the zero address, and
+   * OpenZeppelin's ERC-721 refuses `balanceOf(address(0))` — so every quote came back as
+   * `ERC721InvalidOwner(address(0))`, which is `0x89c62b64`, the error #393 recorded and could not
+   * name. With a taker the refusal is SwapVM's own and says what it means:
+   * `TxOriginTokenBalanceIsZero(taker, accessToken)`.
+   */
+  taker: Address,
 ): Promise<{
   /** Null when nothing priced within what it could pay. The rest still says why. */
   chosen: OpenOrder | null;
@@ -253,9 +274,12 @@ async function best(
   largestCap: bigint;
   /** How many priced above what they could pay. Zero means size was never the problem. */
   overCap: number;
+  /** How many refused because this taker holds none of SwapVM's access token. */
+  gated: number;
 }> {
   let winner: { chosen: OpenOrder; amountOut: bigint } | null = null;
   let largestCap = 0n;
+  let gated = 0;
   // Whether anything priced at all, and whether anything priced *above* what it could pay. They
   // are different failures and only the second one means "ask for less".
   let overCap = 0;
@@ -270,7 +294,12 @@ async function best(
         tokenOut,
         amountIn,
       );
-      const res = await client.call({ to: call.to, data: call.data });
+      // `account` is the `from`, which becomes `tx.origin` for the access-token check above.
+      const res = await client.call({
+        account: taker,
+        to: call.to,
+        data: call.data,
+      });
       if (!res.data) continue;
       const [, amountOut] = decodeAbiParameters(
         parseAbiParameters("uint256, uint256"),
@@ -285,8 +314,13 @@ async function best(
       if (amountOut > 0n && (!winner || amountOut > winner.amountOut)) {
         winner = { chosen: candidate, amountOut };
       }
-    } catch {
-      // Not fillable for this pair, direction or size. Ordinary, not an error.
+    } catch (e) {
+      // Not fillable for this pair, direction or size. Ordinary, not an error — except for the
+      // one refusal that is worth counting, because it is a gate rather than a shortage and no
+      // amount of asking for less gets past it.
+      if (JSON.stringify(e).includes(TX_ORIGIN_TOKEN_BALANCE_IS_ZERO)) {
+        gated++;
+      }
     }
   }
   return {
@@ -294,6 +328,7 @@ async function best(
     amountOut: winner?.amountOut ?? 0n,
     largestCap,
     overCap,
+    gated,
   };
 }
 
@@ -343,16 +378,35 @@ export async function planAquaSwap(
     payWith,
     tokenOut,
   );
-  const picked = await best(client, orders, payWith, tokenOut, amountIn, cap);
+  const picked = await best(
+    client,
+    orders,
+    payWith,
+    tokenOut,
+    amountIn,
+    cap,
+    account,
+  );
 
-  // Three different walls, and they used to arrive as one sentence.
+  // Four different walls, and they used to arrive as one sentence.
   //
   // "No live Aqua position holds both sides of this pair right now" was what a person saw in every
-  // case, and on Arbitrum One it is simply false: measured just now, **six** positions hold WETH
-  // and USDC, four of them decode to the order Aqua filed, and all four refuse a quote in both
-  // directions at every size from 0.0005 to 0.1 WETH with the same custom error from 1inch's
-  // router (`0x89c62b64`). Four independent makers failing identically is not about size or
-  // inventory; those orders are not fillable through this router today.
+  // case, and on Arbitrum One it is simply false: measured, **six** positions hold WETH and USDC
+  // and five decode to the order Aqua filed.
+  //
+  // **And the reason they refuse is now named, which corrects what #393 guessed.** That issue
+  // recorded `0x89c62b64` from every quote, said it belonged to 1inch's router, and offered expiry
+  // as the likely shape. Expiry was wrong, and the error was not the router's: traced on a fork,
+  // SwapVM calls `balanceOf` on an ERC-721 it calls "Access Token for SwapVM v3.1.2"
+  // (`0x26ffc7d3…`), and that call is what reverts. `0x89c62b64` is
+  // `ERC721InvalidOwner(address)` — OpenZeppelin refusing `balanceOf(address(0))` — because the
+  // quote was an `eth_call` with no `from`, so `tx.origin` was the zero address. **Half the bug
+  // was ours.**
+  //
+  // With a taker passed, the refusal is SwapVM's own and says what it means:
+  // `TxOriginTokenBalanceIsZero(taker, 0x26ffc7d3…)`, matched against the 57 error signatures in
+  // its verified ABI. SwapVM v3.1.2 gates fills on holding that token, and no size gets past a
+  // gate — which is why this is counted separately from the three limits below.
   //
   // Saying which wall it is matters more than it looks. A judge reading "no position holds this
   // pair" concludes the integration does not work. The truth is that the index found them, the
@@ -375,6 +429,13 @@ export async function planAquaSwap(
     // quote** at 0.0005 ETH as readily as at 0.1, so no smaller number was ever going to help.
     // Thirty-five active mandates were then scanned across every pair and both directions: zero
     // fillable. Size was never the problem.
+    // Before the three limits, because it is not one of them. A gate is not a shortage: the
+    // makers may be perfectly funded and it would still refuse.
+    if (picked.gated > 0) {
+      throw new Error(
+        `${picked.gated} Aqua position${picked.gated === 1 ? "" : "s"} for this pair price only for takers holding 1inch's SwapVM access token, which this wallet does not. No size gets past that. Providing liquidity of your own is what fixes it.`,
+      );
+    }
     if (picked.overCap > 0 && picked.largestCap > 0n) {
       throw new Error(
         `The largest Aqua position for this pair can pay ${Number(formatUnits(picked.largestCap, 6)).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${outSymbolFor(tokenOut)} and this asks for more. Ask for a smaller amount, or provide liquidity of your own.`,
