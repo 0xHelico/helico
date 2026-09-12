@@ -2577,6 +2577,60 @@ READMEs.
   The first two are the mistake this repository has a section about — generalising from a sample
   that could not have shown the opposite.
 
+### 2026-09-11 — The agent is a contract, and the DON carries the move
+
+- **Done:** the enclave's decision reaches the chain. Until this day it did not: `supplyIdle`
+  authorises by `msg.sender`, the nominated agent was a key nothing held, and every run from
+  10:40 UTC decided `SUPPLY` and moved nothing — visible as a `consensus Report` with no
+  transaction after it, and as the agent key's nonce, still 0.
+
+  `contracts/src/HelicoAgent.sol`: an `IReceiver` behind the same UUPS proxy as the Aqua apps.
+  The account nominates the proxy; only the production `KeystoneForwarder` can reach `onReport`,
+  and only with a report from a workflow deployed by Helico's CRE key; it decodes the report
+  exactly as `encodeReport` lays it out and makes the one call it names. No storage, no setters.
+  Deployed and verified (#417), `config.production.json` switched to `delivery: forwarder`, the
+  app's `HELICO_AGENT` pointed at the proxy, the workflow redeployed. The owner nominated the
+  contract at 11:25 UTC and the run at 11:30 wrote the first move: 490,081 USDC into Morpho,
+  sent by a DON transmitter to the forwarder (`0x0668c698…`). #418 fixed the fork test that the
+  move itself had broken, and `check-deployed.ts` the same way a day later (#422).
+
+- **AI's role:** Claude Opus 5 found the gap while watching balances that would not change,
+  traced it to the delivery mode, read Chainlink's consumer-contract and forwarder sources for
+  the metadata layout and the replay rule, wrote the contract, the tests, the deploy script and
+  the config change, and ran the deploy with the deployer key. Ghoza chose the contract path
+  over a laptop-held relay script and asked for UUPS; a teammate sent `setAgent`; Ghoza ran the
+  CRE commands. One thing the AI got wrong on the way and corrected before it mattered: the
+  vault document it had packed carried anvil's second account as the agent key, so the
+  statements the enclave signed under `signature` delivery recovered to `0x7099…` — found by
+  deriving the address from the packed value, fixed, re-uploaded. Under forwarder delivery the
+  key is not read at all.
+
+- **Plan:** none preceded this code, which is against this repository's rule. The reasoning is
+  in the contract's docblock and in `docs/deployments.md` under 11 September; it is recorded
+  here rather than back-dated into `docs/plans/`.
+
+- **Verified:** the forwarder address by `typeAndVersion()` on chain — `KeystoneForwarder
+  1.0.0` at `0xF8344CFd…`, `MockKeystoneForwarder 1.0.0` at `0xd7704990…` — because the CLI's
+  `supported-chains` prints the production one under a column headed *MOCK FORWARDER*, and a
+  receiver pinned to the mock accepts unsigned reports. 15 unit tests, including the bytes the
+  TypeScript encoder emits decoded by the contract and the ERC165 probe the forwarder makes
+  through OpenZeppelin's own checker; 6 fork tests on the live account and the deployed
+  `MorphoVenue` from the real forwarder's address. Then the chain: the receipt's three logs
+  (`Carried`, `IdleCapitalMoved`, `ReportProcessed success=true`), USDC `500081 → 10000`,
+  hmUSDC `0 → 490081`, `previewRedeem → 490081`, and the next simulation answering
+  `HOLD (already at the target split)`. The delivery hash was not taken as evidence: the
+  forwarder swallows the receiver's revert and the transaction succeeds either way.
+
+- **Two corrections to earlier entries in this file**, found by the 12 September audit:
+  1. The entry above says the twelve 1inch swaps ran "$25 to $12,000". The cases in
+     `e2e/oneinch-repeat.ts` run from 5 USDC to 5,000 USDC and 0.01 to 1 ETH — about $5 to
+     $2,500. The README carried the same figure and was corrected in #422.
+  2. The 11 September entry on the quote that could not be paid says `0x89c62b64` "is not an
+     error in any Solidity here — 445 signatures computed". It is `ERC721InvalidOwner(address)`,
+     in OpenZeppelin's `IERC721Errors`, which the build artifacts contain; the search did not
+     cover them. Whether that is what 1inch's router actually threw remains unproven, and #393 is
+     still open.
+
 <!--
 Template for the next entry:
 
