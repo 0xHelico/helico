@@ -107,7 +107,7 @@ func TestAskReadsThenAnswers(t *testing.T) {
 
 func TestAskFeedsARefusalBackAndCanRecover(t *testing.T) {
 	model := newScriptedModel(t,
-		`{"query":"{ nonsense }","why":"wrong"}`,
+		`{"query":"{ nonsense { id } }","why":"wrong"}`,
 		`{"query":"{ accounts(first:1) { id } }","why":"fixed"}`,
 		`{"answer":"One account."}`,
 	)
@@ -142,7 +142,7 @@ func TestAskFeedsARefusalBackAndCanRecover(t *testing.T) {
 
 func TestAskStopsAtTheQueryLimit(t *testing.T) {
 	model := newScriptedModel(t,
-		`{"query":"{ a }"}`, `{"query":"{ b }"}`, `{"query":"{ c }"}`, `{"query":"{ d }"}`,
+		`{"query":"{ a { id } }"}`, `{"query":"{ b { id } }"}`, `{"query":"{ c { id } }"}`, `{"query":"{ d { id } }"}`,
 	)
 	idx, fake := fakeIndex(t, func(string, map[string]any) (string, bool, error) { return `{"data":{}}`, false, nil })
 	_, steps, err := svc(model).Ask(context.Background(), idx, "loop forever", "")
@@ -160,7 +160,7 @@ func TestAskStopsAtTheQueryLimit(t *testing.T) {
 
 func TestAskTruncatesABigResult(t *testing.T) {
 	big := strings.Repeat("x", maxResultBytes+100)
-	model := newScriptedModel(t, `{"query":"{ big }"}`, `{"answer":"too much"}`)
+	model := newScriptedModel(t, `{"query":"{ big { id } }"}`, `{"answer":"too much"}`)
 	idx, _ := fakeIndex(t, func(string, map[string]any) (string, bool, error) { return big, false, nil })
 	if _, _, err := svc(model).Ask(context.Background(), idx, "q", ""); err != nil {
 		t.Fatal(err)
@@ -240,6 +240,11 @@ func TestLiveAsk(t *testing.T) {
 		MaxQueries:   5,
 		Timeout:      90 * time.Second,
 		ModelTimeout: 40 * time.Second,
+		Trace: func(kind, text string) {
+			if os.Getenv("ASK_DEBUG") == "1" {
+				t.Logf("%s: %s", kind, text)
+			}
+		},
 	}
 	start := time.Now()
 	got, steps, err := svc.Ask(context.Background(), idx, question, os.Getenv("ASK_OWNER"))
@@ -250,4 +255,107 @@ func TestLiveAsk(t *testing.T) {
 		t.Fatalf("ask: %v", err)
 	}
 	t.Logf("answer (%d queries, %s): %s", got.Queries, time.Since(start).Round(time.Millisecond), got.Answer)
+}
+
+func TestWrapQueryGivesABareSelectionItsBraces(t *testing.T) {
+	for in, want := range map[string]string{
+		`accounts(where:{owner:"0xab"}) { id }`: `{ accounts(where:{owner:"0xab"}) { id } }`,
+		`{ accounts { id } }`:                   `{ accounts { id } }`,
+		`query Q { accounts { id } }`:           `query Q { accounts { id } }`,
+		"  \n{ _meta { block { number } } }\n":  `{ _meta { block { number } } }`,
+	} {
+		if got := wrapQuery(in); got != want {
+			t.Errorf("wrapQuery(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestAskSendsAZeroQueryAnswerBackOnce(t *testing.T) {
+	model := newScriptedModel(t,
+		`{"answer":"Nothing moved, the index does not track that."}`,
+		`{"query":"accounts(where:{owner:\"0xabc\"}) { id openedAt }","why":"the account"}`,
+		`{"answer":"Your account 0x0acd was opened on 10 September; the index holds no mandates for it."}`,
+	)
+	idx, fake := fakeIndex(t, func(name string, args map[string]any) (string, bool, error) {
+		if q := args["query"].(string); !strings.HasPrefix(q, "{ accounts") {
+			t.Errorf("query was not wrapped: %q", q)
+		}
+		return `{"data":{"accounts":[{"id":"0x0acd","openedAt":"1789063118"}]}}`, false, nil
+	})
+	got, steps, err := svc(model).Ask(context.Background(), idx, "why has nothing moved?", "0xabc")
+	if err != nil {
+		t.Fatalf("ask: %v (%+v)", err, steps)
+	}
+	if got.Queries != 1 || !strings.Contains(got.Answer, "0x0acd") {
+		t.Fatalf("answer = %+v", got)
+	}
+	// The nudge was shown to the model, once.
+	shown := model.requests[1][len(model.requests[1])-1].Content
+	if !strings.Contains(shown, "answered without reading") {
+		t.Fatalf("no nudge: %s", shown)
+	}
+	if len(fake.Calls()) != 2 {
+		t.Fatalf("mcp calls = %+v", fake.Calls())
+	}
+}
+
+func TestAskAcceptsAZeroQueryAnswerWhenThereIsNoWallet(t *testing.T) {
+	model := newScriptedModel(t, `{"answer":"Connect a wallet and I can look."}`)
+	idx, _ := fakeIndex(t, func(string, map[string]any) (string, bool, error) { return "{}", false, nil })
+	got, _, err := svc(model).Ask(context.Background(), idx, "why has nothing moved?", "")
+	if err != nil || got.Queries != 0 {
+		t.Fatalf("got %+v, %v", got, err)
+	}
+}
+
+func TestTimeLegendConvertsUnixSecondsForTheModel(t *testing.T) {
+	got := timeLegend(`{"data":{"accounts":[{"openedAt":"1789063118","openedAtBlock":"503787461"}]}}`)
+	if !strings.Contains(got, "1789063118 = 2026-09-10 17:58:38 UTC") {
+		t.Fatalf("legend = %q", got)
+	}
+	if strings.Contains(got, "503787461") {
+		t.Fatalf("a block number was mistaken for a timestamp: %q", got)
+	}
+	if timeLegend(`{"data":{"accounts":[]}}`) != "" {
+		t.Fatal("an empty result grew a legend")
+	}
+}
+
+func TestSelectsNoFields(t *testing.T) {
+	for q, want := range map[string]bool{
+		`{ accounts(where:{owner:"0xab"}) }`:        true,
+		`{ accounts(where:{owner:"0xab"}) { id } }`: false,
+		`{ _meta { block { number } } }`:            false,
+		`query Q { accounts { id } }`:               false,
+		`{ makers(first: 5) }`:                      true,
+	} {
+		if got := selectsNoFields(q); got != want {
+			t.Errorf("selectsNoFields(%q) = %v, want %v", q, got, want)
+		}
+	}
+}
+
+func TestAskRefusesAFieldlessQueryBeforeAskingTheIndex(t *testing.T) {
+	model := newScriptedModel(t,
+		`{"query":"accounts(where:{owner:\"0xabc\"})","why":"find the account"}`,
+		`{"query":"{ accounts(where:{owner:\"0xabc\"}) { id } }","why":"with fields"}`,
+		`{"answer":"Your account is 0x0acd."}`,
+	)
+	idx, fake := fakeIndex(t, func(string, map[string]any) (string, bool, error) {
+		return `{"data":{"accounts":[{"id":"0x0acd"}]}}`, false, nil
+	})
+	got, steps, err := svc(model).Ask(context.Background(), idx, "check my portfolio", "0xabc")
+	if err != nil {
+		t.Fatalf("ask: %v", err)
+	}
+	if got.Queries != 1 || len(fake.Calls()) != 2 { // schema + the one real query
+		t.Fatalf("queries = %d, mcp calls = %+v", got.Queries, fake.Calls())
+	}
+	if steps[2].OK || !strings.Contains(steps[2].Detail, "selected no fields") {
+		t.Fatalf("the refusal is not a step: %+v", steps[2])
+	}
+	shown := model.requests[1][len(model.requests[1])-1].Content
+	if !strings.Contains(shown, "selects no fields") {
+		t.Fatalf("the model was not told why: %s", shown)
+	}
 }

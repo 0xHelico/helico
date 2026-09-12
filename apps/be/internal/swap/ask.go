@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -37,6 +39,9 @@ type Index struct {
 	// SchemaTTL is how long the schema read through MCP is kept. A subgraph's schema changes
 	// only when it is redeployed, so minutes are fine and a process restart is a clean read.
 	SchemaTTL time.Duration
+	// Trace, when set, receives every query sent and every result received, untruncated. For
+	// the live test and for a debug log; nil in production.
+	Trace func(kind, text string)
 
 	mu         sync.Mutex
 	schema     string
@@ -78,6 +83,22 @@ turn, answer with JSON only, one of these two shapes:
   {"query": "<a GraphQL query>", "variables": {}, "why": "<one short line: what this read is for>"}
   {"answer": "<the reply, in plain sentences>"}
 
+What this index holds, and what it does not — so you neither invent nor over-read:
+- accounts: Helico accounts opened through the factory (owner, openedAt, openedTx). A person's
+  account is accounts(where:{owner: <their wallet>}); the account has its own address (id).
+- makers, mandates, balances, movements: 1inch Aqua — a maker is a wallet OR a Helico account
+  that shipped a mandate; a mandate is one strategy with its ledger balances (the three-state
+  sentinel: live, empty, docked) and the pulls and pushes against it. fills: swaps a taker
+  executed against a maker, with taker, tokens and amounts.
+- NOT here: the agent's own moves of idle capital into lending markets (supplyIdle /
+  withdrawIdle), lending balances, rates, prices. When the question is about those, say the
+  index does not carry them and point at what it does show (the account exists since <openedAt>,
+  its mandates, its fills) — do not answer "nothing moved" from the absence of fills.
+- When a wallet is given, ALWAYS read the index before answering — never answer with zero
+  queries. Start from accounts(where:{owner: <wallet>}) and maker(id: <wallet>); the Helico
+  account's own address is also a possible maker id. Check those before concluding.
+- Timestamps are unix seconds. Convert them to a UTC date and time when you show them.
+
 Rules:
 - Read the schema below before the first query. Query only entities and fields that exist in it.
 - Addresses in the index are lowercase hex. Compare and filter with lowercase.
@@ -88,11 +109,16 @@ Rules:
   you cannot tell the decimals, show the raw number and say it is raw.
 - If the index returns an error, read it, fix the query once, and if it fails again say what
   you could not read. Never invent a number, a date, or a name.
+- State only what a query returned. Do not say "there are no fills" unless you asked for fills
+  and got none. Do not report a count from a page you limited: "first: 1" tells you nothing
+  about how many exist — fetch "first: 1000" and count, or say "at least N".
 - Answer in at most five plain sentences. No headings, no bullet points, no markdown. Say
-  where the answer came from in a few words ("the index shows…"). If the question is not
+  where the answer came from in a few words ("the index shows…"), and give the concrete
+  things you found — dates as dates, counts as counts — rather than a summary word. If the question is not
   something the index can answer — a price, a prediction, an instruction to move money — say so
   in one sentence and stop.
-- You have at most %d queries. Answer as soon as you know.`
+- You have at most %d queries. Answer as soon as you know. An answer is final: after it you
+  cannot query again, so never write "I will now check…" — check first, then answer.`
 
 // chatTurn is one model exchange the loop keeps, so the model sees what it asked and what came back.
 type chatTurn = chatMessage
@@ -149,7 +175,8 @@ func (s *Service) Ask(ctx context.Context, idx *Index, question, owner string) (
 	}
 
 	queries := 0
-	for turn := 0; turn <= maxQ; turn++ {
+	nudged := false
+	for turn := 0; turn <= maxQ+1; turn++ {
 		raw, _, err := model.complete(ctx, msgs)
 		if err != nil {
 			steps = append(steps, Step{Call: "model", Detail: err.Error(), OK: false})
@@ -166,6 +193,15 @@ func (s *Service) Ask(ctx context.Context, idx *Index, question, owner string) (
 			return IndexAnswer{}, steps, fmt.Errorf("the model's answer was not the shape asked for: %w", err)
 		}
 		if strings.TrimSpace(reply.Answer) != "" {
+			// An answer that read nothing, about a person whose wallet is known, is the model
+			// answering from the prompt. Sent back once with the read it should have made; a
+			// second such answer is accepted, and the card's "0 queries" says what it is.
+			if queries == 0 && owner != "" && !nudged {
+				nudged = true
+				msgs = append(msgs, chatTurn{Role: "assistant", Content: raw})
+				msgs = append(msgs, chatTurn{Role: "user", Content: "You answered without reading the index. Read it first: at least accounts(where:{owner:\"" + owner + "\"}) and maker(id:\"" + owner + "\"), then answer with what you found — including when you found nothing."})
+				continue
+			}
 			return IndexAnswer{Answer: strings.TrimSpace(reply.Answer), Queries: queries, Server: session.Server}, steps, nil
 		}
 		if strings.TrimSpace(reply.Query) == "" {
@@ -176,17 +212,30 @@ func (s *Service) Ask(ctx context.Context, idx *Index, question, owner string) (
 			steps = append(steps, Step{Call: "model", Detail: fmt.Sprintf("asked for a %dth query; the limit is %d", queries+1, maxQ), OK: false})
 			return IndexAnswer{}, steps, errors.New("the model ran out of queries without answering")
 		}
-		queries++
 
-		args := map[string]any{"subgraph_id": idx.SubgraphID, "query": reply.Query}
+		query := wrapQuery(reply.Query)
+		// A root field with no subfields — `{ accounts(where:{…}) }` — comes back from the
+		// gateway as `{}`, which a model reads as "nothing there". Refused here, before the
+		// index is asked, with the reason the model can act on.
+		if selectsNoFields(query) {
+			steps = append(steps, Step{Call: "mcp." + graphmcp.ToolExecuteBySubgraphID, Detail: firstLine(query) + " → selected no fields; not sent", OK: false})
+			msgs = append(msgs, chatTurn{Role: "assistant", Content: raw})
+			msgs = append(msgs, chatTurn{Role: "user", Content: "That query selects no fields, so it would return nothing. Add a selection set, for example `{ id owner openedAt }`, and send it again."})
+			continue
+		}
+		queries++
+		args := map[string]any{"subgraph_id": idx.SubgraphID, "query": query}
 		if len(reply.Variables) > 0 && string(reply.Variables) != "null" {
 			var vars map[string]any
 			if json.Unmarshal(reply.Variables, &vars) == nil && len(vars) > 0 {
 				args["variables"] = vars
 			}
 		}
+		if idx.Trace != nil {
+			idx.Trace("query", query)
+		}
 		res, err := session.Call(ctx, graphmcp.ToolExecuteBySubgraphID, args)
-		detail := firstLine(reply.Query)
+		detail := firstLine(query)
 		if reply.Why != "" {
 			detail = reply.Why + " — " + detail
 		}
@@ -196,9 +245,12 @@ func (s *Service) Ask(ctx context.Context, idx *Index, question, owner string) (
 			steps = append(steps, Step{Call: "mcp." + graphmcp.ToolExecuteBySubgraphID, Detail: detail + " → " + err.Error(), OK: false})
 			msgs = append(msgs, chatTurn{Role: "user", Content: "The index refused that query: " + err.Error()})
 		default:
+			if idx.Trace != nil {
+				idx.Trace("result", res.Text)
+			}
 			ok := !res.IsError && !strings.Contains(res.Text, `"errors"`)
 			steps = append(steps, Step{Call: "mcp." + graphmcp.ToolExecuteBySubgraphID, Detail: detail, OK: ok})
-			msgs = append(msgs, chatTurn{Role: "user", Content: "Result:\n" + truncate(res.Text, maxResultBytes)})
+			msgs = append(msgs, chatTurn{Role: "user", Content: "Result:\n" + truncate(res.Text, maxResultBytes) + timeLegend(res.Text)})
 		}
 	}
 	return IndexAnswer{}, steps, errors.New("the model ran out of turns without answering")
@@ -231,16 +283,87 @@ func (i *Index) schemaFor(ctx context.Context, session *graphmcp.Session) (strin
 	return res.Text, nil
 }
 
-func firstLine(s string) string {
-	s = strings.TrimSpace(s)
-	if i := strings.IndexByte(s, '\n'); i >= 0 {
-		s = s[:i] + " …"
+// wrapQuery gives a bare selection its braces. Smaller models write
+// `accounts(where:{…}) { id }` and the gateway answers "Expected {, query, mutation…" — twice,
+// because the retry looks the same to them. The fix is mechanical, so it is made here rather
+// than asked for.
+func wrapQuery(q string) string {
+	t := strings.TrimSpace(q)
+	for _, prefix := range []string{"{", "query", "mutation", "subscription", "fragment"} {
+		if strings.HasPrefix(t, prefix) {
+			return t
+		}
 	}
-	if len(s) > 120 {
-		s = s[:120] + "…"
+	return "{ " + t + " }"
+}
+
+// firstLine collapses a query to one line for the step under the answer — the whole query,
+// whitespace folded, so the reader sees what was asked and not just its first line.
+// selectsNoFields reports a query whose root selection has no subfields: after the outer
+// braces there is no `{` left. `{ _meta { block { number } } }` has one; `{ accounts(where:{…}) }`
+// has one too — inside the argument — so braces inside parentheses are skipped first.
+func selectsNoFields(query string) bool {
+	t := strings.TrimSpace(query)
+	if !strings.HasPrefix(t, "{") {
+		return false // a named operation; let the gateway judge it
+	}
+	inner := strings.TrimSuffix(strings.TrimPrefix(t, "{"), "}")
+	depth := 0
+	for _, c := range inner {
+		switch c {
+		case '(':
+			depth++
+		case ')':
+			if depth > 0 {
+				depth--
+			}
+		case '{':
+			if depth == 0 {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func firstLine(s string) string {
+	s = strings.Join(strings.Fields(s), " ")
+	if len(s) > 200 {
+		s = s[:200] + "…"
 	}
 	return s
 }
+
+// timeLegend lists every unix timestamp in a result with its UTC date, because a model asked
+// to convert 1789063118 answers a date in the wrong year with full confidence. The arithmetic
+// is done here and handed over; the model only has to copy it.
+func timeLegend(text string) string {
+	seen := map[string]bool{}
+	var lines []string
+	for _, m := range unixSeconds.FindAllStringSubmatch(text, -1) {
+		v := m[1]
+		if seen[v] {
+			continue
+		}
+		seen[v] = true
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			continue
+		}
+		lines = append(lines, v+" = "+time.Unix(n, 0).UTC().Format("2006-01-02 15:04:05 UTC"))
+		if len(lines) == 20 {
+			break
+		}
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	return "\n\nTimestamps in this result, as UTC dates (use these, do not compute your own):\n" + strings.Join(lines, "\n")
+}
+
+// unixSeconds matches a quoted or bare 10-digit number in the 2020–2036 range, which is what a
+// subgraph's BigInt timestamps look like in JSON.
+var unixSeconds = regexp.MustCompile(`"?\b(1[6-9][0-9]{8}|20[0-9]{8})\b"?`)
 
 func truncate(s string, n int) string {
 	if len(s) <= n {
