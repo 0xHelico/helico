@@ -50,6 +50,7 @@
     "streamdown": "^2.6.0",
     "swr": "^2.5.1",
     "tailwind-merge": "^3.6.0",
+    "thinking-orbs": "^0.3.1",
     "use-stick-to-bottom": "^1.1.6",
     "usehooks-ts": "^3.1.1",
     "viem": "^2.56.3",
