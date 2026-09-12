@@ -12,6 +12,8 @@
     "test": "bun test",
     "e2e": "bun run e2e/browser-checks.ts",
     "e2e:account": "bun run e2e/fork-account.ts",
+    "e2e:chat": "bun run e2e/fork-chat-actions.ts",
+    "e2e:oneinch": "bun run e2e/oneinch-repeat.ts",
     "prod": "bun run e2e/production.ts"
   },
   "dependencies": {

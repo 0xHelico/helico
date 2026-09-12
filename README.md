@@ -9,7 +9,7 @@ contract refuses anything outside your rules, and the way out is never blocked.
 Three ideas, one each for a way authority usually leaks:
 
 - **Your own contract.** Each owner gets a separate account at a `CREATE2` address, so it can be
-  paid before it exists. The escape hatch lives in the proxy, not the implementation — we
+  paid before it exists. The escape hatch lives in the proxy, not the implementation. We
   installed a deliberately hostile implementation and the owner still got everything back.
 - **A 1inch Aqua mandate.** Tokens never leave your wallet. The app holds a ledger entry, not
   money, and docking ends it immediately.
@@ -24,7 +24,7 @@ Nothing here is claimed before it is proven. Where something is not true yet, it
 
 Deployed and open. Nothing has to be run locally.
 
-**[app.helico.site](https://app.helico.site)** — connect a wallet on Arbitrum One. One signature
+**[app.helico.site](https://app.helico.site)**. Connect a wallet on Arbitrum One. One signature
 proves the address is yours; it costs no gas and moves nothing.
 
 1. **Agree, and turn everything on.** The first run offers one switch. On a wallet that can batch
@@ -39,7 +39,7 @@ proves the address is yours; it costs no gas and moves nothing.
    eight things it can do.
 
 Every one of those is a call you sign. Naming the agent and allowing a market are owner-only on
-chain, and no batch or relayer can make them for you — which is the property that makes a
+chain, and no batch or relayer can make them for you. That is the property that makes a
 compromised agent harmless rather than a promise that it will behave.
 
 **What is not there yet, said here rather than discovered:** a maker position from your own wallet
@@ -52,8 +52,8 @@ under 1inch); a position backed by wallet tokens is a script
 | Directory | Contents |
 |---|---|
 | [`contracts/`](contracts/) | The account, the two Aqua apps, the SwapVM instruction, the lending venues |
-| [`apps/app/`](apps/app/) | The dapp — [app.helico.site](https://app.helico.site) |
-| [`apps/be/`](apps/be/) | Go backend: sessions, chat, a cached subgraph read |
+| [`apps/app/`](apps/app/) | The dapp, at [app.helico.site](https://app.helico.site) |
+| [`apps/be/`](apps/be/) | Go backend: sessions, chat, a cached subgraph read, an account's own history |
 | [`apps/landing/`](apps/landing/) | [helico.site](https://helico.site) and the blog, Astro |
 | [`apps/cre/`](apps/cre/) | The runnable CRE project, and `rehearse-idle.sh` |
 | [`packages/plugins/cre/`](packages/plugins/cre/) | The workflow's logic, `@helico/plugin-cre` |
@@ -69,13 +69,33 @@ tests cover the enclave's decision without the CRE CLI in the loop.
 ## Three tracks: Chainlink, 1inch, The Graph
 
 A submission may name at most three partners. Uniswap v4 is real and tested here but is not one of
-them — it is kept below because it is part of what this product does, not because it is claimed.
+them. It is kept below because it is part of what this product does, not because it is claimed.
+
+Each row below is a claim and the command that checks it. The sections after them carry the
+measurements, and every link is pinned to the commit the lines were read from.
+
+| Track | What is integrated | Check it yourself |
+|---|---|---|
+| **Chainlink** | A Confidential Workflow that decides how much capital earns and where, registered with `handlerInTee` and executing on the DON. It moved real money on Arbitrum One on 11 September. | `cd apps/cre && ./rehearse-idle.sh` |
+| **1inch** | Two Aqua apps of our own, one SwapVM instruction, and the aggregation route behind them. | `bun scripts/check-aqua.ts`, `bun run --filter @helico/app e2e:oneinch` |
+| **The Graph** | A subgraph indexing all five Aqua events plus our own factory, live on Studio and read by both the dapp and the enclave. | `bun scripts/check-subgraph.ts` |
+
+**The shortest proof that the whole thing works** is one transaction nobody on this team signed:
+the enclave decided, Chainlink's `KeystoneForwarder` routed the report, our agent contract refused
+everyone else, and the account moved its own money into the market paying most.
+
+```
+tx      0x0668c698cf3d396e622a97bfa3e21016de44fb41863fa7cb69b47bd126f9ed27
+from    0x3A8dBD6b…                     a DON node, not us
+result  0.49 USDC into Morpho at 4.40%, against Aave at 2.75% and Compound at 2.86%
+        0.01 USDC left liquid, which is the floor the owner sealed into the Vault DON
+```
 
 ### Chainlink CRE
 
 The decision runs **inside the enclave**, over thresholds the Vault DON releases only there. The
-thresholds are the strategy — the one thing a competitor would want. Only the verdict comes back
-out — as a report the DON signs and writes to Arbitrum One through Chainlink's `KeystoneForwarder`,
+thresholds are the strategy, the one thing a competitor would want. Only the verdict comes back
+out, as a report the DON signs and writes to Arbitrum One through Chainlink's `KeystoneForwarder`,
 into [`HelicoAgent`](contracts/src/HelicoAgent.sol), the contract your account names as its agent.
 No key of ours is in that path: the forwarder is the only address that can call the agent, and the
 agent can only call the two functions the account lets an agent call.
@@ -101,19 +121,19 @@ It forks Arbitrum One, opens an account at an address predicted before it existe
 real USDC from a whale, permits the four production markets, lets the workflow decide and sign
 (staging still uses `signature` delivery), and lands the signed call. A recorded run from when it
 permitted Aave alone: 50,000 USDC in, `SUPPLY 40000000000`, ending at 39,999.999999 aUSDC against
-a 10,000 buffer — one unit short because Aave rounds against the supplier. Today it picks whichever
+a 10,000 buffer, one unit short because Aave rounds against the supplier. Today it picks whichever
 of the four pays most and refuses to pass unless the market it chose is the best-paying one. It
 prints the agent's own balance, and it exits non-zero when the position did not change, because a
 transaction that moves nothing reads in a log exactly like one that worked.
 
-> **What that run does not show.** The simulator is not a TEE — it says so while running. It
+> **What that run does not show.** The simulator is not a TEE, and it says so while running. It
 > proves the workflow compiles for the runtime, reads the chain, decides, signs, and that the call
 > lands and moves capital. It does not prove DON authorisation or attestation, and it is a fork.
 > Chainlink's own text accepts a CLI simulation *or* a live deployment.
 
 > **The model explains; it does not decide.** The verdict is computed before the model is called
 > and never reads its answer back. It needs an enclave because a normal workflow asks every node
-> and takes a consensus — ten nodes asking a model get ten answers, and free text has no median.
+> and takes a consensus. Ten nodes asking a model get ten answers, and free text has no median.
 
 #### Three protocols, one interface
 
@@ -124,18 +144,18 @@ protocols, and the piece that lets it is an interface the markets never agreed t
 does. `CompoundVenue` and `MorphoVenue` answer it on behalf of Comet and of any ERC-4626 vault.
 
 **The venue is its own receipt**, and that one decision solves two problems at once. Both Aqua
-apps ask a receipt for `UNDERLYING_ASSET_ADDRESS()` — Aave's spelling, which Comet spells
+apps ask a receipt for `UNDERLYING_ASSET_ADDRESS()`, Aave's spelling, which Comet spells
 `baseToken()`. Nothing requires the receipt to be a different contract from the pool, so the venue
 answers the question itself. It also settles burn authority: `_burn(msg.sender, …)` needs nobody's
 permission, which is what lets a swap unwind a lending position in the same call. Aave gets that
 for free because its Pool owns the aToken; these earn it by being the token.
 
 **Rates arrive in three shapes and leave in one.** Aave publishes an annual ray, Comet a
-per-second wad, and Morpho publishes no rate at all — so `MorphoVenue` measures one, sampling its
+per-second wad, and Morpho publishes no rate at all, so `MorphoVenue` measures one, sampling its
 own share price against a `1e27` probe large enough that five minutes of drift is about `4.36e8`
 units rather than less than one. Two independent methods, checked against each other on 10 September: the venue's
 trailing measurement reports **446 bps**, and Morpho's own API reports a net APY of **458 bps** for
-the same vault — arrived at without reading a rate from Morpho at all. Everything converts to
+the same vault, arrived at without reading a rate from Morpho at all. Everything converts to
 Aave's units before the enclave sees it, so the decision never learns which protocol answered.
 
 Live on Arbitrum One, verified, each reading its own market:
@@ -149,12 +169,12 @@ Live on Arbitrum One, verified, each reading its own market:
 
 An account reaches exactly the venues its owner has named, and no others: `supplyIdle` is gated on
 `permittedVenue`, and neither it nor `withdrawIdle` takes a recipient. That is the same rule that
-makes a compromised agent harmless — the worst it can do is move the owner's money between the
+makes a compromised agent harmless. The worst it can do is move the owner's money between the
 owner's own places.
 
 **Run it:** `anvil --fork-url $ARBITRUM_RPC_URL --port 8549 --silent & bun scripts/check-deployed.ts`
 
-Forty-six checks against the addresses above rather than against a fresh copy of the source — the
+Forty-six checks against the addresses above rather than against a fresh copy of the source. The
 difference being whether what is shown is what is on chain. It opens an account through the live
 factory, reaches all three protocols from it, and puts five USDC and five dollars of ETH to work in
 both assets, then moves the clock thirty days and requires both positions to be worth more than
@@ -176,7 +196,7 @@ why, is in [`docs/deployments.md`](docs/deployments.md).
 Liquidity never enters the app or Aqua. `pull` goes maker → recipient, `push` goes taker → maker,
 and a test asserts both hold zero either side of a swap. Aqua files a strategy under the hash of
 bytes it never reads, so every field is enforced in our contract or nowhere. 28 tests run against
-a real `Aqua` deployed in `setUp` — nothing is mocked — and every guard was cut out one at a time
+a real `Aqua` deployed in `setUp`, nothing is mocked, and every guard was cut out one at a time
 to check the suite notices: **11 of 11 mutations caught.**
 
 | What | Where |
@@ -199,13 +219,13 @@ ship $2,800–3,200   3 Aqua events, 0 token transfers
 ship $2,900–3,100   3 Aqua events, 0 token transfers
 ship $1,000–9,000   3 Aqua events, 0 token transfers
 
-committed  30 WETH against 10 held  —  300%
+committed  30 WETH against 10 held  ·  300%
 moved      0 WETH   0 USDC
 ```
 
 Three concentrated ranges on the same ten ETH. On a pool that is three positions and the capital
 split three ways; here it is three ledger writes and the wallet is as full afterwards. 300% is not
-leverage — `pull` ends in `safeTransferFrom` from the maker's own wallet, so whoever fills first
+leverage. `pull` ends in `safeTransferFrom` from the maker's own wallet, so whoever fills first
 gets the tokens and the rest revert. Watching that is the agent's job, and it is exactly why the
 subgraph is here. Pricing comes from 1inch's deployed SwapVM, not from arithmetic of ours;
 [the plugin's README](packages/plugins/1inch/README.md) lists the three ways this can be wrong
@@ -213,7 +233,7 @@ subgraph is here. Pricing comes from 1inch's deployed SwapVM, not from arithmeti
 
 **And for real, with a refusal in front of each way it could go wrong.**
 [`scripts/ship-maker-position.ts`](scripts/ship-maker-position.ts) is that sequence against Arbitrum
-One rather than a fork. It ships one position and stops — filling is the taker's action — and it
+One rather than a fork. It ships one position and stops, because filling is the taker's action, and it
 refuses to run off chain 42161, without an explicit `CONFIRM=ship`, on any of the four addresses
 this repository already uses, or on a wallet that does not hold both sides. The approval it leaves
 behind is for exactly the amounts shipped, not unlimited.
@@ -225,14 +245,14 @@ fork, on a wallet it generates, and makes every one of those refusals fire on pu
 ```
 ok    a reserved address refuses
 ok    an unfunded wallet refuses
-ok    and approves nothing on the way out  — 0
-ok    ship moved no tokens  — 20 USDC · 0.01 WETH
-ok    the shipped position quotes near the feed  — 0.5 USDC -> 0.000203967213000518 WETH @ $2451.37 vs feed $2465.60
+ok    and approves nothing on the way out  · 0
+ok    ship moved no tokens  · 20 USDC · 0.01 WETH
+ok    the shipped position quotes near the feed  · 0.5 USDC -> 0.000203967213000518 WETH @ $2451.37 vs feed $2465.60
 ```
 
 The last line is the only honest test that a position is live, and the first version of it was not a
 test at all: it read the quote's two returned words as one number and passed on 6.7e150 WETH. It
-would have passed identically on a position mispriced by 1e12 — the mistake `price.ts` exists to
+would have passed identically on a position mispriced by 1e12, the mistake `price.ts` exists to
 prevent. Decoded properly the fill lands 0.58% under Chainlink, which is the 30bps fee plus the band
 and nothing else produces that number.
 
@@ -240,7 +260,7 @@ and nothing else produces that number.
 
 `HelicoMandateSwap` prices as a constant product, and that is a real limit rather than a
 stylistic one: **the price *is* the ratio of the two sides**, so a maker holding only USDC has no
-price at all. Which is exactly the maker this product is built for — their USDC is earning in a
+price at all. Which is exactly the maker this product is built for. Their USDC is earning in a
 lending market, and a fill is settled out of it mid-swap.
 
 `HelicoOracleBoard` quotes that maker from a Chainlink feed, and brakes itself on Aqua's own
@@ -253,7 +273,7 @@ ask = mid × (BPS + spread − skew) / BPS
 
 Both sides shift **down** as base inventory accumulates, so selling into the board gets steadily
 worse and buying the inventory back gets steadily better. Inventory is pushed home by the price
-rather than by anyone watching — the behaviour a constant product gets for free, rebuilt on top of
+rather than by anyone watching. It is the behaviour a constant product gets for free, rebuilt on top of
 a feed that knows nothing about who holds what.
 
 Measured against the live ETH/USD feed on Arbitrum One, read from the chain rather than assumed:
@@ -275,7 +295,7 @@ bid, half full     2451.218836    bent by half the skew
 | The budget a fill may not exceed | [`#L222-L245`](https://github.com/0xHelico/helico/blob/0052b8a7fccad523132017fffb911367e51e0607/contracts/src/HelicoOracleBoard.sol#L222-L245) |
 
 Six fork tests hold it to that, against the real feed and real USDC:
-`ForkOracleBoard.t.sol` — a one-sided maker quoting the live market, the quote bending as
+`ForkOracleBoard.t.sol`: a one-sided maker quoting the live market, the quote bending as
 inventory accumulates, the cap **refusing** rather than merely discouraging, the inventory bought
 back, a **stale feed refusing the fill**, and the spread being what the maker actually earns.
 
@@ -291,19 +311,19 @@ supplied after  27,507 USDC
 ```
 
 They also pin what it refuses: a fill the wallet covers never touches the market, the shipped
-receipt budget bounds what may be unwound, and **a maker carrying debt is refused** — unwinding
+receipt budget bounds what may be unwound, and **a maker carrying debt is refused**, because unwinding
 collateral can liquidate them, and Aave's health checks do not run on our behalf.
 
-`FixedPriceBoard` in `contracts/test/` is the step between the two, kept as a test fixture rather
-than shipped: it proves a one-sided maker *can* provide liquidity on Aqua, and then proves why a
-fixed price is not enough — the price does not move no matter how much is taken, so a moving
-market converts the whole position at yesterday's number.
+`FixedPriceBoard` in `contracts/test/` is the step between the two, kept as a fixture rather than
+shipped. It proves a one-sided maker *can* quote on Aqua, and then proves why a fixed price is not
+enough: the price does not move however much is taken, so a moving market converts the whole
+position at yesterday's number.
 
 Until 9 September none of that could be reached from outside Solidity: nothing could encode a
 `SwapMandate`, so the mandate half of this track lived entirely in Foundry.
 [`packages/plugins/1inch/src/mandate.ts`](packages/plugins/1inch/src/mandate.ts) encodes one, and
 [`scripts/check-deployed.ts`](scripts/check-deployed.ts) runs the whole path from TypeScript against
-a fork of Arbitrum One — the encoder held against the contract's own `mandateHash` first, because
+a fork of Arbitrum One. The encoder is held against the contract's own `mandateHash` first, because
 Aqua files a position under the hash of the raw bytes and an encoding wrong by one field ships
 successfully and files under a hash nobody looks up.
 
@@ -313,24 +333,24 @@ successfully and files under a hash nobody looks up.
 ```
 
 That is the sentence the product is built on, measured rather than asserted: the capital that
-earns is the capital the mandate spends. What is still missing is a taker on Arbitrum One —
-`agent` names a contract and an EOA can never be one — so no mandate has been shipped to the live
+earns is the capital the mandate spends. What is still missing is a taker on Arbitrum One.
+`agent` names a contract and an EOA can never be one, so no mandate has been shipped to the live
 app yet.
 
-**Powered by SwapVM — © Degensoft Ltd 2025.** [`contracts/src/swapvm/`](contracts/src/swapvm/) is
+**Powered by SwapVM. © Degensoft Ltd 2025.** [`contracts/src/swapvm/`](contracts/src/swapvm/) is
 a redeployment of Degensoft's `AquaSwapVMRouter` with one instruction added. Their VM, transfer
 phase, Aqua accounting and every published instruction are unchanged; the addition is opcode 34,
 [marked as ours](contracts/src/swapvm/AquaYieldCover.sol) under
 [their licence](https://github.com/1inch/swap-vm/blob/main/LICENSES/SwapVM-1.1.txt), whose §4
-names hackathons and whose §3.1 obligations are all met — same licence on our files, upstream
+names hackathons and whose §3.1 obligations are all met: same licence on our files, upstream
 notices kept, this attribution, changes marked and dated in each docblock, and build steps in
 [the runbook](docs/deploy-runbook.md).
 
 Why the instruction exists: every SwapVM curve prices against `balanceOut`, and Aqua answers that
-from what the maker *shipped* — a number written with no transfer and no balance check. So a maker
+from what the maker *shipped*, a number written with no transfer and no balance check. So a maker
 may commit 43,000 USDC while holding 5,000. The curve is right; what breaks is `_transferOut`,
 because tokens earning yield elsewhere are not there to pull. No published instruction can close
-that — none of them has a concept of a lending market. `_aquaYieldCoverXD` unwinds exactly the
+that, because none of them has a concept of a lending market. `_aquaYieldCoverXD` unwinds exactly the
 shortfall, once, inside the transaction that needs it. Measured on a fork against the canonical
 Aqua, real USDC and a real Aave position
 ([`ForkSwapVMYieldCover.t.sol`](contracts/test/ForkSwapVMYieldCover.t.sol)):
@@ -343,7 +363,7 @@ supplied after  34,400 USDC   (3,600 unwound mid-swap, and no more)
 ```
 
 **And it composes with a concentrated band, which is the position rather than the plumbing.**
-`concentrate` is 1inch's own instruction — it adds virtual reserves so a constant product prices
+`concentrate` is 1inch's own instruction, and it adds virtual reserves so a constant product prices
 inside a price range. It has no idea where the inventory is. `_aquaYieldCoverXD` has no idea it is
 quoting a band. Run together they are a **concentrated liquidity position whose capital earns in
 Aave between fills and is unwound only when one needs it**, and nothing in the published
@@ -355,7 +375,7 @@ instruction set expresses that
 paid to taker    10,183 USDC      8,600 USDC
 ```
 
-The right-hand column is the run above — the same account, the same trade, the band removed. One
+The right-hand column is the run above: the same account, the same trade, the band removed. One
 number could not have told a working band from an absent one, which is why the file measures both.
 
 It takes **three** instructions, and the two-instruction pairing is impossible rather than merely
@@ -377,7 +397,7 @@ the partner we do submit sat behind a refusal. The chain is now:
 Aqua  →  1inch aggregation  →  Uniswap v4
 ```
 
-Aqua keeps everything it was doing — `provide` ships through it, the moment a position exists this
+Aqua keeps everything it was doing. `provide` ships through it, the moment a position exists this
 path takes it, and the fallbacks only run when it cannot. Uniswap stays **last** because it needs
 no key and no service, so it still answers when a deployment has no 1inch key or 1inch rate-limits
 us. Every tier is named in the card, because a swap that quietly changes venue reads as a claim.
@@ -392,7 +412,7 @@ us. Every tier is named in the card, because a swap that quietly changes venue r
 
 **The key never reaches the browser.** `NEXT_PUBLIC_` inlines a value into the client bundle, so a
 prefixed key is a public key; the dapp asks `/api/1inch/…`, a route handler that adds the header.
-The proxy forwards six path shapes and answers 404 for everything else — a proxy that forwards any
+The proxy forwards six path shapes and answers 404 for everything else, because a proxy that forwards any
 path is a way for anybody to spend our quota on anything 1inch sells. Both regex anchors on every
 pattern: without the end anchor, `quote/../../portfolio` is a quote.
 
@@ -411,7 +431,7 @@ search for an empty string passes on nothing.
 **Twelve swaps, because once is not evidence.** The chat suite fills through 1inch once; one run of
 it reported `+0 USDC` and could not say whether the transaction reverted, was never sent, or had not
 landed. [`apps/app/e2e/oneinch-repeat.ts`](apps/app/e2e/oneinch-repeat.ts) answers the reliability
-question — a fresh wallet each time, twelve sizes from $5 to about $2,500, both directions, nothing
+question: a fresh wallet each time, twelve sizes from $5 to about $2,500, both directions, nothing
 stubbed: the route and the calldata come from the live API through our own proxy and each
 transaction is signed and mined on a fork of Arbitrum One.
 
@@ -441,12 +461,12 @@ Read off Arbitrum One, three live positions with three different binding constra
 | maker | ledger | wallet | allowance | binds on |
 |---|---|---|---|---|
 | `0xa9aa0af4…` | 0.0000811 WETH | 0.000209 | 0.0000018 | **allowance**, 43× short |
-| `0xef9f7f40…` | 0.014624 WETH | 0 | 0 | **wallet** — a ledger with no money |
+| `0xef9f7f40…` | 0.014624 WETH | 0 | 0 | **wallet**, a ledger with no money |
 | `0xcdbde4f9…` | 0.010950 WETH | 0.010950 | unlimited | ledger, as intended |
 
 The middle one cannot be filled at any size or any price, and nothing in Aqua's own state says so.
 The cap is now `min(ledger, wallet, allowance)`, read in one multicall, and **a read that fails
-counts as zero rather than as unlimited** — an RPC that will not answer is not evidence that a maker
+counts as zero rather than as unlimited**. An RPC that will not answer is not evidence that a maker
 can pay. The refusal names which of the three bound, because they need different fixes: a ledger
 that binds means asking for less may work, and a wallet or an allowance that binds means no smaller
 number ever will ([`aqua-swap.ts#L115-L124`](https://github.com/0xHelico/helico/blob/dc9e8bc219092093887883fcd820866e811ece0b/apps/app/lib/aqua-swap.ts#L115-L124)).
@@ -456,7 +476,7 @@ number ever will ([`aqua-swap.ts#L115-L124`](https://github.com/0xHelico/helico/
 `provide-card.tsx` ships a position backed by tokens in the **wallet**, while `supplyIdle` moves
 only what the **account** holds. That is a maker beside a yield optimiser: two pools of money doing
 one job each. [`provide-from-account-card.tsx`](apps/app/components/provide-from-account-card.tsx)
-makes the account the maker, so one pool does both — the account holds it, the enclave puts it in
+makes the account the maker, so one pool does both. The account holds it, the enclave puts it in
 whichever market pays most, and a fill redeems exactly the shortfall on the way through.
 
 It lands as one `executeBatch`: an approval to **Aqua** for each token and each receipt the
@@ -465,9 +485,9 @@ encoding wrong by one field ships successfully under a hash nobody looks up. Dri
 chat on a fork, read back out of Aqua rather than out of our own card:
 
 ```
-ok  and it ships from the account in one batch  — Shipped from your account, under 0x6c833488…
-ok  and Aqua records the account as the maker   — 1 Shipped event(s) from 0x0118F249…
-ok  under our own Aqua app, with the ceiling on the ledger  — 20 USDC, sentinel 2
+ok  and it ships from the account in one batch  · Shipped from your account, under 0x6c833488…
+ok  and Aqua records the account as the maker   · 1 Shipped event(s) from 0x0118F249…
+ok  under our own Aqua app, with the ceiling on the ledger  · 20 USDC, sentinel 2
 ```
 
 ### The Graph
@@ -485,11 +505,11 @@ event Shipped(address maker, address app, bytes32 strategyHash, bytes strategy);
 
 The mapping is `private` and four levels deep. **No event parameter is `indexed`**, so logs cannot
 be filtered by maker, app or token. And `rawBalances` needs a hash you already have. So *"which
-mandates does this maker have, and what is left in each?"* has **no on-chain answer at all** —
-which is what makes an indexer load-bearing here rather than decorative.
+mandates does this maker have, and what is left in each?"* has **no on-chain answer at all**. That is
+what makes an indexer load-bearing here rather than decorative.
 
 The subgraph is in [`subgraph/`](subgraph/), deployed to Subgraph Studio and indexing the live
-Aqua. `bun scripts/check-subgraph.ts` **measures the claim above before answering it** — it asks
+Aqua. `bun scripts/check-subgraph.ts` **measures the claim above before answering it**. It asks
 the chain for `Shipped` logs and counts the topics on them:
 
 ```
@@ -500,7 +520,7 @@ topics per log: 1–1
 ```
 
 If any parameter were indexed a log would carry two topics or more, and the script would say so
-instead. Then it asks the subgraph the same question. Against the busiest maker on the chain —
+instead. Then it asks the subgraph the same question. Against the busiest maker on the chain,
 not ours:
 
 ```
@@ -515,7 +535,7 @@ ones come back marked docked rather than merely empty, which is Aqua's own three
 > ([#165](https://github.com/0xHelico/helico/issues/165)), then deployed the fix to a Studio slug
 > nobody queries ([#183](https://github.com/0xHelico/helico/pull/183)). Both times the endpoint
 > answered, `hasIndexingErrors` was false, and `_meta` tracked the head. **The oldest entity an
-> endpoint serves cannot predate the first log of the contract it indexes** — that is what
+> endpoint serves cannot predate the first log of the contract it indexes**. That is what
 > separates "this endpoint is up" from "this endpoint read the contract we meant".
 
 We also got the Aqua address wrong twice and are keeping both corrections rather than editing them
@@ -523,7 +543,7 @@ away. First we said Aqua on Arbitrum was empty, from a query asking for the last
 when the newest event was 49 million old. Then the address itself turned out to be a different
 deployment 1inch does not call Aqua. The canonical one is
 `0x1111113CCf1426A8E30e2bfF5E005d929bF6a90a`, confirmed by their SDK constant and by the deployed
-router's own bytecode — not by event counts, which pick the wrong contract, or by recent event
+router's own bytecode, not by event counts, which pick the wrong contract, or by recent event
 counts, which pick the right one by luck.
 
 
@@ -535,8 +555,8 @@ documentation, under Data & Analytics:
 
 We indexed four of those five. `Shipped`, `Docked`, `Pulled` and `Pushed` are on the Aqua registry;
 the fifth, `Swapped`, is on the router, and there was no router data source at all. There were
-**340** of them at `0x111111338c…` since Aqua's deployment when the data source was written — the
-most recent two minutes before the query — so it landed with 340 fills nobody could otherwise
+**340** of them at `0x111111338c…` since Aqua's deployment when the data source was written. The
+most recent two minutes before the query, so it landed with 340 fills nobody could otherwise
 query, and the live index serves every one since.
 
 Its `startBlock` is the router's own first log, an `OwnershipTransferred`, so it is the deployment
@@ -544,7 +564,7 @@ and exact rather than a safe underestimate. Bisected with `eth_getLogs`, never `
 pruned archive answers *"state is not available"*, and a search that reads that as "no code yet"
 returns the node's pruning boundary instead of a deployment.
 
-**It is keyed honestly, and that is the part worth reading.** `Swapped` carries `orderHash` — the
+**It is keyed honestly, and that is the part worth reading.** `Swapped` carries `orderHash`, the
 router's identifier for the order it executed, which is *not* the `strategyHash` everything else in
 the schema keys on and is not derivable from the event. So there is **no edge from `Fill` to
 `Mandate`**: a join on two hashes that are not the same hash would be a lie that reads as data. The
@@ -562,7 +582,7 @@ the schema keys on and is not derivable from the event. So there is **no edge fr
 | The accounts the enclave discovers from the index | [`subgraph.ts#L191-L205`](https://github.com/0xHelico/helico/blob/f6f2fc6695e030d8a6918a863470299fcb8dd179/packages/plugins/cre/src/subgraph.ts#L191-L205) |
 | The subgraph itself | [`subgraph/`](subgraph/) |
 
-### Uniswap v4 — real, tested, not a submitted track
+### Uniswap v4: real, tested, not a submitted track
 
 The plugin talks to v4 directly, no aggregator. Every claim has an on-chain transaction behind it
 on Base Sepolia, listed in [the plugin's README](packages/plugins/uniswap/README.md).
@@ -581,7 +601,7 @@ on Base Sepolia, listed in [the plugin's README](packages/plugins/uniswap/README
 | `PositionManager` mint | [`liquidity.ts#L93-L124`](https://github.com/0xHelico/helico/blob/89054c6fe9fdb8c7cfe7b978e11f9b37a1e42c25/packages/plugins/uniswap/src/liquidity.ts#L93-L124) |
 
 Every link above is a **commit-pinned permalink**, checked against the code it points at by
-`scripts/check-readme-links.py` in CI — because a permalink to the wrong lines is worse than none.
+`scripts/check-readme-links.py` in CI, because a permalink to the wrong lines is worse than none.
 It looks checked.
 
 ## Rules
@@ -591,7 +611,7 @@ genuinely work is a full disqualification**, not a deduction. Coding rules are i
 [`CLAUDE.md`](CLAUDE.md); AI usage is logged in [`AI-USAGE.md`](AI-USAGE.md).
 
 **About the history.** Judges inspect commits, so: eleven merges on `main` are squashed, made
-before squash merging was switched off —
+before squash merging was switched off. They are
 [#64](https://github.com/0xHelico/helico/pull/64),
 [#65](https://github.com/0xHelico/helico/pull/65),
 [#67](https://github.com/0xHelico/helico/pull/67),
@@ -603,7 +623,7 @@ before squash merging was switched off —
 [#84](https://github.com/0xHelico/helico/pull/84),
 [#98](https://github.com/0xHelico/helico/pull/98),
 [#102](https://github.com/0xHelico/helico/pull/102).
-Each shows as one commit rather than the work behind it — #67 was 19, #84 was 10. Nothing is lost:
+Each shows as one commit rather than the work behind it. #67 was 19, #84 was 10. Nothing is lost:
 the sequence is on the pull request, and the commits stay fetchable even where the branch is gone.
 
 ```
