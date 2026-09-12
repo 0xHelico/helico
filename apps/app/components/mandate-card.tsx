@@ -72,10 +72,13 @@ export function MandateCard({
     query: { enabled: Boolean(account) },
   });
 
+  // The account is a maker too, and for anything shipped through it the only one. Asking the
+  // wallet alone showed nothing to somebody who had just shipped from their account.
+  const makers = [account, address].filter(Boolean) as string[];
   const mandates = useQuery({
-    enabled: Boolean(address),
-    queryKey: ["mandates", address],
-    queryFn: () => readMandates(address as string),
+    enabled: makers.length > 0,
+    queryKey: ["mandates", ...makers],
+    queryFn: () => readMandates(makers),
   });
 
   // The account's own log, for the transaction that opened it. The same key the portfolio uses, so

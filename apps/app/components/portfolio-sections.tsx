@@ -17,7 +17,7 @@ import { TokenMark } from "@/components/token-mark";
 import { VenueMark } from "@/components/venue-mark";
 import { CHAIN_ID, totals, useAccountState } from "@/hooks/use-account-state";
 import { readAccountActivity, withoutVenueLegs } from "@/lib/activity";
-import { readMovements } from "@/lib/mandates";
+import { amount, collapse, readMovements, token } from "@/lib/mandates";
 import { MARKETS, readVenues } from "@/lib/venues";
 
 /**
@@ -246,10 +246,14 @@ export function Activity() {
   const account =
     data && data.kind === "open" ? (data.address as `0x${string}`) : null;
 
+  // **Both makers.** The account is the maker for anything shipped through it, and the wallet is
+  // the maker for `provide-card`; asking only the wallet hid every position the one-press card
+  // ever shipped. `makers` is the query key too, so connecting an account refetches.
+  const makers = [account, address].filter(Boolean) as string[];
   const moves = useQuery({
-    enabled: Boolean(address),
-    queryKey: ["movements", address],
-    queryFn: () => readMovements(address as string),
+    enabled: makers.length > 0,
+    queryKey: ["movements", ...makers],
+    queryFn: () => readMovements(makers),
   });
   const own = useQuery({
     enabled: Boolean(account && client),
@@ -274,25 +278,57 @@ export function Activity() {
       at: e.at,
       tx: e.tx as string | null,
     })),
-    ...(moves.data?.timestamps ?? []).map((t) => ({
-      key: `aqua-${t}`,
-      what: "Filled through a mandate",
-      amount: "",
-      where: "Aqua",
-      at: t,
-      tx: null as string | null,
-    })),
-  ].slice(0, 10);
+    // **A ship is a movement, so the direction decides the sentence.** Aqua emits `Pushed` per
+    // token when a mandate is shipped, and this list used to call every movement *"Filled through
+    // a mandate"* — which for this account would have been seven claims that money left a wallet
+    // nothing has ever taken from. `PULL` is the only one of the two that is a fill.
+    ...collapse(moves.data?.events ?? []).map((m) => {
+      const t = token(m.token);
+      return {
+        key: `aqua-${m.tx}-${m.token}-${m.direction}`,
+        what:
+          m.direction === "PULL"
+            ? "Filled through a mandate"
+            : "Made quotable on Aqua",
+        amount: `${amount(m.amount, t.decimals)} ${t.symbol}`,
+        where: "Aqua",
+        at: m.at,
+        tx: m.tx as string | null,
+      };
+    }),
+  ]
+    // **Sorted, which it was not.** The account's own events arrive newest first and the Aqua
+    // movements arrive oldest first — `readMovements` asks for `orderDirection: asc` — so
+    // concatenating them put a list in two directions at once and then cut the middle out of it
+    // with `slice`. A recent-activity table whose rows are not in time order is worse than no
+    // table: every row is true and the sequence they imply is invented.
+    .sort((a, b) => (b.at ?? 0) - (a.at ?? 0))
+    .slice(0, 10);
 
-  const pending = (moves.isPending && Boolean(address)) || own.isPending;
-  const when = (at: number | null) =>
-    at
-      ? new Date(at * 1000).toLocaleDateString(undefined, {
-          day: "numeric",
-          month: "short",
-          year: "numeric",
-        })
-      : "—";
+  const pending = (moves.isPending && makers.length > 0) || own.isPending;
+
+  /**
+   * The day, and the time under it.
+   *
+   * Two lines rather than one string, because the two are read for different reasons: the date
+   * is what you scan down the column, and the clock is what you check on one row. A single
+   * `12 Sep 2026, 13:55` makes the scan read the clock too.
+   *
+   * The minute matters here more than it looks. Two of this account's rows are 54 seconds apart
+   * — a mandate shipped, and the agent unwinding a position to cover it — and to the day they
+   * are the same fact twice.
+   */
+  const day = (at: number) =>
+    new Date(at * 1000).toLocaleDateString(undefined, {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  const clock = (at: number) =>
+    new Date(at * 1000).toLocaleTimeString(undefined, {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
 
   return (
     <Card>
@@ -338,7 +374,18 @@ export function Activity() {
                     )}
                   </td>
                   <td className="tabular py-2.5 pl-4 text-soft">
-                    {when(r.at)}
+                    {r.at ? (
+                      // The full stamp on hover, including the seconds the cell has no room
+                      // for — the two rows a minute apart are the ones somebody will want it on.
+                      <span title={new Date(r.at * 1000).toLocaleString()}>
+                        {day(r.at)}
+                        <span className="block text-[11px] text-faint">
+                          {clock(r.at)}
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="text-faint">—</span>
+                    )}
                   </td>
                   <td className="py-2.5 pl-4 text-right">
                     {r.tx ? (

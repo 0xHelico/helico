@@ -15,6 +15,7 @@ import {
 import { byDay, Sparkline } from "@/components/sparkline";
 import { TokenBars } from "@/components/token-bars";
 import { Input } from "@/components/ui/input";
+import { useAccountState } from "@/hooks/use-account-state";
 import {
   amount,
   appName,
@@ -59,21 +60,36 @@ const spendable = (m: {
  */
 export function MandatesPanel() {
   const { address } = useAccount();
+  const { data: state } = useAccountState();
+  const account =
+    state && state.kind === "open" ? (state.address as string) : null;
   const [typed, setTyped] = useState("");
-  const maker = isAddress(typed) ? typed : (address ?? "");
+  /**
+   * A typed address means exactly that address; otherwise both of the reader's own makers.
+   *
+   * **The account is the one that was missing, and it is the one that matters here.** A position
+   * shipped through the one-press card has `maker: account`, so the panel whose whole subject is
+   * "which mandates does this wallet have" answered about the wrong address and came back empty
+   * for somebody who had just shipped one. Nothing in the UI showed the account address, so there
+   * was no way to type it either.
+   */
+  const makers = isAddress(typed)
+    ? [typed]
+    : ([account, address].filter(Boolean) as string[]);
+  const maker = makers[0] ?? "";
 
   const mandates = useQuery<MandateView>({
-    enabled: Boolean(maker),
-    queryKey: ["mandates", maker],
-    queryFn: () => readMandates(maker),
+    enabled: makers.length > 0,
+    queryKey: ["mandates", ...makers],
+    queryFn: () => readMandates(makers),
   });
 
   // Its own query, and allowed to fail on its own: the table is the answer and the chart is
   // context, so a chart that will not load must not take the table down with it.
   const moves = useQuery({
-    enabled: Boolean(maker),
-    queryKey: ["movements", maker],
-    queryFn: () => readMovements(maker),
+    enabled: makers.length > 0,
+    queryKey: ["movements", ...makers],
+    queryFn: () => readMovements(makers),
   });
 
   const body = () => {

@@ -76,23 +76,55 @@ export type MandateView = {
   spendable: Map<string, bigint>;
 };
 
-export async function readMandates(maker: string): Promise<MandateView> {
-  const answer: MakerMandates = await askGraph((s) => makerMandates(s, maker));
+/**
+ * Mandates, for one maker or for several.
+ *
+ * **Several, because a Helico owner has two maker addresses and the interesting one is not the
+ * obvious one.** `provide-card.tsx` ships from the connected wallet, and both
+ * `provide-from-account-card.tsx` and the one-press card ship with `maker: account` — the account
+ * contract *is* the maker in Aqua's ledger, which is the whole reason one account per owner
+ * exists. Every panel here asked about the wallet alone, so a position shipped through the
+ * account was invisible in the app that shipped it: measured on 12 September, wallet
+ * `0x3B4f0135…` has zero mandates and zero movements in the index and account `0x0acdfa21…` has
+ * the one that was actually shipped.
+ *
+ * That is worse than a missing row. A person who shipped a mandate, saw nothing anywhere, and
+ * concluded they had never shipped one was reading the app correctly.
+ *
+ * Merged rather than picked, because both addresses really can be makers and which one applies
+ * depends on which card was pressed. Duplicate hashes cannot collide across makers — a mandate's
+ * identity in Aqua includes the maker — so the concatenation needs no de-duplication.
+ */
+export async function readMandates(
+  maker: string | string[],
+): Promise<MandateView> {
+  const makers = (Array.isArray(maker) ? maker : [maker]).filter(Boolean);
+  const answers: MakerMandates[] = await Promise.all(
+    makers.map((m) => askGraph((s) => makerMandates(s, m))),
+  );
+  const spendable = new Map<string, bigint>();
+  for (const answer of answers) {
+    for (const [token, amount] of answer.spendable) {
+      spendable.set(token, (spendable.get(token) ?? 0n) + amount);
+    }
+  }
   return {
-    maker: answer.maker,
-    rows: answer.mandates.map((m) => ({
-      strategyHash: m.strategyHash,
-      app: m.app,
-      active: m.active,
-      movements: m.movementCount,
-      balances: m.balances.map((b) => ({
-        token: b.token,
-        amount: b.amount,
-        spendable: b.spendable,
+    maker: answers[0]?.maker ?? makers[0] ?? "",
+    rows: answers.flatMap((answer) =>
+      answer.mandates.map((m) => ({
+        strategyHash: m.strategyHash,
+        app: m.app,
+        active: m.active,
+        movements: m.movementCount,
+        balances: m.balances.map((b) => ({
+          token: b.token,
+          amount: b.amount,
+          spendable: b.spendable,
+        })),
       })),
-    })),
-    active: answer.active,
-    spendable: answer.spendable,
+    ),
+    active: answers.reduce((sum, a) => sum + a.active, 0),
+    spendable,
   };
 }
 
@@ -179,6 +211,24 @@ export function amount(value: bigint, decimals: number | null): string {
 }
 
 /**
+ * A movement of one token under one of this maker's mandates.
+ *
+ * **The direction is carried because a ship is a movement.** `subgraph/src/aqua.ts` records one
+ * from `handlePulled` and one from `handlePushed`, and Aqua's `ship` emits `Pushed` per token —
+ * so the seven rows this account has are the seven tokens of one ship, not seven fills. The
+ * activity list called every movement *"Filled through a mandate"*, which would have printed
+ * seven claims that money left a wallet nothing has ever taken from.
+ */
+export type Movement = {
+  at: number;
+  /** `PULL` is out of the maker's wallet to a taker; `PUSH` is into the ledger. */
+  direction: "PULL" | "PUSH";
+  token: string;
+  amount: bigint;
+  tx: string;
+};
+
+/**
  * When this wallet's mandates were actually used, one timestamp per movement.
  *
  * Scoped with a nested filter on the mandate's maker rather than fetched and thrown away
@@ -197,28 +247,99 @@ const MOVEMENTS = `
       first: $first
     ) {
       timestamp
+      direction
+      token
+      amount
+      tx
     }
   }
 `;
 
 const PAGE = 1000;
 
+type MovementRow = {
+  timestamp: string;
+  direction: "PULL" | "PUSH";
+  token: string;
+  amount: string;
+  tx: string;
+};
+
 export async function readMovements(
-  maker: string,
-): Promise<{ timestamps: number[]; capped: boolean }> {
-  const raw = await askGraph((subgraph) =>
-    query<{ movements: { timestamp: string }[] }>(
-      subgraph,
-      { apiKey: "" },
-      MOVEMENTS,
-      { maker: maker.toLowerCase(), first: PAGE },
+  maker: string | string[],
+): Promise<{ timestamps: number[]; events: Movement[]; capped: boolean }> {
+  const makers = (Array.isArray(maker) ? maker : [maker]).filter(Boolean);
+  const answers = await Promise.all(
+    makers.map((m) =>
+      askGraph((subgraph) =>
+        query<{ movements: MovementRow[] }>(
+          subgraph,
+          { apiKey: "" },
+          MOVEMENTS,
+          { maker: m.toLowerCase(), first: PAGE },
+        ),
+      ),
     ),
   );
+  const events = answers
+    .flatMap((raw) =>
+      raw.movements.map((m) => ({
+        at: Number(m.timestamp),
+        direction: m.direction,
+        token: m.token,
+        amount: BigInt(m.amount),
+        tx: m.tx,
+      })),
+    )
+    // Ascending, which is what the chart reads and what the caller that sorts descending expects
+    // to have to do. Merging two ascending lists does not stay ascending on its own.
+    .sort((a, b) => a.at - b.at);
   return {
-    timestamps: raw.movements.map((m) => Number(m.timestamp)),
-    capped: raw.movements.length === PAGE,
+    timestamps: events.map((e) => e.at),
+    events,
+    capped: answers.some((raw) => raw.movements.length === PAGE),
   };
 }
+
+/**
+ * One row per movement of money, out of the several movements of tokens that carry it.
+ *
+ * **Why this is not one row per event.** A mandate names the asset and every receipt a lending
+ * position could be unwound from, so one `ship` emits a `Pushed` for each: this account's has
+ * seven, four of them `1497196` — USDC, Aave's aUSDC, and the Compound and Morpho receipts — and
+ * three of them zero. Printed one per event that is four rows saying 1.497196 for a single
+ * 1.497196 movement, which reads as six USDC shipped, and three rows for tokens with nothing
+ * behind them.
+ *
+ * They are the same claim expressed in the tokens it could be paid from, so they collapse to
+ * one. The amount kept is the largest in the group, and a base token wins a tie over a receipt
+ * — at equal amounts USDC is the honest way to say it, because that is the money.
+ *
+ * Grouped by transaction **and** direction: a fill that pays out of a position is a `PULL` and a
+ * `PUSH` in one transaction, and merging those two would hide the half that left.
+ */
+export function collapse(events: Movement[]): Movement[] {
+  const groups = new Map<string, Movement>();
+  for (const m of events) {
+    // A push of nothing is a token the mandate names with no balance behind it, not an event.
+    if (m.amount === 0n) continue;
+    const key = `${m.tx}:${m.direction}`;
+    const held = groups.get(key);
+    const better =
+      !held ||
+      m.amount > held.amount ||
+      (m.amount === held.amount && isBase(m.token) && !isBase(held.token));
+    if (better) groups.set(key, m);
+  }
+  return [...groups.values()].sort((a, b) => a.at - b.at);
+}
+
+/** USDC and WETH: the two sides a mandate is actually denominated in. */
+const BASE = new Set([
+  "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+  "0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+]);
+const isBase = (token: string) => BASE.has(token.toLowerCase());
 
 /**
  * Aqua apps this repository can name.

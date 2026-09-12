@@ -1,6 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
-import { amount, appName, type MandateRow, shipped, token } from "./mandates";
+import {
+  amount,
+  appName,
+  collapse,
+  type MandateRow,
+  type Movement,
+  shipped,
+  token,
+} from "./mandates";
 
 describe("naming a token", () => {
   test("known ones get their symbol and decimals", () => {
@@ -116,5 +124,91 @@ describe("naming an Aqua app", () => {
 
   test("the superseded address is not named as if it were live", () => {
     expect(appName("0xa16d313816247628deb7d89dc7a3cf4adb5287ed")).toBeNull();
+  });
+});
+
+/**
+ * One `ship` emits a `Pushed` per token the mandate names — seven for this account's, four of
+ * them the same 1497196 and three of them zero. One row per event says six USDC moved when one
+ * did, so the group collapses to the movement of money it actually is.
+ */
+describe("collapsing movements into what moved", () => {
+  const USDC = "0xaf88d065e77c8cc2239327c5edb3a432268e5831";
+  const AUSDC = "0x724dc807b04555b71ed48a6896b6f41593b8c637";
+  const MORPHO = "0xbba798a61f0d7d1ae51466fd4045cd2ea25c9a29";
+  const WETH = "0x82af49447d8a07e3bd95bd0d56f35241523fbab1";
+  const TX =
+    "0x2ed147cfe956fe5f8fc9693acdcd3af2bbd8ce8b8ec3b5669cf5bbb9f219416c";
+
+  const push = (token: string, amount: bigint, tx = TX): Movement => ({
+    at: 1_789_221_267,
+    direction: "PUSH",
+    token,
+    amount,
+    tx,
+  });
+
+  // The live ship, as the index actually serves it.
+  const ship = [
+    push(USDC, 1_497_196n),
+    push(WETH, 0n),
+    push(AUSDC, 1_497_196n),
+    push(MORPHO, 1_497_196n),
+  ];
+
+  test("one ship is one row, not one per token", () => {
+    expect(collapse(ship)).toHaveLength(1);
+  });
+
+  // Four rows of 1497196 for one movement of 1497196 reads as four times the money.
+  test("the row is the amount that moved, once", () => {
+    expect(collapse(ship)[0].amount).toBe(1_497_196n);
+  });
+
+  // At equal amounts the receipts and the asset are the same claim; the asset is the money.
+  test("a base token wins a tie against a receipt", () => {
+    expect(collapse(ship)[0].token).toBe(USDC);
+    expect(collapse([push(AUSDC, 1n), push(USDC, 1n)])[0].token).toBe(USDC);
+  });
+
+  // A token the mandate names with nothing behind it is not something that happened.
+  test("a push of nothing is not a row", () => {
+    expect(collapse([push(WETH, 0n)])).toHaveLength(0);
+  });
+
+  // A fill paid out of a lending position is both at once, and hiding the outbound half would
+  // turn money leaving into money arriving.
+  test("a pull and a push in one transaction stay two rows", () => {
+    const rows = collapse([
+      push(USDC, 500n),
+      { ...push(USDC, 500n), direction: "PULL" },
+    ]);
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r) => r.direction).sort()).toEqual(["PULL", "PUSH"]);
+  });
+
+  // Found by breaking the rule and watching every test stay green: the fixture above has four
+  // equal amounts, so `m.amount > held.amount` never fired and nothing covered it. A group whose
+  // amounts differ is the case that needs it — a receipt unwound for slightly more than the asset
+  // side, where keeping the first would understate what moved.
+  test("the largest in the group wins, whichever order it arrives in", () => {
+    expect(collapse([push(AUSDC, 490_158n), push(MORPHO, 7n)])[0].amount).toBe(
+      490_158n,
+    );
+    expect(collapse([push(MORPHO, 7n), push(AUSDC, 490_158n)])[0].amount).toBe(
+      490_158n,
+    );
+  });
+
+  // And the tiebreak must not beat a genuinely larger receipt amount: USDC is preferred at equal
+  // amounts, not at any amount.
+  test("a base token does not win against a larger receipt", () => {
+    expect(collapse([push(USDC, 1n), push(AUSDC, 999n)])[0].token).toBe(AUSDC);
+  });
+
+  test("two separate ships stay two rows", () => {
+    expect(
+      collapse([...ship, push(USDC, 7n, `${TX.slice(0, 64)}ff`)]),
+    ).toHaveLength(2);
   });
 });
