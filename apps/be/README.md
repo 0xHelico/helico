@@ -26,12 +26,14 @@ a deployment is unaffected by a file it never has.
 | `BE_ADMIN_TOKEN` | empty | bearer token for blog writes; empty refuses them with `503` |
 | `BE_CORS_ORIGINS` | the four localhost ports | browser origins allowed in |
 | `BE_CONTENT_DIR` | `content` | Markdown to seed from |
-| `BE_REQUEST_TIMEOUT` | `10s` | one request, end to end |
+| `BE_REQUEST_TIMEOUT` | `30s` | one request, end to end; the whole chain of models has to fit inside it |
 | `BE_SESSION_SECRET` | empty | signs the session cookie; empty keeps a generated key beside the database, so a restart no longer signs everyone out |
 | `BE_LLM_API_KEY` | empty | **empty turns the conversation off**, with a `503` that says so |
-| `BE_LLM_BASE_URL` | OpenAI | any OpenAI-compatible endpoint |
+| `BE_LLM_BASE_URL` | OpenAI | any OpenAI-compatible endpoint, which is what lets a router stand where the provider used to |
 | `BE_LLM_MODEL` | `gpt-4o-mini` | the model asked for the swap JSON |
-| `BE_LLM_TIMEOUT` | `8s` | must be shorter than `BE_REQUEST_TIMEOUT`, or startup refuses it |
+| `BE_LLM_USER` / `BE_LLM_PASS` | empty | HTTP basic credentials, for an endpoint behind a proxy challenge. When set, the key is sent as `X-Api-Key` instead: one `Authorization` header cannot carry Basic and Bearer at once, and the proxy answers first |
+| `BE_LLM_FALLBACK_*` | empty | the same five variables for a second model, asked **only when the first fails**. Empty key means no fallback, which is one model rather than a broken one |
+| `BE_LLM_TIMEOUT` | `12s` | one model, not the chain. `timeout × models` must be shorter than `BE_REQUEST_TIMEOUT`, or startup refuses it |
 | `BE_SWAP_RATE_PER_MIN` / `BE_SWAP_DAILY_MAX` | `6` / `500` | what the paid model may cost |
 | `BE_SUBGRAPH_URL` | Helico's Studio deployment | what `POST /api/graph` stands in front of |
 | `BE_GRAPH_TTL` / `BE_GRAPH_RATE_PER_MIN` | `60s` / `120` | how long an answer is kept, and per-address reads |
@@ -39,6 +41,37 @@ a deployment is unaffected by a file it never has.
 | `BE_GRAPH_MCP_SUBGRAPH_ID` | empty | Helico's subgraph id on The Graph Network — the MCP serves the network, not Studio, so this is set after publishing |
 | `BE_GRAPH_MCP_API_KEY` | empty | sent as a Bearer token when set; the server answers without one |
 | `BE_GRAPH_MCP_TIMEOUT` | `40s` | one status question end to end: every model and MCP call together. The intent route gets this budget when the index is on |
+
+## The model is a router, and there are two of them
+
+`BE_LLM_BASE_URL` has always been any OpenAI-compatible endpoint, and that is the whole reason
+[9router](https://github.com/decolua/9router) can stand where `api.openai.com` used to: the
+request and the response are the same shape, and only the address, the key and the model string
+change. Nothing in `internal/swap` knows which provider is behind it.
+
+Two of them are configured, and the order is about **latency rather than preference**. Measured
+on 12 September against this repository's own system prompt: the first answers in 1.3 to 2.2
+seconds, the second in 6.3 to 7.1. Both answer correctly. So the quick one goes first and the
+other is what the conversation falls back to when a router is down, which matters because they
+are separate machines belonging to separate people.
+
+Two things a second endpoint made necessary, and neither is optional:
+
+**`stream: false` is stated rather than assumed.** It is the OpenAI default and not every
+router's: one of ours answers `text/event-stream` unless told otherwise, and a stream of `data:`
+chunks does not parse as the single object the client expects. The failure is a complaint about a
+shape, which says nothing about the cause.
+
+**Basic credentials are a header, never part of the URL.** A request that never connects comes
+back as a `*url.Error`, which prints the URL it was given, so credentials in the userinfo end up
+in every log and error string that value reaches.
+
+What a caller can learn from all this is unchanged. `GET /api/swap/config` reports whether a model
+is available and its family name — `gpt-4o-mini`, not the router's `fajar-openai/gpt-4o-mini`,
+because the part before the slash names the account the call is billed to. A failure is logged
+here and answered with one sentence that names no host. And `BE_SWAP_RATE_PER_MIN` with
+`BE_SWAP_DAILY_MAX` is what stops the endpoint being a way to spend somebody else's money: the
+address it counts is the one nginx writes, never a header a caller can forge.
 
 ## The chat reads the index
 

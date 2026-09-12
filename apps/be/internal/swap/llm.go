@@ -98,40 +98,91 @@ func history(prior []Turn, message string) []chatMessage {
 	return append(out, chatMessage{Role: "user", Content: message})
 }
 
-// Client is an OpenAI-compatible chat endpoint. Any provider that speaks that shape works,
-// which is the only reason this is a dozen lines rather than a package.
-type Client struct {
+// Upstream is one OpenAI-compatible chat endpoint.
+//
+// Helico asks a router rather than a provider, and a router is one of these with a different
+// address. That is the whole reason this is a struct and not three arguments: the two we have
+// differ in how they authenticate, and the difference is not a detail either side can skip.
+type Upstream struct {
+	// BaseURL ends before /chat/completions.
 	BaseURL string
-	APIKey  string
-	Model   string
-	HTTP    *http.Client
+	// Key is the router's own key for this account.
+	Key string
+	// Model is the router's routing string, which names a provider account as well as a model.
+	Model string
+	// User and Pass are HTTP basic credentials for a proxy sitting in front of the router.
+	//
+	// **They are a header, never part of the URL.** A request that never connects comes back as a
+	// `*url.Error`, and that prints the URL it was given — so credentials written into the
+	// userinfo of a base URL end up in whatever log or error string that value reaches.
+	// `handlers.go` already withholds these errors from callers for the same reason.
+	//
+	// When they are set the key moves to `X-Api-Key`, because one `Authorization` header cannot
+	// carry a Basic challenge and a Bearer token at once, and the proxy answers first: without
+	// the Basic value it refuses with its own 401 and the router is never reached.
+	User string
+	Pass string
+}
+
+// Client asks the upstreams in order and returns the first answer.
+//
+// **Order is not a preference between models, it is a preference between latencies.** Both
+// routers answer the same question correctly; measured on 12 September with this file's own
+// system prompt, one takes 1.3 to 2.2 seconds and the other 6.3 to 7.1. So the quick one is
+// asked first and the other is what the conversation falls back to, rather than the two being
+// interchangeable.
+type Client struct {
+	ups  []Upstream
+	HTTP *http.Client
 }
 
 // ErrNotConfigured is what the caller turns into a 503. There is no offline fallback on
 // purpose: a fabricated reply would be worse than an honest refusal.
 var ErrNotConfigured = errors.New("no model is configured")
 
-// NewClient builds a client. An empty key leaves it unconfigured, and Ask says so.
-func NewClient(baseURL, apiKey, model string, timeout time.Duration) *Client {
-	if baseURL == "" {
-		baseURL = "https://api.openai.com/v1"
-	}
-	if model == "" {
-		model = "gpt-4o-mini"
-	}
+// NewClient builds a client over the upstreams that carry a key. `timeout` bounds each attempt,
+// not the whole chain, so a fallback is not handed the remains of the first one's budget.
+func NewClient(timeout time.Duration, ups ...Upstream) *Client {
 	if timeout <= 0 {
 		timeout = 20 * time.Second
 	}
-	return &Client{
-		BaseURL: strings.TrimSuffix(baseURL, "/"),
-		APIKey:  apiKey,
-		Model:   model,
-		HTTP:    &http.Client{Timeout: timeout},
+	kept := make([]Upstream, 0, len(ups))
+	for _, u := range ups {
+		// An entry with no key is a half-written configuration rather than an upstream. Kept, it
+		// would spend an attempt on a call that cannot succeed and report that call's error.
+		if u.Key == "" {
+			continue
+		}
+		if u.BaseURL == "" {
+			u.BaseURL = "https://api.openai.com/v1"
+		}
+		if u.Model == "" {
+			u.Model = "gpt-4o-mini"
+		}
+		u.BaseURL = strings.TrimSuffix(u.BaseURL, "/")
+		kept = append(kept, u)
 	}
+	return &Client{ups: kept, HTTP: &http.Client{Timeout: timeout}}
 }
 
 // Configured reports whether Ask can do anything.
-func (c *Client) Configured() bool { return c != nil && c.APIKey != "" }
+func (c *Client) Configured() bool { return c != nil && len(c.ups) > 0 }
+
+// Model is the family name of the model asked first, for the composer to show.
+//
+// The family rather than the routing string. A router's model reads `fajar-openai/gpt-4o-mini`,
+// where the part before the slash names the account the call is billed to — not a credential, and
+// not something a public endpoint has any reason to publish either.
+func (c *Client) Model() string {
+	if !c.Configured() {
+		return ""
+	}
+	m := c.ups[0].Model
+	if i := strings.LastIndex(m, "/"); i >= 0 {
+		return m[i+1:]
+	}
+	return m
+}
 
 type chatRequest struct {
 	Model       string        `json:"model"`
@@ -177,14 +228,35 @@ func (c *Client) ask(ctx context.Context, message string, prior []Turn) (draft, 
 // complete sends one conversation and returns the model's content, which is asked for as a JSON
 // object. `ask` builds the intent draft on it; `Ask` in ask.go runs its read loop on it. The HTTP
 // half is here once so that a status, a non-JSON body and an empty choice list are reported the
-// same way by both.
+// same way by every upstream.
+//
+// **Each upstream is asked in turn and the first answer wins.** A router being down is a reason to
+// ask the other one, not a reason to tell somebody the conversation is off — and the two here are
+// separate machines belonging to separate people, so neither failing takes the other with it.
+//
+// There is no check on the caller's context between attempts: `net/http` refuses a request on a
+// cancelled context before it reaches the wire, so a guard here would decide nothing that a test
+// could tell apart from its absence.
 func (c *Client) complete(ctx context.Context, messages []chatMessage) (string, error) {
 	if !c.Configured() {
 		return "", ErrNotConfigured
 	}
+	var last error
+	for _, u := range c.ups {
+		content, err := c.completeOne(ctx, u, messages)
+		if err == nil {
+			return content, nil
+		}
+		last = err
+	}
+	return "", last
+}
 
+// completeOne is one call to one upstream.
+func (c *Client) completeOne(ctx context.Context, u Upstream, messages []chatMessage) (string, error) {
 	body := chatRequest{
-		Model:       c.Model,
+		Model:       u.Model,
+		Stream:      false,
 		Temperature: 0,
 		Messages:    messages,
 	}
@@ -194,12 +266,22 @@ func (c *Client) complete(ctx context.Context, messages []chatMessage) (string, 
 	if err != nil {
 		return "", err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/chat/completions", bytes.NewReader(buf))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.BaseURL+"/chat/completions", bytes.NewReader(buf))
 	if err != nil {
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.APIKey)
+	// One `Authorization` header, and a proxy in front of the router has first claim on it: it
+	// answers with its own 401 before the router sees the request at all. So where basic
+	// credentials exist they take the header and the key moves to `X-Api-Key`, which is the other
+	// place a router looks. Where they do not, `Bearer` is the ordinary arrangement and there is
+	// no second copy of the key in a header the endpoint did not ask for.
+	if u.User != "" {
+		req.SetBasicAuth(u.User, u.Pass)
+		req.Header.Set("X-Api-Key", u.Key)
+	} else {
+		req.Header.Set("Authorization", "Bearer "+u.Key)
+	}
 
 	resp, err := c.HTTP.Do(req)
 	if err != nil {

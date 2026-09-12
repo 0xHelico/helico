@@ -43,7 +43,7 @@ func newScriptedModel(t *testing.T, script ...string) *scriptedModel {
 		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []map[string]any{{"message": map[string]string{"role": "assistant", "content": next}}}})
 	}))
 	t.Cleanup(srv.Close)
-	m.client = NewClient(srv.URL, "test-key", "test-model", 5*time.Second)
+	m.client = NewClient(5*time.Second, Upstream{BaseURL: srv.URL, Key: "test-key", Model: "test-model"})
 	return m
 }
 
@@ -227,7 +227,13 @@ func TestLiveAsk(t *testing.T) {
 	if question == "" {
 		question = "What is the current liquidity rate of the USDC reserve, and how many reserves does the index know?"
 	}
-	svc := New(NewClient(os.Getenv("LLM_BASE_URL"), os.Getenv("LLM_API_KEY"), os.Getenv("LLM_MODEL"), 25*time.Second))
+	svc := New(NewClient(25*time.Second, Upstream{
+		BaseURL: os.Getenv("LLM_BASE_URL"),
+		Key:     os.Getenv("LLM_API_KEY"),
+		Model:   os.Getenv("LLM_MODEL"),
+		User:    os.Getenv("LLM_USER"),
+		Pass:    os.Getenv("LLM_PASS"),
+	}))
 	idx := &Index{
 		MCP:          graphmcp.New("https://subgraphs.mcp.thegraph.com", os.Getenv("GRAPH_MCP_API_KEY"), 15*time.Second),
 		SubgraphID:   subgraph,

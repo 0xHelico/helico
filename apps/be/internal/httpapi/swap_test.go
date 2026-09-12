@@ -37,7 +37,7 @@ func swapServer(t *testing.T, key, content string, ratePerMin int) *httptest.Ser
 
 	h := New(blog.NewService(db), Options{
 		Logger:         slog.New(slog.NewTextHandler(io.Discard, nil)),
-		Swap:           swap.New(swap.NewClient(model.URL, key, "test-model", 5*time.Second)),
+		Swap:           swap.New(swap.NewClient(5*time.Second, swap.Upstream{BaseURL: model.URL, Key: key, Model: "test-model"})),
 		SwapRatePerMin: ratePerMin,
 		SwapDailyMax:   100,
 	})

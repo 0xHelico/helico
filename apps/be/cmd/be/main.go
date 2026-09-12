@@ -55,7 +55,9 @@ func run() error {
 	}
 	defer db.Close()
 
-	swapSvc := swap.New(swap.NewClient(cfg.LLMBaseURL, cfg.LLMKey, cfg.LLMModel, cfg.LLMTimeout))
+	// The models, in the order they are asked. One set of variables is a single model; two is a
+	// fallback, and an entry with no key is dropped rather than being tried and failing.
+	swapSvc := swap.New(swap.NewClient(cfg.LLMTimeout, cfg.LLMs...))
 
 	// The index the chat may read for a status question, through The Graph's Subgraph MCP. Off
 	// unless both the server and the subgraph's network id are set, and then the intent route
