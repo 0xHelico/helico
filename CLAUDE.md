@@ -285,8 +285,10 @@ costs one slot, not several.
 > closed for that reason. Do not re-add it to a checklist without the track coming back first.
 
 **Chainlink:**
-- [ ] The workflow registers and uses **`handlerInTee`** (TypeScript) or **`cre.HandlerInTee`**
-- [ ] The Confidential Workflow performs a **meaningful part** of the application, not a token gesture
+- [x] The workflow registers and uses **`handlerInTee`** (TypeScript) or **`cre.HandlerInTee`** —
+      `packages/plugins/cre/src/index.ts`, `initWorkflow`
+- [x] The Confidential Workflow performs a **meaningful part** of the application, not a token gesture —
+      it makes the only decision the product has, and since 11 September the DON writes it to the chain
 
 **1inch:**
 - [x] The Aqua app is custom, not a fork of `XYCSwap` — ours replaces the strategy struct with a
