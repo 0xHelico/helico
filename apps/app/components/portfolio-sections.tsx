@@ -1,7 +1,14 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeftRight, ChevronDown, Search, Wallet } from "lucide-react";
+import {
+  ArrowLeftRight,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Search,
+  Wallet,
+} from "lucide-react";
 import { useState } from "react";
 import { formatUnits } from "viem";
 import { useAccount, usePublicClient } from "wagmi";
@@ -16,7 +23,7 @@ import {
 import { TokenMark } from "@/components/token-mark";
 import { VenueMark } from "@/components/venue-mark";
 import { CHAIN_ID, totals, useAccountState } from "@/hooks/use-account-state";
-import { readAccountActivity, withoutVenueLegs } from "@/lib/activity";
+import { pageOf, readAccountActivity, withoutVenueLegs } from "@/lib/activity";
 import { amount, collapse, readMovements, token } from "@/lib/mandates";
 import { MARKETS, readVenues } from "@/lib/venues";
 
@@ -302,8 +309,24 @@ export function Activity() {
     // concatenating them put a list in two directions at once and then cut the middle out of it
     // with `slice`. A recent-activity table whose rows are not in time order is worse than no
     // table: every row is true and the sequence they imply is invented.
-    .sort((a, b) => (b.at ?? 0) - (a.at ?? 0))
-    .slice(0, 10);
+    .sort((a, b) => (b.at ?? 0) - (a.at ?? 0));
+
+  /**
+   * A page at a time, instead of throwing the rest away.
+   *
+   * This was `.slice(0, 10)`, which is not a page — it is a list that silently ends. The tenth
+   * row gave no sign that an eleventh existed, so an account with any history at all showed a
+   * table that looked complete and was not. Ten still shows at once; what changed is that the
+   * rest is reachable.
+   *
+   * **Clamped rather than reset.** The row set shrinks when a wallet disconnects or a query
+   * refetches shorter, and a stored index would strand the reader on a page that no longer
+   * exists — an empty table with no rows and no error, which reads as "nothing ever happened".
+   * Clamping needs no effect and cannot get out of step with the data it indexes.
+   */
+  const [page, setPage] = useState(0);
+  const { pages, current, from, count } = pageOf(rows.length, page, PAGE);
+  const shown = rows.slice(from, from + count);
 
   const pending = (moves.isPending && makers.length > 0) || own.isPending;
 
@@ -355,7 +378,7 @@ export function Activity() {
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
-              {rows.map((r) => (
+              {shown.map((r) => (
                 <tr className="text-[12.5px]" key={r.key}>
                   <td className="py-2.5 text-ink">{r.what}</td>
                   <td className="tabular py-2.5 text-right font-mono text-ink">
@@ -405,8 +428,110 @@ export function Activity() {
               ))}
             </tbody>
           </table>
+          {pages > 1 ? (
+            <Pages
+              capped={moves.data?.capped ?? false}
+              from={from}
+              onPage={setPage}
+              page={current}
+              pages={pages}
+              shown={shown.length}
+              total={rows.length}
+            />
+          ) : null}
         </div>
       )}
     </Card>
+  );
+}
+
+/** How many rows one page of the activity table holds. Ten, as the old `slice` showed. */
+const PAGE = 10;
+
+/**
+ * The pager under the activity table.
+ *
+ * **Only drawn when there is a second page.** A disabled pair of arrows under a four-row table
+ * is furniture that says "there is more" and then refuses — worse than no control, because the
+ * reader spends a click finding out.
+ *
+ * **The count is honest about its own limit.** `readMovements` asks for one page of 1,000 and
+ * reports `capped` when it came back full, so a busier maker's total is a floor rather than a
+ * total. Printing `1–10 of 1000` there would be a number nobody measured; it says `of 1000+`
+ * instead, which is the same fact without the claim.
+ */
+function Pages({
+  page,
+  pages,
+  from,
+  shown,
+  total,
+  capped,
+  onPage,
+}: {
+  page: number;
+  pages: number;
+  from: number;
+  shown: number;
+  total: number;
+  capped: boolean;
+  onPage: (n: number) => void;
+}) {
+  const step = (by: number) =>
+    onPage(Math.min(pages - 1, Math.max(0, page + by)));
+  return (
+    <div className="mt-3 flex items-center justify-between border-line border-t pt-3">
+      <p className="tabular text-[11.5px] text-faint">
+        {`${from + 1}–${from + shown} of ${total}${capped ? "+" : ""}`}
+      </p>
+      <div className="flex items-center gap-1">
+        <PageButton
+          disabled={page === 0}
+          label="Newer"
+          onClick={() => step(-1)}
+        >
+          <ChevronLeft className="size-3.5" />
+        </PageButton>
+        <PageButton
+          disabled={page >= pages - 1}
+          label="Older"
+          onClick={() => step(1)}
+        >
+          <ChevronRight className="size-3.5" />
+        </PageButton>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * One arrow.
+ *
+ * `aria-label` rather than text, and `title` so a mouse gets the same word: the direction of an
+ * arrow in a table of dates is not obvious — up could mean newer or earlier in the list — and
+ * "Newer" and "Older" are the words the rows are actually sorted by.
+ */
+function PageButton({
+  children,
+  label,
+  disabled,
+  onClick,
+}: {
+  children: React.ReactNode;
+  label: string;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      aria-label={label}
+      className="flex size-6 items-center justify-center rounded-md border border-line text-soft transition-colors hover:border-ink/25 hover:text-ink disabled:pointer-events-none disabled:opacity-35"
+      disabled={disabled}
+      onClick={onClick}
+      title={label}
+      type="button"
+    >
+      {children}
+    </button>
   );
 }

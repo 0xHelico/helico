@@ -255,3 +255,32 @@ export function withoutVenueLegs(events: AccountEvent[]): AccountEvent[] {
       (e.kind !== "in" && e.kind !== "out") || !legs.has(`${e.tx}-${e.units}`),
   );
 }
+
+/**
+ * Which slice of a list one page is, with the page index clamped into range.
+ *
+ * **Clamped rather than stored-and-reset.** The activity table's row set shrinks — a wallet
+ * disconnects, a query refetches shorter, a subgraph answer comes back empty — and an index kept
+ * in state then points past the end. The result is a table with no rows, no error and no
+ * explanation, which reads as "nothing ever happened" rather than "you are on page 4 of 1". An
+ * effect that watched the length and reset it would be a second source of truth about the same
+ * number; deriving it cannot get out of step.
+ *
+ * `pages` is at least 1 so an empty list has a page rather than zero of them, which is what makes
+ * `current` safe to use as an index without a second guard at the call site.
+ */
+export function pageOf(
+  total: number,
+  page: number,
+  size: number,
+): { pages: number; current: number; from: number; count: number } {
+  const pages = Math.max(1, Math.ceil(total / size));
+  const current = Math.min(Math.max(0, page), pages - 1);
+  const from = current * size;
+  return {
+    pages,
+    current,
+    from,
+    count: Math.max(0, Math.min(size, total - from)),
+  };
+}
