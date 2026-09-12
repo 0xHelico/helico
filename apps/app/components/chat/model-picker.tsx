@@ -17,19 +17,45 @@ import { cn } from "@/lib/utils";
 import { ProviderLogo } from "./provider-logo";
 
 /**
- * The template's model selector, with one difference that matters: nothing here is a choice
- * yet. `apps/be` is configured for exactly one model and reports which; that one is enabled,
- * and every other entry is disabled and says why. A list that let you pick a model nobody wired
- * would be a menu of things that silently do not work.
+ * The template's model selector, and now an actual choice.
+ *
+ * `apps/be` reports every model it is configured for, in the order it asks them. Each of those is
+ * selectable and picking one sends it with the next message; everything else is listed and
+ * **disabled**, because a menu that let you pick a model nobody wired would be a menu of things
+ * that silently do not work.
+ *
+ * A choice is a preference and not an override. The backend keeps the rest of the chain behind
+ * whatever is picked, so choosing the slower model still falls back to the other one when its
+ * router is down — and the step tree under the answer names the model that actually replied.
  */
-export function ModelPicker({ config }: { config: SwapConfig }) {
+export function ModelPicker({
+  config,
+  chosen,
+  onChoose,
+}: {
+  config: SwapConfig;
+  chosen: string | null;
+  onChoose: (model: string) => void;
+}) {
   const [open, setOpen] = useState(false);
-  const active = config.available ? config.model : null;
-  const handleSelect = useCallback(() => setOpen(false), []);
-  const choices = modelChoices(active);
+  // `models` is what a current backend answers with. `model` alone is what an older one answers,
+  // and a page newer than the service it talks to still has to show something true.
+  const served = config.available
+    ? (config.models ?? [config.model]).filter(Boolean)
+    : [];
+  const active =
+    chosen && served.includes(chosen) ? chosen : (served[0] ?? null);
+  const handleSelect = useCallback(
+    (id: string) => {
+      onChoose(id);
+      setOpen(false);
+    },
+    [onChoose],
+  );
+  const choices = modelChoices(served);
   // Whose mark sits on the trigger. An endpoint configured for something this list does not know
   // has no provider and therefore no logo, which is honest: we do not know whose model it is.
-  const activeProvider = choices.find((m) => m.available)?.provider ?? "";
+  const activeProvider = choices.find((m) => m.id === active)?.provider ?? "";
   const byProvider = choices.reduce<Record<string, typeof choices>>(
     (acc, m) => {
       const group = acc[m.provider] ?? [];
@@ -54,7 +80,11 @@ export function ModelPicker({ config }: { config: SwapConfig }) {
           variant="ghost"
         >
           <ProviderLogo provider={activeProvider} size={13} />
-          <span className="truncate">{active ?? "no model configured"}</span>
+          <span className="truncate">
+            {choices.find((m) => m.id === active)?.name ??
+              active ??
+              "no model configured"}
+          </span>
         </Button>
       </ModelSelectorTrigger>
       <ModelSelectorContent commandDefaultValue={active ?? ""}>
@@ -67,9 +97,6 @@ export function ModelPicker({ config }: { config: SwapConfig }) {
                   className="justify-between gap-3"
                   disabled={!m.available}
                   key={m.id}
-                  // There is one model to pick and it is already in use, so choosing it only
-                  // has to close the popover. Without this the row swallows the click and the
-                  // menu stays open, which reads as broken rather than as settled.
                   onSelect={handleSelect}
                   value={m.id}
                 >
@@ -83,7 +110,11 @@ export function ModelPicker({ config }: { config: SwapConfig }) {
                     {m.name}
                   </span>
                   <span className="text-[11px] text-muted-foreground">
-                    {m.available ? "in use" : "not configured"}
+                    {m.id === active
+                      ? "in use"
+                      : m.available
+                        ? "available"
+                        : "not configured"}
                   </span>
                 </ModelSelectorItem>
               ))}

@@ -60,6 +60,9 @@ export function Chat({ conversationId }: { conversationId?: string }) {
   // Which model answers, read from the backend rather than from this app's own environment —
   // a name the two could disagree about is a name not worth showing.
   const [swap, setSwap] = useState<SwapConfig | null>(null);
+  // Which model the person picked, or null for whichever the backend asks first. Held here rather
+  // than in the picker because it travels with the message.
+  const [model, setModel] = useState<string | null>(null);
   // The conversation this page writes to. Created on the first message rather than on arrival,
   // so opening the app and leaving does not litter the sidebar.
   const active = useRef<string | undefined>(conversationId);
@@ -172,6 +175,9 @@ export function Chat({ conversationId }: { conversationId?: string }) {
             // So a status question can be about this person's account rather than about the
             // index in general. Absent when no wallet is connected, and the backend says so.
             ...(address ? { address } : {}),
+            // A preference, not an override: the backend matches it against the models it holds
+            // and keeps the rest of the chain behind it, so a router being down still falls back.
+            ...(model ? { model } : {}),
           }),
         });
         const body = await res.json();
@@ -230,8 +236,9 @@ export function Chat({ conversationId }: { conversationId?: string }) {
       }
     },
     // `turns` is here because the request carries them. It is the value from before this
-    // message was pushed, which is exactly what history means.
-    [address, busy, mutate, session.ready, turns],
+    // message was pushed, which is exactly what history means. `model` for the same reason: left
+    // out, the closure would keep sending whichever model was picked when this was first built.
+    [address, busy, model, mutate, session.ready, turns],
   );
 
   // Follow the bottom, and keep following while the answer grows.
@@ -366,7 +373,13 @@ export function Chat({ conversationId }: { conversationId?: string }) {
             />
             <PromptInputFooter className="px-3 pb-3">
               <PromptInputTools>
-                {swap ? <ModelPicker config={swap} /> : null}
+                {swap ? (
+                  <ModelPicker
+                    chosen={model}
+                    config={swap}
+                    onChoose={setModel}
+                  />
+                ) : null}
               </PromptInputTools>
               <PromptInputSubmit
                 className={cn(

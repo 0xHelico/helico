@@ -135,7 +135,7 @@ func TestAskReportsAStatusRatherThanAShape(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 	c := NewClient(5*time.Second, Upstream{BaseURL: srv.URL, Key: "test-key", Model: "test-model"})
-	_, err := c.ask(context.Background(), "swap 1 ETH into USDC", nil)
+	_, _, err := c.ask(context.Background(), "swap 1 ETH into USDC", nil)
 	if err == nil || !strings.Contains(err.Error(), "refused") {
 		t.Fatalf("err = %v, want the status reported", err)
 	}

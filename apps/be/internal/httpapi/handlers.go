@@ -30,6 +30,11 @@ type Options struct {
 	CORSOrigins    []string
 	Logger         *slog.Logger
 	RequestTimeout time.Duration
+	// SwapTimeout is the budget for POST /api/swap/intent alone, which needs more than the rest:
+	// a status question makes several model and MCP calls in a row, and asking a slow model with a
+	// fallback behind it is two whole model calls. Zero, or less than RequestTimeout, and that
+	// route keeps the general budget. `config.SwapBudget` is where the figure comes from.
+	SwapTimeout time.Duration
 	// Chats is optional. Without it the conversation routes answer 503 rather than vanishing,
 	// so a caller is told the feature is off instead of guessing at a 404.
 	Chats *chat.Service
@@ -135,12 +140,16 @@ func New(svc *blog.Service, opt Options) http.Handler {
 	if opt.RequestTimeout > 0 {
 		const timedOut = `{"type":"about:blank","title":"Service Unavailable","status":503,"detail":"request timed out"}`
 		timed := http.TimeoutHandler(h, opt.RequestTimeout, timedOut)
-		// A status question that reads the index makes several model and MCP calls in a row,
-		// which the request budget sized for one model call cannot hold. That one route gets the
-		// index's budget, and only when the index is configured; every other route, and this one
-		// when it is not, keeps the budget it always had.
-		if opt.Index.Configured() && opt.Index.Timeout > opt.RequestTimeout {
-			longer := http.TimeoutHandler(h, opt.Index.Timeout+2*time.Second, timedOut)
+		// **One route needs more room than the rest, and it is the only one that gets it.** A
+		// status question makes several model and MCP calls in a row, and a chain of models is one
+		// whole call per model — measured, the slower of the two answers in anything from 6 to 26
+		// seconds. A budget sized for a single fast model cannot hold either, and the failure is a
+		// 503 that reads exactly like an unset key.
+		//
+		// Every other route keeps the general budget, so nothing else holds a connection open for
+		// as long as this one may.
+		if opt.SwapTimeout > opt.RequestTimeout {
+			longer := http.TimeoutHandler(h, opt.SwapTimeout, timedOut)
 			h = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.Method == http.MethodPost && r.URL.Path == "/api/swap/intent" {
 					longer.ServeHTTP(w, r)
@@ -406,13 +415,21 @@ func (a *api) swapIntent(w http.ResponseWriter, r *http.Request) {
 		// The connected wallet, optional. Used for one thing: telling the index whose account a
 		// status question is about. Nothing here trusts it — it is a filter on public data.
 		Address string `json:"address"`
+		// Which configured model to ask first, by the family name GET /api/swap/config published.
+		//
+		// **It selects, it does not describe.** The value is matched against the models this
+		// process already holds; it is never an address, a key or a routing string, so a caller
+		// cannot point the service at an endpoint nobody configured. A name that matches nothing
+		// leaves the order alone, because the list a page is holding can be a deploy out of date
+		// and an answer from the model that does exist beats an error about a menu.
+		Model string `json:"model"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 16<<10)).Decode(&body); err != nil {
 		writeProblem(w, http.StatusBadRequest, "send {\"message\": \"…\"}")
 		return
 	}
 
-	answer, err := a.opt.Swap.Interpret(r.Context(), body.Message, body.History...)
+	answer, err := a.opt.Swap.Prefer(body.Model).Interpret(r.Context(), body.Message, body.History...)
 	if err == nil && answer.Action == swap.ActionStatus && a.opt.Index.Configured() {
 		a.readTheIndex(r.Context(), &answer, body.Message, body.Address)
 	}

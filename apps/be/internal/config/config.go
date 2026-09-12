@@ -34,9 +34,12 @@ type Config struct {
 	// with no key is dropped, so one set of variables is a single model and two is a fallback.
 	// Empty means the route answers 503.
 	LLMs []swap.Upstream
-	// LLMTimeout bounds one call to one model, not the chain. `RequestTimeout` is what bounds the
-	// chain, and the check at the bottom of FromEnv is what keeps the two in step.
+	// LLMTimeout bounds one call to one model, not the chain.
 	LLMTimeout time.Duration
+	// SwapBudget is what POST /api/swap/intent gets, which is more than every other route: the
+	// whole chain of models has to fit, and a status question adds the index's own calls on top.
+	// Derived rather than configured, so no combination of the two is unreachable.
+	SwapBudget time.Duration
 	// SwapRatePerMin is how many swap messages one address may send in a minute.
 	SwapRatePerMin int
 	// SwapDailyMax is the whole process's ceiling on model calls per day, because each one
@@ -109,7 +112,7 @@ func FromEnv(lookup Lookup) (Config, error) {
 		DBPath:          get("BE_DB_PATH", "data/helico.db"),
 		AdminToken:      get("BE_ADMIN_TOKEN", ""),
 		ContentDir:      get("BE_CONTENT_DIR", "content"),
-		RequestTimeout:  30 * time.Second,
+		RequestTimeout:  10 * time.Second,
 		ShutdownTimeout: 10 * time.Second,
 		SessionSecret:   get("BE_SESSION_SECRET", ""),
 		LLMs: []swap.Upstream{
@@ -128,10 +131,12 @@ func FromEnv(lookup Lookup) (Config, error) {
 				Pass:    get("BE_LLM_FALLBACK_PASS", ""),
 			},
 		},
-		// Twelve seconds because it was measured, not guessed. On 12 September, asked the real
-		// system prompt, one router answered in 1.3 to 2.2 seconds and the other in 6.3 to 7.1.
-		// Eight seconds fitted the first and would have timed the second out on a slow day.
-		LLMTimeout:         12 * time.Second,
+		// Thirty seconds because it was measured, not guessed. Asked the real system prompt on
+		// 12 September, one router answered in 1.3 and 2.2 seconds; the other, a reasoning agent
+		// behind a router that prepends its own prompt, took 6.7, 6.8, 25.7 and 19.5. Twelve
+		// seconds fitted the first and timed the second out about half the time, which would have
+		// made it a menu entry that mostly does not work.
+		LLMTimeout:         30 * time.Second,
 		SwapRatePerMin:     6,
 		SwapDailyMax:       500,
 		SubgraphURL:        get("BE_SUBGRAPH_URL", defaultSubgraph),
@@ -150,12 +155,11 @@ func FromEnv(lookup Lookup) (Config, error) {
 			cfg.CORSOrigins = append(cfg.CORSOrigins, o)
 		}
 	}
-	llmTimeoutSet := false
 	for _, d := range []struct {
 		key string
 		dst *time.Duration
 		set *bool
-	}{{"BE_REQUEST_TIMEOUT", &cfg.RequestTimeout, nil}, {"BE_LLM_TIMEOUT", &cfg.LLMTimeout, &llmTimeoutSet}, {"BE_GRAPH_TTL", &cfg.GraphTTL, nil}, {"BE_GRAPH_MCP_TIMEOUT", &cfg.GraphMCPTimeout, nil}} {
+	}{{"BE_REQUEST_TIMEOUT", &cfg.RequestTimeout, nil}, {"BE_LLM_TIMEOUT", &cfg.LLMTimeout, nil}, {"BE_GRAPH_TTL", &cfg.GraphTTL, nil}, {"BE_GRAPH_MCP_TIMEOUT", &cfg.GraphMCPTimeout, nil}} {
 		if v, ok := lookup(d.key); ok && strings.TrimSpace(v) != "" {
 			parsed, err := time.ParseDuration(strings.TrimSpace(v))
 			if err != nil {
@@ -179,17 +183,16 @@ func FromEnv(lookup Lookup) (Config, error) {
 			*n.dst = parsed
 		}
 	}
-	// The handler wraps every request in RequestTimeout, so the whole chain of models has to fit
-	// inside it: a model given longer than what is left can never finish, and the request times
-	// out first with a 503 that reads exactly like the one for an unset key.
+	// **The swap route's budget is derived, not validated.** It used to be a check: a model given
+	// longer than the request that wraps it can never finish, so an operator who wrote that
+	// combination was refused at startup and one who only shortened the request timeout had the
+	// model timeout quietly fitted under it.
 	//
-	// **The budget is per attempt, times the number of attempts.** With two routers configured and
-	// eight seconds each, a request bounded at ten seconds cannot reach the second one at all —
-	// the fallback would be configuration that never runs, which is worse than no fallback,
-	// because it looks like cover it does not provide.
-	//
-	// An operator who wrote that combination on purpose is told at startup; one who only shortened
-	// the request timeout gets a model timeout that fits under it.
+	// That check exists because the two numbers were in tension. They are not any more. The chain
+	// of models is one whole call per model, a status question adds the index's calls after them,
+	// and both of those are properties of one route rather than of every request — so that route
+	// gets what it needs and everything else keeps the general budget. Nothing is unreachable, so
+	// there is nothing left to refuse.
 	attempts := time.Duration(0)
 	for _, u := range cfg.LLMs {
 		if u.Key != "" {
@@ -199,15 +202,17 @@ func FromEnv(lookup Lookup) (Config, error) {
 	if attempts < 1 {
 		attempts = 1
 	}
-	if cfg.RequestTimeout > 0 && cfg.LLMTimeout*attempts >= cfg.RequestTimeout {
-		if llmTimeoutSet {
-			return Config{}, fmt.Errorf(
-				"BE_LLM_TIMEOUT (%s) × %d model(s) must be shorter than BE_REQUEST_TIMEOUT (%s), or the request times out before the last one answers",
-				cfg.LLMTimeout, attempts, cfg.RequestTimeout)
-		}
-		if cfg.LLMTimeout = cfg.RequestTimeout * 4 / 5 / attempts; cfg.LLMTimeout < time.Second {
-			cfg.LLMTimeout = time.Second
-		}
+	cfg.SwapBudget = cfg.LLMTimeout * attempts
+	// A status question asks a model several times over and reads the index between the asks, so
+	// that budget is the larger of the two rather than the sum: they are alternative shapes of the
+	// same request, not stages of it.
+	if cfg.GraphMCPURL != "" && cfg.GraphMCPTimeout > cfg.SwapBudget {
+		cfg.SwapBudget = cfg.GraphMCPTimeout
 	}
+	if cfg.RequestTimeout > cfg.SwapBudget {
+		cfg.SwapBudget = cfg.RequestTimeout
+	}
+	// Two seconds for the handler to write the answer it already has.
+	cfg.SwapBudget += 2 * time.Second
 	return cfg, nil
 }
