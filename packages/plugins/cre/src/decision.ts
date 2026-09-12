@@ -64,7 +64,10 @@ export const suppliedTotal = (venues: Venue[]): bigint =>
  * `minIdleAmount` and `targetWorkingBps` disagree the buffer wins. That ordering is the whole
  * reason this is not just a percentage: the account has to be able to cover a swap against its
  * Aqua mandate out of what it holds, and a mandate that cannot be covered fails at the moment it
- * is taken, which costs more than the yield that was missed by holding the buffer.
+ * is taken, which costs more than the yield that was missed by holding the buffer. Which
+ * mandates raise the floor is decided upstream, in `withMandateBuffer` and the demand query: the
+ * ones on apps that pull the asset from the wallet do; the ones on apps that unwind a venue
+ * inside the swap (`coveringApps`) do not.
  *
  * The working side is the sum across markets, not one market's position. Where that capital
  * should sit is a separate question from how much of it should be working, and this answers only
