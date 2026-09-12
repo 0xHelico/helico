@@ -7,12 +7,12 @@ import { useEffect, useMemo, useState } from "react";
 import { formatUnits } from "viem";
 import { usePublicClient } from "wagmi";
 
+import { ChangeWindows } from "@/components/change-windows";
 import { Card, Loading } from "@/components/kit";
 import { ValueSpark } from "@/components/sparkline";
 import { CHAIN_ID, totals, useAccountState } from "@/hooks/use-account-state";
 import { configuredFactory } from "@/lib/account";
 import { readAccountActivity } from "@/lib/activity";
-import { cn } from "@/lib/utils";
 import { change, sample, valueSeries } from "@/lib/value-history";
 
 /** Dollars, sign outside the symbol, so a fall reads `-$0.02` rather than `$-0.02`. */
@@ -23,19 +23,6 @@ const money = (v: number, decimals = 2) =>
   })}`;
 
 const usdc = (v: bigint) => money(Number(formatUnits(v, 6)));
-
-/** The three windows the summary reports, which are the near ones. The page below links to the rest. */
-const WINDOWS = [
-  { label: "24H", days: 1 },
-  { label: "1W", days: 7 },
-  { label: "1M", days: 30 },
-] as const;
-
-const INK: Record<"up" | "down" | "flat", string> = {
-  up: "text-[#1DA66A]",
-  down: "text-[#E5484D]",
-  flat: "text-soft",
-};
 
 /**
  * The portfolio in one line, at the top of the page about limits.
@@ -115,17 +102,10 @@ export function PortfolioSummary() {
 
         {/* Each window's own change, from its own start. Hidden while there is nothing to compare,
             rather than three zeroes standing in for an unread account. */}
-        {held && full.length > 0 ? (
-          <div className="flex gap-7">
-            {WINDOWS.map((w) => (
-              <Window
-                days={w.days}
-                key={w.label}
-                label={w.label}
-                series={full}
-              />
-            ))}
-          </div>
+        {/* Not while the log is still loading: one live point makes every window start at
+            nothing, and a 24H change then reads as the whole balance arriving today. */}
+        {held && !own.isPending && full.length > 1 ? (
+          <ChangeWindows series={full} />
         ) : null}
 
         {/* A line only once there are two dated readings to draw between. One point is a dot, and
@@ -162,40 +142,5 @@ function Amount({ value }: { value: bigint }) {
       {whole}
       <span className="text-faint">.{cents}</span>
     </>
-  );
-}
-
-/**
- * One window: its name, and what changed inside it.
- *
- * **A percentage needs something to be a percentage of.** An account funded inside the window
- * started at nothing, and every gain from nothing is infinite — so that case reports the amount
- * instead, which is the same fact without the division. Reporting `0.00%` there, which is what a
- * fixed layout invites, would be a number nobody computed.
- */
-function Window({
-  label,
-  days,
-  series,
-}: {
-  label: string;
-  days: number;
-  series: { timestamp: number; value: number }[];
-}) {
-  const moved = change(sample(series, days), 4);
-  const sign = moved.absolute > 0 ? "+" : moved.absolute < 0 ? "−" : "";
-  return (
-    <div>
-      <p className="text-[11px] text-faint">{label}</p>
-      <p
-        className={cn("tabular mt-1 font-mono text-[12.5px]", INK[moved.trend])}
-      >
-        {moved.trend === "flat"
-          ? "0.00%"
-          : moved.percent === null
-            ? `${sign}${money(Math.abs(moved.absolute), 4)}`
-            : `${sign}${Math.abs(moved.percent).toFixed(2)}%`}
-      </p>
-    </div>
   );
 }

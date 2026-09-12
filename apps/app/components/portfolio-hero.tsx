@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { formatUnits } from "viem";
 import { useAccount, usePublicClient } from "wagmi";
-
+import { ChangeWindows } from "@/components/change-windows";
 import { GeneratedAvatar } from "@/components/generated-avatar";
 import { Card, Loading } from "@/components/kit";
 import { PriceChart } from "@/components/price-chart";
@@ -92,12 +92,15 @@ export function PortfolioHero() {
   // timestamp is the one piece of a page guaranteed to differ between the two.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+  // The fold, kept whole. The chart takes a window of it; the change rows each take their own,
+  // because "what happened this week" is a different question from a seventh of the month.
+  const full = useMemo(
+    () => (mounted ? valueSeries(own.data ?? [], held) : []),
+    [mounted, own.data, held],
+  );
   const series = useMemo(
-    () =>
-      mounted
-        ? sample(valueSeries(own.data ?? [], held), span.days ?? null)
-        : [],
-    [mounted, own.data, held, span.days],
+    () => sample(full, span.days ?? null),
+    [full, span.days],
   );
   // Only for the colour. Green unless the window actually fell, which is what the chart's own
   // `LINE` table says; the figure itself is not printed beside the total any more.
@@ -190,6 +193,19 @@ export function PortfolioHero() {
             ))}
           </div>
         </div>
+
+        {/* **Between the figure and the line, because it is about both.** The total says what is
+            there and the chart says how it got there; these three say how much of it is new, which
+            is the question somebody asks between looking at one and the other. Each window is
+            measured from its own start rather than from the range the chart is showing, so
+            changing the range does not change what they say. */}
+        {/* **Not while the history is still loading.** `full` is non-empty the moment the live
+            reading lands, and a series of one point makes every window start at nothing — so a
+            24H change reads as the whole balance arriving today. Briefly, and wrongly. The gate is
+            the log having settled, not merely the total being known. */}
+        {mounted && held && !own.isPending && full.length > 1 ? (
+          <ChangeWindows className="mt-4" series={full} />
+        ) : null}
 
         {/* An account with nothing in it still gets the line, flat at zero, with the scale opened
             symmetrically around it. That is the reading rather than a placeholder: an account that
