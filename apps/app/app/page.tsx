@@ -1,6 +1,10 @@
 import { Chat } from "@/components/chat/chat";
 
-export const metadata = { title: "Helico" };
+export const metadata = {
+  // Absolute, because the template would otherwise make this "Helico · Helico".
+  title: { absolute: "Helico | Your Funds, on Autopilot" },
+  alternates: { canonical: "/" },
+};
 
 /**
  * The front door is the conversation.

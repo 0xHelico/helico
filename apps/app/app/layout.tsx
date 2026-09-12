@@ -35,8 +35,12 @@ const DESCRIPTION =
 // The icons and the social card are the landing's, so the three sites read as one product.
 export const metadata: Metadata = {
   metadataBase: new URL("https://app.helico.site"),
-  title: TITLE,
+  // **A template, not a bare string.** A page setting `title: "Limits"` used to replace this
+  // outright, so the tab read "Limits" with nothing to say whose it was — and `/portfolio` worked
+  // around it by writing "Portfolio | Helico" by hand, which is the same fact in two shapes.
+  title: { default: TITLE, template: "%s · Helico" },
   description: DESCRIPTION,
+  alternates: { canonical: "/" },
   applicationName: "Helico",
   icons: {
     icon: [

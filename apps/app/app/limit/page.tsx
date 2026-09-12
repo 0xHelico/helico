@@ -3,7 +3,19 @@ import { AccountControls } from "@/components/account-controls";
 import { PageHeader } from "@/components/chat/page-header";
 import { PortfolioSummary } from "@/components/portfolio-summary";
 
-export const metadata = { title: "Limits" };
+/**
+ * **Not indexed, and that is the SEO decision rather than an oversight.** What a crawler can see
+ * of this page is the connect gate, because everything below it needs a wallet. Four pages each
+ * showing the same gate compete with each other and with the one page that has something to say,
+ * so they are kept out of the index and the sitemap names only the front door.
+ */
+export const metadata = {
+  title: "Limits",
+  description:
+    "Name the agent that may move your idle capital, and the lending markets it may move it to. Both are calls you sign yourself.",
+  alternates: { canonical: "/limit" },
+  robots: { index: false, follow: true },
+};
 
 /**
  * The front door, and it is two controls.
