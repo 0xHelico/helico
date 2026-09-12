@@ -3,34 +3,38 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 /**
- * The detail chart, ported from the implementation this app's surfaces are matched against.
+ * The value chart: a line, a dashed grid, a scale down the left, and a crosshair.
  *
- * Kept faithful where it is about drawing — the margins, the nice-stepped ticks, the gradient
- * under the line, the crosshair and the tooltip — and changed only where the series differs.
- * That reference plots money; this plots how many times a maker's mandates moved on a day, so the
- * scale is a count and a `$` in front of it would be a unit this page cannot source.
+ * **Everything here is geometry.** It is handed a series and draws it; it does not know what the
+ * numbers mean, where they came from, or how they were folded. `lib/value-history.ts` owns that.
+ *
+ * Two decisions in here are about honesty rather than looks, and both were wrong once:
+ *
+ * The line **steps**. A balance holds its value until something changes it, so sloping from one
+ * reading to the next draws a single deposit as a gradual climb through figures the account was
+ * never worth.
+ *
+ * The scale is worked out **before** the plot's width, because its labels decide how wide the
+ * gutter has to be. The other way round the gutter is a guess, and the guess that shipped cut the
+ * last character off every figure on the axis.
  */
 
 type XY = { x: number; y: number };
 
 export type Point = { timestamp: number; value: number };
 
-const linePath = (pts: XY[], step = false) =>
+const linePath = (pts: XY[], step: boolean) =>
   pts
     .map((p, i) =>
       i === 0
         ? `M${p.x},${p.y}`
-        : // **A balance holds until something changes it.** Sloping from one reading to the next
-          // draws a deposit as a gradual climb across the days either side of it, and the account
-          // was never worth any of the figures on that slope. Horizontal to the new moment, then
-          // vertical to the new value, is the shape the events actually describe.
-          step
+        : step
           ? `L${p.x},${pts[i - 1]?.y ?? p.y}L${p.x},${p.y}`
           : `L${p.x},${p.y}`,
     )
     .join("");
 
-function areaPath(pts: XY[], height: number, step = false): string {
+function areaPath(pts: XY[], height: number, step: boolean): string {
   const last = pts.at(-1);
   return last
     ? `${linePath(pts, step)}L${last.x},${height}L${pts[0]?.x ?? 0},${height}Z`
@@ -38,74 +42,68 @@ function areaPath(pts: XY[], height: number, step = false): string {
 }
 
 const HEIGHT = 240;
-const MARGIN = { top: 16, right: 48, bottom: 28, left: 8 };
-/**
- * The gutter the tick labels are written into, measured from the labels rather than assumed.
- *
- * 48px was enough for a count and not for money: `$80.0000` was drawn to the edge and the last
- * character was cut off, on every tick, which looked like a rendering fault rather than a margin.
- * Roughly 6.2px per character at 11px in this face, plus the 10px the text is offset by.
- */
-const gutter = (labels: string[]) =>
-  Math.max(
-    MARGIN.right,
-    12 + Math.max(0, ...labels.map((l) => l.length)) * 6.2,
-  );
-const PX_PER_X_LABEL = 110;
+const MARGIN = { top: 16, right: 8, bottom: 28 };
+/** The narrowest the scale's gutter goes, before the labels ask for more. */
+const AXIS_MIN = 44;
+/** Roughly one date every hundred pixels, which is what nine labels across a card comes to. */
+const PX_PER_X_LABEL = 100;
+const MAX_X_LABELS = 9;
 const TOOLTIP_HALF_WIDTH = 70;
 
+type Trend = "up" | "down" | "flat";
+
 /**
- * Helico's own line where the series has no direction, and the reference's red-or-green where it
- * has one.
+ * Green unless the window actually fell.
  *
- * A count of movements is not good or bad, so a green line climbing through it would claim
- * something the data does not say. Money is the other case: a total that went up went up, and the
- * colour is the fastest way to read that. `flat` is its own answer rather than a rounding of `up`.
+ * `flat` is green rather than grey on purpose: a balance that has not moved has not lost anything,
+ * and a grey line reads as a chart that could not decide. Red is reserved for a real fall, which is
+ * the one case worth interrupting somebody over.
  */
 const LINE: Record<Trend, string> = {
-  none: "#695cff",
   up: "#1DA66A",
+  flat: "#1DA66A",
   down: "#E5484D",
-  flat: "#9CA1A6",
 };
 
-type Trend = "none" | "up" | "down" | "flat";
+const MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
 
-const dateLabel = (ts: number) =>
-  new Date(ts).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  });
-const tooltipLabel = (ts: number) =>
-  new Date(ts).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "UTC",
-  });
+/**
+ * `10 Sep`, in that order, whatever the reader's locale is.
+ *
+ * `toLocaleDateString` puts the month first in some locales and the day first in others, so an axis
+ * built on it reads differently depending on who opens the page. A date on a chart is a tick label
+ * rather than prose, and one shape for everyone is what makes the design match itself.
+ */
+const dateLabel = (ts: number) => {
+  const d = new Date(ts);
+  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
+};
+const tooltipLabel = (ts: number) => {
+  const d = new Date(ts);
+  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+};
 
 /** Round a step size to a nice value (1/2/2.5/5 × 10^k) for axis ticks. */
-function niceTicks(
-  min: number,
-  max: number,
-  count = 5,
-  /** The series only takes whole values, so the scale may not offer a fraction of one. */
-  integral = false,
-): number[] {
+function niceTicks(min: number, max: number, count = 5): number[] {
   if (min === max) {
     return [min];
   }
   const rough = (max - min) / (count - 1);
   const pow = 10 ** Math.floor(Math.log10(rough));
-  let step = ([1, 2, 2.5, 5, 10].find((b) => rough / pow <= b) ?? 10) * pow;
-  // A count of movements cannot be 0.25, and an empty wallet is exactly where this bites: the
-  // flat-series clamp below opens the scale to 0..1, which lands on a quarter step and rules the
-  // card at three values the data can never take. `sparkline.tsx` had this written down and the
-  // port dropped it.
-  if (integral) {
-    step = Math.max(1, Math.round(step));
-  }
+  const step = ([1, 2, 2.5, 5, 10].find((b) => rough / pow <= b) ?? 10) * pow;
   const ticks: number[] = [];
   for (let v = Math.ceil(min / step) * step; v <= max + 1e-9; v += step) {
     ticks.push(+v.toFixed(6));
@@ -113,22 +111,35 @@ function niceTicks(
   return ticks;
 }
 
+/**
+ * The fewest decimals that still tell the ticks apart.
+ *
+ * Fixed precision fails at both ends, and both failures shipped. Two decimals put `$0.50` on every
+ * tick of the live account, whose whole earning is sixty-five millionths of a dollar; four put four
+ * digits of noise on a ninety-dollar one. So it is derived: try two, and add a digit until no two
+ * neighbouring ticks print the same thing.
+ */
+function decimalsFor(ticks: number[]): number {
+  for (let d = 2; d < 8; d++) {
+    const printed = ticks.map((t) => t.toFixed(d));
+    if (new Set(printed).size === printed.length) {
+      return d;
+    }
+  }
+  return 8;
+}
+
 export function PriceChart({
   points,
-  trend = "none",
-  /**
-   * How a value reads on the axis and in the tooltip. The default is the bare number, because the
-   * series this started with is a count and a `$` in front of one would be a unit the page cannot
-   * source. A caller plotting money passes its own formatter rather than this file guessing which
-   * it has.
-   */
-  format = (v: number) => String(v),
+  trend = "flat",
+  /** How a figure reads on the axis and in the tooltip, at the precision the scale worked out. */
+  format,
   /** True for a series that holds its value between readings, which every balance does. */
   step = false,
 }: {
   points: Point[];
   trend?: Trend;
-  format?: (value: number) => string;
+  format: (value: number, decimals: number) => string;
   step?: boolean;
 }) {
   const id = useId();
@@ -150,39 +161,34 @@ export function PriceChart({
     return () => ro.disconnect();
   }, []);
 
-  // A constant by another name, so it is not a memo dependency.
-  const plotLeft = MARGIN.left;
   const plotH = HEIGHT - MARGIN.top - MARGIN.bottom;
 
-  // **The scale is worked out before the width is.** Its ticks decide how wide the label gutter has
-  // to be, and the plot gets what is left. The other way round, the gutter is a guess: 48px fitted
-  // a count and cut the last character off every dollar figure.
   const scale = useMemo(() => {
     if (points.length < 2) {
       return { ticks: [] as number[], min: 0, span: 1 };
     }
     const values = points.map((p) => p.value);
-    const integral = values.every(Number.isInteger);
     let low = Math.min(...values);
     let high = Math.max(...values);
     if (low === high) {
-      // A flat series still gets room around the line, so it reads as a measurement rather than
-      // as a chart that failed to draw. Never below zero, though: a balance and a count are both
-      // things that cannot be negative, and a scale running to -1 puts a flat run in the middle of
-      // the card with a gradient hanging under it, as if half the readings were below nothing.
-      low = Math.max(0, low - 1);
-      high += 1;
+      // A flat series still gets symmetric room around the line, so it reads as a measurement
+      // rather than as a chart that failed to draw.
+      low -= 0.06;
+      high += 0.06;
     }
-    return {
-      ticks: niceTicks(low, high, 5, integral),
-      min: low,
-      span: high - low,
-    };
+    return { ticks: niceTicks(low, high, 7), min: low, span: high - low };
   }, [points]);
 
   const { ticks, min, span } = scale;
-  const right = gutter(ticks.map(format));
-  const plotW = Math.max(0, width - plotLeft - right);
+  const decimals = decimalsFor(ticks);
+  const labels = ticks.map((t) => format(t, decimals));
+  // Measured from the labels rather than assumed: roughly 6.2px per character at 11px in this
+  // face, plus the 10px the text is held off the plot by.
+  const axis = Math.max(
+    AXIS_MIN,
+    12 + Math.max(0, ...labels.map((l) => l.length)) * 6.2,
+  );
+  const plotW = Math.max(0, width - axis - MARGIN.right);
 
   const pts = useMemo(() => {
     if (points.length < 2 || plotW <= 0) {
@@ -192,16 +198,19 @@ export function PriceChart({
     // line quietly becomes a sloped one.
     const dx = plotW / (points.length - 1);
     return points.map((p, i) => ({
-      x: +(plotLeft + i * dx).toFixed(2),
+      x: +(axis + i * dx).toFixed(2),
       y: +(MARGIN.top + (1 - (p.value - min) / span) * plotH).toFixed(2),
     }));
-  }, [points, plotW, plotH, min, span]);
+  }, [points, plotW, plotH, min, span, axis]);
 
   const xTickIdx = useMemo(() => {
     if (pts.length === 0) {
       return [] as number[];
     }
-    const count = Math.max(2, Math.min(7, Math.floor(plotW / PX_PER_X_LABEL)));
+    const count = Math.max(
+      2,
+      Math.min(MAX_X_LABELS, Math.floor(plotW / PX_PER_X_LABEL)),
+    );
     return [
       ...new Set(
         Array.from({ length: count }, (_, i) =>
@@ -216,7 +225,7 @@ export function PriceChart({
     if (pts.length === 0 || !el) {
       return;
     }
-    const x = e.clientX - el.getBoundingClientRect().left - plotLeft;
+    const x = e.clientX - el.getBoundingClientRect().left - axis;
     setHover(
       Math.max(
         0,
@@ -231,7 +240,7 @@ export function PriceChart({
 
   return (
     <div
-      className="relative w-full overflow-hidden rounded-2xl bg-shade/50"
+      className="relative w-full overflow-hidden"
       onPointerLeave={() => setHover(null)}
       onPointerMove={onMove}
       ref={containerRef}
@@ -246,11 +255,11 @@ export function PriceChart({
         >
           <defs>
             <linearGradient id={id} x1="0" x2="0" y1="0" y2="1">
-              <stop stopColor={LINE[trend]} stopOpacity="0.22" />
+              <stop stopColor={LINE[trend]} stopOpacity="0.16" />
               <stop offset="1" stopColor={LINE[trend]} stopOpacity="0" />
             </linearGradient>
           </defs>
-          {ticks.map((t) => {
+          {ticks.map((t, i) => {
             const y = MARGIN.top + (1 - (t - min) / span) * plotH;
             return (
               <g key={t}>
@@ -258,19 +267,22 @@ export function PriceChart({
                   stroke="#111827"
                   strokeDasharray="3 4"
                   strokeOpacity="0.08"
-                  x1={plotLeft}
-                  x2={plotLeft + plotW}
+                  x1={axis}
+                  x2={axis + plotW}
                   y1={y}
                   y2={y}
                 />
+                {/* Down the left, right-aligned against the plot's edge, so the numbers read as a
+                    column and the line starts where the scale stops. */}
                 <text
                   className="tabular"
                   fill="#83878b"
                   fontSize="11"
-                  x={width - right + 10}
+                  textAnchor="end"
+                  x={axis - 10}
                   y={y + 4}
                 >
-                  {format(t)}
+                  {labels[i]}
                 </text>
               </g>
             );
@@ -337,7 +349,7 @@ export function PriceChart({
           }}
         >
           <div className="tabular font-medium text-sm">
-            {format(hoveredPoint.value)}
+            {format(hoveredPoint.value, decimals)}
           </div>
           <div className="whitespace-nowrap text-[11px] text-soft">
             {tooltipLabel(hoveredPoint.timestamp)}

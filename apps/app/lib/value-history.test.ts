@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 
 import { type AccountEvent, withoutVenueLegs } from "@/lib/activity";
-import { change, valueSeries, windowed } from "@/lib/value-history";
+import { change, sample, valueSeries } from "@/lib/value-history";
 
 const DAY = 86_400_000;
 
@@ -59,18 +59,42 @@ test("events with no date are skipped rather than stacked on today", () => {
   );
 });
 
-// Choosing a short range on an older account used to drop every event and draw a flat line, as if
-// the money had appeared this morning.
-test("a window carries the value it started at", () => {
+// **The axis is evenly spaced and the events are not.** Plotted one event per x-step, two moves an
+// hour apart sit as far apart as two a fortnight apart, and the dates written under them say
+// otherwise. Resampling puts each reading where its timestamp belongs.
+test("the window is walked at a fixed interval, not once per event", () => {
   const now = 10 * DAY;
   const points = [
     { timestamp: 1 * DAY, value: 5 },
     { timestamp: 9 * DAY, value: 8 },
   ];
-  const week = windowed(points, 7, now);
-  expect(week).toHaveLength(2);
-  expect(week[0]).toEqual({ timestamp: 3 * DAY, value: 5 });
-  expect(windowed(points, null, now)).toHaveLength(2);
+  const week = sample(points, 7, now, 8);
+  expect(week).toHaveLength(8);
+  // Evenly spaced in time, ending exactly at now.
+  expect(week.at(0)?.timestamp).toBe(3 * DAY);
+  expect(week.at(-1)?.timestamp).toBe(now);
+  // And a balance holds its value between changes: 5 until day 9, then 8.
+  expect(week.map((p) => p.value)).toEqual([5, 5, 5, 5, 5, 5, 8, 8]);
+});
+
+// Choosing a short range on an older account must not drop every event and draw a flat nothing:
+// the account was worth something a week ago and the line has to start there.
+test("a window that contains no event still starts at what it was worth", () => {
+  const now = 30 * DAY;
+  const week = sample([{ timestamp: 1 * DAY, value: 5 }], 7, now, 4);
+  expect(week.map((p) => p.value)).toEqual([5, 5, 5, 5]);
+});
+
+// Before the first reading the account did not exist. Carrying the first figure backwards would
+// draw money it never had, which is what a long range on a young account would show.
+test("there is nothing before the first reading", () => {
+  const now = 100 * DAY;
+  const funded = [{ timestamp: 74 * DAY, value: 7 }];
+  expect(sample(funded, 100, now, 5).map((p) => p.value)).toEqual([
+    0, 0, 0, 7, 7,
+  ]);
+  // ALL starts at the first reading instead, so there is no empty run to scroll past.
+  expect(sample(funded, null, now, 3).map((p) => p.value)).toEqual([7, 7, 7]);
 });
 
 test("a change of nothing is flat, and a start of nothing has no percentage", () => {

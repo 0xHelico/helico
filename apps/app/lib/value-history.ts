@@ -87,24 +87,45 @@ export function valueSeries(
 }
 
 /**
- * The series clipped to a window, with a point at the window's left edge carrying the value as of
- * then.
+ * The series resampled to `n` readings evenly spaced in time across the window.
  *
- * Without that edge point, choosing "7D" on an account funded a month ago would drop every event
- * and draw a flat line, as if the money had appeared this morning. `null` days means all of it.
+ * **The events are not evenly spaced and the axis is.** Plotted one event per x-step, two moves an
+ * hour apart sit as far apart as two a fortnight apart, and the dates written under them say
+ * otherwise. So the window is walked at a fixed interval and each sample takes the last reading at
+ * or before it, which is what a balance does between changes. It also gives the axis enough points
+ * to write a date every hundred pixels instead of one per event.
+ *
+ * Before the first reading the account did not exist, so the value there is zero rather than the
+ * first figure carried backwards. `null` days means everything, from the first reading to now.
  */
-export function windowed(
+export function sample(
   points: ValuePoint[],
   days: number | null,
   now = Date.now(),
+  n = 96,
 ): ValuePoint[] {
-  if (days === null || points.length === 0) return points;
-  const from = now - days * 86_400_000;
-  const inside = points.filter((p) => p.timestamp >= from);
-  if (inside.length === points.length) return points;
-  const before = points.filter((p) => p.timestamp < from).at(-1);
-  // Nothing before the window means the account did not exist then, which is a zero worth drawing.
-  return [{ timestamp: from, value: before?.value ?? 0 }, ...inside];
+  if (points.length === 0) {
+    return [];
+  }
+  const earliest = points[0]?.timestamp ?? now;
+  // A day of width even when there is only one reading, or there is no window to draw a line in.
+  const from =
+    days === null
+      ? Math.min(earliest, now - 86_400_000)
+      : now - days * 86_400_000;
+  const span = Math.max(1, now - from);
+
+  let cursor = 0;
+  return Array.from({ length: n }, (_, i) => {
+    const at = from + (span * i) / (n - 1);
+    while (cursor < points.length && (points[cursor]?.timestamp ?? 0) <= at) {
+      cursor++;
+    }
+    return {
+      timestamp: at,
+      value: cursor === 0 ? 0 : (points[cursor - 1]?.value ?? 0),
+    };
+  });
 }
 
 export type Trend = "up" | "down" | "flat";
