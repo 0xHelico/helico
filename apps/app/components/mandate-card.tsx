@@ -23,6 +23,8 @@ import {
   accountWriteAbi,
   hasAgent,
 } from "@/lib/account";
+import { readAccountActivity } from "@/lib/activity";
+import { explorerTx } from "@/lib/chain";
 import { amountShort as held } from "@/lib/format";
 import { amount, readMandates, token, WALLET_TOKENS } from "@/lib/mandates";
 import { readVenues, sweepList } from "@/lib/venues";
@@ -73,6 +75,20 @@ export function MandateCard({
     enabled: Boolean(address),
     queryKey: ["mandates", address],
     queryFn: () => readMandates(address as string),
+  });
+
+  // The account's own log, for the transaction that opened it. The same key the portfolio uses, so
+  // a reader who has been there already pays nothing for this.
+  const own = useQuery({
+    enabled: Boolean(account && client),
+    queryKey: ["account-activity", account],
+    queryFn: () =>
+      readAccountActivity(
+        client as NonNullable<typeof client>,
+        account as Address,
+      ),
+    retry: false,
+    staleTime: 15_000,
   });
 
   // Up here with the other hooks, not beside the branch that uses it: everything below returns
@@ -197,6 +213,11 @@ export function MandateCard({
       ? "Ready, and the account is empty."
       : "Set up. The agent moves when the gain clears the gas, so a small balance may sit a long time.";
 
+  // Oldest first is the end of the list: `readAccountActivity` sorts newest first, and nothing an
+  // account did can predate the transaction that created it.
+  const opened = own.data?.at(-1);
+  const openedAt = opened ? explorerTx(CHAIN_ID, opened.tx) : undefined;
+
   const live = mandates.data?.rows.filter((m) => m.active) ?? [];
   const spendable = [...(mandates.data?.spendable ?? new Map())].filter(
     ([, value]) => value > 0n,
@@ -252,6 +273,35 @@ export function MandateCard({
                 : String(live.length)}
           </span>
         </span>
+        {/* **The transaction that opened this account, as a link rather than as a sentence.**
+            The index used to report it in prose — "the transaction that opened the account has the
+            hash 0x0673389b803b0b2a60c828ee0b1a7cb4984f00a0960e4b8b85fa66972181ce61" — sixty-six
+            characters nobody can check by reading them. Shortened and pointed at the explorer, it
+            is the same fact and one click from being verified.
+
+            The oldest event the account emitted, because the list arrives newest first and an
+            account cannot have done anything before the transaction that created it. Absent while
+            the log is being read, and absent if it cannot be: a link to nowhere is worse than no
+            link, and a hash this app invented would be worse than both. */}
+        {opened ? (
+          <span className="flex items-center gap-1.5">
+            <span className="text-faint">Opened</span>
+            {openedAt ? (
+              <a
+                className="tabular font-mono text-soft underline decoration-dotted underline-offset-2 hover:text-ink"
+                href={openedAt}
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                {short(opened.tx)}
+              </a>
+            ) : (
+              <span className="tabular font-mono text-soft">
+                {short(opened.tx)}
+              </span>
+            )}
+          </span>
+        ) : null}
       </div>
 
       {action === "earn" ? (
