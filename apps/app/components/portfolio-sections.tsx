@@ -50,8 +50,6 @@ function Filter({ label }: { label: string }) {
   );
 }
 
-const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
-
 const SPLITS = ["All assets", "Liquid", "Working"] as const;
 
 /**
@@ -150,15 +148,10 @@ export function Holdings() {
   return (
     <Card>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <SectionTitle>Holdings</SectionTitle>
-          {account ? (
-            <p className="tabular mt-1 font-mono text-[11.5px] text-faint">
-              Account {short(account)} ·{" "}
-              {data?.kind === "open" ? "open" : "not opened yet"}
-            </p>
-          ) : null}
-        </div>
+        {/* The heading alone. The account's address and whether it is open are on the Limits page,
+            where they are what somebody came for; here they sat under a list of balances that
+            could only have been read from that account in the first place. */}
+        <SectionTitle>Holdings</SectionTitle>
         <div className="flex items-center gap-1">
           <Filter label="Asset class" />
           <Filter label="Network" />
