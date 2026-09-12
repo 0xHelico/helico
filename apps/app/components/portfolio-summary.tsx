@@ -119,7 +119,7 @@ export function PortfolioSummary() {
             reading twice and the explanation nowhere. */}
         {days.length > 0 && days.some((d) => d.count > 0) ? (
           <div className="w-full sm:max-w-[300px]">
-            <Sparkline days={days} label="Aqua movements per day" />
+            <Sparkline days={days} label="Moves per day" />
           </div>
         ) : null}
       </div>
