@@ -69,21 +69,27 @@ each need somebody's transaction are listed there too, and one of them is the ow
       in the production path any more. What remains true and worth saying: the *decision* is the
       enclave's, the *delivery* is the DON's, and the *permission* is the owner's `setAgent`.
 - [ ] **Who runs the relayer, and where its key lives.** #186 gave the app the read half —
-      `apps/app/lib/account.ts` calls `accountFor` and renders the account before it exists. The
-      write half is still missing: nothing sends `open`, in either `apps/app` or `apps/be`, so
-      today a user's account has to be opened for them by hand. The wallet exists and is funded;
-      the code that spends it does not. Still part of #175.
+      `apps/app/lib/account.ts` calls `accountFor` and renders the account before it exists — and
+      the write half arrived from the other side: the app sends `open` from the owner's own wallet
+      (`account-controls.tsx`, `openFirst`; batched with `setAgent` and `permitVenue` by
+      `use-unlock.ts`), which is how the live account was opened on 10 September. So no account
+      has needed a relayer. The relayer wallet exists, is funded, and has sent nothing (nonce 0);
+      nothing in `apps/be` spends it. Whether a relayer is wanted at all is undecided, and #175 —
+      which this used to point at — closed on 8 September.
 
 ## Preconditions
 
 - [x] **#182 merged** — 8 September 13:28 WIB. The account contracts are on `main`
 - [x] **#176 merged** — 8 September 13:32 WIB. The workflow that reads the account
-- [ ] **[#188](https://github.com/0xHelico/helico/pull/188) decided** — it changes
+- [x] **[#188](https://github.com/0xHelico/helico/pull/188) decided** — merged 8 September
+      07:07 UTC, two hours before the deploy. It changes
       `HelicoAccount.withdrawIdle`, so it changes the implementation bytecode. Deploying before it
       lands means the first upgrade is a bug fix, on the day the upgrade path is least rehearsed.
       Merging it first costs a review; deploying without it costs an upgrade
-- [ ] `forge test`, the fork suite and `check-storage-layout.py` green on `main`
-- [ ] Deployer funded on Arbitrum One (chain id 42161)
+- [x] `forge test`, the fork suite and `check-storage-layout.py` green on `main` — CI runs the
+      first and third and skips the fork suite by design; the fork suite is run locally before a
+      deploy (173/173 on 12 September)
+- [x] Deployer funded on Arbitrum One (chain id 42161) — 8 September, 0.0249 ETH
 
 ### How much, measured rather than guessed
 
@@ -289,21 +295,25 @@ with a small amount before trusting it with a real one.
 | Field | Value |
 |---|---|
 | `account` | **leave zero.** The workflow reads every account from the subgraph, so naming one here is not how an account gets managed — it is how one account stays managed when the index cannot answer. Set it only for an account a demo depends on |
-| `agent` | `0x84C3891a9693c891877aC474a90d17d29075fcAf`, the same address `setAgent` was given |
-| `pools` | `["0x794a61358D6845594F94dc1DB02A252b5b4814aD"]` |
-| `asset` | USDC, already correct |
-| `reportReceiver` | leave zero — `delivery` is `signature`, and `deliver` refuses to write to an address with no code |
+| `agent` | `0x98c3979358A4e5086Da432CfE91F45aE2A854463`, the `HelicoAgent` proxy — the same address `setAgent` is given. Until 11 September this was the key `0x84C3891a…`, which nothing ever spent |
+| `pools` | four objects, each with `kind` (`rebasing` for Aave, `share-priced` for the venues) and, for the venues, the one asset it lists |
+| `assets` | USDC and WETH — every asset the enclave reads at every account |
+| `delivery` | `forwarder`. `signature` was the setting until 11 September and is what staging still uses |
+| `reportReceiver` | the same `HelicoAgent` proxy. `deliver` refuses to write to an address with no code, and the forwarder marks a receiver that fails its ERC165 probe invalid for that transmission |
 | `policyHash` | zero means "no policy published", which is a valid state and disables only the cross-check |
 
 ## 4. The workflow
 
-Secrets first: the policy values and `SECRET_AGENT_KEY` have to be released to the DON, and the
-key must be the one whose address step 2 named as agent. Then deploy against
+Secrets first: the policy values have to be released to the DON as the one `HELICO_VAULT`
+document (`scripts/pack-cre-vault.py`, then `cre secrets update`). The document still carries
+`AGENT_KEY`, and under `forwarder` delivery the workflow never reads it. Then deploy against
 `production-settings`.
 
-**The first run is the check.** It should read the account, decide, and sign. If the account holds
-nothing yet, the honest outcome is a hold — a workflow that supplies from an empty account would
-be the surprising result, not the reassuring one.
+**The first run is the check.** It should read the account, decide, and — under `forwarder`
+delivery — write. If the account holds nothing yet, the honest outcome is a hold; if it has not
+nominated the agent the line says so; and once a move has landed the steady state is
+`HOLD (already at the target split)`. The evidence of a move is the account's balance and its
+`IdleCapitalMoved` event, never the delivery hash (see `deployments.md`, 11 September).
 
 ### What deploying CRE actually costs, and on which chain
 
@@ -325,10 +335,11 @@ reads the account, Aave and the subgraph on Arbitrum, and still writes its verdi
 
 | operation | gas | at 0.10 gwei |
 |---|---|---|
-| `account link-key`, once per owner | 127,940 | ~0.000013 ETH |
-| `workflow deploy` — **every deploy, not just the first** | 803,030 | ~0.00008 ETH |
-| `secrets create` / `list` — each allowlists a digest on chain | ~185,000 | ~0.00002 ETH |
-| activate, pause, delete | ~167,000 | ~0.000017 ETH |
+| `account link-key`, once per owner | 127,928 | ~0.000013 ETH |
+| `workflow deploy`, the first time — it registers | 803,030 | ~0.00008 ETH |
+| `workflow deploy`, every time after — it updates | 117,678 | ~0.000012 ETH |
+| `secrets create` / `update` — each allowlists a digest on chain | 101,431 | ~0.00001 ETH |
+| activate, pause, delete | not yet sent from this owner; unmeasured |
 
 **0.005 ETH on Ethereum mainnet covers a hackathon's worth of redeploys** at that gas price, and
 still does at ten times it. What it must not be is zero, which is what an Arbitrum-funded deployer
@@ -461,5 +472,6 @@ because nothing above depends on either and neither depends on anything above.
 
 `HelicoVault` and the Uniswap v4 contracts were removed on 8 September 2026. They were never
 deployed, CRE had moved to the yield layer, and the Uniswap v4 work was never a submitted track.
-The frontend still imports `packages/plugins/uniswap` — that removal is
-[#175](https://github.com/0xHelico/helico/issues/175) and belongs to whoever moves the app.
+The frontend still imports `packages/plugins/uniswap`, as the last-resort swap route behind Aqua
+and 1inch (#398, #400); [#175](https://github.com/0xHelico/helico/issues/175) — moving the app
+off the vault — is closed, and the package stays because the fallback is used.

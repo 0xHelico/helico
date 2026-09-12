@@ -80,7 +80,7 @@ what it returns gives the hash of an XML error, which is how the first attempt a
 
 Two policy updates preceded it, each a `cre secrets update` on the same `HELICO_VAULT` document:
 [`0x2d1ed7b2…`](https://etherscan.io/tx/0x2d1ed7b218d84eb5a6777e3ec7f65afafa76c60ffd355e5d7629d7e2121cb00c)
-put the real agent key in the document (it had held anvil's first account, so the statements the
+put the real agent key in the document (it had held anvil's second account, so the statements the
 enclave signed under `signature` delivery recovered to `0x7099…79C8` — no consequence now that
 nothing reads the key in production, but the record should say it), and
 [`0x60d44e0b…`](https://etherscan.io/tx/0x60d44e0b09baf9dbc341c9c61ac0770b19ec4512f481e5385752f56c29ae4ec8)
@@ -136,7 +136,8 @@ and this is the deployment that makes the README's sentence about it true rather
 subgraph        helico-arbitrum-one
 version         v0.3.0                (v0.2.0 was 8 September)
 build           QmbhmRoR9C7Eo6RGRdM4kCd6iBhWvRWcLXXAx4SSd5WSfe
-router source   0x111111338c…  startBlock 489,290,882 — the router's own first log
+router source   0x111111338c…  startBlock 488,001,389 — the router's first log of any kind (its
+                `OwnershipTransferred`); the first `Swapped` is at 489,290,882
 ```
 
 **Read back from Studio after sync, at `version/latest`:**
@@ -147,7 +148,7 @@ block                 504,018,404       against a chain head of 504,018,412
 hasIndexingErrors     false
 fills                 340               ← the number the README names, measured rather than copied
 unique takers         3
-accounts              1                 ← the one opened on the 11th, still indexed
+accounts              1                 ← the one opened on the 10th (17:58 UTC), still indexed
 ```
 
 Before deploy: `graph codegen`, `graph build`, and the subgraph's own suite — 12 tests, four of
@@ -310,14 +311,15 @@ migration. Declared rather than discovered on purpose: treating a revert as "doe
 would make a dropped RPC call, a paused venue and a market that genuinely does not hold the asset
 all arrive as the same silence.
 
-### Still inert
+### Still inert — all three done since
 
-- the owner calls `permitVenue(0xb0A125F5…)` — the account refuses any market it was not told
-  about, and there is no account yet
+- ~~the owner calls `permitVenue(0xb0A125F5…)`~~ — done in the account's opening transaction,
+  10 September 17:58 UTC (`0x0673389b…`), which permitted all four markets at once
 - ~~`config.production.json` names it with `kind: "share-priced"`~~ — done, scoped to WETH
-- the workflow is redeployed, because config travels with the binary
+- ~~the workflow is redeployed~~ — 10 September 08:40 UTC (`0xce50ae94…`, config hash
+  `13c7ab9c…` = commit `8b2b723`, which carries this venue), and again on the 11th
 
-Until all three, ETH does not earn and the submission must not say it does.
+ETH can earn; whether it does depends on the account holding any, which the live one does not.
 
 ## 10 September 2026 — the Aqua apps went behind proxies
 
@@ -411,24 +413,28 @@ from their deploy block to head — so nothing was stranded and no maker had to 
 A deployed venue is inert. Three more things are needed before the enclave can use one, and they
 are deliberately not part of this deploy:
 
-- the owner calls `permitVenue` for each address — the account refuses any market it was not told about
-- `config.production.json` names them with `kind: "share-priced"`, since both issue shares whose
-  price drifts upward rather than balances that grow
-- the workflow is redeployed, because config travels with the binary
+- ~~the owner calls `permitVenue` for each address~~ — done 10 September 17:58 UTC, in the
+  account's opening transaction, for all four markets
+- ~~`config.production.json` names them with `kind: "share-priced"`~~ — done; both issue shares
+  whose price drifts upward rather than balances that grow
+- ~~the workflow is redeployed~~ — 10 September, and again on the 11th
 
-Until all three, the account reaches Aave and nothing else, and the submission must not say
-otherwise.
+All three happened after this deploy, and on 11 September the enclave chose the Morpho venue and
+the DON moved the account's USDC into it.
 
 ```
-CompoundVenue      tx 0xfe8a3a9ad56758eaecaaec6251ab35ed499ef448ed48e23a5aa93a825453db8f
-MorphoVenue        tx 0xdaa80f542ae23e1d490cd1373feae36d38db645cdadc41ca1cfb584c6e0416c7
-                   both together   gas 3,229,004   cost 0.0000647 ETH
+CompoundVenue      tx 0x944d597eada2f4422ccd0a931970da68112188d8d3b4da853701c13d304668e0   block 503,469,759   gas 1,402,548
+MorphoVenue        tx 0x4a2a61fc7f6d3912e5899f9d14d04464d1139cb57df3c5b7ca3334a24bccbca4   block 503,469,773   gas 1,838,693
+                   both together   gas 3,241,241   cost 0.0000651 ETH
 HelicoMandateSwap  redeploy
 HelicoOracleBoard  redeploy
 ```
 
-**Deployer** `0x6DCd7485aB17e0CBD0723b8435a35bb8d029439E`, balance `0.0077045` → `0.0075673`.
-All four cost **0.000137 ETH** together, at around 0.02 gwei.
+**Deployer** `0x6DCd7485aB17e0CBD0723b8435a35bb8d029439E`, balance `0.0077045` → `0.0074873`
+across the whole evening: the superseded venue pair (`0xfe8a3a9a…`, `0xdaa80f54…`, 0.0000647 ETH
+together — the hashes this entry carried until 12 September, when a receipt check showed they had
+created the superseded addresses), the two app redeploys, the replacement venues above, and two
+`poke()` calls.
 
 ### The check that mattered most, and it was at deploy rather than at first use
 
@@ -570,7 +576,7 @@ zero side has no price.
 
 | Contract | Address | Checked | Source |
 |---|---|---|---|
-| `HelicoOracleBoard` | [`0xeb480C0994A34a81a49C3250C45a9e96eac0C760`](https://arbiscan.io/address/0xeb480C0994A34a81a49C3250C45a9e96eac0C760#code) | `AQUA()` → `0x1111113CCf…`, 15,747 hex of code | verified, first attempt |
+| `HelicoOracleBoard` | [`0xeb480C0994A34a81a49C3250C45a9e96eac0C760`](https://arbiscan.io/address/0xeb480C0994A34a81a49C3250C45a9e96eac0C760#code) | `AQUA()` → `0x1111113CCf…`, 7,872 bytes of code | verified, first attempt |
 
 ```
 tx     0x9f93a95a553e98453fd04fdad83bc55839cb53e85f130a1faf5698c7d3ac3a17
@@ -600,7 +606,10 @@ Not a contract of ours, so it sits apart: a workflow registered in Chainlink's
 
 ```
 name          helico-production
-workflow id   002b3bc0bfea52d8d7b3a617fffdfa0d26c32d303c0c3bec713b3d9036ab0a05
+workflow id   003fbfdc48…  at registration, 13:00 UTC; updated four times that day, the last to
+              002b3bc0bfea52d8d7b3a617fffdfa0d26c32d303c0c3bec713b3d9036ab0a05 (13:42 UTC,
+              tx 0xec14c00e…), then superseded on 10 and 11 September — the id changes with
+              every binary or config
 DON family    zone-a
 owner         0x6DCd7485aB17e0CBD0723b8435a35bb8d029439E   (the deployer)
 schedule      every 5 minutes
@@ -617,7 +626,9 @@ this same workflow while it was running:
 ```
 isOwnerLinked(deployer)                → true
 totalActiveWorkflowsByOwner(deployer)  → 1
-getWorkflowById(0x003fbfdc…)           → present, owner 0x6dcd7485…
+getWorkflowById(0x003fbfdc…)           → present, owner 0x6dcd7485…   (8 September; the
+                                          registry keeps only the current id, so this read
+                                          answers empty since the first update)
 ```
 
 **One secret is in the Vault DON** under namespace `main` — `HELICO_VAULT`, a JSON document
@@ -629,7 +640,7 @@ It is one item because the DON answers **one secret retrieval per execution**, w
 documented anywhere we could find and which every earlier deploy ran into. The measurement and
 the SDK evidence are in [`deploy-runbook.md`](deploy-runbook.md); created by
 [`0x5126f608…`](https://etherscan.io/tx/0x5126f6087ab8f874b03289add69d1afb4f3e73a283f7b80c1b050fa758c43dd8),
-0.0000339 ETH.
+101,431 gas, 0.0000354 ETH.
 
 **What it does today, corrected.** This section previously read *"it holds, every run,
 correctly."* That was not true when it was written, and the runs said so: every execution failed
@@ -677,6 +688,6 @@ Queried at `…/helico-arbitrum-one/version/latest`, which is what
 
 ### Not done yet
 
-- **No account has been opened on mainnet.** The factory is live and permissionless; nothing has
-  used it, and nothing holds anyone's funds. See [the runbook](deploy-runbook.md) for the two
-  calls that prove a deployed account can be acted on and escaped from.
+- ~~**No account has been opened on mainnet.**~~ One was, on 10 September at 17:58 UTC, through
+  the deployed dapp by a teammate's wallet; funded on the 11th; managed by the DON since 11:30 UTC
+  that day — see the 11 September entries above.
