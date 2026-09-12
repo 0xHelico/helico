@@ -303,7 +303,7 @@ export function PutToWorkCard({
     // route and `minReturn` are facts about one block, and the number the mandate is sized by has
     // to be the one this batch enforces.
     let fresh: FundingSwap | undefined;
-    if (fundAsked) {
+    if (fundAsked && !done) {
       const q = await funding.refetch();
       if (!q.data) {
         throw q.error ?? new Error("The funding swap could not be quoted.");
@@ -375,7 +375,10 @@ export function PutToWorkCard({
   // immutable, so money that arrived after one was shipped is not covered by it, and a second
   // ship is the honest way to cover it. With an empty wallet there is nothing to add and the
   // button says so rather than offering a duplicate under a fresh salt.
-  const addable = wallet > 0n || fundAsked;
+  // The funding swap does not make a second press addable: it ran in the press that made this
+  // card "done", and offering to "ship 0.00 USDC more" over it read as a request for another
+  // signature — measured on the first live press, whose owner asked why it wanted one more.
+  const addable = wallet > 0n;
 
   return (
     <div
