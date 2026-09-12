@@ -14,6 +14,7 @@
 	"deadlineSeconds": 600,
 	"subgraphUrl": "https://api.studio.thegraph.com/query/1758877/helico-arbitrum-one/version/latest",
 	"subgraphTimeoutSeconds": 20,
+	"coveringApps": ["0x0524a353dfab33CD362593ae8e97707764Fb6041"],
 	"aiUrl": "https://9router.godza.site/v1/chat/completions",
 	"aiModel": "ag/claude-opus-4-6-thinking",
 	"aiFallbackModel": "ag/gemini-3-flash",

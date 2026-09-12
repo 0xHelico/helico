@@ -55,6 +55,15 @@ export type SubgraphConfig = {
 	/** The Aqua subgraph's GraphQL endpoint. Empty turns the whole step off. */
 	subgraphUrl: string
 	subgraphTimeoutSeconds: number
+	/**
+	 * Apps whose mandates settle out of a lending venue, so they do not raise the liquid floor.
+	 *
+	 * `HelicoMandateSwap` pulls the venue *receipt* through Aqua and withdraws the deficit inside
+	 * the swap, so USDC in Morpho is USDC one of its mandates can spend. A SwapVM mandate pulls
+	 * the asset itself, and for that one the floor is the promise kept. Empty means every mandate
+	 * counts, which is what every run did before this existed. Lower-case, like every address here.
+	 */
+	coveringApps?: readonly string[]
 }
 
 /**
@@ -314,6 +323,28 @@ export const MANDATE_DEMAND = `
  * stands", which is a complete and safe answer. The reason is carried so the verdict can say
  * which of the two buffers it used.
  */
+/**
+ * The same question with the covering apps left out — `app_not_in` on the mandate.
+ *
+ * A second constant rather than one query with an always-present variable, because of what an
+ * empty list does: measured on the live subgraph on 12 September, `app_not_in: []` matches
+ * **nothing**, so a configuration with no covering apps would read every maker as owing nothing
+ * and the floor would never rise. `demandHttpRequest` sends this only when the list has entries.
+ */
+export const MANDATE_DEMAND_EXCLUDING = `
+  query Demand($maker: Bytes!, $token: Bytes!, $first: Int!, $coveringApps: [Bytes!]!) {
+    balances(
+      where: { token: $token, mandate_: { maker: $maker, active: true, app_not_in: $coveringApps } }
+      orderBy: amount
+      orderDirection: desc
+      first: $first
+    ) {
+      amount
+      tokensCount
+    }
+  }
+`
+
 export type MandateDemand =
 	| { known: false; reason: string }
 	| {
@@ -357,14 +388,27 @@ export function demandHttpRequest(
 	// address matches nothing and comes back as an **empty list rather than an error**, so a
 	// maker with fifty mandates would read as a maker with none. Config already lower-cases
 	// both of these; doing it again costs nothing and does not depend on that staying true.
-	const body = JSON.stringify({
-		query: MANDATE_DEMAND,
-		variables: {
-			maker: maker.toLowerCase(),
-			token: asset.toLowerCase(),
-			first: MAX_BALANCE_ROWS,
-		},
-	})
+	const coveringApps = (config.coveringApps ?? []).map((a) => a.toLowerCase())
+	const body = JSON.stringify(
+		coveringApps.length > 0
+			? {
+					query: MANDATE_DEMAND_EXCLUDING,
+					variables: {
+						maker: maker.toLowerCase(),
+						token: asset.toLowerCase(),
+						first: MAX_BALANCE_ROWS,
+						coveringApps,
+					},
+				}
+			: {
+					query: MANDATE_DEMAND,
+					variables: {
+						maker: maker.toLowerCase(),
+						token: asset.toLowerCase(),
+						first: MAX_BALANCE_ROWS,
+					},
+				},
+	)
 	return {
 		url: config.subgraphUrl,
 		method: 'POST',

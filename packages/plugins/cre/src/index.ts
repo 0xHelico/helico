@@ -237,6 +237,17 @@ export const configShape = {
 		.or(z.literal(''))
 		.default(''),
 	subgraphTimeoutSeconds: z.number().int().positive().max(60).default(20),
+	/**
+	 * Apps whose mandates are settled out of a lending venue and so do not raise the floor.
+	 *
+	 * `HelicoMandateSwap` covers a fill from the venue inside the swap — the receipt lines on its
+	 * mandates are the permission for that — so its mandates are not claims on the wallet. On
+	 * 12 September the enclave read one as exactly that and withdrew the whole Morpho position the
+	 * minute a mandate appeared (`docs/plans/2026-09-12-a-mandate-our-app-can-cover-is-not-a-claim-on-the-wallet.md`).
+	 * A SwapVM mandate pulls the asset itself and keeps raising the floor. Empty keeps every
+	 * mandate counting.
+	 */
+	coveringApps: z.array(hex(20)).default([]),
 }
 
 /**
