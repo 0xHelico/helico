@@ -4,20 +4,16 @@ import {
   ARBITRUM_ONE,
   MANDATE_SWAP_ABI,
   mandateHash,
-  mandateSetupCalls,
   mandateSwapAddress,
-  ReceiptKind,
-  type SwapMandate,
 } from "@helico/plugin-1inch";
 import { useQuery } from "@tanstack/react-query";
 import { Check, Loader2 } from "lucide-react";
 import { useState } from "react";
 import {
   type Address,
-  encodeFunctionData,
   erc20Abi,
+  formatEther,
   formatUnits,
-  parseAbi,
   zeroAddress,
 } from "viem";
 import {
@@ -30,31 +26,30 @@ import {
 
 import { FundAccount } from "@/components/fund-account";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { CHAIN_ID, useAccountState } from "@/hooks/use-account-state";
 import {
   ACCOUNT_TOKENS,
-  accountWriteAbi,
   configuredFactory,
-  factoryAbi,
   HELICO_AGENT,
   hasAgent,
 } from "@/lib/account";
-import { explorerTx } from "@/lib/chain";
+import { explorerTx, SLIPPAGE_BPS } from "@/lib/chain";
 import { readMandates, shipped } from "@/lib/mandates";
+import { planOneInchSwap } from "@/lib/oneinch-swap";
+import { type FundingSwap, putToWork } from "@/lib/put-to-work";
+import { unitsForDollars } from "@/lib/usd";
 import { cn } from "@/lib/utils";
 import { KNOWN_VENUES, MARKETS, readVenues } from "@/lib/venues";
 
 const USDC: Address = ACCOUNT_TOKENS.idle;
 const WETH: Address = "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1";
 
-const accountBatchAbi = parseAbi([
-  "struct Call { address target; uint256 value; bytes data; }",
-  "function executeBatch(Call[] calls) returns (bytes[])",
-]);
-
-/** A day. Long enough for a demo, short enough that a forgotten mandate dies on its own. */
-const LIFETIME_SECONDS = 86_400n;
-const FEE_BPS = 30n;
+/**
+ * What the wallet keeps for gas when it funds from ETH. Three moves on Arbitrum One have cost
+ * under 0.00002 ETH each; this is five times the batch, not a guess at a fee.
+ */
+const GAS_CUSHION = 100_000_000_000_000n; // 0.0001 ETH
 
 const usdc = (v: bigint) =>
   Number(formatUnits(v, 6)).toLocaleString(undefined, {
@@ -79,6 +74,13 @@ const usdc = (v: bigint) =>
  *
  * A wallet without EIP-5792 is told so and pointed at the controls that do the same job one
  * transaction at a time. That is not a failure and is not dressed as one.
+ *
+ * **A wallet holding ETH and no USDC funds the batch from a swap.** The 1inch router takes ETH as
+ * `value` and, with `receiver` set, delivers the USDC to the account the same batch opens — an
+ * ERC-20 transfer to a CREATE2 address with no code yet is an ordinary transfer. The mandate is
+ * sized by the quote's `minAmountOut`, the floor the router's own calldata enforces, and whatever
+ * lands above it is idle in the account for the enclave's next run. The calldata is fetched again
+ * at press time: a quote is a fact about one block, not a plan.
  *
  * **The last line of the breakdown is not in the batch, and says so.** This press ships and funds;
  * the supplying is the enclave's, on its next run, into whichever market pays most. The reason it
@@ -126,7 +128,7 @@ export function PutToWorkCard({
     staleTime: 0,
     queryFn: async () => {
       const c = client as NonNullable<typeof client>;
-      const [wallet, idle, weth] = await Promise.all([
+      const [wallet, idle, weth, ether] = await Promise.all([
         c.readContract({
           abi: erc20Abi,
           address: USDC,
@@ -145,8 +147,9 @@ export function PutToWorkCard({
           args: [account as Address],
           functionName: "balanceOf",
         }),
+        c.getBalance({ address: address as Address }),
       ]);
-      return { wallet, idle, weth };
+      return { wallet, idle, weth, ether };
     },
   });
 
@@ -202,68 +205,108 @@ export function PutToWorkCard({
 
   const wallet = balances.data?.wallet ?? 0n;
   const idle = balances.data?.idle ?? 0n;
+  const ether = balances.data?.ether ?? 0n;
   const working = (venues.data?.positions ?? []).reduce(
     (sum, p) =>
       p.asset.toLowerCase() === USDC.toLowerCase() ? sum + p.supplied : sum,
     0n,
   );
+
+  // Dollars of ETH to swap into the account inside the batch. Offered when the wallet holds no
+  // USDC, which is the wallet this exists for; a wallet holding USDC funds from that.
+  const [fundDollars, setFundDollars] = useState("");
+  const fundAsked = wallet === 0n && Number(fundDollars) > 0;
+  const funding = useQuery({
+    enabled: fundAsked && Boolean(account && address && client),
+    queryKey: ["put-to-work-funding", account, fundDollars],
+    staleTime: 15_000,
+    retry: false,
+    queryFn: async (): Promise<FundingSwap & { amountIn: bigint }> => {
+      const c = client as NonNullable<typeof client>;
+      const amountIn = await unitsForDollars(c, zeroAddress, 18, fundDollars);
+      if (amountIn + GAS_CUSHION > ether) {
+        throw new Error(
+          `Your wallet holds ${Number(formatEther(ether)).toFixed(5)} ETH; that swap plus gas needs more.`,
+        );
+      }
+      const plan = await planOneInchSwap(c, {
+        account: address as Address,
+        amountIn,
+        chainId: CHAIN_ID,
+        receiver: account as Address,
+        slippageBps: SLIPPAGE_BPS,
+        tokenIn: zeroAddress,
+        tokenOut: USDC,
+      });
+      const swap = plan.steps.find((s) => s.kind === "swap");
+      if (!swap) {
+        throw new Error("1inch returned no swap for that amount.");
+      }
+      return {
+        amountIn,
+        data: swap.transaction.data as `0x${string}`,
+        minAmountOut: plan.minAmountOut,
+        to: swap.transaction.to as Address,
+        value: swap.transaction.value,
+      };
+    },
+  });
+  const fundingOut = fundAsked ? (funding.data?.minAmountOut ?? 0n) : 0n;
+
   // What a fill may take: everything the account will hold once this batch has run. The working
   // side counts because a fill is covered out of the receipt, not only out of idle tokens.
-  const ceiling = wallet + idle + working;
+  const ceiling = wallet + idle + working + fundingOut;
 
   const reading = balances.isPending || venues.isPending;
-  const ready = Boolean(account && address && client) && ceiling > 0n;
+  const ready =
+    Boolean(account && address && client) &&
+    ceiling > 0n &&
+    (!fundAsked || Boolean(funding.data));
 
   async function run() {
-    if (!(client && account && address && ceiling > 0n)) {
+    if (!(client && account && address && factory !== null)) {
       throw new Error("There is nothing to put to work");
     }
 
-    // **Every market, and the read above is what makes that true.** This comment used to end
-    // "this batch permits every market, so by the time anyone can fill, the permits are on
-    // chain" — which is true and does not help: `SwapMandate.venues` is immutable, so permits
-    // landing later cannot add a venue to a mandate that named none. `readVenues` is passed
-    // `KNOWN_VENUES` above for exactly that reason.
-    const receipts = venues.data?.positions ?? [];
-    const byPool = new Map<string, SwapMandate["venues"][number]>();
-    for (const p of receipts) {
-      const key = p.pool.toLowerCase();
-      const existing = byPool.get(key) ?? {
-        pool: p.pool,
-        receipt0: zeroAddress as Address,
-        receipt1: zeroAddress as Address,
-        kind: p.sharePriced ? ReceiptKind.SharePriced : ReceiptKind.Rebasing,
-      };
-      if (p.asset.toLowerCase() === USDC.toLowerCase()) {
-        existing.receipt0 = p.receipt;
-      } else {
-        existing.receipt1 = p.receipt;
+    // The swap's calldata, fetched now rather than taken from the quote on screen: the router's
+    // route and `minReturn` are facts about one block, and the number the mandate is sized by has
+    // to be the one this batch enforces.
+    let fresh: FundingSwap | undefined;
+    if (fundAsked) {
+      const q = await funding.refetch();
+      if (!q.data) {
+        throw q.error ?? new Error("The funding swap could not be quoted.");
       }
-      byPool.set(key, existing);
+      fresh = q.data;
     }
-    const venueList = [...byPool.values()];
 
-    const mandate: SwapMandate = {
-      maker: account,
-      token0: USDC,
-      token1: WETH,
-      feeBps: FEE_BPS,
-      maxOut0: ceiling,
-      // Whatever the account holds of the other side. Naming more than that would be a ceiling the
-      // ledger cannot honour, which is a quote that reverts at fill time.
-      maxOut1: balances.data?.weth ?? 0n,
-      expiry: BigInt(Math.floor(Date.now() / 1000)) + LIFETIME_SECONDS,
-      agent: zeroAddress as Address,
+    const { mandate, calls } = putToWork({
+      account,
+      agent: HELICO_AGENT as Address,
+      app: mandateSwapAddress(ARBITRUM_ONE) as Address,
+      armed,
+      chainId: ARBITRUM_ONE,
+      factory: opened ? undefined : (factory ?? undefined),
+      funding: fresh,
+      idle,
+      markets: MARKETS,
+      now: BigInt(Math.floor(Date.now() / 1000)),
+      opened,
+      owner: address,
+      positions: venues.data?.positions ?? [],
       salt: `0x${Date.now().toString(16).padStart(64, "0")}` as `0x${string}`,
-      venues: venueList,
-    };
+      usdc: USDC,
+      wallet,
+      weth: WETH,
+      weth_: balances.data?.weth ?? 0n,
+      working,
+    });
 
     // The live contract's own hash, against the bytes about to be shipped. An encoding wrong by one
     // field ships successfully under a hash nobody looks up, so this is checked rather than trusted.
-    const app = mandateSwapAddress(ARBITRUM_ONE) as Address;
     const theirs = await client.readContract({
       abi: MANDATE_SWAP_ABI,
-      address: app,
+      address: mandateSwapAddress(ARBITRUM_ONE) as Address,
       args: [mandate],
       functionName: "mandateHash",
     });
@@ -273,27 +316,6 @@ export function PutToWorkCard({
       );
     }
 
-    const tokens: Address[] = [USDC, WETH];
-    const amounts: bigint[] = [ceiling, balances.data?.weth ?? 0n];
-    for (const v of venueList) {
-      for (const [receipt, cap] of [
-        [v.receipt0, ceiling],
-        [v.receipt1, balances.data?.weth ?? 0n],
-      ] as const) {
-        if (receipt !== zeroAddress) {
-          tokens.push(receipt as Address);
-          amounts.push(cap);
-        }
-      }
-    }
-    const setup = mandateSetupCalls(
-      ARBITRUM_ONE,
-      app,
-      mandate,
-      tokens,
-      amounts,
-    );
-
     send.sendCalls({
       // **All of it or none of it.** Without this the wallet may accept the batch and send the
       // calls as separate transactions: MetaMask showed "Includes 2 transactions" and one of them
@@ -301,73 +323,9 @@ export function PutToWorkCard({
       // `atomicRequired` makes the wallet either do it as one transaction or refuse, and a refusal
       // is something this card can say rather than a half-applied batch nobody is told about.
       forceAtomic: true,
-      calls: [
-        // `open` has no access control and returns the existing address rather than reverting, so
-        // this is skipped for the gas rather than for correctness.
-        ...(opened || !factory
-          ? []
-          : [
-              {
-                to: factory,
-                data: encodeFunctionData({
-                  abi: factoryAbi,
-                  functionName: "open",
-                  args: [address as Address],
-                }),
-              },
-            ]),
-        ...(armed
-          ? []
-          : [
-              {
-                to: account,
-                data: encodeFunctionData({
-                  abi: accountWriteAbi,
-                  functionName: "setAgent",
-                  args: [HELICO_AGENT as Address],
-                }),
-              },
-              ...MARKETS.map((m) => ({
-                to: account,
-                data: encodeFunctionData({
-                  abi: accountWriteAbi,
-                  functionName: "permitVenue",
-                  args: [m.pool as Address, true],
-                }),
-              })),
-            ]),
-        // The wallet's whole balance. "All my assets" is the request, and a number typed into a box
-        // is the thing this card exists to remove.
-        ...(wallet > 0n
-          ? [
-              {
-                to: USDC,
-                data: encodeFunctionData({
-                  abi: erc20Abi,
-                  functionName: "transfer",
-                  args: [account, wallet],
-                }),
-              },
-            ]
-          : []),
-        // The approvals and the ship, as the account. They go to **Aqua**, never to a Helico
-        // contract, and only for what is shipped: an allowance to our own contracts would be
-        // custody, would outlive the mandate, and would survive `dock`.
-        {
-          to: account,
-          data: encodeFunctionData({
-            abi: accountBatchAbi,
-            functionName: "executeBatch",
-            args: [
-              setup.map((c) => ({
-                target: c.to as Address,
-                value: 0n,
-                data: c.data as `0x${string}`,
-              })),
-            ],
-          }),
-        },
-      ],
+      // The calls themselves are data, built and tested in `lib/put-to-work.ts`: open, the funding
+      // swap when there is one, arm, move USDC in, and the approvals and ship as the account.
+      calls,
     });
   }
 
@@ -386,7 +344,7 @@ export function PutToWorkCard({
   // immutable, so money that arrived after one was shipped is not covered by it, and a second
   // ship is the honest way to cover it. With an empty wallet there is nothing to add and the
   // button says so rather than offering a duplicate under a fresh salt.
-  const addable = wallet > 0n;
+  const addable = wallet > 0n || fundAsked;
 
   return (
     <div
@@ -418,18 +376,45 @@ export function PutToWorkCard({
           }
         />
         <Line
-          done={!reading && wallet === 0n}
+          done={!reading && wallet === 0n && !fundAsked}
           label="Move your USDC in"
           detail={
             reading
               ? "reading your wallet…"
               : wallet > 0n
                 ? `${usdc(wallet)} USDC from your wallet`
-                : idle + working > 0n
-                  ? "already in"
-                  : "your wallet holds none"
+                : fundAsked
+                  ? funding.isPending
+                    ? "asking 1inch…"
+                    : funding.data
+                      ? `swap ${Number(formatEther(funding.data.amountIn)).toFixed(5)} ETH → at least ${usdc(funding.data.minAmountOut)} USDC into the account, via 1inch`
+                      : "1inch could not quote that"
+                  : idle + working > 0n
+                    ? "already in"
+                    : "your wallet holds none"
           }
         />
+        {/* **A wallet with ETH and no USDC is not a wallet with nothing.** The swap card would take
+            two presses to get here; this puts the swap in the same batch, ETH in as value and the
+            USDC delivered to the account by the router. Shown only when there is no USDC to move,
+            so the ordinary case reads exactly as it did. */}
+        {!reading && wallet === 0n && ether > GAS_CUSHION ? (
+          <div className="ml-5 flex items-center gap-2">
+            <span className="text-faint">or fund it from ETH:</span>
+            <span className="text-faint">$</span>
+            <Input
+              aria-label="Dollars of ETH to swap into the account"
+              className="h-6 w-16 border-line font-mono text-[11px]"
+              inputMode="decimal"
+              onChange={(e) => setFundDollars(e.target.value)}
+              placeholder="0"
+              value={fundDollars}
+            />
+            <span className="text-faint">
+              {`of ${Number(formatEther(ether)).toFixed(4)} ETH`}
+            </span>
+          </div>
+        ) : null}
         <Line
           done={already}
           label="Ship the position"
@@ -482,10 +467,15 @@ export function PutToWorkCard({
               "Execute"
             )}
           </Button>
-          {ceiling === 0n && !reading ? (
+          {ceiling === 0n && !reading && !fundAsked ? (
             <p className="mt-2 text-[11px] text-faint">
               Nothing to put to work yet. Your wallet and your account both hold
-              no USDC.
+              no USDC{ether > GAS_CUSHION ? ", but the wallet holds ETH" : ""}.
+            </p>
+          ) : null}
+          {fundAsked && funding.error ? (
+            <p className="mt-2 text-[11px] text-[#E5484D] leading-relaxed">
+              {funding.error.message.split("\n")[0]}
             </p>
           ) : null}
         </>

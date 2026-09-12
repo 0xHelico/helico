@@ -50,6 +50,11 @@ export type PlanOneInchSwapInput = {
   tokenOut: Address;
   amountIn: bigint;
   slippageBps: number;
+  /**
+   * Where the output goes when it is not the sender. The put-to-work batch swaps ETH straight into
+   * the Helico account it opens in the same batch, so nothing has to be moved afterwards.
+   */
+  receiver?: Address;
 };
 
 export async function planOneInchSwap(
@@ -109,6 +114,7 @@ export async function planOneInchSwap(
     chainId: input.chainId,
     dst,
     from: input.account,
+    receiver: input.receiver,
     skipSimulation: true,
     slippageBps: input.slippageBps,
     src,

@@ -2700,6 +2700,35 @@ READMEs.
   back — `Carried` with the new workflow id and the unchanged policy hash, `ReportProcessed`
   carrying the same execution id the CRE dashboard shows, `previewRedeem(743598) = 1487196`.
 
+### 2026-09-12 — One signature from ETH to a maker at work
+
+- **Done:** the put-to-work batch can fund itself from a swap. A wallet holding ETH and no USDC
+  types a dollar amount; the card quotes the 1inch route with `receiver` = the account, puts the
+  swap into the same EIP-5792 batch as `open`, `setAgent`, the permits and the ship, and sizes the
+  mandate by the quote's `minAmountOut`. The batch is now data — `lib/put-to-work.ts` — and the
+  card keeps only the `mandateHash` cross-check and the send. `swapTransaction` in the 1inch plugin
+  takes `receiver`; the proxy already forwarded the query string. Plan first:
+  `docs/plans/2026-09-12-one-signature-from-eth.md`; issue #487.
+
+- **AI's role:** Claude Opus 5 verified the one unknown before designing — that the swap API
+  honours `receiver`, measured with our key against Ghoza's wallet and its not-yet-opened account —
+  then wrote the lib, the tests, the card changes and the fork rehearsal. Ghoza asked for one
+  transaction and decided to build it the night before the deadline; rifky was told first in #487
+  because the card was his three times that day.
+
+- **Plan:** `docs/plans/2026-09-12-one-signature-from-eth.md`, committed before the code.
+
+- **Verified:** 5 tests on the batch's shape — today's batch unchanged call for call and with no
+  value anywhere; an armed account funding and shipping only; the funding case with the swap
+  second, the only `value` in the batch, no transfer, the ship inside `executeBatch` approving and
+  shipping exactly `minAmountOut` to Aqua with the mandate's bytes byte for byte; both sources at
+  once summing. Plugin test for the `receiver` query. `tsc` and biome clean, 134 app tests. Then a
+  fork of Arbitrum One: the eight calls sent in order from the impersonated wallet with real 1inch
+  calldata — `open` 346,594 gas, the swap 193,301 delivering 0.997226 USDC to the account, arm,
+  four permits, `executeBatch` 431,130 — and read back: code at the account, `agent()` the proxy,
+  four permits true, Aqua's ledger holding the mandate at `0.992008` = `minAmountOut`, the
+  allowance exactly that. 1,316,122 gas in all, about 0.00003 ETH.
+
 <!--
 Template for the next entry:
 

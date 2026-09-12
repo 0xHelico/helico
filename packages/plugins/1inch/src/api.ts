@@ -144,6 +144,13 @@ export async function swapTransaction(
 		/** In basis points, as the rest of this repository counts slippage. The API wants percent. */
 		slippageBps: number
 		skipSimulation?: boolean
+		/**
+		 * Who receives the output, when it is not `from`. Measured on 12 September with a real key:
+		 * the router's calldata then carries this address and the destination tokens land there —
+		 * an address with no code yet included, which is what lets a swap fund an account that
+		 * `open` creates in the same batch.
+		 */
+		receiver?: Address
 	},
 ): Promise<SwapTransaction> {
 	const slippage = q.slippageBps / 100
@@ -154,7 +161,8 @@ export async function swapTransaction(
 		f,
 		`/swap/v6.1/${q.chainId}/swap?src=${q.src}&dst=${q.dst}&amount=${q.amount}` +
 			`&from=${q.from}&origin=${q.from}&slippage=${slippage}` +
-			(q.skipSimulation ? '&disableEstimate=true' : ''),
+			(q.skipSimulation ? '&disableEstimate=true' : '') +
+			(q.receiver ? `&receiver=${q.receiver}` : ''),
 	)
 	return {
 		amountOut: BigInt(body.dstAmount),
