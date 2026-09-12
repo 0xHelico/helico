@@ -159,6 +159,10 @@ type fakeRPC struct {
 	headCalls int
 	timed     []uint64
 	timesErr  error
+	transfers []Event
+	xferErr   error
+	xferAsked [][2]uint64
+	xferToken string
 }
 
 func (f *fakeRPC) Head(context.Context) (uint64, error) {
@@ -168,6 +172,12 @@ func (f *fakeRPC) Head(context.Context) (uint64, error) {
 func (f *fakeRPC) Logs(_ context.Context, _ string, from, to uint64) ([]Event, error) {
 	f.asked = append(f.asked, [2]uint64{from, to})
 	return f.logs, f.logsErr
+}
+
+func (f *fakeRPC) Transfers(_ context.Context, token, _ string, from, to uint64) ([]Event, error) {
+	f.xferToken = token
+	f.xferAsked = append(f.xferAsked, [2]uint64{from, to})
+	return f.transfers, f.xferErr
 }
 
 func (f *fakeRPC) Times(_ context.Context, blocks []uint64) (map[uint64]uint64, error) {
@@ -327,5 +337,140 @@ func TestAMissingHeaderStillWritesTheEvent(t *testing.T) {
 	}
 	if got.Events[0].BlockTime != 0 {
 		t.Error("a date that could not be read should be zero, not invented")
+	}
+}
+
+// The real deposit, decoded from the USDC log at block 504019200: 0.500081 USDC arriving at the
+// account. Nothing a Helico contract emitted says this happened, which is the whole reason the
+// package reads transfers at all.
+func TestDecodesTheDepositThatFundedTheAccount(t *testing.T) {
+	e, ok := decodeTransfer(rawLog{
+		Address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+		Topics: []string{
+			TopicTransfer,
+			"0x0000000000000000000000003b4f0135465d444a5bd06ab90fc59b73916c85f5",
+			"0x0000000000000000000000000acdfa21a3cd075aee6583c8a8069f86ad3e4a39",
+		},
+		Data:        "0x000000000000000000000000000000000000000000000000000000000007a171",
+		BlockNumber: "0x1e0b0f40",
+		LogIndex:    "0x3",
+		TxHash:      "0x870fbb53190000000000000000000000000000000000000000000000000000000",
+	}, account)
+	if !ok {
+		t.Fatal("the deposit did not decode")
+	}
+	if e.Kind != KindIn {
+		t.Errorf("kind %s, want in", e.Kind)
+	}
+	if e.Amount != "500081" {
+		t.Errorf("amount %s, want 500081", e.Amount)
+	}
+	if e.Pool != "0x3b4f0135465d444a5bd06ab90fc59b73916c85f5" {
+		t.Errorf("counterparty %s, want the owner who funded it", e.Pool)
+	}
+	// Lower-cased like every other address here, or the token is two rows in one table.
+	if e.Asset != "0xaf88d065e77c8cc2239327c5edb3a432268e5831" {
+		t.Errorf("asset %s", e.Asset)
+	}
+}
+
+// The direction comes from the topics, not from which of the two queries returned the log. A
+// decoder that trusted the query would read every row as a deposit the moment the two were merged.
+func TestTheDirectionIsReadFromTheLogItself(t *testing.T) {
+	out, ok := decodeTransfer(rawLog{
+		Address: "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+		Topics: []string{
+			TopicTransfer,
+			"0x0000000000000000000000000acdfa21a3cd075aee6583c8a8069f86ad3e4a39",
+			"0x000000000000000000000000bba798a61f0d7d1ae51466fd4045cd2ea25c9a29",
+		},
+		Data:        "0x0000000000000000000000000000000000000000000000000000000000077a61",
+		BlockNumber: "0x1e0b4fa9",
+		LogIndex:    "0x5",
+		TxHash:      "0x0668c698cf3d396e622a97bfa3e21016de44fb41863fa7cb69b47bd126f9ed27",
+	}, account)
+	if !ok {
+		t.Fatal("the outgoing transfer did not decode")
+	}
+	if out.Kind != KindOut {
+		t.Errorf("kind %s, want out", out.Kind)
+	}
+	if out.Supplied {
+		t.Error("supplied is the incoming flag and this went the other way")
+	}
+
+	// An account paying itself moves nothing, and counted on both sides it is two rows for an
+	// event that did not happen to anyone's money.
+	me := "0x000000000000000000000000" + account[2:]
+	if _, ok := decodeTransfer(rawLog{
+		Address: "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+		Topics:  []string{TopicTransfer, me, me},
+		Data:    "0x0000000000000000000000000000000000000000000000000000000000000001",
+	}, account); ok {
+		t.Error("a self-transfer was counted")
+	}
+
+	// A log that is not a Transfer must not be read as one: the topic is shared by every ERC-20
+	// on the chain and the filter is the only thing keeping other contracts out.
+	if _, ok := decodeTransfer(rawLog{
+		Topics: []string{TopicIdleCapitalMoved, me, me},
+	}, account); ok {
+		t.Error("a non-transfer decoded as a transfer")
+	}
+}
+
+// The transfers are scanned over the same range as the account's own events, and stored under the
+// same cursor. A second range would be a second watermark to keep in step, and the one that fell
+// behind would drop rows for ever.
+func TestTransfersShareTheScanAndTheCursor(t *testing.T) {
+	store := &fakeStore{}
+	rpc := &fakeRPC{
+		head:      600,
+		logs:      []Event{{Block: 500, Kind: KindMoved}},
+		transfers: []Event{{Block: 400, Kind: KindIn, Amount: "500081"}},
+	}
+	s := NewService(store, rpc, 100, time.Minute, 50)
+	s.now = func() time.Time { return time.Unix(10_000, 0) }
+
+	if _, err := s.For(context.Background(), account); err != nil {
+		t.Fatal(err)
+	}
+	if len(rpc.xferAsked) != 1 || rpc.xferAsked[0] != [2]uint64{100, 600} {
+		t.Errorf("transfers were scanned over %v, want the same range as the events", rpc.xferAsked)
+	}
+	if rpc.xferToken != USDC {
+		t.Errorf("scanned %s, want USDC", rpc.xferToken)
+	}
+	if len(store.rows) != 2 {
+		t.Fatalf("stored %d rows, want the move and the deposit", len(store.rows))
+	}
+	// Both blocks get a header, or half the series has no date to be plotted at.
+	if len(rpc.timed) != 2 {
+		t.Errorf("timed %v, want a header for each block that carries an event", rpc.timed)
+	}
+}
+
+// **Neither half is saved without the other.** The cursor moves past everything the scan covered,
+// so writing the account's events while the transfers failed would put that range out of reach and
+// leave the deposit missing for ever, with nothing to say it had gone.
+func TestAFailedTransferScanSavesNothing(t *testing.T) {
+	store := &fakeStore{}
+	rpc := &fakeRPC{
+		head:    600,
+		logs:    []Event{{Block: 500, Kind: KindMoved}},
+		xferErr: errors.New("the endpoint would not say"),
+	}
+	s := NewService(store, rpc, 100, time.Minute, 50)
+	s.now = func() time.Time { return time.Unix(10_000, 0) }
+
+	got, err := s.For(context.Background(), account)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Fetched {
+		t.Error("nothing was fetched: the scan failed")
+	}
+	if len(store.rows) != 0 || store.readTo != 0 {
+		t.Errorf("stored %d rows and moved the cursor to %d", len(store.rows), store.readTo)
 	}
 }

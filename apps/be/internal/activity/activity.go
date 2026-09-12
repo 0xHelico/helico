@@ -35,6 +35,13 @@ const (
 	TopicIdleCapitalMoved = "0x31b0a7503f02d1d00b2290939640f339abd3c47aa9e41dd6fcc7fa17f2d3cad3"
 	TopicAgentChanged     = "0x4a2e63eb36ad3c667a1d8d1b18dfbf37d06f96b46b82b526a855175916515add"
 	TopicVenuePermitted   = "0xdae93fbd597062922eea00db27bacf375a602e285a1a9eb57639838a5ac75182"
+
+	// TopicTransfer is ERC-20's, and it is here because the account's own events do not say where
+	// its money came from. `IdleCapitalMoved` covers what the agent did with capital already held;
+	// the owner funding the account is a plain token transfer that emits nothing on our side. A
+	// value line built from our events alone would start at whatever the agent first moved and
+	// would never show the deposit that made it possible.
+	TopicTransfer = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
 )
 
 // Kind names an event without repeating its topic downstream.
@@ -45,6 +52,11 @@ const (
 	KindAgent   Kind = "agent"
 	KindVenue   Kind = "venue"
 	KindUnknown Kind = "unknown"
+	// KindIn and KindOut are token transfers with the account on one end. Two kinds rather than one
+	// with a flag, because the direction is the whole of what they say and a reader that forgot to
+	// check the flag would read a withdrawal as a deposit.
+	KindIn  Kind = "in"
+	KindOut Kind = "out"
 )
 
 // Event is one thing the account did. The fields are the log's, not a sentence about it.
@@ -89,6 +101,8 @@ func Normalise(address string) (string, error) {
 // Reader fetches logs. Small enough that a test hands over a struct instead of a server.
 type Reader interface {
 	Logs(ctx context.Context, address string, from, to uint64) ([]Event, error)
+	// Transfers answers the token's movements with account on either end, both directions.
+	Transfers(ctx context.Context, token, account string, from, to uint64) ([]Event, error)
 	Head(ctx context.Context) (uint64, error)
 	// Times answers the timestamp of each block named, skipping any it cannot.
 	Times(ctx context.Context, blocks []uint64) (map[uint64]uint64, error)
@@ -194,6 +208,37 @@ func (c *RPC) Logs(ctx context.Context, address string, from, to uint64) ([]Even
 	return events, nil
 }
 
+// Transfers returns the token's movements with account on one end, in both directions.
+//
+// Two queries rather than one, because `eth_getLogs` ands its topic positions: `from` and `to` are
+// separate indexed parameters, and a single filter naming the account in both positions matches
+// only a transfer from the account to itself. Each query is narrow at the node, since both the
+// contract and an indexed party are pinned.
+func (c *RPC) Transfers(ctx context.Context, token, account string, from, to uint64) ([]Event, error) {
+	padded := "0x000000000000000000000000" + strings.TrimPrefix(strings.ToLower(account), "0x")
+	events := make([]Event, 0, 8)
+	for _, topics := range [][]any{
+		{TopicTransfer, nil, padded},
+		{TopicTransfer, padded, nil},
+	} {
+		var raw []rawLog
+		if err := c.call(ctx, "eth_getLogs", []any{map[string]any{
+			"address":   token,
+			"fromBlock": "0x" + strconv.FormatUint(from, 16),
+			"toBlock":   "0x" + strconv.FormatUint(to, 16),
+			"topics":    topics,
+		}}, &raw); err != nil {
+			return nil, err
+		}
+		for _, l := range raw {
+			if e, ok := decodeTransfer(l, account); ok {
+				events = append(events, e)
+			}
+		}
+	}
+	return events, nil
+}
+
 // Times reads one block header per number, which is the only way to get a log's timestamp:
 // `eth_getLogs` does not carry one. Called once per block ever, because the answer is immutable
 // and the row it fills is written to the database beside the event.
@@ -283,6 +328,49 @@ func decode(l rawLog) (Event, bool) {
 		e.Kind = KindVenue
 		e.Pool = addressFromWord(strings.TrimPrefix(l.Topics[1], "0x"))
 		e.Allowed = strings.HasSuffix(word(l.Data, 0), "1")
+	default:
+		return Event{}, false
+	}
+	return e, true
+}
+
+// decodeTransfer turns one ERC-20 `Transfer` into an Event, from the account's point of view.
+//
+// The direction is read from the topics rather than taken from which query returned the log, so a
+// row cannot claim a direction the chain does not carry. A transfer from the account to itself is
+// dropped: it moves nothing, and counted on both sides it would net to zero anyway while putting
+// two rows in front of a reader for an event that did not happen to their money.
+func decodeTransfer(l rawLog, account string) (Event, bool) {
+	if len(l.Topics) != 3 || !strings.EqualFold(l.Topics[0], TopicTransfer) {
+		return Event{}, false
+	}
+	block, err := parseHex(l.BlockNumber)
+	if err != nil {
+		return Event{}, false
+	}
+	index, err := parseHex(l.LogIndex)
+	if err != nil {
+		return Event{}, false
+	}
+	amount, ok := new(big.Int).SetString(strings.TrimPrefix(strings.ToLower(l.Data), "0x"), 16)
+	if !ok {
+		return Event{}, false
+	}
+	from := addressFromWord(strings.TrimPrefix(l.Topics[1], "0x"))
+	to := addressFromWord(strings.TrimPrefix(l.Topics[2], "0x"))
+	me := strings.ToLower(account)
+	e := Event{
+		Block:    block,
+		LogIndex: index,
+		Tx:       strings.ToLower(l.TxHash),
+		Asset:    strings.ToLower(l.Address),
+		Amount:   amount.String(),
+	}
+	switch {
+	case to == me && from != me:
+		e.Kind, e.Pool, e.Supplied = KindIn, from, true
+	case from == me && to != me:
+		e.Kind, e.Pool = KindOut, to
 	default:
 		return Event{}, false
 	}
