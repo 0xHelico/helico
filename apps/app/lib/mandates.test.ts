@@ -111,9 +111,13 @@ describe("has this maker already shipped", () => {
 });
 
 /**
- * `HelicoMandateSwap` went behind a proxy on 10 September and this table stayed on the address
- * before it, so the mandate shipped on the 12th rendered as a hex prefix in the panel whose job
- * is naming it. The name now comes from `@helico/plugin-1inch`, and this asserts the two agree.
+ * The table named a **superseded** `HelicoMandateSwap` — `docs/deployments.md:748` records it and
+ * `:688` says the current pair supersedes it — so the mandate shipped on the 12th rendered as a
+ * hex prefix in the panel whose job is naming it. The name now comes from
+ * `@helico/plugin-1inch`, and this asserts the two agree.
+ *
+ * The second test is the one that matters on a superseded address: it is still on chain and still
+ * ours, so "is it deployed" cannot be the question. "Is it the one to ship to" is.
  */
 describe("naming an Aqua app", () => {
   test("the live HelicoMandateSwap is named, not shown as hex", () => {

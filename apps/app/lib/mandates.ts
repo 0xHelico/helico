@@ -349,11 +349,20 @@ const isBase = (token: string) => BASE.has(token.toLowerCase());
  * the mistake this file avoids everywhere else.
  *
  * **`HelicoMandateSwap` is asked for rather than written down, and that is the whole point.** It
- * used to be the literal `0xa16d3138…`, which is an address that appears nowhere in
- * `docs/deployments.md` — the app went behind a proxy on 10 September and this copy stayed on the
- * one before it. The live mandate shipped on 12 September therefore rendered as a hex prefix in
- * the panel whose entire job is naming it. An address with a source should be read from the
- * source; `@helico/plugin-1inch` is the source, and it is the same call the card that ships makes.
+ * used to be the literal `0xA16D3138…`, a **superseded** deployment — `docs/deployments.md:748`
+ * records it, verified, and `:688` says the current pair supersedes it because it predates
+ * `ReceiptKind` and cannot take a mandate carrying today's `Venue`. So this table named a
+ * contract that is on chain, was ours, and can no longer be shipped to, and the live mandate of
+ * 12 September rendered as a hex prefix in the panel whose entire job is naming it.
+ *
+ * An address with a source should be read from the source. `@helico/plugin-1inch` is the source,
+ * and it is the same call the card that ships makes.
+ *
+ * **This comment first said that address appeared nowhere in `docs/deployments.md`, and that was
+ * false.** The record has it three times, checksummed; the grep behind the claim was
+ * case-sensitive against a lower-cased literal, so it could not have found it and would have
+ * printed the same nothing whether or not the address was there. The fix was right and the reason
+ * given for it was not, which is the more dangerous of the two to leave lying around.
  */
 const APPS: Record<string, string> = {
   [mandateSwapAddress(ARBITRUM_ONE).toLowerCase()]: "HelicoMandateSwap",
