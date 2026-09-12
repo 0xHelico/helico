@@ -193,16 +193,21 @@ export function Chat({ conversationId }: { conversationId?: string }) {
         const cards: Card[] | undefined = Array.isArray(body.cards)
           ? body.cards
           : undefined;
+        // An earn that carries an intent is "swap this first, then put it all to work" — one card,
+        // one signature — so the swap is stored beside the action rather than as a swap of its own,
+        // which would draw a swap card for a sentence that asked for more than a swap.
         const produced =
-          body.intent ??
-          (body.action === "status" ||
-          body.action === "revoke" ||
-          body.action === "withdraw" ||
-          body.action === "earn" ||
-          body.action === "deposit" ||
-          body.action === "provide"
-            ? { action: body.action }
-            : null);
+          body.action === "earn" && body.intent
+            ? { action: "earn" as const, fund: body.intent }
+            : (body.intent ??
+              (body.action === "status" ||
+              body.action === "revoke" ||
+              body.action === "withdraw" ||
+              body.action === "earn" ||
+              body.action === "deposit" ||
+              body.action === "provide"
+                ? { action: body.action }
+                : null));
         const result: TurnResult | null =
           produced || steps || cards
             ? ({
@@ -347,7 +352,10 @@ export function Chat({ conversationId }: { conversationId?: string }) {
                         <ProvideCard />
                       </>
                     ) : (
-                      <MandateCard action={turn.intent.action} />
+                      <MandateCard
+                        action={turn.intent.action}
+                        fund={turn.intent.fund}
+                      />
                     )
                   ) : null}
                 </Turn>

@@ -22,8 +22,8 @@ import { accountWriteAbi, factoryAbi } from "@/lib/account";
  * without a wallet, a chain or a browser. The card keeps the two things that need a chain: the
  * `mandateHash` cross-check against the live contract, and the send.
  *
- * **One optional call funds the rest.** A wallet holding ETH and no USDC can put a 1inch swap into
- * the batch, with the account as `receiver`: ETH goes in as `value`, USDC lands in the account —
+ * **One optional swap funds the rest.** When the sentence asked to swap first, a 1inch swap goes
+ * into the batch with the account as `receiver`: ETH goes in as `value`, USDC lands in the account —
  * an address `open` creates in the same batch, and an ERC-20 transfer to a CREATE2 address with no
  * code yet is an ordinary transfer — and the mandate is sized by the quote's `minAmountOut`, the
  * floor 1inch's own calldata enforces. Whatever lands above it is idle in the account, and the
@@ -51,10 +51,11 @@ export type Position = {
 
 /** A swap the batch carries to fund the account, already planned against the 1inch API. */
 export type FundingSwap = {
-  /** The router call, ETH in as `value`, output to the account. */
-  to: Address;
-  data: Hex;
-  value: bigint;
+  /**
+   * From the wallet, in order: the approval when the token needs one, then the router call —
+   * ETH in as `value` when the token is ether — with the account as the swap's receiver.
+   */
+  calls: Call[];
   /** What the router will refuse to deliver less than — the number the mandate is sized by. */
   minAmountOut: bigint;
 };
@@ -182,15 +183,7 @@ export function putToWork(input: PutToWorkInput): PutToWork {
         ]),
     // The funding swap, straight after `open` so the account exists when the USDC arrives — not
     // required, since a transfer to a code-less address succeeds, but the order a reader expects.
-    ...(input.funding
-      ? [
-          {
-            to: input.funding.to,
-            data: input.funding.data,
-            value: input.funding.value,
-          },
-        ]
-      : []),
+    ...(input.funding?.calls ?? []),
     ...(input.armed
       ? []
       : [

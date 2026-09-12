@@ -9,13 +9,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Check, Loader2 } from "lucide-react";
 import { useState } from "react";
-import {
-  type Address,
-  erc20Abi,
-  formatEther,
-  formatUnits,
-  zeroAddress,
-} from "viem";
+import { type Address, erc20Abi, formatUnits, zeroAddress } from "viem";
 import {
   useAccount,
   useCapabilities,
@@ -26,7 +20,6 @@ import {
 
 import { FundAccount } from "@/components/fund-account";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { CHAIN_ID, useAccountState } from "@/hooks/use-account-state";
 import {
   ACCOUNT_TOKENS,
@@ -35,6 +28,7 @@ import {
   hasAgent,
 } from "@/lib/account";
 import { explorerTx, SLIPPAGE_BPS } from "@/lib/chain";
+import type { Intent } from "@/lib/intent";
 import { readMandates, shipped } from "@/lib/mandates";
 import { planOneInchSwap } from "@/lib/oneinch-swap";
 import { type FundingSwap, putToWork } from "@/lib/put-to-work";
@@ -75,12 +69,15 @@ const usdc = (v: bigint) =>
  * A wallet without EIP-5792 is told so and pointed at the controls that do the same job one
  * transaction at a time. That is not a failure and is not dressed as one.
  *
- * **A wallet holding ETH and no USDC funds the batch from a swap.** The 1inch router takes ETH as
- * `value` and, with `receiver` set, delivers the USDC to the account the same batch opens — an
- * ERC-20 transfer to a CREATE2 address with no code yet is an ordinary transfer. The mandate is
- * sized by the quote's `minAmountOut`, the floor the router's own calldata enforces, and whatever
- * lands above it is idle in the account for the enclave's next run. The calldata is fetched again
- * at press time: a quote is a fact about one block, not a plan.
+ * **The sentence can say "swap this first".** "Swap $1 of ETH to USDC and put it all to work" is
+ * read by the backend as earn with a checked swap beside it, and that swap arrives here as `fund`:
+ * the 1inch router takes ETH as `value` and, with `receiver` set, delivers the USDC to the account
+ * the same batch opens — an ERC-20 transfer to a CREATE2 address with no code yet is an ordinary
+ * transfer. The mandate is sized by the quote's `minAmountOut`, the floor the router's own calldata
+ * enforces, and whatever lands above it is idle in the account for the enclave's next run. The
+ * calldata is fetched again at press time: a quote is a fact about one block, not a plan. Without
+ * `fund` the card never swaps — a press that said "put to work" and quietly swapped would be a
+ * different request than the one made.
  *
  * **The last line of the breakdown is not in the batch, and says so.** This press ships and funds;
  * the supplying is the enclave's, on its next run, into whichever market pays most. The reason it
@@ -91,8 +88,11 @@ const usdc = (v: bigint) =>
 export function PutToWorkCard({
   /** Without its own border, for when it sits inside another card. */
   plain = false,
+  /** The swap the sentence asked for first, to carry in the same batch. */
+  fund,
 }: {
   plain?: boolean;
+  fund?: Intent;
 } = {}) {
   const { address, isConnected } = useAccount();
   const client = usePublicClient({ chainId: CHAIN_ID });
@@ -212,21 +212,44 @@ export function PutToWorkCard({
     0n,
   );
 
-  // Dollars of ETH to swap into the account inside the batch. Offered when the wallet holds no
-  // USDC, which is the wallet this exists for; a wallet holding USDC funds from that.
-  const [fundDollars, setFundDollars] = useState("");
-  const fundAsked = wallet === 0n && Number(fundDollars) > 0;
+  // The swap the sentence asked for, quoted against 1inch with the account as receiver. The
+  // amount is sized here from the feed when the sentence said dollars, the same way the swap card
+  // sizes one; the wallet's own balance is checked before a quote is asked for, so a wallet that
+  // cannot pay is told so in a sentence rather than by a reverted batch.
+  const fundAsked = Boolean(fund);
   const funding = useQuery({
     enabled: fundAsked && Boolean(account && address && client),
-    queryKey: ["put-to-work-funding", account, fundDollars],
+    queryKey: [
+      "put-to-work-funding",
+      account,
+      fund?.tokenIn.address,
+      fund?.amountUsd ?? fund?.amountInWei,
+    ],
     staleTime: 15_000,
     retry: false,
     queryFn: async (): Promise<FundingSwap & { amountIn: bigint }> => {
       const c = client as NonNullable<typeof client>;
-      const amountIn = await unitsForDollars(c, zeroAddress, 18, fundDollars);
-      if (amountIn + GAS_CUSHION > ether) {
+      const f = fund as Intent;
+      const native = f.tokenIn.address === zeroAddress;
+      const amountIn = f.amountUsd
+        ? await unitsForDollars(
+            c,
+            f.tokenIn.address,
+            f.tokenIn.decimals,
+            f.amountUsd,
+          )
+        : BigInt(f.amountInWei);
+      const held = native
+        ? ether
+        : await c.readContract({
+            abi: erc20Abi,
+            address: f.tokenIn.address,
+            args: [address as Address],
+            functionName: "balanceOf",
+          });
+      if (held < amountIn + (native ? GAS_CUSHION : 0n)) {
         throw new Error(
-          `Your wallet holds ${Number(formatEther(ether)).toFixed(5)} ETH; that swap plus gas needs more.`,
+          `Your wallet holds ${Number(formatUnits(held, f.tokenIn.decimals)).toFixed(5)} ${f.tokenIn.symbol}; that swap${native ? " plus gas" : ""} needs more.`,
         );
       }
       const plan = await planOneInchSwap(c, {
@@ -235,19 +258,21 @@ export function PutToWorkCard({
         chainId: CHAIN_ID,
         receiver: account as Address,
         slippageBps: SLIPPAGE_BPS,
-        tokenIn: zeroAddress,
+        tokenIn: f.tokenIn.address,
         tokenOut: USDC,
       });
-      const swap = plan.steps.find((s) => s.kind === "swap");
-      if (!swap) {
+      if (!plan.steps.some((s) => s.kind === "swap")) {
         throw new Error("1inch returned no swap for that amount.");
       }
       return {
         amountIn,
-        data: swap.transaction.data as `0x${string}`,
+        // The approval when the token needs one, then the swap — from the wallet, in the batch.
+        calls: plan.steps.map((s) => ({
+          data: s.transaction.data as `0x${string}`,
+          to: s.transaction.to as Address,
+          value: s.transaction.value,
+        })),
         minAmountOut: plan.minAmountOut,
-        to: swap.transaction.to as Address,
-        value: swap.transaction.value,
       };
     },
   });
@@ -375,8 +400,23 @@ export function PutToWorkCard({
               : `name the agent, allow ${MARKETS.length} markets`
           }
         />
+        {/* The swap the sentence asked for, first, because it is what funds the rest. Only when
+            the sentence asked: a card that said "put to work" and swapped would be doing a
+            different thing than the one requested. */}
+        {fund ? (
+          <Line
+            label={`Swap ${fund.amountUsd ? `$${fund.amountUsd} of ` : `${fund.amountIn} `}${fund.tokenIn.symbol} into USDC`}
+            detail={
+              funding.isPending
+                ? "asking 1inch…"
+                : funding.data
+                  ? `${Number(formatUnits(funding.data.amountIn, fund.tokenIn.decimals)).toFixed(fund.tokenIn.decimals === 18 ? 5 : 2)} ${fund.tokenIn.symbol} → at least ${usdc(funding.data.minAmountOut)} USDC, delivered to the account by 1inch`
+                  : "1inch could not quote that"
+            }
+          />
+        ) : null}
         <Line
-          done={!reading && wallet === 0n && !fundAsked}
+          done={!reading && wallet === 0n}
           label="Move your USDC in"
           detail={
             reading
@@ -384,37 +424,12 @@ export function PutToWorkCard({
               : wallet > 0n
                 ? `${usdc(wallet)} USDC from your wallet`
                 : fundAsked
-                  ? funding.isPending
-                    ? "asking 1inch…"
-                    : funding.data
-                      ? `swap ${Number(formatEther(funding.data.amountIn)).toFixed(5)} ETH → at least ${usdc(funding.data.minAmountOut)} USDC into the account, via 1inch`
-                      : "1inch could not quote that"
+                  ? "none in your wallet; the swap above funds it"
                   : idle + working > 0n
                     ? "already in"
                     : "your wallet holds none"
           }
         />
-        {/* **A wallet with ETH and no USDC is not a wallet with nothing.** The swap card would take
-            two presses to get here; this puts the swap in the same batch, ETH in as value and the
-            USDC delivered to the account by the router. Shown only when there is no USDC to move,
-            so the ordinary case reads exactly as it did. */}
-        {!reading && wallet === 0n && ether > GAS_CUSHION ? (
-          <div className="ml-5 flex items-center gap-2">
-            <span className="text-faint">or fund it from ETH:</span>
-            <span className="text-faint">$</span>
-            <Input
-              aria-label="Dollars of ETH to swap into the account"
-              className="h-6 w-16 border-line font-mono text-[11px]"
-              inputMode="decimal"
-              onChange={(e) => setFundDollars(e.target.value)}
-              placeholder="0"
-              value={fundDollars}
-            />
-            <span className="text-faint">
-              {`of ${Number(formatEther(ether)).toFixed(4)} ETH`}
-            </span>
-          </div>
-        ) : null}
         <Line
           done={already}
           label="Ship the position"
@@ -470,7 +485,10 @@ export function PutToWorkCard({
           {ceiling === 0n && !reading && !fundAsked ? (
             <p className="mt-2 text-[11px] text-faint">
               Nothing to put to work yet. Your wallet and your account both hold
-              no USDC{ether > GAS_CUSHION ? ", but the wallet holds ETH" : ""}.
+              no USDC.
+              {ether > GAS_CUSHION
+                ? ' Your wallet holds ETH: say "swap $1 of ETH to USDC and put it all to work" and it happens in one signature.'
+                : ""}
             </p>
           ) : null}
           {fundAsked && funding.error ? (
