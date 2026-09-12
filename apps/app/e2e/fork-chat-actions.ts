@@ -45,6 +45,7 @@ import {
 } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { arbitrum } from "viem/chains";
+import { HELICO_AGENT } from "../lib/account";
 
 const APP = process.env.APP_URL ?? "http://localhost:3000";
 const FORK = "http://127.0.0.1:8545";
@@ -54,7 +55,9 @@ const FACTORY = "0x01CC7d9FE8da79B61bcc5d3f7e3f0433DCE7E081" as const;
 const USDC_WHALE = "0x47c031236e19d024b42f8AE6780E44A573170703" as const;
 const WETH_WHALE = "0xe50fA9b3c56FfB159cB0FCA61F5c9D750e8128c8" as const;
 const ETH_USD = "0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612" as const;
-const AGENT = "0x84C3891a9693c891877aC474a90d17d29075fcAf" as const;
+// The address the app nominates, read from the app rather than restated: since 11 September
+// it is the `HelicoAgent` contract, and a copy here is exactly what went stale last time.
+const AGENT = HELICO_AGENT;
 
 const erc20 = parseAbi([
   "function transfer(address,uint256) returns (bool)",
