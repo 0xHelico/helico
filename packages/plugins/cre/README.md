@@ -113,7 +113,9 @@ await runner.run(initWorkflow)
 
 `pools` is a non-empty list with no repeats; a list of one behaves as the single-market
 configuration did. Leave `subgraphUrl` empty to skip the buffer step, exactly as an empty `aiUrl`
-skips the model. `secrets.yaml` declares one Vault DON secret, `HELICO_VAULT`, a JSON document
+skips the model. `coveringApps` lists the Aqua apps whose mandates settle out of a lending venue
+(`HelicoMandateSwap` does, through `_cover`) and so do not raise the liquid floor; a SwapVM
+mandate pulls the asset from the wallet and keeps raising it. Empty means every mandate counts. `secrets.yaml` declares one Vault DON secret, `HELICO_VAULT`, a JSON document
 that carries the `IDLE_*` policy values, `AGENT_KEY` (read only in signature mode) and the model
 credentials, the DON answers one retrieval per execution, so they travel as one.
 

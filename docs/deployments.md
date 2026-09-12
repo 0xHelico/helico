@@ -4,6 +4,97 @@ Arbitrum One, chain id 42161. Every address below was read back from the chain a
 broadcast, not copied from a script's output — the third column is what the contract answers when
 asked about itself.
 
+## 12 September 2026, 16:35 UTC — the enclave learns which mandates the wallet does not owe
+
+The section below records the withdrawal and ends on *"the one link that is not measured"* —
+whether the 13:55 run withdrew because of the mandate buffer or a rate floor. Measured now, and
+then changed, and then the network put the capital back to work with the mandate still live.
+
+### The link, measured
+
+The decision is pure, so it replays. `decideIdleMove` and `withMandateBuffer` from the plugin,
+the production policy from `apps/cre/.env`, the production subgraph's answer to the exact
+`MANDATE_DEMAND` the enclave sends (`{"balances":[{"amount":"1497196","tokensCount":7}]}`), and
+the balances one block before the withdrawal, reconstructed from USDC `Transfer` logs
+(`10000` left after the first move + `997038` funded at block 504,414,589):
+
+```
+idle 1,007,038 · Morpho 490,158 · total 1,497,196
+buffer 10,000 → 1,497,196 (1 live Aqua balance could demand 1,497,196)
+wantIdle 1,497,196 · wantWorking 0 · delta −490,158
+
+verdict WITHOUT the mandate:   supply   997,038 to Morpho
+verdict WITH the mandate:      withdraw 490,158 from Morpho      ← the transaction
+```
+
+A rate floor cannot have been it: the production policy's `minSupplyRateRay` is `0`. The
+withdrawal was the mandate buffer, to the unit, and nothing else.
+
+### Why that was the wrong answer for this mandate, and right for every SwapVM one
+
+The floor exists for mandates that pull the asset out of the wallet. A SwapVM position does —
+`Aqua.pull` on USDC itself — so USDC in Morpho is USDC a fill cannot reach. `HelicoMandateSwap`
+does not: `_cover` (`contracts/src/HelicoMandateSwap.sol:276`) pulls the venue **receipt** through
+Aqua and withdraws the deficit from the venue inside the same swap, which is what the aUSDC,
+Compound and Morpho lines on the shipped mandate permit. For a mandate on this app, capital in a
+venue is takeable. The enclave summed every active mandate of the maker whatever app it was on,
+so it read the account's own product as a claim on the wallet and emptied Morpho to honour it.
+
+### The change, and the deploy
+
+`coveringApps` in the workflow config — apps whose mandates settle out of a venue and so do not
+raise the floor. Production names `HelicoMandateSwap`. With entries, the enclave sends
+`MANDATE_DEMAND_EXCLUDING` (`mandate_: { …, app_not_in: $coveringApps }`); with none, the query
+it always sent. **Never `app_not_in: []`**: measured on the live subgraph, an empty list matches
+nothing and would leave every maker's floor at the owner's minimum. Plan, tests and the
+measurements: PR #479 and `docs/plans/2026-09-12-a-mandate-our-app-can-cover-is-not-a-claim-on-the-wallet.md`.
+Simulated first against the live chain with the production target:
+`SUPPLY 1487196 to 0xbba798a6… [buffer 10000: policy floor 10000, 0 live Aqua balances could demand 0]`.
+
+```
+name          helico-production      (updated, not re-registered)
+workflow id   00fa897bf0b15b8f108f18499ec76ed0817ffac1a06fac02d6e2a8814339b14c
+binary hash   d0982dc299545b9c4a1967a6412d54a7977e0967cdcc759c0c0880d893b2316e
+config hash   e94aac65f90eff78f4e53080a8a77e1fb48013f6c1ed264ca0d9cf4dbaf70050
+tx            0x41d8145056995bf8b81a5035b45df9cdf5e8e5c16aa96d95a472e13ff5793dff
+              block 25,962,543 on Ethereum mainnet, 117,678 gas, status 1
+deployer      0x6DCd7485…439E
+```
+
+The config hash is `sha256` of `apps/cre/workflow/config.production.json` at commit `3d1902d`,
+byte for byte. The secrets did not change, so `policyHash` did not: the third move below carries
+the same `0x84e5626f…` as the first two.
+
+### The third move, 16:35 UTC — the mandate is live and the capital is at work
+
+The run at 16:30:02 still ran the previous build (the deploy landed in the same second). The next
+one, execution `b00b1e7c…` at 16:35:01, ran the new id and carried this:
+
+```
+tx            0x0beffeee97ad8a0f11e19af59e763394d4838440796967357ef578299e1d3435
+              block 504,453,076 on Arbitrum One, 16:35:20 UTC, status 1, 917,167 gas at 0.02007 gwei
+from          0xf0ecfbfcfe3b42d84abc2fcbd45b26f303b7641f   a third DON transmitter — three
+                                                           moves, three different nodes
+to            0xF8344CFd…4482                             KeystoneForwarder
+```
+
+| Log | Says |
+|---|---|
+| `HelicoAccount.IdleCapitalMoved` | pool `0xBBa798A6…` (Morpho), USDC, `1487196`, supplied |
+| `HelicoAgent.Carried` | the same move, policy hash `0x84e5626f…` (unchanged), workflow id `0x00fa897b…` — the new build, and the id the registry now holds |
+| `KeystoneForwarder.ReportProcessed` | receiver `0x98c3…4463`, execution id `0xb00b1e7c…` — the same id `cre execution list` shows for the 16:35 run — report id `0x0007`, `success = true` |
+
+Balances after: `USDC 10000`, `hmUSDC 743598` shares, which `previewRedeem` values at
+`1487196` USDC. The mandate on Aqua is unchanged: still active, still `1497196` on USDC and on
+each receipt. So the sentence the product is built on is now on chain in full: **the mandate is
+live and the money behind it is earning**, and the agent that put it there is a contract fed by
+the DON, three transmitters deep.
+
+**Sayable:** three moves, three transmitters, one policy hash; the withdrawal was the enclave
+being more careful than the app needed, and the fix was teaching it which app covers from a venue.
+**Not sayable:** that the mandate is fillable — the section below on `DegenerateReserves` still
+holds, and a one-sided mandate on this app still prices nothing.
+
 ## 12 September 2026 — the network took it back out, and it came back with more
 
 Yesterday's entry ends by saying the enclave *"has nothing to do until the balance, the rates, or

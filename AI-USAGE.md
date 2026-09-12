@@ -2666,6 +2666,40 @@ READMEs.
   seconds. Not yet verified, because it cannot be until the subgraph is published to the
   network: the same loop against Helico's own subgraph.
 
+### 2026-09-12 — A mandate our app can cover does not raise the liquid floor
+
+- **Done:** the enclave withdrew the whole Morpho position one minute after a mandate was
+  shipped on `HelicoMandateSwap`, because it summed every active mandate of the maker as a claim
+  on the wallet. For a SwapVM mandate that is right; for our app, which settles a fill out of the
+  venue inside the swap, it reversed the product's own thesis. `coveringApps` in the workflow
+  config names the apps whose mandates do not raise the floor; the demand query excludes them
+  with `app_not_in`, and only when the list is non-empty, because an empty `app_not_in` matches
+  nothing. Deployed at 16:30 UTC; the 16:35 run supplied `1487196` back to Morpho with the
+  mandate live (`0x0beffeee…`). Plan first:
+  `docs/plans/2026-09-12-a-mandate-our-app-can-cover-is-not-a-claim-on-the-wallet.md`.
+
+- **AI's role:** Claude Opus 5 replayed the 13:55 decision offline with the plugin's pure
+  functions, the production policy and the production subgraph's answer, which is what turned
+  "why did it withdraw?" from a guess into `withdraw 490158` to the unit and `supply 997038`
+  without the mandate; read `_cover` to confirm the app pays from the venue; measured the
+  subgraph's `app_not_in` behaviour including the empty-list trap; wrote the change, the tests,
+  the config, the docs, and simulated the new build against the live chain. Ghoza asked the
+  question that started it — *"shouldn't the money still be working in the venue after the
+  mandate is shipped?"* — decided to fix it 24 hours before the deadline, and ran the mainnet
+  deploy. rifky had recorded the withdrawal and its cause in #474 the same hour, and named the
+  one unmeasured link; the replay closes it.
+
+- **Plan:** `docs/plans/2026-09-12-a-mandate-our-app-can-cover-is-not-a-claim-on-the-wallet.md`,
+  committed before the code.
+
+- **Verified:** 3 new tests (244 pass) — the excluding query with lower-cased apps, the plain
+  query with none and never an empty list, the config field's default and validation; `tsc` and
+  biome clean; four measurements on the live subgraph recorded in the plan; `cre workflow
+  simulate --target production-settings` against the live chain answering `SUPPLY 1487196`; the
+  deploy's config hash equal to `sha256` of the file in `main`; the third move's receipt read
+  back — `Carried` with the new workflow id and the unchanged policy hash, `ReportProcessed`
+  carrying the same execution id the CRE dashboard shows, `previewRedeem(743598) = 1487196`.
+
 <!--
 Template for the next entry:
 
