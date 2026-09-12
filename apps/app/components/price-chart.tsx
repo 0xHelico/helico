@@ -23,7 +23,16 @@ type XY = { x: number; y: number };
 
 export type Point = { timestamp: number; value: number };
 
-const linePath = (pts: XY[], step: boolean) =>
+export type XYPoint = XY;
+
+/**
+ * Exported so the summary's mini chart draws the same geometry as the full one.
+ *
+ * The stepping is the part that matters: a balance holds its value until something changes it, and
+ * a second implementation that sloped would make the small chart disagree with the large one about
+ * the same account.
+ */
+export const linePath = (pts: XY[], step: boolean) =>
   pts
     .map((p, i) =>
       i === 0
@@ -34,7 +43,7 @@ const linePath = (pts: XY[], step: boolean) =>
     )
     .join("");
 
-function areaPath(pts: XY[], height: number, step: boolean): string {
+export function areaPath(pts: XY[], height: number, step: boolean): string {
   const last = pts.at(-1);
   return last
     ? `${linePath(pts, step)}L${last.x},${height}L${pts[0]?.x ?? 0},${height}Z`
