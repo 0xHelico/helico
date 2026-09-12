@@ -682,14 +682,28 @@ func TestEarnCanSwapFirst(t *testing.T) {
 		t.Errorf("reply does not say what it does: %q", got.Reply)
 	}
 
-	// tokenOut left empty is USDC — that is the only thing the account puts to work.
+	// tokenOut left empty is asked about, not guessed: into USDC and as ETH itself put the money
+	// in different markets.
 	svc = New(fakeModel(t, http.StatusOK, `{"action":"earn","chain":"arbitrum","tokenIn":"ETH","tokenOut":"","amount":"0.001","amountUsd":"","question":""}`))
 	got, err = svc.Interpret(context.Background(), "swap 0.001 ETH and put it to work")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Intent == nil || got.Intent.TokenOut.Symbol != "USDC" {
-		t.Fatalf("an empty tokenOut did not default to USDC: %+v", got.Intent)
+	if got.Action != ActionEarn || got.Intent != nil || len(got.Needs) != 1 || got.Needs[0] != "tokenOut" {
+		t.Fatalf("an empty tokenOut was not asked about: action=%q intent=%+v needs=%v", got.Action, got.Intent, got.Needs)
+	}
+
+	// Ether as itself: tokenOut WETH is the wrap path, and the reply says so.
+	svc = New(fakeModel(t, http.StatusOK, `{"action":"earn","chain":"arbitrum","tokenIn":"ETH","tokenOut":"WETH","amount":"","amountUsd":"1","question":""}`))
+	got, err = svc.Interpret(context.Background(), "put $1 of ETH to work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Action != ActionEarn || got.Intent == nil || got.Intent.TokenOut.Symbol != "WETH" || got.Intent.AmountUsd != "1" {
+		t.Fatalf("the wrap half was not built: action=%q intent=%+v", got.Action, got.Intent)
+	}
+	if !strings.Contains(got.Reply, "as ETH") || !strings.Contains(got.Reply, "wrapped") {
+		t.Errorf("reply does not say it wraps: %q", got.Reply)
 	}
 
 	// A swap that ends anywhere but USDC is refused by name, and the action is still earn so the

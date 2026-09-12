@@ -216,7 +216,35 @@ export function PutToWorkCard({
   // amount is sized here from the feed when the sentence said dollars, the same way the swap card
   // sizes one; the wallet's own balance is checked before a quote is asked for, so a wallet that
   // cannot pay is told so in a sentence rather than by a reverted batch.
-  const fundAsked = Boolean(fund);
+  // Two shapes, told apart by where the sentence sends the ether: into USDC is a swap that funds
+  // the USDC side; WETH is ether working as itself — wrapped, moved in, the other side of the
+  // same position. The backend has already refused anything else.
+  const wrapAsked = Boolean(fund) && fund?.tokenOut.symbol === "WETH";
+  const fundAsked = Boolean(fund) && !wrapAsked;
+  const wrapping = useQuery({
+    enabled:
+      wrapAsked && Boolean(account && address && client && balances.data),
+    queryKey: [
+      "put-to-work-wrap",
+      account,
+      fund?.amountUsd ?? fund?.amountInWei,
+    ],
+    staleTime: 15_000,
+    retry: false,
+    queryFn: async (): Promise<{ amount: bigint }> => {
+      const c = client as NonNullable<typeof client>;
+      const f = fund as Intent;
+      const amount = f.amountUsd
+        ? await unitsForDollars(c, zeroAddress, 18, f.amountUsd)
+        : BigInt(f.amountInWei);
+      if (ether < amount + GAS_CUSHION) {
+        throw new Error(
+          `Your wallet holds ${Number(formatUnits(ether, 18)).toFixed(5)} ETH; that plus gas needs more.`,
+        );
+      }
+      return { amount };
+    },
+  });
   const funding = useQuery({
     // **After the balances, not beside them.** This read the wallet's ether from `balances.data`,
     // which is `undefined` until that query answers, so a quote asked in the same tick saw a
@@ -283,6 +311,7 @@ export function PutToWorkCard({
     },
   });
   const fundingOut = fundAsked ? (funding.data?.minAmountOut ?? 0n) : 0n;
+  const wrapIn = wrapAsked ? (wrapping.data?.amount ?? 0n) : 0n;
 
   // What a fill may take: everything the account will hold once this batch has run. The working
   // side counts because a fill is covered out of the receipt, not only out of idle tokens.
@@ -291,8 +320,9 @@ export function PutToWorkCard({
   const reading = balances.isPending || venues.isPending;
   const ready =
     Boolean(account && address && client) &&
-    ceiling > 0n &&
-    (!fundAsked || Boolean(funding.data));
+    (ceiling > 0n || wrapIn > 0n) &&
+    (!fundAsked || Boolean(funding.data)) &&
+    (!wrapAsked || Boolean(wrapping.data));
 
   async function run() {
     if (!(client && account && address && factory !== null)) {
@@ -302,6 +332,14 @@ export function PutToWorkCard({
     // The swap's calldata, fetched now rather than taken from the quote on screen: the router's
     // route and `minReturn` are facts about one block, and the number the mandate is sized by has
     // to be the one this batch enforces.
+    let wrap: { amount: bigint } | undefined;
+    if (wrapAsked && !justDone) {
+      const q = await wrapping.refetch();
+      if (!q.data) {
+        throw q.error ?? new Error("The amount to wrap could not be sized.");
+      }
+      wrap = q.data;
+    }
     let fresh: FundingSwap | undefined;
     if (fundAsked && !done) {
       const q = await funding.refetch();
@@ -319,6 +357,7 @@ export function PutToWorkCard({
       chainId: ARBITRUM_ONE,
       factory: opened ? undefined : (factory ?? undefined),
       funding: fresh,
+      wrap,
       idle,
       markets: MARKETS,
       now: BigInt(Math.floor(Date.now() / 1000)),
@@ -378,7 +417,7 @@ export function PutToWorkCard({
   // The funding swap does not make a second press addable: it ran in the press that made this
   // card "done", and offering to "ship 0.00 USDC more" over it read as a request for another
   // signature — measured on the first live press, whose owner asked why it wanted one more.
-  const addable = wallet > 0n;
+  const addable = wallet > 0n || (wrapAsked && !justDone);
 
   return (
     <div
@@ -412,7 +451,20 @@ export function PutToWorkCard({
         {/* The swap the sentence asked for, first, because it is what funds the rest. Only when
             the sentence asked: a card that said "put to work" and swapped would be doing a
             different thing than the one requested. */}
-        {fund ? (
+        {fund && wrapAsked ? (
+          <Line
+            label={`Put ${fund.amountUsd ? `$${fund.amountUsd} of ` : `${fund.amountIn} `}ETH in as ETH`}
+            detail={
+              wrapping.isPending || !balances.data
+                ? "sizing…"
+                : wrapping.data
+                  ? `${Number(formatUnits(wrapping.data.amount, 18)).toFixed(5)} ETH wrapped and moved into the account; the agent lends it as WETH`
+                  : (wrapping.error?.message.split("\n")[0] ??
+                    "could not size that")
+            }
+          />
+        ) : null}
+        {fund && fundAsked ? (
           <Line
             label={`Swap ${fund.amountUsd ? `$${fund.amountUsd} of ` : `${fund.amountIn} `}${fund.tokenIn.symbol} into USDC`}
             detail={
@@ -452,7 +504,9 @@ export function PutToWorkCard({
                   : `${position.data?.count} already shipped`
                 : reading
                   ? "reading the account…"
-                  : `up to ${usdc(ceiling)} USDC quotable on Aqua`
+                  : wrapIn > 0n
+                    ? `up to ${usdc(ceiling)} USDC and ${Number(formatUnits((balances.data?.weth ?? 0n) + wrapIn, 18)).toFixed(5)} WETH quotable on Aqua — both sides, so it prices`
+                    : `up to ${usdc(ceiling)} USDC quotable on Aqua`
           }
         />
         {/* Not in this batch, and it does not pretend to be. */}
@@ -484,7 +538,11 @@ export function PutToWorkCard({
               </>
             ) : done ? (
               addable ? (
-                `Ship ${usdc(wallet)} USDC more`
+                wrapAsked ? (
+                  "Execute"
+                ) : (
+                  `Ship ${usdc(wallet)} USDC more`
+                )
               ) : (
                 "Done"
               )

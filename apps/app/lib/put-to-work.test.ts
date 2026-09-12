@@ -37,6 +37,7 @@ const batchAbi = parseAbi([
   "function executeBatch(Call[] calls) returns (bytes[])",
 ]);
 const EXECUTE_BATCH = sel(batchAbi, "executeBatch");
+const DEPOSIT = sel(parseAbi(["function deposit() payable"]), "deposit");
 const shape = (calls: { to: Address; data: `0x${string}` }[]) =>
   calls.map((c) => `${c.to.toLowerCase()} ${c.data.slice(0, 10)}`);
 
@@ -199,6 +200,65 @@ describe("putToWork", () => {
       EXECUTE_BATCH,
     ]);
     expect(calls.every((c) => (c.value ?? 0n) === 0n)).toBe(true);
+  });
+
+  /**
+   * Ether put to work as itself. Wrapped in the wallet, moved in, and the mandate's WETH side is
+   * the wrapped amount — so a position that had only USDC now has both sides and can price.
+   */
+  test("wrapping ether: deposit with value, transfer, and a two-sided mandate", () => {
+    const { calls, ceiling, mandate } = putToWork({
+      ...fresh,
+      opened: true,
+      armed: true,
+      factory: undefined,
+      idle: 10_000n,
+      working: 986_487n,
+      wrap: { amount: 400_000_000_000_000n },
+    });
+    expect(shape(calls)).toEqual([
+      `${WETH.toLowerCase()} ${DEPOSIT}`,
+      `${WETH.toLowerCase()} ${TRANSFER}`,
+      `${ACCOUNT.toLowerCase()} ${EXECUTE_BATCH}`,
+    ]);
+    expect(calls[0]?.value).toBe(400_000_000_000_000n);
+    expect(calls.filter((c) => (c.value ?? 0n) > 0n)).toHaveLength(1);
+    expect(ceiling).toBe(996_487n);
+    expect(mandate.maxOut0).toBe(996_487n);
+    expect(mandate.maxOut1).toBe(400_000_000_000_000n);
+    const batch = decodeFunctionData({
+      abi: batchAbi,
+      data: calls.at(-1)?.data as `0x${string}`,
+    });
+    const shipped = decodeFunctionData({
+      abi: parseAbi([
+        "function ship(address app, bytes strategy, address[] tokens, uint256[] amounts) returns (bytes32)",
+      ]),
+      data: batch.args[0].at(-1)?.data as `0x${string}`,
+    });
+    // USDC, WETH, then the receipts: the WETH side is shipped at the wrapped amount.
+    expect(shipped.args[3].slice(0, 2)).toEqual([
+      996_487n,
+      400_000_000_000_000n,
+    ]);
+  });
+
+  test("ether alone is enough to ship: no USDC anywhere, a wrap, a mandate with a WETH side", () => {
+    const { mandate, calls } = putToWork({
+      ...fresh,
+      wrap: { amount: 1n },
+    });
+    expect(mandate.maxOut0).toBe(0n);
+    expect(mandate.maxOut1).toBe(1n);
+    expect(shape(calls).map((s) => s.split(" ")[1])).toEqual([
+      OPEN,
+      DEPOSIT,
+      TRANSFER,
+      SET_AGENT,
+      PERMIT,
+      PERMIT,
+      EXECUTE_BATCH,
+    ]);
   });
 
   test("a wallet holding USDC and funding from ETH does both, and the ceiling is the sum", () => {
