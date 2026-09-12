@@ -78,3 +78,20 @@ the model turning `0.0004 ETH` into `$0.4`. They were answered by a backend proc
 by an earlier `go run` — `p.kill()` ends `go run`, not the binary it spawned — so the prompt
 edits under test were never the ones answering. A fresh binary on a free port answered right the
 first time. **Before blaming the model, check which process answered.**
+
+## Third half: the ether works too
+
+Ghoza, after the first live press: *"I want the USDC and the ETH working."* The account already
+manages WETH — the enclave reads both assets and the ETH market is permitted — but nothing put
+ether in. Now the sentence can: *"put $1 of ETH to work"* is earn with `tokenIn ETH, tokenOut
+WETH`, and the batch wraps in the wallet (`WETH.deposit` with the value), transfers the WETH into
+the account, and ships a mandate whose WETH side is the wrapped amount. A position that had only
+USDC becomes two-sided, which is what `DegenerateReserves` was refusing. The enclave lends the
+WETH on its next run. An empty destination is asked about, not guessed: into USDC and as ETH put
+the money in different markets.
+
+Measured on a fork against the live account as it stood (0.01 USDC idle, 0.986 in Morpho): wrap
+0.000396 ETH → three calls, all success, WETH in the account, Aqua's ledger holding the mandate at
+USDC 0.996487 and WETH 0.000396, 535,237 gas. Production model: `"put $1 of ETH to work"` →
+earn ETH→WETH $1; `"put 0.0003 ETH to work as ETH"` → earn ETH→WETH 0.0003; the swap and plain
+forms unchanged; `"put my ETH to work"` asks for an amount, because "all" has to leave gas.

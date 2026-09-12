@@ -214,8 +214,12 @@ func (s *Service) Interpret(ctx context.Context, message string, prior ...Turn) 
 		// swap half goes through build like any other, so a token the registry does not know or
 		// an amount that is not a number is refused here, by name, and not at the wallet.
 		if strings.TrimSpace(d.TokenIn) != "" {
+			// Two shapes, told apart by where the token ends up. Into USDC: the swap funds the
+			// USDC side. Into WETH: ether is wrapped and works as itself, on the other side of the
+			// same position. An empty destination is asked about rather than guessed — the two
+			// shapes put the money in different markets.
 			if strings.TrimSpace(d.TokenOut) == "" {
-				d.TokenOut = "USDC"
+				return Answer{Action: ActionEarn, Reply: "Into USDC, or as ETH itself? Say \"swap $1 of ETH to USDC and put it all to work\", or \"put $1 of ETH to work\".", Needs: []string{"tokenOut"}, Steps: []Step{read}}, nil
 			}
 			intent, checks, err := build(d)
 			steps := append([]Step{read}, checks...)
@@ -226,22 +230,33 @@ func (s *Service) Interpret(ctx context.Context, message string, prior ...Turn) 
 				}
 				return Answer{Action: ActionEarn, Reply: capitalise(err.Error()) + ".", Needs: faulty(err), Steps: steps}, nil
 			}
-			if !strings.EqualFold(intent.TokenOut.Symbol, "USDC") {
-				steps = append(steps, Step{Call: "Fund.tokenOut", Detail: intent.TokenOut.Symbol + " cannot be put to work; the agent places USDC"})
-				return Answer{Action: ActionEarn, Reply: "The account puts USDC to work, so the swap has to end in USDC.", Needs: []string{"tokenOut"}, Steps: steps}, nil
-			}
 			said := fmt.Sprintf("%s %s", intent.AmountIn, intent.TokenIn.Symbol)
 			if intent.AmountUsd != "" {
 				said = fmt.Sprintf("$%s of %s", intent.AmountUsd, intent.TokenIn.Symbol)
 			}
-			return Answer{
-				Action: ActionEarn,
-				Intent: &intent,
-				Reply: fmt.Sprintf("Swapping %s into USDC and putting all of it to work, in one signature: the swap "+
-					"lands in your account, the account ships it as a position on Aqua, and the agent "+
-					"places it in whichever market pays best. Nothing has moved: this is what I understood.", said),
-				Steps: steps,
-			}, nil
+			switch {
+			case strings.EqualFold(intent.TokenOut.Symbol, "USDC"):
+				return Answer{
+					Action: ActionEarn,
+					Intent: &intent,
+					Reply: fmt.Sprintf("Swapping %s into USDC and putting all of it to work, in one signature: the swap "+
+						"lands in your account, the account ships it as a position on Aqua, and the agent "+
+						"places it in whichever market pays best. Nothing has moved: this is what I understood.", said),
+					Steps: steps,
+				}, nil
+			case strings.EqualFold(intent.TokenOut.Symbol, "WETH") && strings.EqualFold(intent.TokenIn.Symbol, "ETH"):
+				return Answer{
+					Action: ActionEarn,
+					Intent: &intent,
+					Reply: fmt.Sprintf("Putting %s to work as ETH, in one signature: it is wrapped, moved into your "+
+						"account beside your USDC, the account ships both as one position on Aqua, and the agent "+
+						"places the ETH in whichever market pays most for it. Nothing has moved: this is what I understood.", said),
+					Steps: steps,
+				}, nil
+			default:
+				steps = append(steps, Step{Call: "Fund.tokenOut", Detail: intent.TokenIn.Symbol + " → " + intent.TokenOut.Symbol + " is not a way into the account; USDC or ETH as itself"})
+				return Answer{Action: ActionEarn, Reply: "The account puts USDC to work, and ETH as itself. Say \"swap … to USDC and put it to work\" or \"put … ETH to work\".", Needs: []string{"tokenOut"}, Steps: steps}, nil
+			}
 		}
 		return Answer{
 			Action: ActionEarn,

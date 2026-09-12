@@ -31,6 +31,8 @@ import { accountWriteAbi, factoryAbi } from "@/lib/account";
  * says so.
  */
 
+const wethAbi = parseAbi(["function deposit() payable"]);
+
 const accountBatchAbi = parseAbi([
   "struct Call { address target; uint256 value; bytes data; }",
   "function executeBatch(Call[] calls) returns (bytes[])",
@@ -60,6 +62,18 @@ export type FundingSwap = {
   minAmountOut: bigint;
 };
 
+/**
+ * Ether put to work as itself: wrapped in the wallet and moved into the account, where the
+ * enclave places it in whichever WETH market pays most. Two calls, both from the wallet, and the
+ * only `value` in the batch. The mandate's WETH side grows by the same amount, so a position
+ * that was one-sided becomes two-sided — which is the difference between a mandate that prices
+ * and one `DegenerateReserves` refuses.
+ */
+export type FundingWrap = {
+  /** Wei to wrap. The caller has already kept enough ether back for gas. */
+  amount: bigint;
+};
+
 export type PutToWorkInput = {
   chainId: number;
   owner: Address;
@@ -84,6 +98,8 @@ export type PutToWorkInput = {
   positions: readonly Position[];
   /** Optional: the swap that funds the account inside this batch. */
   funding?: FundingSwap;
+  /** Optional: ether wrapped and moved in inside this batch, put to work as WETH. */
+  wrap?: FundingWrap;
   now: bigint;
   salt: Hex;
 };
@@ -105,7 +121,10 @@ export function putToWork(input: PutToWorkInput): PutToWork {
   const usdc = input.usdc.toLowerCase();
   const fundingOut = input.funding?.minAmountOut ?? 0n;
   const ceiling = input.wallet + input.idle + input.working + fundingOut;
-  if (ceiling <= 0n) {
+  const wrapped = input.wrap?.amount ?? 0n;
+  // The WETH side: what the account holds plus what this batch wraps in.
+  const wethSide = input.weth_ + wrapped;
+  if (ceiling <= 0n && wethSide <= 0n) {
     throw new Error("There is nothing to put to work");
   }
 
@@ -136,9 +155,10 @@ export function putToWork(input: PutToWorkInput): PutToWork {
     token1: input.weth,
     feeBps: FEE_BPS,
     maxOut0: ceiling,
-    // Whatever the account holds of the other side. Naming more than that would be a ceiling the
-    // ledger cannot honour, which is a quote that reverts at fill time.
-    maxOut1: input.weth_,
+    // Whatever the account holds of the other side, plus what this batch wraps in. Naming more
+    // than that would be a ceiling the ledger cannot honour, which is a quote that reverts at
+    // fill time.
+    maxOut1: wethSide,
     expiry: input.now + LIFETIME_SECONDS,
     agent: zeroAddress as Address,
     salt: input.salt,
@@ -146,11 +166,11 @@ export function putToWork(input: PutToWorkInput): PutToWork {
   };
 
   const tokens: Address[] = [input.usdc, input.weth];
-  const amounts: bigint[] = [ceiling, input.weth_];
+  const amounts: bigint[] = [ceiling, wethSide];
   for (const v of venues) {
     for (const [receipt, cap] of [
       [v.receipt0, ceiling],
-      [v.receipt1, input.weth_],
+      [v.receipt1, wethSide],
     ] as const) {
       if (receipt !== zeroAddress) {
         tokens.push(receipt as Address);
@@ -184,6 +204,27 @@ export function putToWork(input: PutToWorkInput): PutToWork {
     // The funding swap, straight after `open` so the account exists when the USDC arrives — not
     // required, since a transfer to a code-less address succeeds, but the order a reader expects.
     ...(input.funding?.calls ?? []),
+    // Ether wrapped in the wallet and moved in: `WETH.deposit` with the value, then a transfer.
+    ...(input.wrap
+      ? [
+          {
+            to: input.weth,
+            data: encodeFunctionData({
+              abi: wethAbi,
+              functionName: "deposit",
+            }),
+            value: input.wrap.amount,
+          },
+          {
+            to: input.weth,
+            data: encodeFunctionData({
+              abi: erc20Abi,
+              functionName: "transfer",
+              args: [input.account, input.wrap.amount],
+            }),
+          },
+        ]
+      : []),
     ...(input.armed
       ? []
       : [
