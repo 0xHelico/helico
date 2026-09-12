@@ -4,6 +4,39 @@ Arbitrum One, chain id 42161. Every address below was read back from the chain a
 broadcast, not copied from a script's output — the third column is what the contract answers when
 asked about itself.
 
+## 12 September 2026 — the subgraph is on The Graph Network
+
+Until today the subgraph lived on Subgraph Studio only, which is a Graph provider and enough for
+the app and the enclave — but not for The Graph's **Subgraph MCP**, which serves the network and
+answers *"subgraph not found"* for a Studio deployment (measured, `docs/plans/2026-09-12-the-chat-
+reads-the-index.md`). Publishing is one call on the L2GNS contract on Arbitrum One, which
+`graph publish` hands to a browser wallet; `scripts/publish-subgraph.ts` makes the same call from
+the deployer key, after checking the deployment is the one Studio serves and its manifest is on
+The Graph's IPFS.
+
+```
+subgraph id      7Qw2zNn9recjF81BvdiKHDAok7ec9yq9o9cPsyjjoeVL
+                 (uint256 43096186124169755617742106709768601881737388648012973422582242099590821973935)
+deployment       QmbhmRoR9C7Eo6RGRdM4kCd6iBhWvRWcLXXAx4SSd5WSfe   the same hash Studio serves as v0.3.0
+metadata         subgraph QmWkTrYY2VS6bzDARciCGcLpGGpoKma814FfKjVfE7EgQc
+                 version  QmVoLAJPi1g78Z7Qsmbqof4VmGi6T54MfqdviLnVCChEx6
+L2GNS            0xec9A7fb6CbC2E41926127929c2dcE6e9c5D33Bec   GraphProxy → 0x9b81c7c5…; subgraphNFT() → 0x3FbD54f0…
+tx               0xa11cda5e593dacecd208a765798401bd610dac98d09382af42cc1fc716b4724f
+                 block 504,352,622 on Arbitrum One, 283,704 gas, 0.0000057 ETH
+publisher        0x6DCd7485…439E   (the deployer; it holds the subgraph's NFT, ownerOf → itself)
+isPublished      true
+```
+
+Read back through the MCP a minute later: `search_subgraphs_by_keyword("Helico")` returns this
+id with the deployment above and the metadata; `get_schema_by_subgraph_id` returns our schema.
+`execute_query_by_subgraph_id` answered *"no valid versions"* first, then *"no allocations"* —
+the network's upgrade indexer had not yet taken it. What the app and the enclave read is
+unchanged: both still use the Studio endpoint, which needs no key and has served since the 8th.
+
+The backend's `BE_GRAPH_MCP_SUBGRAPH_ID` is this id. It is set on the `api` application only
+once the gateway serves a query, so that a status question never shows a failed read while the
+indexer is still syncing.
+
 ## 11 September 2026 — the agent is a contract, and the DON writes the move
 
 Until today the enclave's decision never reached the chain. `supplyIdle` authorises by
