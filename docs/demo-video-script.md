@@ -37,7 +37,27 @@ that exists, and #22 asks for a full-length take by **11 September** rather than
 A shot that has to fall back is not a weaker video. A shot that claims something untrue ends the
 submission.
 
-### Pre-flight, re-run 12 September 16:40 UTC, after the money went back to work — **read this one first**
+### Pre-flight, re-run 13 September 03:00 WIB, after a second owner did it from the chat — **read this one first**
+
+Everything in the layer below still holds. This adds the shot that did not exist at 16:40: a
+fresh wallet, one sentence, one signature, and both assets earning. Where they disagree, this one
+wins.
+
+| | State, measured at block 504,497,103 and after |
+|---|---|
+| **One sentence, one signature, on mainnet** | Wallet `0x43F9ee1f…` held 0.001 ETH and nothing else. *"swap $1 of ETH to USDC and put it all to work"* → one transaction ([`0x2742cb30…`](https://arbiscan.io/tx/0x2742cb300e00e8345b5fb395c6732de9fcb4a1911c2b6de7b71d34b4e77f4814), 18:32 UTC): open, 1inch swap delivered to the account, agent named, four markets permitted, mandate shipped. Three minutes later the DON supplied 0.986 USDC to Morpho ([`0xa9916296…`](https://arbiscan.io/tx/0xa99162965825d575b30809c2b073eac53079e3ac573bb732da6f695fb7a9866e)). **Sayable:** *"one sentence, one signature, and three minutes later the network had the money earning — the owner paid for one transaction."* |
+| **The ether works too** | *"put $1 of ETH to work"* → one transaction ([`0x50603768…`](https://arbiscan.io/tx/0x50603768ecd22ddd3313c9dedd6174f9a7187356d3471027cdca312bb3672aad), 19:38 UTC): wrapped, moved in, a second mandate with both sides. The DON lent it to Compound v3 ETH two minutes later ([`0x7d346cc4…`](https://arbiscan.io/tx/0x7d346cc4815cc0dcb8fe9db62c1559201c00c46a195f4fe4f85f49cfc211fe25)). **Sayable:** *"USDC in Morpho, ETH in Compound, both quotable on Aqua, and the agent never held either."* |
+| **The card and the portfolio say ETH now** | Since #502/#503: `WETH · Compound v3 (ETH) 0.00040`, a headline that prices the WETH side off Chainlink and says the chart tracks USDC, activity rows in the asset's unit. Record on the account `0x8E0f7e67…1807`, which is a second owner's — the first, `0x0acdfa21…`, is still the one the older layers describe |
+| **Which wallet to record with** | **MetaMask.** The one-signature batch is EIP-5792 with `atomicRequired`; MetaMask answers as a 7702 smart account and did, twice tonight. Rabby answers no `atomic` capability and the card refuses rather than sending half. Do not record the refusal as the product |
+| **The sentence needs an amount** | *"put $1 of ETH to work"*, not *"put all my ETH to work"* — gas has to stay behind, and the card checks a 0.0001 ETH cushion before quoting. The backend asks for the amount if it is missing; do not improvise one on camera |
+| **Do not wait for a move on camera — still** | Both accounts are at their target split; the next runs say `HOLD`. The moves are the six receipts across the two accounts; show the sentence, the signature, then Arbiscan |
+
+What this changes in the shot list: **0:00–0:30 can open on the sentence** — a wallet with only
+ether, one line typed, one confirmation — and **3:15 has six receipts across two owners, five
+transmitters, one policy hash.** The Graph shot keeps its hash; the index is what the card read to
+know the account had shipped.
+
+### Pre-flight, re-run 12 September 16:40 UTC, after the money went back to work
 
 The layer below was written while the account held everything idle, and it says the withdrawal
 is the story. It is half of it. Where they disagree, this one wins.
