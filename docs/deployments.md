@@ -33,9 +33,39 @@ id with the deployment above and the metadata; `get_schema_by_subgraph_id` retur
 the network's upgrade indexer had not yet taken it. What the app and the enclave read is
 unchanged: both still use the Studio endpoint, which needs no key and has served since the 8th.
 
-The backend's `BE_GRAPH_MCP_SUBGRAPH_ID` is this id. It is set on the `api` application only
-once the gateway serves a query, so that a status question never shows a failed read while the
-indexer is still syncing.
+The backend's `BE_GRAPH_MCP_SUBGRAPH_ID` is this id. It was set on the `api` application only
+once the gateway served a query, so that a status question never showed a failed read while the
+indexer was still allocating.
+
+### The gateway served it at 11:2x UTC, and the chat read it at 11:53
+
+The Upgrade Indexer's own status endpoint (`indexer.upgrade.thegraph.com/status`) had the
+deployment **synced and healthy** within an hour of the publish — it is the same infrastructure
+Studio runs on — but the gateway answered *"no allocations"* for 95 minutes: an allocation is
+the indexer's on-chain declaration that it serves a deployment, and its agent had not made one.
+It appeared shortly after Ghoza also pressed **Publish** in Studio (owner `0xc782…6661D7`, subgraph
+id `3mantytrQfpsKsoxWEk7qHra7Jz77PjEabFB7JSxFaqo`, same deployment). Whether that press caused
+the allocation or coincided with it cannot be told from outside; both ids serve the same
+deployment, and the backend uses the first.
+
+```
+env on api   BE_GRAPH_MCP_URL=https://subgraphs.mcp.thegraph.com
+             BE_GRAPH_MCP_SUBGRAPH_ID=7Qw2zNn9recjF81BvdiKHDAok7ec9yq9o9cPsyjjoeVL
+deploy       dy4grxpolkioilwnd8og4nmw   finished 11:52:47 UTC
+```
+
+First answer from production, `POST /api/swap/intent` with the account owner's wallet, model
+`gpt-4o-mini`, 11.3 s: a card *From the index* (`The Graph · Subgraph MCP · 1 query`) and four
+steps — `mcp.initialize subgraph-mcp 0.1.1`, `mcp.get_schema_by_subgraph_id 6725 bytes`, one
+`mcp.execute_query_by_subgraph_id`. The schema size is the tell that it is ours: Aave's is 65 KB.
+
+Five questions run against the live subgraph with production's model then found four things a
+fake cannot (#448): bare selections without braces, root fields with no subfields answered as
+`{}`, an answer given without reading, and a timestamp converted to the wrong year. Each is
+handled in code now, and the demo question carries one sentence the index cannot say otherwise
+(#449): *the agent's moves into lending markets are not in this index; the portfolio reads those
+from the chain.*
+
 
 ## 11 September 2026 — the agent is a contract, and the DON writes the move
 

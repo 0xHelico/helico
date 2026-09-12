@@ -99,11 +99,12 @@ subgraph, cannot write, and cannot change the reply that would have been given w
 
 Measured on 12 September, before the code (`docs/plans/2026-09-12-the-chat-reads-the-index.md`):
 the server executes queries on network subgraphs with no API key, and answers *"subgraph not
-found"* for a Studio-only deployment. So this composition goes live the moment the subgraph is
-published to The Graph Network and its id is set in the backend — until then the code path is
-off and the status answer is the chain's alone. Run against the real server and the production
-model on a public subgraph: two to four queries, twenty to forty seconds, a correct sentence with
-the index's numbers in it (`apps/be/internal/swap/ask_test.go`, `TestLiveAsk`).
+found"* for a Studio-only deployment. So the subgraph was published to The Graph Network the same
+day — id `7Qw2zNn9recjF81BvdiKHDAok7ec9yq9o9cPsyjjoeVL`, from `scripts/publish-subgraph.ts` — and
+the composition has been live on `api.helico.site` since 11:53 UTC. Ask the deployed chat *"why
+has nothing moved?"* with a wallet connected: the card *From the index* and the `mcp.*` steps under
+it are the two products at work, and `docs/deployments.md` (12 September) has the first answer
+verbatim.
 
 | What | Where |
 |---|---|

@@ -299,13 +299,13 @@ costs one slot, not several.
 - [x] README points at the contract and what it enforces
 
 **The Graph:**
-- [ ] **Two or more Graph products combined**, *or* meaningful work on a standardised schema
+- [x] **Two or more Graph products combined**, *or* meaningful work on a standardised schema
       (they name Messari Standardized Subgraphs). This is the *Composable* prize's requirement;
-      the *AI Use Case* prize has none. Built 12 September: the chat composes our Subgraph with
-      The Graph's **Subgraph MCP** (`apps/be/internal/graphmcp`, `Ask` in `swap/ask.go`). It is
-      live only once the subgraph is **published to The Graph Network** and
-      `BE_GRAPH_MCP_SUBGRAPH_ID` is set — the MCP does not serve Studio deployments. Tick this
-      box when that has happened, not before
+      the *AI Use Case* prize has none. Live since 12 September 11:53 UTC: the chat composes our
+      Subgraph — published to The Graph Network, id `7Qw2zNn9…` — with The Graph's **Subgraph
+      MCP** (`apps/be/internal/graphmcp`, `Ask` in `swap/ask.go`); a status question on
+      `api.helico.site` answers from the index with the MCP calls as steps. `deployments.md`,
+      12 September
 - [x] **Live data consumed from a Graph provider** — Subgraph Studio for subgraphs, The Graph
       Market for Substreams. A mocked dataset does not qualify. Studio, `version/latest`, read by
       the enclave every five minutes and by the app
