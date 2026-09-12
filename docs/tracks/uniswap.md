@@ -10,7 +10,7 @@ place a reader reaches when they want the depth rather than the claim.*
 
 The plugin talks to v4 directly, no aggregator. Every claim has an on-chain transaction behind it
 on Base Sepolia, listed in [the plugin's README](../../packages/plugins/uniswap/README.md).
-[`FEEDBACK.md`](FEEDBACK.md) records what we ran into building on their stack.
+[`FEEDBACK.md`](../../FEEDBACK.md) records what we ran into building on their stack.
 
 | What | Where |
 |---|---|
