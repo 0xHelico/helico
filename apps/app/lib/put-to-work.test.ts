@@ -261,6 +261,34 @@ describe("putToWork", () => {
     ]);
   });
 
+  /** One sentence, both sides: the swap funds USDC, the wrap funds WETH, one two-sided mandate. */
+  test("a swap and a wrap in one batch ship a two-sided mandate from nothing", () => {
+    const { calls, ceiling, mandate } = putToWork({
+      ...fresh,
+      funding: {
+        calls: [
+          { to: ROUTER, data: "0x07ed2379", value: 400_000_000_000_000n },
+        ],
+        minAmountOut: 990_000n,
+      },
+      wrap: { amount: 400_000_000_000_000n },
+    });
+    expect(shape(calls).map((s) => s.split(" ")[1])).toEqual([
+      OPEN,
+      "0x07ed2379",
+      DEPOSIT,
+      TRANSFER,
+      SET_AGENT,
+      PERMIT,
+      PERMIT,
+      EXECUTE_BATCH,
+    ]);
+    expect(calls.filter((c) => (c.value ?? 0n) > 0n)).toHaveLength(2);
+    expect(ceiling).toBe(990_000n);
+    expect(mandate.maxOut0).toBe(990_000n);
+    expect(mandate.maxOut1).toBe(400_000_000_000_000n);
+  });
+
   test("a wallet holding USDC and funding from ETH does both, and the ceiling is the sum", () => {
     const { calls, ceiling } = putToWork({
       ...fresh,

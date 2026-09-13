@@ -31,7 +31,7 @@ Decide which of five things they are asking for, and for a swap also pull out th
 amount.
 
 Answer with JSON only, this shape:
-{"action":"","chain":"arbitrum","tokenIn":"","tokenOut":"","amount":"","amountUsd":"","question":""}
+{"action":"","chain":"arbitrum","tokenIn":"","tokenOut":"","amount":"","amountUsd":"","ethAmount":"","ethAmountUsd":"","question":""}
 
 action is one of:
 - "swap"   — they want to exchange one token for another
@@ -67,10 +67,17 @@ Rules:
   to USDC and put it all to work" is earn with tokenIn "ETH", tokenOut "USDC", amountUsd "1";
   "swap 0.0004 ETH and put it to work" is earn with tokenIn "ETH", tokenOut "USDC", amount
   "0.0004". Ether working as itself: "put $1 of ETH to work" or "put 0.0004 ETH to work as ETH" is
-  earn with tokenIn "ETH", tokenOut "WETH" and the amount. The amount rules below apply exactly as
-  for a swap — a token amount never becomes a dollar amount. Leave all three empty for the other
-  five actions, and for an earn that names no token: "put all my money to work" is earn with
-  nothing else set.
+  earn with tokenIn "ETH", tokenOut "WETH" and the amount. Both at once, in one sentence: "swap $1
+  of ETH to USDC and put $1 of ETH to work as ETH" is earn with tokenIn "ETH", tokenOut "USDC",
+  amountUsd "1" for the swap, and ethAmountUsd "1" (dollars, because they said "$1") for the ether
+  that works as itself; "swap 0.0004 ETH to USDC and put 0.0003 ETH to work as ETH" has amount
+  "0.0004" and ethAmount "0.0003". ethAmount and ethAmountUsd are set ONLY when the sentence names
+  a second amount of ether to work as ETH beside the swap. "swap $1 of ETH to USDC and put it all
+  to work" names one amount — the swap — so ethAmount and ethAmountUsd stay empty: "it all" is the
+  USDC. Never invent the ether side. The amount rules below apply exactly as for a swap — a token
+  amount never becomes a dollar amount, and "$1 of ETH" is always a dollar amount. Leave all of
+  them empty for the other five actions, and for an earn that names no token: "put all my money to
+  work" is earn with nothing else set.
 - tokenIn is what they are giving, tokenOut what they want. Use the ticker, not a name.
 - amount is how much of tokenIn, as a plain decimal number, no unit and no commas. "half an ETH" is "0.5". Never invent one.
 - amountUsd is for a dollar amount instead: "$5 of ETH", "5 dollars of ETH", "swap $5 ETH to USDC"

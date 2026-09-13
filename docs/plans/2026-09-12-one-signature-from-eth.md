@@ -95,3 +95,21 @@ Measured on a fork against the live account as it stood (0.01 USDC idle, 0.986 i
 USDC 0.996487 and WETH 0.000396, 535,237 gas. Production model: `"put $1 of ETH to work"` →
 earn ETH→WETH $1; `"put 0.0003 ETH to work as ETH"` → earn ETH→WETH 0.0003; the swap and plain
 forms unchanged; `"put my ETH to work"` asks for an amount, because "all" has to leave gas.
+
+## Fourth: both sides in one sentence
+
+Ghoza: *"one sentence; the taker swap is a separate prompt later."* So the sentence carries both
+amounts — *"swap $1 of ETH to USDC and put $1 of ETH to work as ETH"* — and the batch is: open,
+the 1inch swap delivered to the account, `WETH.deposit` + transfer, arm, and one ship with both
+sides. The backend carries the ether side as `intent.eth` beside the swap; the card wraps it and
+sizes the WETH side of the mandate by it; the gas check adds the swap's ether to the wrap's.
+
+Measured on a fork from a fresh wallet: ten calls, all success, 0.9969 USDC and 0.000397 WETH in
+the account, the mandate two-sided from the first ship, 1,458,387 gas ≈ 0.00003 ETH at mainnet's
+0.02 gwei. (The first run failed on anvil's default 1 gwei gas price with a 0.001 ETH wallet —
+fifty times mainnet's; a fork artifact, not a budget problem.) Production model, twice over six
+sentences: the combined sentence carries both in the right units; *"put it all to work"* carries
+no ether side, which the first prompt got wrong by inventing one — the rule now says *never
+invent the ether side* and gives the contrast.
+
+Budget for a 0.001 ETH wallet: $1 + $1 + ~$0.07 gas leaves ~$0.43, above the 0.0001 ETH cushion.
