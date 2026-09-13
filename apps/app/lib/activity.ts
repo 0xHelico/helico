@@ -57,6 +57,13 @@ export type AccountEvent = {
   amount: string;
   /** The market, for the rows that name one. Empty for the rest. */
   where: string;
+  /**
+   * True for money arriving from a market's own vault or token contract: the underlying paid
+   * out of a position. With a `moved` of the account's own in the same transaction it is the
+   * agent taking money back out; without one it is the swap app redeeming the account's receipt
+   * for a taker, which no event of the account's names — `lib/value-history.ts` uses it for that.
+   */
+  redeemed?: boolean;
   block: bigint;
   /** Unix seconds, or null when the block's header could not be read. Never invented. */
   at: number | null;
@@ -99,6 +106,31 @@ const ASSETS: Record<string, { symbol: string; decimals: number }> = {
     decimals: 18,
   },
 };
+/**
+ * Where each market pays the underlying out from, which is not the address the account's events
+ * name: Aave's pool pays from its receipt token, Compound from the Comet, Morpho from the vault
+ * behind our receipt. Read from the deployed receipts on 13 Sep 2026 — `hcUSDC.COMET()`,
+ * `hcWETH.COMET()`, `hmUSDC.VAULT()`, and the aTokens' `UNDERLYING_ASSET_ADDRESS()` — and each
+ * one's own answer for its asset checked against USDC or WETH. Keyed by the payer, valued by the
+ * market the account's `moved` events name, so a payout can be laid beside them.
+ */
+const PAYS_FROM: Record<string, string> = {
+  // aUSDC and aWETH, for the Aave v3 pool
+  "0x724dc807b04555b71ed48a6896b6f41593b8c637":
+    "0x794a61358d6845594f94dc1db02a252b5b4814ad",
+  "0xe50fa9b3c56ffb159cb0fca61f5c9d750e8128c8":
+    "0x794a61358d6845594f94dc1db02a252b5b4814ad",
+  // cUSDCv3, for hcUSDC
+  "0x9c4ec768c28520b50860ea7a15bd7213a9ff58bf":
+    "0x1ec57ce1ddfdc7a4ebf4f54aedee19ab73fcbb2e",
+  // cWETHv3, for hcWETH
+  "0x6f7d514bbd4aff3bcd1140b7344b32f063dee486":
+    "0xb0a125f539237b553025e2cb180f9c40b25918cd",
+  // the Steakhouse USDC vault, for hmUSDC
+  "0x5c0c306aaa9f877de636f4d5822ca9f2e81563ba":
+    "0xbba798a61f0d7d1ae51466fd4045cd2ea25c9a29",
+};
+
 const inAsset = (v: bigint | string, asset?: string): string => {
   const known = asset ? ASSETS[asset.toLowerCase()] : undefined;
   if (!known || known.decimals === 6) return `${amount(v)} USDC`;
@@ -168,7 +200,17 @@ async function fromBackend(account: Address): Promise<AccountEvent[] | null> {
           ? inAsset(e.amount ?? "0", e.asset)
           : `${amount(e.amount ?? "0")} USDC`
         : "",
-      where: e.pool ? marketName(e.pool) : "",
+      // A transfer's `pool` is its counterparty. When that is a market's payer, the row names
+      // the market rather than an address nobody recognises, and says what the money was.
+      where: e.pool
+        ? marketName(
+            e.kind === "in"
+              ? (PAYS_FROM[e.pool.toLowerCase()] ?? e.pool)
+              : e.pool,
+          )
+        : "",
+      redeemed:
+        e.kind === "in" && Boolean(e.pool && PAYS_FROM[e.pool.toLowerCase()]),
       block: BigInt(e.block),
       at: e.blockTime ? e.blockTime : null,
       tx: e.tx as `0x${string}`,
@@ -199,7 +241,9 @@ function sentence(e: ServedEvent): string {
     case "venue":
       return e.allowed ? "Allowed a market" : "Revoked a market";
     case "in":
-      return "Money in";
+      return e.pool && PAYS_FROM[e.pool.toLowerCase()]
+        ? "Paid out of a market"
+        : "Money in";
     case "out":
       return "Money out";
     default:

@@ -76,6 +76,20 @@ export function holdings(
 
   let liquid = 0n;
   let working = 0n;
+  // **A taker's fill redeems a position without any event of the account's saying so.** The
+  // swap app pulls the receipt through Aqua and has the market pay the underlying to the
+  // account, then Aqua pays the taker from it: the log shows USDC in from the market and USDC
+  // out to the taker, and nothing that says the position shrank. Folded as written, that
+  // counted the payout as a deposit and drew the account $0.20 richer than it was from the fill
+  // until the live point at the very right edge — which is where the first take showed it.
+  // A payout from a market with no move of the account's own in the same transaction is that
+  // case, and steps the working side down by what was paid out. The agent's own withdrawals
+  // carry a `moved` and are counted by it, once.
+  const ownMoves = new Set(
+    dated
+      .filter((e) => e.kind === "moved" && !e.into)
+      .map((e) => `${e.tx}-${e.asset ?? USDC}`),
+  );
   // Working WETH, in wei, from the account's own ether moves. Ether arriving in the account —
   // a wrap moved in, a taker's payment — is not an event the activity list carries (only USDC
   // transfers are), so the WETH side steps when the agent lends it, which on this product is a
@@ -88,8 +102,10 @@ export function holdings(
     // in its own units, and never added to the USDC figure.
     if (e.kind === "moved" && e.asset && e.asset !== USDC) {
       wethWorking += e.into ? e.units : -e.units;
-    } else if (e.kind === "in") liquid += e.units;
-    else if (e.kind === "out") liquid -= e.units;
+    } else if (e.kind === "in") {
+      liquid += e.units;
+      if (e.redeemed && !ownMoves.has(`${e.tx}-${USDC}`)) working -= e.units;
+    } else if (e.kind === "out") liquid -= e.units;
     else if (e.kind === "moved") working += e.into ? e.units : -e.units;
     else continue;
     const timestamp = (e.at as number) * 1000;

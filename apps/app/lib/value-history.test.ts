@@ -234,3 +234,42 @@ test("the same ether draws a rise when its price rose", () => {
     sampleHoldings(usdc, 1, () => 99_999, later, 3).map((p) => p.value),
   ).toEqual([0.500081, 0.500081, 0.500081]);
 });
+
+// **A taker's fill is not a deposit.** On the first mainnet take the swap app had Morpho pay
+// 0.189887 USDC to the account and Aqua paid 0.199887 to the taker, and no event of the
+// account's said the position shrank. The fold read the payout as money arriving and drew the
+// account $0.19 richer than it was from the fill to the live point.
+test("a market's payout for a taker steps the working side down", () => {
+  const paid = {
+    ...event("in", 189_887n, 504_589_092, 1_757_300_000, true),
+    key: "504589092-19",
+    tx: "0xd8dc" as `0x${string}`,
+    redeemed: true,
+  };
+  const toTaker = {
+    ...event("out", 199_887n, 504_589_092, 1_757_300_000),
+    key: "504589092-22",
+    tx: "0xd8dc" as `0x${string}`,
+  };
+  const series = valueSeries([DEPOSIT, LEG, MOVED, paid, toTaker], null);
+  // 0.500081 in, 0.490081 working; the fill spends the 0.01 wallet first and 0.189887 of the
+  // position, so the account is worth 0.500081 − 0.199887 afterwards.
+  expect(series.at(-1)?.value).toBeCloseTo(0.300194, 6);
+
+  // The agent's own withdrawal pays out of the same vault, but carries a `moved` in the same
+  // transaction and is counted by that, once: the total does not change.
+  const back = {
+    ...event("moved", 10_000n, 504_589_917, 1_757_300_100, false),
+    key: "504589917-14",
+    tx: "0x00a5" as `0x${string}`,
+    asset: "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+  };
+  const arrived = {
+    ...event("in", 10_000n, 504_589_917, 1_757_300_100, true),
+    key: "504589917-11",
+    tx: "0x00a5" as `0x${string}`,
+    redeemed: true,
+  };
+  const after = valueSeries([DEPOSIT, LEG, MOVED, arrived, back], null);
+  expect(after.at(-1)?.value).toBeCloseTo(0.500081, 6);
+});
