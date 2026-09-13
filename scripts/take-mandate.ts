@@ -54,7 +54,7 @@ const USDC = '0xaf88d065e77c8cC2239327C5EDb3A432268e5831' as const
 const WETH = '0x82aF49447D8a07e3bd95BD0d56f35241523fBab1' as const
 /** `HelicoTaker` on Arbitrum One. `docs/deployments.md` has the deploy; `HELICO_TAKER` overrides. */
 const HELICO_TAKER = (process.env.HELICO_TAKER ??
-	'0x0000000000000000000000000000000000000000') as Hex
+	'0x7A52bfD7EF1b4D0345d6e76deD649FC05208DD58') as Hex
 /** Enough ether to stay behind for the two transactions this sends. Measured at ~0.00003 ETH. */
 const GAS_CUSHION = 100_000_000_000_000n
 

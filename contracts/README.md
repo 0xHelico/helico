@@ -1,9 +1,9 @@
 # Contracts
 
-Four things ship, and one idea sits behind all of them: a user commits to rules, and an agent may
+Five things ship, and one idea sits behind all of them: a user commits to rules, and an agent may
 act only inside them.
 
-They occupy **twelve addresses** on Arbitrum One, implementations and proxies counted separately,
+They occupy **thirteen addresses** on Arbitrum One, implementations and proxies counted separately,
 and the accounts themselves not counted at all, since those are deployed one per owner. Both
 counts are correct and they are not the same count.
 [`docs/deployments.md`](../docs/deployments.md) lists the addresses, read back from the chain.
@@ -25,6 +25,10 @@ counts are correct and they are not the same count.
 - **`HelicoAgent`**, the agent an account nominates: a contract, behind a proxy, that only a
   report from Chainlink's DON can make act. It calls the account's `supplyIdle` and
   `withdrawIdle` and nothing else, because the account lets an agent call nothing else.
+- **`HelicoTaker`**, the door through which a plain wallet takes a `HelicoMandateSwap`
+  position: the app pays the taker first and calls it back to pay, which an EOA cannot answer,
+  so this contract answers for it — pulls exactly what the wallet owes, pays the maker through
+  Aqua, keeps nothing. First used on 13 September to take USDC that was earning in Morpho.
 
 ## HelicoOracleBoard
 
