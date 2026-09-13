@@ -26,6 +26,39 @@ caller, swaps with the caller as `to`, and in the callback — accepted from the
 Aqua for the amount and pushes it to the maker. It keeps no owner, no fee, and nothing between
 transactions. Rehearsed on a fork against this exact mandate first (`ForkHelicoTakerLive.t.sol`).
 
+### The ledger fell by exactly what was spent, and anyone can check it
+
+The claim `CLAUDE.md` makes for shipping to Aqua rather than taking an approval is that a ship is
+*"a number the owner shipped, it falls as it is spent, and docking destroys it"*. That is now
+checkable against this mandate from the public index alone, with no key and no privileged access —
+`shipped − pulled` against the balance Aqua still holds, for every token the mandate names:
+
+| token | shipped | pulled | left | balances? |
+|---|---|---|---|---|
+| USDC | `996491` | **`199887`** | `796604` | ✔ |
+| Morpho receipt | `996491` | **`94939`** | `901552` | ✔ |
+| aUSDC | `996491` | `0` | `996491` | ✔ |
+| Compound USDC | `996491` | `0` | `996491` | ✔ |
+| WETH | `497329897698090` | `0` | `497329897698090` | ✔ |
+| aWETH | `397329897698090` | `0` | `397329897698090` | ✔ |
+| Compound WETH | `397329897698090` | `0` | `397329897698090` | ✔ |
+
+Seven tokens, seven exact balances. And the two that moved are not arbitrary: **`199887` is the
+payout the quote named** — 0.0001 WETH → 0.199887 USDC — and **`94939` is the Morpho share count
+the receipt log burned**. The ledger fell by the payout on the asset it paid in and by the shares
+on the receipt it unwound, and by nothing anywhere else.
+
+**This is also the sharpest answer to "why an index".** The arithmetic needs what the mandate was
+shipped with, what has been pulled since, and what is left. Aqua's `_balances` is `private` and
+four levels deep, `rawBalances` needs a hash you already hold, and not one of its four events is
+`indexed` — so the third column has no on-chain answer and the first two cannot be filtered by
+maker from logs. The table above is one GraphQL query and is reproducible by a reader; without the
+subgraph it is not reachable at all.
+
+**Sayable, and it is the whole Aqua argument in one line:** *"we never took an approval — the app
+can spend exactly the number the owner shipped, and you can watch that number fall by exactly what
+left."*
+
 ### The take
 
 ```
