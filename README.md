@@ -78,8 +78,9 @@ Where the code is, pinned to the commit it was read from and checked in CI:
 | [`subgraph/`](subgraph/) | The subgraph indexing Aqua and our factory |
 | [`docs/`](docs/) | Deployments, track measurements, and the plans written before the code |
 
-Run it locally with `bun install`, then `bun run test` for everything (178 Solidity tests, 74 of
-them on an Arbitrum One fork, plus the TypeScript and Go suites).
+Run it locally with `bun install`, then `bun run test` for the TypeScript and Go suites, and
+`forge test` in `contracts/` for the 178 Solidity tests (74 of them on an Arbitrum One fork, so
+set `ARBITRUM_RPC_URL`).
 
 ## What is not done
 
