@@ -4,6 +4,62 @@ Arbitrum One, chain id 42161. Every address below was read back from the chain a
 broadcast, not copied from a script's output — the third column is what the contract answers when
 asked about itself.
 
+## 13 September 2026, 02:11 UTC — a taker took USDC that was earning in Morpho
+
+The sentence the product is built on, as one transaction on Arbitrum One: a wallet swapped
+0.0001 WETH for USDC against the live two-sided mandate, and the USDC it received was, one call
+earlier, a Morpho position. Until this morning no such transaction could exist —
+`HelicoMandateSwap.swapExactIn` pays the taker first and calls it back to pay, so an EOA cannot
+take, and the app's swap card fills SwapVM only (#468). `HelicoTaker` is the door (#508).
+
+### The taker contract
+
+```
+HelicoTaker   0x7A52bfD7EF1b4D0345d6e76deD649FC05208DD58   verified, source on Arbiscan
+tx            0x66a2ec285e9a76d5a447f47968cc6d9560cf912ebd102840440028adced0e9a4
+              block 504,588,872, 570,170 gas, from the deployer 0x6DCd7485…
+APP()         0x0524a353…6041 (HelicoMandateSwap)   AQUA()  0x1111113C…a90a   both read back
+```
+
+`take(mandate, zeroForOne, amountIn, amountOutMin, deadline)` pulls exactly `amountIn` from the
+caller, swaps with the caller as `to`, and in the callback — accepted from the app only — approves
+Aqua for the amount and pushes it to the maker. It keeps no owner, no fee, and nothing between
+transactions. Rehearsed on a fork against this exact mandate first (`ForkHelicoTakerLive.t.sol`).
+
+### The take
+
+```
+tx            0xd8dc7dfdfce77c83ea79c9e6eb683cb013939a5f8113af5a10d6936212ff7310
+              block 504,589,092, 02:11:45 UTC, status 1, 1,432,953 gas at 0.020024 gwei, 25 logs
+from          0x6DCd7485…439E   the deployer, as a plain wallet, through HelicoTaker
+mandate       0x576c16fb… on HelicoMandateSwap, maker 0x8E0f7e67…1807 (the second owner's account)
+quote         0.0001 WETH → 0.199887 USDC, floor 0.198887, taken at the quote
+```
+
+What its logs say, in the order they happened:
+
+| # | Log | Says |
+|---|---|---|
+| 0 | `WETH.Transfer` wallet → HelicoTaker | `100000000000000` — the taker's 0.0001 WETH, pulled by `take` |
+| 2–4 | `hmUSDC.Transfer` account → app, `Aqua.Pulled`, then burned | **94,939 Morpho shares pulled through Aqua and redeemed** — `_cover`, inside the swap |
+| 13, 15 | `USDC.Transfer` Morpho → … → account | `189887` — exactly the deficit: the fill less the idle cent |
+| 18 | `USDC.Transfer` account → wallet, `Aqua.Pulled` | `199887` — the taker's USDC, pulled from the maker by Aqua |
+| 21, 23 | `WETH.Transfer` HelicoTaker → account, `Aqua.Pushed` | the payment, landing in the maker's account through Aqua's ledger |
+| 24 | `HelicoTaker.Taken` | `0.0001 WETH → 0.199887 USDC` |
+
+Balances, read back: the account's idle USDC `0.01 → 0` (**the wallet is spent first**, `_cover`),
+`hmUSDC 493,238 → 398,299` shares, WETH `+0.0001`; Aqua's USDC ledger for the mandate
+`0.996491 → 0.796604`; the taker holds `0.199887` USDC and nothing else changed hands. HelicoTaker
+and the app hold nothing.
+
+**Sayable:** *"the money was earning in Morpho, somebody swapped against it anyway, and the
+contract pulled out exactly the shortfall inside the same transaction — the position never
+stopped earning on the rest."* All of it is in one receipt.
+
+**Not sayable:** that the app's swap card does that today — it fills SwapVM strategies; taking
+one of ours is `scripts/take-mandate.ts` or `HelicoTaker.take` directly, until the card learns
+the door (#468).
+
 ## 12–13 September 2026 — one sentence, one signature, and the ether works too
 
 A second owner, a fresh wallet holding 0.001 ETH and nothing else, put money to work from the chat

@@ -2758,6 +2758,31 @@ READMEs.
   DON's `0x7d346cc4…` two minutes later, `previewRedeem` on the Compound receipt already above
   what went in.
 
+### 2026-09-13 — A taker anyone can use, and the sentence as a mainnet transaction
+
+- **Done:** `HelicoTaker`, the contract a plain wallet needs to take a `HelicoMandateSwap`
+  position (the app pays first and calls the taker back, which an EOA cannot answer); its deploy
+  script; five fork tests against the live two-sided mandate, bytes verbatim from Aqua; the
+  plugin's `decodeMandate`; `scripts/take-mandate.ts`. Deployed to Arbitrum One at
+  `0x7A52bfD7…` and verified, then used: `0xd8dc7dfd…` swapped 0.0001 WETH for 0.199887 USDC
+  against the second owner's mandate, and the receipt shows 94,939 Morpho shares redeemed
+  inside the swap for exactly the shortfall. The landing's count is ten, with the taker named.
+
+- **AI's role:** Claude Opus 5 read `swapExactIn` and the callback interface to see why no fill
+  had ever happened on mainnet, wrote the contract by mirroring the tested `PayingTaker` with the
+  two guards a chain needs (callback from the app only; pull exactly `amountIn`), rehearsed on a
+  fork against the live mandate — where the first assertion was wrong about which side is spent
+  first, and `_cover`'s own docblock corrected it — then, on Ghoza's instruction to handle all
+  of it with the deployer key already in the environment, broadcast the deploy, verified it,
+  and ran the take from the deployer as the taker; keys were read in-process and never printed.
+
+- **Plan:** `docs/plans/2026-09-13-a-taker-anyone-can-use.md`.
+
+- **Verified:** 5/5 fork tests; the script both ways on a fork; the deploy receipt and the
+  immutables read back from the chain; Arbiscan's verification checked through its API; the
+  mainnet take's 25 logs read one by one, and the balances after — idle USDC spent first, Morpho
+  shares down by the deficit, Aqua's ledger down by the fill, the taker holding the USDC.
+
 <!--
 Template for the next entry:
 
