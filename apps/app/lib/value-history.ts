@@ -38,6 +38,7 @@ export type ValuePoint = { timestamp: number; value: number };
 
 /** Micro-units to a number of USDC. Six decimals, so this is exact to the cent and beyond. */
 const dollars = (units: bigint) => Number(units) / 1e6;
+const USDC = "0xaf88d065e77c8cc2239327c5edb3a432268e5831";
 
 /**
  * The running total after each dated event, then the live reading.
@@ -65,6 +66,11 @@ export function valueSeries(
   let working = 0n;
   const points: ValuePoint[] = [];
   for (const e of dated) {
+    // **USDC only, which is what the line is denominated in.** The first ether move — 397
+    // trillion base units of WETH — went through here as dollars and drew a $397M spike on a
+    // two-dollar account. A move in another asset is a real event and not a point on this line;
+    // the headline above the chart is where the WETH side is counted, priced.
+    if (e.kind === "moved" && e.asset && e.asset !== USDC) continue;
     if (e.kind === "in") liquid += e.units;
     else if (e.kind === "out") liquid -= e.units;
     else if (e.kind === "moved") working += e.into ? e.units : -e.units;
