@@ -154,11 +154,25 @@ export function shipped(
  * Tokens the app can name. Anything else is shown as its address rather than guessed at — a
  * wrong symbol beside a real balance is worse than an address nobody recognises.
  */
-const KNOWN: Record<string, { symbol: string; decimals: number }> = {
-  "0xaf88d065e77c8cc2239327c5edb3a432268e5831": { symbol: "USDC", decimals: 6 },
+/**
+ * `side` is the asset a receipt stands for, so the spendable bars can be scaled against their
+ * own kind: a wei figure on an ETH receipt beside a six-decimal USDC line is not a comparison.
+ * The venue receipts are ours (`hc` Compound, `hm` Morpho) or Aave's (`a`), and a share-priced
+ * receipt's number is shares, which is what Aqua's ledger holds for it.
+ */
+const KNOWN: Record<
+  string,
+  { symbol: string; decimals: number; side?: "USDC" | "WETH" }
+> = {
+  "0xaf88d065e77c8cc2239327c5edb3a432268e5831": {
+    symbol: "USDC",
+    decimals: 6,
+    side: "USDC",
+  },
   "0x82af49447d8a07e3bd95bd0d56f35241523fbab1": {
     symbol: "WETH",
     decimals: 18,
+    side: "WETH",
   },
   "0x912ce59144191c1204e64559fe8253a0e49e6548": { symbol: "ARB", decimals: 18 },
   "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1": { symbol: "DAI", decimals: 18 },
@@ -166,6 +180,27 @@ const KNOWN: Record<string, { symbol: string; decimals: number }> = {
   "0x724dc807b04555b71ed48a6896b6f41593b8c637": {
     symbol: "aUSDC",
     decimals: 6,
+    side: "USDC",
+  },
+  "0x1ec57ce1ddfdc7a4ebf4f54aedee19ab73fcbb2e": {
+    symbol: "hcUSDC",
+    decimals: 6,
+    side: "USDC",
+  },
+  "0xbba798a61f0d7d1ae51466fd4045cd2ea25c9a29": {
+    symbol: "hmUSDC",
+    decimals: 6,
+    side: "USDC",
+  },
+  "0xe50fa9b3c56ffb159cb0fca61f5c9d750e8128c8": {
+    symbol: "aWETH",
+    decimals: 18,
+    side: "WETH",
+  },
+  "0xb0a125f539237b553025e2cb180f9c40b25918cd": {
+    symbol: "hcWETH",
+    decimals: 18,
+    side: "WETH",
   },
 };
 
@@ -181,6 +216,7 @@ export const WALLET_TOKENS = KNOWN;
 export function token(address: string): {
   symbol: string;
   decimals: number | null;
+  side?: "USDC" | "WETH";
 } {
   const known = KNOWN[address.toLowerCase()];
   if (known) return known;
