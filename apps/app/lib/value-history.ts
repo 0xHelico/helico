@@ -51,6 +51,13 @@ export function valueSeries(
   events: AccountEvent[],
   live: { idle: bigint; working: bigint } | null,
   now = Date.now(),
+  /**
+   * The WETH side, when the account has one: the price to value it at, and what it holds now.
+   * The line then carries ether moves too — each `IdleCapitalMoved` in WETH steps the working
+   * WETH up or down, valued at today's price throughout, since a per-block price is not a
+   * number this page has. Without it the line is USDC alone, as it was.
+   */
+  weth?: { price: number; total: bigint } | null,
 ): ValuePoint[] {
   const dated = events
     .filter((e) => typeof e.at === "number")
@@ -64,14 +71,22 @@ export function valueSeries(
 
   let liquid = 0n;
   let working = 0n;
+  // Working WETH, in wei, from the account's own ether moves. Ether arriving in the account —
+  // a wrap moved in, a taker's payment — is not an event the activity list carries (only USDC
+  // transfers are), so the WETH side steps when the agent lends it, which on this product is a
+  // run or two after it arrives. The right-hand end is the live reading, which is exact.
+  let wethWorking = 0n;
+  const ethDollars = (wei: bigint) =>
+    weth ? (Number(wei) / 1e18) * weth.price : 0;
   const points: ValuePoint[] = [];
   for (const e of dated) {
-    // **USDC only, which is what the line is denominated in.** The first ether move — 397
-    // trillion base units of WETH — went through here as dollars and drew a $397M spike on a
-    // two-dollar account. A move in another asset is a real event and not a point on this line;
-    // the headline above the chart is where the WETH side is counted, priced.
-    if (e.kind === "moved" && e.asset && e.asset !== USDC) continue;
-    if (e.kind === "in") liquid += e.units;
+    // A move in another asset used to be skipped here — the first ether move, 397 trillion
+    // wei, had gone through as USDC micro-units and drawn a $397M spike. It is its own side now,
+    // valued at today's price; without a price it is still skipped rather than mis-scaled.
+    if (e.kind === "moved" && e.asset && e.asset !== USDC) {
+      if (!weth) continue;
+      wethWorking += e.into ? e.units : -e.units;
+    } else if (e.kind === "in") liquid += e.units;
     else if (e.kind === "out") liquid -= e.units;
     else if (e.kind === "moved") working += e.into ? e.units : -e.units;
     else continue;
@@ -81,14 +96,20 @@ export function valueSeries(
     // remainder and climbs straight back, which reads as the account briefly emptying. Nobody can
     // observe the state between two logs of one transaction, so it is not a reading.
     if (points.at(-1)?.timestamp === timestamp) points.pop();
-    points.push({ timestamp, value: dollars(liquid + working) });
+    points.push({
+      timestamp,
+      value: dollars(liquid + working) + ethDollars(wethWorking),
+    });
   }
 
   // The right-hand end is the number printed above the chart, not the fold's own total. They differ
   // by whatever a market has paid and nobody has taken out yet, and that gap is the profit — so it
   // belongs on the line rather than being quietly reconciled away.
   if (live)
-    points.push({ timestamp: now, value: dollars(live.idle + live.working) });
+    points.push({
+      timestamp: now,
+      value: dollars(live.idle + live.working) + ethDollars(weth?.total ?? 0n),
+    });
   return points;
 }
 

@@ -41,8 +41,31 @@ test("a WETH move does not touch the USDC line", () => {
     ...MOVED,
     asset: "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
   };
+  // Without a price the ether side is left out rather than mis-scaled…
   const series = valueSeries([DEPOSIT, LEG, usdcMove, wethMove], null);
   expect(series.at(-1)?.value).toBeCloseTo(0.500081, 6);
+  // …and with one, the line carries it at that price: 0.000397 WETH at $2,500 is $0.99.
+  const priced = valueSeries(
+    [DEPOSIT, LEG, usdcMove, wethMove],
+    null,
+    Date.now(),
+    {
+      price: 2500,
+      total: 397_329_897_688_090n,
+    },
+  );
+  expect(priced.at(-1)?.value).toBeCloseTo(0.500081 + 0.9933, 3);
+  // The live point uses what the account holds now, not the fold's running total.
+  const withLive = valueSeries(
+    [DEPOSIT, LEG, usdcMove],
+    { idle: 10_000n, working: 490_081n },
+    Date.now(),
+    {
+      price: 2500,
+      total: 500_000_000_000_000n,
+    },
+  );
+  expect(withLive.at(-1)?.value).toBeCloseTo(0.500081 + 1.25, 3);
   // A move with no asset named — an older stored event — still counts, as it always did.
   expect(valueSeries([DEPOSIT, LEG, MOVED], null).at(-1)?.value).toBeCloseTo(
     0.500081,

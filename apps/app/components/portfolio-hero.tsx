@@ -103,8 +103,18 @@ export function PortfolioHero() {
   // The fold, kept whole. The chart takes a window of it; the change rows each take their own,
   // because "what happened this week" is a different question from a seventh of the month.
   const full = useMemo(
-    () => (mounted ? valueSeries(own.data ?? [], held) : []),
-    [mounted, own.data, held],
+    () =>
+      mounted
+        ? valueSeries(
+            own.data ?? [],
+            held,
+            Date.now(),
+            weth.data
+              ? { price: weth.data.price, total: weth.data.total }
+              : null,
+          )
+        : [],
+    [mounted, own.data, held, weth.data],
   );
   const series = useMemo(
     () => sample(full, span.days ?? null),
@@ -203,7 +213,7 @@ export function PortfolioHero() {
         </div>
         {weth.data ? (
           <p className="tabular mt-2 font-mono text-[11px] text-faint">
-            {`includes ${Number(formatUnits(weth.data.total, 18)).toFixed(5)} WETH at $${weth.data.price.toLocaleString(undefined, { maximumFractionDigits: 0 })} (Chainlink) · the chart tracks USDC`}
+            {`includes ${Number(formatUnits(weth.data.total, 18)).toFixed(5)} WETH at $${weth.data.price.toLocaleString(undefined, { maximumFractionDigits: 0 })} (Chainlink), valued at today's price along the whole line`}
           </p>
         ) : null}
 
