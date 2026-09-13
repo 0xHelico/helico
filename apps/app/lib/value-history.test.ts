@@ -29,6 +29,27 @@ const DEPOSIT = event("in", 500_081n, 504_019_200, 1_757_000_000, true);
 const LEG = event("out", 490_081n, 504_035_561, 1_757_100_000);
 const MOVED = event("moved", 490_081n, 504_035_561, 1_757_100_000, true);
 
+// **A move in another asset is not a point on this line.** The first ether move — 397 trillion
+// wei of WETH supplied to Compound — went through the fold as USDC micro-units and drew a $397
+// million spike on a two-dollar account. The line is USDC; the WETH side is priced in the headline.
+test("a WETH move does not touch the USDC line", () => {
+  const wethMove: AccountEvent = {
+    ...event("moved", 397_329_897_688_090n, 504_497_103, 1_757_200_000, true),
+    asset: "0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+  };
+  const usdcMove: AccountEvent = {
+    ...MOVED,
+    asset: "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+  };
+  const series = valueSeries([DEPOSIT, LEG, usdcMove, wethMove], null);
+  expect(series.at(-1)?.value).toBeCloseTo(0.500081, 6);
+  // A move with no asset named — an older stored event — still counts, as it always did.
+  expect(valueSeries([DEPOSIT, LEG, MOVED], null).at(-1)?.value).toBeCloseTo(
+    0.500081,
+    6,
+  );
+});
+
 // **The property worth having.** Supplying to a market moves USDC out of the account and the total
 // must not move with it. A fold that counted the transfer and forgot its matching move would draw
 // the account emptying itself into Morpho.

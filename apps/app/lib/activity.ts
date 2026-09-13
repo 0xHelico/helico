@@ -43,6 +43,11 @@ export type AccountEvent = {
   kind: "moved" | "agent" | "venue" | "in" | "out" | "unknown";
   /** Base units of the asset, for the rows that carry one. Zero for the rest. */
   units: bigint;
+  /**
+   * The asset the units are in, lower-cased, for the rows that move one. `IdleCapitalMoved`
+   * names it; a transfer row is USDC by construction. Absent on the rows that move nothing.
+   */
+  asset?: string;
   /** True for money arriving: supplied to a market, or transferred into the account. */
   into: boolean;
   /** Block first, log index second. Two events in one transaction keep the order they happened. */
@@ -86,6 +91,7 @@ const amount = (v: bigint | string) =>
  * WETH as well as USDC since the account learned to hold it — an ether move printed through the
  * USDC formatter read as 397,329,897.69 USDC on the first one.
  */
+const USDC_ADDRESS = "0xaf88d065e77c8cc2239327c5edb3a432268e5831";
 const ASSETS: Record<string, { symbol: string; decimals: number }> = {
   "0xaf88d065e77c8cc2239327c5edb3a432268e5831": { symbol: "USDC", decimals: 6 },
   "0x82af49447d8a07e3bd95bd0d56f35241523fbab1": {
@@ -148,6 +154,12 @@ async function fromBackend(account: Address): Promise<AccountEvent[] | null> {
     return body.events.map((e) => ({
       kind: e.kind,
       units: BigInt(e.amount ?? "0"),
+      asset:
+        e.kind === "moved"
+          ? e.asset?.toLowerCase()
+          : e.kind === "in" || e.kind === "out"
+            ? USDC_ADDRESS
+            : undefined,
       into: e.kind === "out" ? false : Boolean(e.supplied),
       key: `${e.block}-${e.logIndex}`,
       what: sentence(e),
@@ -210,6 +222,7 @@ async function readFromChain(
     ...moved.map((l) => ({
       kind: "moved" as const,
       units: l.args.amount ?? 0n,
+      asset: String(l.args.asset ?? "").toLowerCase(),
       into: Boolean(l.args.supplied),
       key: `${l.blockNumber}-${l.logIndex}`,
       what: l.args.supplied ? "Put money to work" : "Took money back out",
