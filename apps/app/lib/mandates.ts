@@ -358,13 +358,20 @@ export async function readMovements(
  *
  * Grouped by transaction **and** direction: a fill that pays out of a position is a `PULL` and a
  * `PUSH` in one transaction, and merging those two would hide the half that left.
+ *
+ * **And by side.** A two-sided mandate ships USDC and WETH in one transaction, and "largest
+ * amount" compared 396469738297462 wei with 991242 micro-USDC and kept the wei — so the third
+ * owner's ship read as 0.00039 WETH made quotable and nothing about the dollar beside it. Amounts
+ * live in each asset's own units and do not compare across assets; the receipts of a side are
+ * the same claim as its asset and collapse with it, the other side is another movement of money
+ * and stays its own row. A token with no side is grouped by its own address.
  */
 export function collapse(events: Movement[]): Movement[] {
   const groups = new Map<string, Movement>();
   for (const m of events) {
     // A push of nothing is a token the mandate names with no balance behind it, not an event.
     if (m.amount === 0n) continue;
-    const key = `${m.tx}:${m.direction}`;
+    const key = `${m.tx}:${m.direction}:${token(m.token).side ?? m.token.toLowerCase()}`;
     const held = groups.get(key);
     const better =
       !held ||
