@@ -1,5 +1,12 @@
 # Demo video: script and shot list
 
+> **Recorded 13 September 2026:** [youtube.com/watch?v=if0BzgxOM-I](https://www.youtube.com/watch?v=if0BzgxOM-I),
+> 3:55, unlisted. The take below is the fifth owner's wallet `0x8bA81B33…4942` (account
+> `0xF124…2115`, "swap $10 of ETH to USDC and put it all to work", DON move 23 seconds later in
+> `0xb1f4d9bf…`), a live take from a taker wallet against the second owner's mandate
+> (`0xfb15dd01…`), and the index read through The Graph's MCP server. Everything after this line
+> is the script it was recorded from.
+
 Issue: #22. Target **3:30**, inside the 2–4 minute window. 720p or better.
 
 > **Rewritten 7 September**, when the three submitted tracks became **Chainlink, 1inch and The

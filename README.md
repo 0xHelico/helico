@@ -34,7 +34,9 @@ result  0.49 USDC into Morpho at 4.40%, against Aave at 2.75% and Compound at 2.
 
 ## Try it
 
-Deployed and open. Nothing has to be run locally.
+Deployed and open. Nothing has to be run locally. **[Demo video, 3:55](https://www.youtube.com/watch?v=if0BzgxOM-I)** —
+a fresh wallet, one sentence, one signature, the network moving the money 23 seconds later, a
+taker filling against another owner's Morpho position, the index answering, all on Arbitrum One.
 
 **[app.helico.site](https://app.helico.site)**, on Arbitrum One. One signature proves the address is
 yours; it costs no gas and moves nothing. Then: turn everything on in one confirmation on a wallet
