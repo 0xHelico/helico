@@ -60,6 +60,21 @@ in MetaMask, account `0x6e8968889a69Ec10cE6f99c8c2539FaB24c902D5`. It holds 0.01
 | 3:10–3:25 | The chat: type **"take everything back to my wallet"** and stop at the card (do not press) | *And you can leave whenever you like. The sweep sends every token to the one address this account was built for, and the call takes no recipient.* | The card renders for the third owner; not pressed, so the state stays for the second take |
 | 3:25–3:30 | `README.md` caveats, then the repo URL | *Every number in this video is in the repository with the command that reproduces it.* | — |
 
+**Ghoza's choice for the recording, 13:20 WIB: one side, from a fresh wallet, on camera.**
+*"swap $2 of ETH to USDC and put it all to work"* — the sentence the second owner proved in one
+signature from nothing (`0x2742cb30…`: open, 1inch swap delivered to the account, agent named,
+four markets permitted, mandate shipped; the DON supplied Morpho three minutes later). A fourth
+wallet holding about 0.001 ETH and nothing else, **not** taken through the limits page first, so
+the whole thing is the one signature. The amount stays in the sentence — "all my ETH" has no gas
+reserve and the backend asks for a number — and $2 of $2.50 leaves the 0.0001 ETH cushion the
+card checks. What this changes in the table above: 0:20–1:00 is recorded live rather than
+narrated over the third owner's history; 1:00–1:15 (the ether line) is skipped, a USDC-only
+account has no ether side; 1:15–1:45 shows one ledger side, USDC `≈1.98` against a wallet of
+`0.01`, with `hmUSDC` (or whichever receipt the DON chose) carrying the balance; 1:45–2:15 stays
+the second owner's take `0xd8dc7dfd…` — a one-sided mandate does not quote (`DegenerateReserves`),
+so there is no live take on this wallet, and that is not a weakness to explain on camera. The
+third owner's two-asset history is the fallback if the live signature misbehaves.
+
 **What changed since the 03:00 layer.** The account to record with is the third owner's, not
 the second's — it has the clean two-asset history in one sitting. The activity list's Aqua rows
 are per side since #521 (deploying at 13:02 WIB; check the list before recording — if one row,
