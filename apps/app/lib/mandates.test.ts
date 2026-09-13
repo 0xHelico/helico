@@ -203,6 +203,26 @@ describe("collapsing movements into what moved", () => {
     expect(collapse([push(AUSDC, 1n), push(USDC, 1n)])[0].token).toBe(USDC);
   });
 
+  // **The third owner's ship, as the index serves it**: 0.991242 USDC and 0.000396 WETH with
+  // every receipt at its side's figure. One row kept the wei, because a raw comparison across
+  // assets always picks the eighteen-decimal one, and the dollar side vanished from the list.
+  test("a two-sided ship is two rows, one per side", () => {
+    const HC_WETH = "0xb0a125f539237b553025e2cb180f9c40b25918cd";
+    const A_WETH = "0xe50fa9b3c56ffb159cb0fca61f5c9d750e8128c8";
+    const rows = collapse([
+      push(USDC, 991_242n),
+      push(WETH, 396_469_738_297_462n),
+      push(AUSDC, 991_242n),
+      push(A_WETH, 396_469_738_297_462n),
+      push(MORPHO, 991_242n),
+      push(HC_WETH, 396_469_738_297_462n),
+    ]);
+    expect(rows.map((r) => [r.token, r.amount])).toEqual([
+      [USDC, 991_242n],
+      [WETH, 396_469_738_297_462n],
+    ]);
+  });
+
   // A token the mandate names with nothing behind it is not something that happened.
   test("a push of nothing is not a row", () => {
     expect(collapse([push(WETH, 0n)])).toHaveLength(0);
