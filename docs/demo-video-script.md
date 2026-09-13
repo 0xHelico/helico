@@ -37,6 +37,45 @@ that exists, and #22 asks for a full-length take by **11 September** rather than
 A shot that has to fall back is not a weaker video. A shot that claims something untrue ends the
 submission.
 
+### Rehearsal, 13 September 13:30 WIB — the run of show, every proof re-checked — **read this one first**
+
+Everything below still holds. This is the order to record in, with what is on screen, what is
+said, and the proof beside it — each proof read again between 12:50 and 13:15 WIB today, from
+the chain, the live API, or the live app, not from memory. Target 3:30.
+
+**The account to record with is the third owner's:** wallet `0x47548B3de1C3dc00CeFA58B8106C531331CC1d72`
+in MetaMask, account `0x6e8968889a69Ec10cE6f99c8c2539FaB24c902D5`. It holds 0.01 USDC idle,
+0.986224 USDC in Morpho, 0.000396 WETH in Compound v3, and one two-sided mandate on Aqua, hash
+`0x22e6bd1d6eab153ce16cf843edaf398bee72a58ccb8a444c2f804a24334233c1`, expiring 14 Sep 05:37 UTC.
+
+| Time | Screen | Say | Proof, checked today |
+|---|---|---|---|
+| 0:00–0:20 | `app.helico.site` | *An agent that trades for you has to be trusted with your money. This one does not. You write the rules on chain, the contract refuses anything outside them, and your tokens never leave your own wallet.* | The page answers 200 (13:03) |
+| 0:20–1:00 | `/portfolio`, connected as the third owner. Scroll to **Recent activity** | *This wallet held 0.001 ETH and nothing else. One sentence — "put all my money to work: swap $1 of ETH to USDC, and $1 of ETH as ETH" — and one signature. 1inch delivered the USDC to the account, the ether was wrapped in beside it, and the position shipped to Aqua. Five minutes later the network had both earning: USDC in Morpho, ETH in Compound. The owner paid one transaction: three cents.* | [`0xf10298a1…`](https://arbiscan.io/tx/0xf10298a158159d53b76fbe00b7ffe9c3c63c2db3f457c361ce497aefa1ab278f) 05:38 UTC, status 1, 28 logs, `from` = `to` = the wallet (EIP-7702). DON: [`0x9484d761…`](https://arbiscan.io/tx/0x9484d76177ef7a0994f524185786141987e1b74a8755857b993829db0fa57cbc) 05:40 (0.986224 USDC → Morpho), [`0x98bd82ef…`](https://arbiscan.io/tx/0x98bd82ef069c8370be2a334fe492037623d8fed3953c045ba4142e2b73e0a82f) 05:45 (0.000396 WETH → Compound v3). Both `from` transmitter `0x00da34cd…` to the forwarder `0xf8344cfd…`. Activity rows: "Put money to work · 0.99 USDC · Morpho", "Put money to work · 0.000396 WETH · Compound v3 (ETH)", "Money in · 1.00 USDC · 0x1111…2a65", "Made quotable on Aqua" — **two rows once #521 is live, one until then** |
+| 1:00–1:15 | Same page, the headline and the line under it | *The line is worth what the account is worth — the ether side at the Chainlink price of each hour, not today's.* Hover one point. | Caption reads *"each point of the line at the feed's price at that hour"* (live since 11:35 WIB). `GET api.helico.site/api/prices?asset=WETH&from=…&to=…` answers 26 hourly points with round ids |
+| 1:15–1:45 | Terminal, repo root on `main`: `bun scripts/aqua-maker.ts 0x6e8968889a69Ec10cE6f99c8c2539FaB24c902D5` | *This is 1inch's ledger, read from the Aqua contract. Left column: what a taker may take — 0.99 USDC and 0.0004 WETH. Right column: what is actually in the wallet — a cent of USDC, and Morpho shares and Compound receipts instead. Aqua holds the permission. The market holds the money.* | Ran at 13:10 WIB: USDC ledger `0.991242` / wallet `0.01`; WETH ledger `0.000396…` / wallet `1e-14`; `hmUSDC` wallet `0.493079` shares; `hcWETH` wallet `0.000396…`. With `ONEINCH_API_KEY` exported the last line reads *"1inch's Aqua API lists 4528 open strategies; 1 with this account as maker — 7 tokens agree with the chain"* |
+| 1:45–2:15 | **Either** Arbiscan [`0xd8dc7dfd…`](https://arbiscan.io/tx/0xd8dc7dfdfce77c83ea79c9e6eb683cb013939a5f8113af5a10d6936212ff7310), Logs tab — **or, live,** the take command below against this mandate, then `/portfolio` again | *The money is earning in Morpho, and somebody swaps against it anyway. Inside the same transaction the contract pulls out exactly the shortfall — the rest never stops earning — and the taker is paid. That is the whole product in one receipt.* | Yesterday's take on the second owner: status 1, 25 logs, 94,939 Morpho shares redeemed for 189,887 micro-USDC, 0.199887 USDC to the taker. **Live option:** `TAKER_KEY=… CONFIRM=take bun scripts/take-mandate.ts --mandate 0x22e6bd1d6eab153ce16cf843edaf398bee72a58ccb8a444c2f804a24334233c1 --sell WETH --amount 0.0001` from the deployer (holds 0.0052 ETH; the script wraps what it needs). ~60 s; cut the wait. Afterwards the activity list reads *"Paid out of a market · Morpho"* and *"Filled through a mandate"*, and the next DON runs restore the floor and lend the WETH — as they did yesterday (`0x00a57425…`, `0x00104e76…`) |
+| 2:15–2:45 | The chat. Type **"what has my account done today?"** and open the steps | *The chain cannot answer this: Aqua's ledger is a private mapping four levels deep, and its events index nothing. The Graph is the only way to ask. And the chat does not paraphrase me — it reads the index itself, through The Graph's MCP server, and every call is on screen.* | Live at 13:12 WIB: `Client.ask` → `mcp.initialize` (subgraph-mcp 0.1.1) → `mcp.get_schema_by_subgraph_id` (6725 bytes) → `mcp.execute_query_by_subgraph_id` (two guesses refused by the schema, the third answered) → `index.answer`: *"The account was opened on 2026-09-13 at 05:35:32 UTC."* Two Graph products, both load-bearing: the subgraph `7Qw2zNn9…` on the network, and the MCP server the backend calls |
+| 2:45–3:10 | `packages/plugins/cre/src/index.ts` at `cre.handlerInTee`; then `contracts/src/HelicoAccount.sol` at `supplyIdle(address pool, address asset, uint256 amount)` | *The decision runs in a Chainlink CRE confidential workflow, inside an enclave; the thresholds are secrets released only there. What leaves is only the decision, as a report the network signs and writes to Arbitrum, into the contract this account names as its agent. And that authority has no recipient anywhere in it — the agent chooses where your money works and cannot send it anywhere else. So the enclave can be wrong and still cannot take anything.* | The two DON transactions above: `from` a Chainlink transmitter, `to` the KeystoneForwarder, then `HelicoAgent.Carried` and the account's own `IdleCapitalMoved`. Workflow id `00fa897b…`, policy hash `0x84e5626f…` (`docs/deployments.md`) |
+| 3:10–3:25 | The chat: type **"take everything back to my wallet"** and stop at the card (do not press) | *And you can leave whenever you like. The sweep sends every token to the one address this account was built for, and the call takes no recipient.* | The card renders for the third owner; not pressed, so the state stays for the second take |
+| 3:25–3:30 | `README.md` caveats, then the repo URL | *Every number in this video is in the repository with the command that reproduces it.* | — |
+
+**What changed since the 03:00 layer.** The account to record with is the third owner's, not
+the second's — it has the clean two-asset history in one sitting. The activity list's Aqua rows
+are per side since #521 (deploying at 13:02 WIB; check the list before recording — if one row,
+say "0.0004 WETH" and let the terminal shot carry the USDC side). The chart prices the ether
+side per hour since #518 (live). `scripts/aqua-maker.ts` exists since #522 (merged 13:05 WIB).
+
+**Two signatures happened on this wallet, and the video must not claim one for it.** "Unlock
+all" on the limits page was pressed first (`0xefe402b5…`), so the sentence found the account
+armed and needed one signature for the money. The one-signature-from-nothing proof is the
+second owner's `0x2742cb30…`, in the layer below; say "one signature" over that hash, or over a
+fourth wallet done on camera without visiting the limits page first.
+
+**MetaMask will show "Review alert"** on the batch — its simulation flagging nine contracts in
+one request. It went through both times today. If recording a fresh wallet, expect it and click
+through; do not read the alert as the product.
+
 ### Pre-flight, re-run 13 September 03:00 WIB, after a second owner did it from the chat — **read this one first**
 
 Everything in the layer below still holds. This adds the shot that did not exist at 16:40: a
@@ -435,6 +474,19 @@ it was a teammate's wallet, and that phrase must not be said.
 End on the repo URL. No outro music.
 
 ## Before recording
+
+**13 September, for the rehearsal layer above:**
+
+- [ ] MetaMask on Arbitrum One with the third owner's wallet `0x4754…1d72` selected; `/portfolio`
+      and `/chat` open in tabs, already loaded once
+- [ ] Terminal at the repo root on `main` after `git pull` (needs `5bdb735` or later for
+      `scripts/aqua-maker.ts`), `bun install` warm, font large enough for 720p
+- [ ] `export ONEINCH_API_KEY=…` in that terminal only if the API line is wanted; never `cat` the
+      `.env`. Likewise `TAKER_KEY` only if the live take is planned, and only in the shell that
+      runs it
+- [ ] Check the activity list shows two "Made quotable on Aqua" rows (#521 live); if one, adjust
+      the spoken line as noted above
+- [ ] Close anything with a key, a seed, or a private repository in it
 
 - [ ] `bun install`, `cp apps/cre/.env.example apps/cre/.env` — the run must be warm, so the first
       take is not spent on a dependency download
