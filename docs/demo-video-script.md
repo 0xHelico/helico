@@ -468,13 +468,47 @@ End on the repo URL. No outro music.
   `DegenerateReserves`, which is the guard that stops a constant product handing over the whole
   opposite reserve for two wei. So *"a position of ours is live on Aqua and the index serves it"*
   is now sayable and worth saying; *"a swap fills against it"* is not, and #468 is a second,
-  separate reason the dapp could not fill ours even if it did quote
+  separate reason the dapp could not fill ours even if it did quote.
+
+  **Amended again 13 September, and this time the first sentence above is the one that stopped
+  being true.** The second account — owner `0x43f9ee1f…`, opened from one sentence in the chat —
+  shipped a **two-sided** mandate, and it quotes. Measured against the deployed
+  `HelicoMandateSwap` at `0x0524a353…6041`, with the mandate decoded out of the index and its
+  `mandateHash` checked against the contract's own before anything was asked of it:
+
+  ```
+  0x576c16fb15a4…   two-sided      quoteExactIn(USDC→WETH, 100000)  -> 55320282851018 wei
+                                   quoteExactIn(WETH→USDC, 1e13)    -> 15655
+  0x8579e95a944d…   USDC only      both directions                   -> REFUSED
+  ```
+
+  0.1 USDC buys 0.00005532 ETH, which is **about 1,808 USDC/ETH** — a sane price rather than a
+  degenerate one, and the refusal beside it is `DegenerateReserves` doing exactly what the
+  paragraph above describes. One shape quotes and the other cannot; that contrast is the
+  evidence, and it needs no fork.
+
+  **And the quote is no longer the frontier**, which this bullet would otherwise imply: the top
+  pre-flight layer records a **fill** against this same mandate at 02:11 UTC
+  ([`0xd8dc7dfd…`](https://arbiscan.io/tx/0xd8dc7dfdfce77c83ea79c9e6eb683cb013939a5f8113af5a10d6936212ff7310)),
+  paid out of a Morpho position inside the swap. Verified from the chain rather than from that
+  row: status 1, 1,432,953 gas, to `HelicoTaker` `0x7A52bfD7…` whose `APP()` reads back as
+  `HelicoMandateSwap`. The quote below is the *explanation* of why that fill was possible and the
+  one-sided mandate's is not — keep them in that order, evidence first.
+
+  **So what changes:** *"no Aqua position for WETH/USDC will quote at any size"* is retired — ours
+  does, on mainnet, in both directions. **Newly sayable:** *"our own Aqua app prices a live
+  two-sided position on Arbitrum One, and refuses the one-sided one for the reason the code
+  says."* **Still not sayable:** that a swap **in the dapp** fills against it — #468 is unchanged,
+  the swap path reaches SwapVM strategies only, so read the route line off the screen exactly as
+  the rule above says
 - ~~**Anything about fills being queryable.**~~ Retired 11 September: v0.3.0 serves `fills`, 342 of
   them. Sayable now, with the number read on the day
 - **"Deployed", "live", or "in production"** about anything that is not — check each one on the
-  day, because this list changes as things land. As of 11 September **nine** contracts of ours are
-  on Arbitrum One, the newest being `HelicoAgent` and its implementation; count them off
-  `docs/deployments.md` on the day. (The 9 September count was five.) The router is among them and
+  day, because this list changes as things land. **Ten** — *each proxy counted once, superseded
+  deployments not*, which is the rule `helico.site` now states and the reason the number is
+  reproducible rather than trusted; count them off `docs/deployments.md` on the day and say the
+  rule with the number. (The 9 September count was five, and an unqualified "nine" was on the
+  landing page until 13 September.) The router is among them and
   its opcode reads back from the chain. What is still not deployable-and-used is a different
   sentence: nothing has shipped a board to the oracle app, so *"deployed"* is true of it and
   *"in use"* is not
