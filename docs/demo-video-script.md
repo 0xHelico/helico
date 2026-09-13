@@ -487,6 +487,14 @@ End on the repo URL. No outro music.
   paragraph above describes. One shape quotes and the other cannot; that contrast is the
   evidence, and it needs no fork.
 
+  **And the quote is no longer the frontier**, which this bullet would otherwise imply: the top
+  pre-flight layer records a **fill** against this same mandate at 02:11 UTC
+  ([`0xd8dc7dfd…`](https://arbiscan.io/tx/0xd8dc7dfdfce77c83ea79c9e6eb683cb013939a5f8113af5a10d6936212ff7310)),
+  paid out of a Morpho position inside the swap. Verified from the chain rather than from that
+  row: status 1, 1,432,953 gas, to `HelicoTaker` `0x7A52bfD7…` whose `APP()` reads back as
+  `HelicoMandateSwap`. The quote below is the *explanation* of why that fill was possible and the
+  one-sided mandate's is not — keep them in that order, evidence first.
+
   **So what changes:** *"no Aqua position for WETH/USDC will quote at any size"* is retired — ours
   does, on mainnet, in both directions. **Newly sayable:** *"our own Aqua app prices a live
   two-sided position on Arbitrum One, and refuses the one-sided one for the reason the code
