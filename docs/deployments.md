@@ -51,8 +51,11 @@ workflow `00fa897b…` (helico-production), not from the dashboard alone.
 
 | | |
 |---|---|
-| Last clean run | 13 Sep 01:00 UTC, no errors |
-| First run with the error | 13 Sep 02:10 UTC |
+| Last clean run | 13 Sep 02:05:00 UTC — and every run from 01:00 to 02:05 checked one by one, all clean |
+| First run with the error | 13 Sep 02:10:02 UTC, `count: 1` |
+| Our own actions nearest to it | `HelicoTaker` deployed at 02:10:49 UTC and the take at 02:11:45 UTC — both **after** the 02:10:02 run had started, and the error is raised while the platform fetches enclave parameters, before the handler's reads. Close in time; no path from one to the other |
+| The deployment the platform runs | `cre workflow get`: `deployedAt 2026-09-12T16:31:34Z`, registered 8 Sep, `ACTIVE`; not redeployed since |
+| The TEE declaration | `[{ tee: 'nitro', regions: ['us-west-2'] }]` — the form the SDK documents, unchanged since it ran clean |
 | Every run since | one error, verbatim: `confidential-workflows capability execution failed: [13]Internal: failed after 2 retries: failed to get enclave params: enclave config validation failed for request <id>: cannot validate enclave config: DON members not set` |
 | Execution status | `SUCCESS` on every one of them; `creditUsed` 0 |
 | What the runs still did | the reads (`http-actions`, 11–16 per run), `consensus … Report`, and `evm … WriteReport` — the four moves of the day were written *after* the error began: 02:15 (`0x00a57425…`), 02:20 (`0x00104e76…`), 05:40 (`0x9484d761…`), 05:45 (`0x98bd82ef…`) |
