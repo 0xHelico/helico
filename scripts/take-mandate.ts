@@ -7,8 +7,12 @@
  * lending position inside the same swap. The receipt shows the redemption, the transfer to the
  * taker, and the taker's payment landing in the maker's account through Aqua.
  *
- *     TAKER_KEY=0x… CONFIRM=take bun scripts/take-mandate.ts \
- *       --mandate 0x576c16fb… --sell WETH --amount 0.0001 [--slippage-bps 50]
+ *     TAKER_KEY=0x… CONFIRM=take bun scripts/take-mandate.ts --sell WETH --amount 0.0001
+ *
+ * That is all a taker knows: the side and the amount. Which mandate answers is asked of the
+ * index and the contract — every active mandate on our app is quoted and the best output is
+ * taken — the same two questions a router asks. `--mandate 0x…` pins one instead.
+ * `[--slippage-bps 50]` sets the floor under the quote; `--quote-only` stops after it.
  *
  * What it does, in order, and each step is checked before the next:
  *
@@ -74,13 +78,14 @@ const arg = (name: string, def?: string) => {
 	const i = process.argv.indexOf(`--${name}`)
 	return i >= 0 ? process.argv[i + 1] : def
 }
-const hash = arg('mandate')
+let hash = arg('mandate')
 const sell = (arg('sell') ?? '').toUpperCase()
 const amountArg = arg('amount')
 const slippageBps = BigInt(arg('slippage-bps', '50') as string)
-if (!hash || !/^0x[0-9a-fA-F]{64}$/.test(hash) || !['WETH', 'USDC'].includes(sell) || !amountArg) {
+if ((hash && !/^0x[0-9a-fA-F]{64}$/.test(hash)) || !['WETH', 'USDC'].includes(sell) || !amountArg) {
 	console.error(
-		'usage: --mandate 0x<strategyHash> --sell WETH|USDC --amount <human> [--slippage-bps 50]',
+		'usage: --sell WETH|USDC --amount <human> [--mandate 0x<strategyHash>] [--slippage-bps 50]\n' +
+			'Without --mandate, every active mandate on our app is quoted and the best one is taken.',
 	)
 	process.exit(1)
 }
@@ -129,7 +134,71 @@ if (
 	process.exit(1)
 }
 
+// ─── 1b. no hash given: ask the index which mandates quote, take the best ──
+//
+// A taker does not know a hash and should not have to. What it knows is the pair and the
+// amount; which maker's mandate answers best is the index's question and the contract's — the
+// same two a router would ask. Every active mandate on our app is read, the ones on this pair
+// and not yet expired are quoted through `quoteExactIn`, a mandate that reverts (one side
+// empty, `DegenerateReserves`) is a mandate that does not quote, and the best output wins.
+const zeroForOne = sell === 'USDC' // token0 is USDC, token1 is WETH on every mandate our app ships
+const decIn = zeroForOne ? 6 : 18
+const decOut = zeroForOne ? 18 : 6
+const symOut = zeroForOne ? 'WETH' : 'USDC'
+const amountIn = parseUnits(amountArg as string, decIn)
+if (!hash) {
+	const all = (await (
+		await fetch(STUDIO, {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({
+				query:
+					'{ mandates(where:{active:true, app:"' +
+					app.toLowerCase() +
+					'"}, first: 100) { strategyHash strategy maker { id } } }',
+			}),
+		})
+	).json()) as {
+		data?: { mandates?: { strategyHash: Hex; strategy: Hex; maker: { id: string } }[] }
+	}
+	const rows = all.data?.mandates ?? []
+	const nowS = BigInt(Math.floor(Date.now() / 1000))
+	console.log(`index        ${rows.length} active mandate${rows.length === 1 ? '' : 's'} on ${app}`)
+	let best: { hash: Hex; out: bigint } | null = null
+	for (const r of rows) {
+		const d = decodeMandate(r.strategy)
+		if (
+			d.token0.toLowerCase() !== USDC.toLowerCase() ||
+			d.token1.toLowerCase() !== WETH.toLowerCase()
+		)
+			continue
+		if (d.expiry <= nowS) continue
+		let out: bigint | null = null
+		try {
+			out = (await pub.readContract({
+				abi: MANDATE_SWAP_ABI,
+				address: app as Hex,
+				functionName: 'quoteExactIn',
+				args: [d, zeroForOne, amountIn],
+			})) as bigint
+		} catch {
+			out = null // one side empty: this mandate does not quote
+		}
+		console.log(
+			`  ${r.strategyHash.slice(0, 10)}…  maker ${r.maker.id.slice(0, 10)}…  ${out === null ? 'does not quote' : `${formatUnits(out, decOut)} ${symOut}`}`,
+		)
+		if (out !== null && (!best || out > best.out)) best = { hash: r.strategyHash, out }
+	}
+	if (!best) {
+		console.error('No active mandate quotes this pair right now.')
+		process.exit(1)
+	}
+	hash = best.hash
+	console.log(`chosen       ${hash}  (best output)\n`)
+}
+
 // ─── 2. the mandate, from the index, hashed back ────────────
+if (!hash) throw new Error('unreachable: no mandate')
 const res = (await (
 	await fetch(STUDIO, {
 		method: 'POST',
@@ -161,13 +230,8 @@ if (!row.active) {
 	console.error('The index says this mandate is no longer active.')
 	process.exit(1)
 }
-const zeroForOne = sell === 'USDC' // token0 is USDC, token1 is WETH on every mandate our app ships
 const tokenIn = (zeroForOne ? m.token0 : m.token1) as Hex
 const tokenOut = (zeroForOne ? m.token1 : m.token0) as Hex
-const decIn = tokenIn.toLowerCase() === USDC.toLowerCase() ? 6 : 18
-const decOut = tokenOut.toLowerCase() === USDC.toLowerCase() ? 6 : 18
-const symOut = decOut === 6 ? 'USDC' : 'WETH'
-const amountIn = parseUnits(amountArg as string, decIn)
 console.log(
 	`mandate      ${hash}  maker ${m.maker}  ${row.active ? 'active' : 'inactive'}, expires ${new Date(Number(m.expiry) * 1000).toISOString()}`,
 )
@@ -186,6 +250,11 @@ const floor = (quoted * (10_000n - slippageBps)) / 10_000n
 console.log(
 	`quote        ${amountArg} ${sell} → ${formatUnits(quoted, decOut)} ${symOut}   (floor ${formatUnits(floor, decOut)})`,
 )
+// A rehearsal stops here: the index was asked, the contract quoted, nothing was spent.
+if (process.argv.includes('--quote-only')) {
+	console.log('quote only; nothing sent')
+	process.exit(0)
+}
 
 // ─── 4. the wallet, and a wrap when it holds only ether ─────
 const [held, ether] = await Promise.all([
