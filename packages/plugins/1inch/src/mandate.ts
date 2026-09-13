@@ -1,4 +1,4 @@
-import { encodeAbiParameters, encodeFunctionData, parseAbi } from 'viem'
+import { decodeAbiParameters, encodeAbiParameters, encodeFunctionData, parseAbi } from 'viem'
 
 import { aquaAddress } from './addresses'
 import { AQUA_ABI, type Call, strategyHash } from './calldata'
@@ -103,6 +103,31 @@ export const MANDATE_SWAP_ABI = [
 		outputs: [{ type: 'uint256' }],
 	},
 ] as const
+
+/**
+ * The mandate back out of the bytes Aqua holds — the inverse of `encodeMandate`, for a taker that
+ * reads a position off the index and needs the struct the app hashes.
+ */
+export function decodeMandate(strategy: `0x${string}`): SwapMandate {
+	const [m] = decodeAbiParameters([MANDATE_TUPLE], strategy)
+	return {
+		maker: m.maker,
+		token0: m.token0,
+		token1: m.token1,
+		feeBps: m.feeBps,
+		maxOut0: m.maxOut0,
+		maxOut1: m.maxOut1,
+		expiry: m.expiry,
+		agent: m.agent,
+		salt: m.salt,
+		venues: m.venues.map((v) => ({
+			pool: v.pool,
+			receipt0: v.receipt0,
+			receipt1: v.receipt1,
+			kind: v.kind as ReceiptKind,
+		})),
+	}
+}
 
 /**
  * The bytes to ship. `abi.encode(mandate)` and nothing else.
