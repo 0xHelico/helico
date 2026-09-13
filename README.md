@@ -99,11 +99,15 @@ Said here rather than left to be discovered.
 
 - **The local rehearsal is not a TEE.** It runs in the CRE simulator, which prints that while
   running, against a fork. The deployed workflow is a different thing and does execute on the DON.
-- **No mandate has been shipped to our Aqua app on the live chain.** The account can be the maker
-  from the dapp and the path is proven on a fork; on Arbitrum One, `agent` names a contract and an
-  EOA can never be one, so a taker is still missing.
-- **A maker position backed by wallet tokens has no interface**, only
-  [`scripts/ship-maker-position.ts`](scripts/ship-maker-position.ts).
+- **The dapp's swap card does not fill our own mandates.** It routes through 1inch aggregation
+  and names the route. Taking one of ours is [`HelicoTaker`](contracts/src/HelicoTaker.sol) — a
+  taker here must be a contract, since the app pays first and calls back for payment — through
+  [`scripts/take-mandate.ts`](scripts/take-mandate.ts); one such take is on chain
+  ([`docs/deployments.md`](docs/deployments.md), 13 September), and the card learning to do it
+  is #468.
+- **A mandate backed by a bare wallet has no interface.** The dapp ships from the account it
+  opens for you; a wallet shipping to 1inch's own router is
+  [`scripts/ship-maker-position.ts`](scripts/ship-maker-position.ts) or the provide card.
 - **Nothing has been shipped to `HelicoOracleBoard`.** It is deployed and verified; deployed is not
   in use.
 - **This is not audited.** Twelve automated reviewers went over the two Aqua contracts on 8
