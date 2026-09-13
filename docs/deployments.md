@@ -44,6 +44,33 @@ arriving, which is the same rule seen from the other side.
 MetaMask showed a "Review alert" on the batch — its own simulation flagging a request that
 touches nine contracts — and the batch went through; the alert's text was not captured.
 
+## 13 September 2026 — every run since 02:10 UTC reports an enclave-parameter error, and still runs
+
+Read at 14:40 WIB from `cre execution list` and `cre execution status` on the production
+workflow `00fa897b…` (helico-production), not from the dashboard alone.
+
+| | |
+|---|---|
+| Last clean run | 13 Sep 01:00 UTC, no errors |
+| First run with the error | 13 Sep 02:10 UTC |
+| Every run since | one error, verbatim: `confidential-workflows capability execution failed: [13]Internal: failed after 2 retries: failed to get enclave params: enclave config validation failed for request <id>: cannot validate enclave config: DON members not set` |
+| Execution status | `SUCCESS` on every one of them; `creditUsed` 0 |
+| What the runs still did | the reads (`http-actions`, 11–16 per run), `consensus … Report`, and `evm … WriteReport` — the four moves of the day were written *after* the error began: 02:15 (`0x00a57425…`), 02:20 (`0x00104e76…`), 05:40 (`0x9484d761…`), 05:45 (`0x98bd82ef…`) |
+| What changed on our side at 02:00 UTC | nothing: the last workflow deploy is 12 Sep 16:35 UTC (config hash `e94aac65…`), no secrets were rotated, no config edited |
+
+**What can and cannot be said.** The workflow is registered with `cre.handlerInTee(…, [{ tee:
+'nitro', regions: ['us-west-2'] }])`, executes on the DON every five minutes, reaches consensus
+and writes reports the network signs — all of that is measured above. Whether a run that reports
+"failed to get enclave params" still executed its handler inside an enclave is **not**
+something the CLI shows (`cre execution logs` is empty for every run, erroring or clean, as a
+TEE handler's are), and the error's text — "DON members not set" — names the platform's
+confidential-workflows configuration, not ours. Until Chainlink answers, the sentence for the
+video is *"registered as a confidential workflow; the network signed and wrote the decision"*,
+not *"this run executed inside an enclave"*.
+
+Reported to Chainlink with execution id `2953398a48eafe7eb1acca7e079e99e1b4a2ba8f7003933621d2e461cd8e8f41`
+(07:25 UTC) and request id `861f44156a93c95649fe8b0f168f673fc8e33df27db237d7a48db9d04462c118`.
+
 ## 13 September 2026 — the portfolio line moves with ether's price
 
 Not a contract: a read path, measured, because the demo shows the chart and the chart used to
