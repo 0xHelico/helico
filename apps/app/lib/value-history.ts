@@ -36,29 +36,34 @@ import type { AccountEvent } from "@/lib/activity";
  */
 export type ValuePoint = { timestamp: number; value: number };
 
+/**
+ * What the account held at one moment, each side in its own units: USDC in micro-units, WETH in
+ * wei. The fold produces these; a price turns them into dollars, and which price is the caller's
+ * decision — today's along the whole line, or the feed's reading at each point.
+ */
+export type HoldingPoint = { timestamp: number; usdc: bigint; weth: bigint };
+
+/** The price of ether at a moment, in dollars. `lib/prices.ts` builds one from the feed. */
+export type PriceAt = (timestampMs: number) => number;
+
 /** Micro-units to a number of USDC. Six decimals, so this is exact to the cent and beyond. */
 const dollars = (units: bigint) => Number(units) / 1e6;
 const USDC = "0xaf88d065e77c8cc2239327c5edb3a432268e5831";
 
 /**
- * The running total after each dated event, then the live reading.
+ * What the account held after each dated event, then the live reading.
  *
  * Undated events are skipped rather than stacked on today. The chain fallback has no timestamps —
  * `eth_getLogs` does not carry one — so on that path this returns the live point alone and the card
  * says there is nothing to plot, which is true, rather than drawing every event at this instant.
  */
-export function valueSeries(
+export function holdings(
   events: AccountEvent[],
   live: { idle: bigint; working: bigint } | null,
   now = Date.now(),
-  /**
-   * The WETH side, when the account has one: the price to value it at, and what it holds now.
-   * The line then carries ether moves too — each `IdleCapitalMoved` in WETH steps the working
-   * WETH up or down, valued at today's price throughout, since a per-block price is not a
-   * number this page has. Without it the line is USDC alone, as it was.
-   */
-  weth?: { price: number; total: bigint } | null,
-): ValuePoint[] {
+  /** What the account holds in WETH now, idle and working together, for the live point. */
+  wethNow: bigint = 0n,
+): HoldingPoint[] {
   const dated = events
     .filter((e) => typeof e.at === "number")
     .sort((a, b) =>
@@ -76,15 +81,12 @@ export function valueSeries(
   // transfers are), so the WETH side steps when the agent lends it, which on this product is a
   // run or two after it arrives. The right-hand end is the live reading, which is exact.
   let wethWorking = 0n;
-  const ethDollars = (wei: bigint) =>
-    weth ? (Number(wei) / 1e18) * weth.price : 0;
-  const points: ValuePoint[] = [];
+  const points: HoldingPoint[] = [];
   for (const e of dated) {
     // A move in another asset used to be skipped here — the first ether move, 397 trillion
     // wei, had gone through as USDC micro-units and drawn a $397M spike. It is its own side now,
-    // valued at today's price; without a price it is still skipped rather than mis-scaled.
+    // in its own units, and never added to the USDC figure.
     if (e.kind === "moved" && e.asset && e.asset !== USDC) {
-      if (!weth) continue;
       wethWorking += e.into ? e.units : -e.units;
     } else if (e.kind === "in") liquid += e.units;
     else if (e.kind === "out") liquid -= e.units;
@@ -96,10 +98,7 @@ export function valueSeries(
     // remainder and climbs straight back, which reads as the account briefly emptying. Nobody can
     // observe the state between two logs of one transaction, so it is not a reading.
     if (points.at(-1)?.timestamp === timestamp) points.pop();
-    points.push({
-      timestamp,
-      value: dollars(liquid + working) + ethDollars(wethWorking),
-    });
+    points.push({ timestamp, usdc: liquid + working, weth: wethWorking });
   }
 
   // The right-hand end is the number printed above the chart, not the fold's own total. They differ
@@ -108,9 +107,79 @@ export function valueSeries(
   if (live)
     points.push({
       timestamp: now,
-      value: dollars(live.idle + live.working) + ethDollars(weth?.total ?? 0n),
+      usdc: live.idle + live.working,
+      weth: wethNow,
     });
   return points;
+}
+
+/** Dollars for one holding at one price. */
+const worth = (h: HoldingPoint, price: number) =>
+  dollars(h.usdc) + (Number(h.weth) / 1e18) * price;
+
+/**
+ * The running total in dollars after each dated event, then the live reading — the holdings
+ * valued at one price throughout.
+ *
+ * This is the line without a price history: the WETH side at today's price along its whole
+ * length, or left out when there is no price at all. `sampleHoldings` is the line with one.
+ */
+export function valueSeries(
+  events: AccountEvent[],
+  live: { idle: bigint; working: bigint } | null,
+  now = Date.now(),
+  /**
+   * The WETH side, when the account has one: the price to value it at, and what it holds now.
+   * Without it the line is USDC alone, as it was.
+   */
+  weth?: { price: number; total: bigint } | null,
+): ValuePoint[] {
+  return holdings(events, live, now, weth?.total ?? 0n).map((h) => ({
+    timestamp: h.timestamp,
+    value: worth(h, weth?.price ?? 0),
+  }));
+}
+
+/**
+ * The holdings resampled across the window and valued at the price of each sample.
+ *
+ * **This is the line that moves with ether.** Between two events the account holds the same
+ * ether, and what that ether is worth changes every round of the feed; a line drawn from events
+ * alone is flat there and says the position did nothing while the market moved it. Each sample
+ * takes the last holding at or before it, as `sample` does, and prices it at that moment — so a
+ * day when ether rose from $2,000 to $4,000 draws a rise, which is what the account's owner saw.
+ *
+ * Same grid as `sample`, so `change` reads either the same way.
+ */
+export function sampleHoldings(
+  points: HoldingPoint[],
+  days: number | null,
+  priceAt: PriceAt,
+  now = Date.now(),
+  n = 96,
+): ValuePoint[] {
+  if (points.length === 0) {
+    return [];
+  }
+  const earliest = points[0]?.timestamp ?? now;
+  const from =
+    days === null
+      ? Math.min(earliest, now - 86_400_000)
+      : now - days * 86_400_000;
+  const span = Math.max(1, now - from);
+
+  let cursor = 0;
+  return Array.from({ length: n }, (_, i) => {
+    const at = from + (span * i) / (n - 1);
+    while (cursor < points.length && (points[cursor]?.timestamp ?? 0) <= at) {
+      cursor++;
+    }
+    const held = cursor === 0 ? null : points[cursor - 1];
+    return {
+      timestamp: at,
+      value: held ? worth(held, priceAt(at)) : 0,
+    };
+  });
 }
 
 /**

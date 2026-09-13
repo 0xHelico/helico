@@ -12,8 +12,9 @@ import { CHAIN_ID, totals, useAccountState } from "@/hooks/use-account-state";
 import { useWethHeld } from "@/hooks/use-weth-held";
 import { configuredFactory } from "@/lib/account";
 import { readAccountActivity } from "@/lib/activity";
+import { fetchPriceSeries, priceAt } from "@/lib/prices";
 import { cn } from "@/lib/utils";
-import { change, sample, valueSeries } from "@/lib/value-history";
+import { change, holdings, sampleHoldings } from "@/lib/value-history";
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
@@ -100,25 +101,60 @@ export function PortfolioHero() {
   // timestamp is the one piece of a page guaranteed to differ between the two.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-  // The fold, kept whole. The chart takes a window of it; the change rows each take their own,
-  // because "what happened this week" is a different question from a seventh of the month.
+  // The fold, kept whole and in units. The chart takes a window of it; the change rows each take
+  // their own, because "what happened this week" is a different question from a seventh of the
+  // month. Dollars come later, at a price per point.
   const full = useMemo(
     () =>
       mounted
-        ? valueSeries(
-            own.data ?? [],
-            held,
-            Date.now(),
-            weth.data
-              ? { price: weth.data.price, total: weth.data.total }
-              : null,
-          )
+        ? holdings(own.data ?? [], held, Date.now(), weth.data?.total ?? 0n)
         : [],
     [mounted, own.data, held, weth.data],
   );
+  // **Ether's price at each point, so the line moves when the market did.** The feed's own
+  // history, by the hour, from the backend; asked only while the account holds any ether, and
+  // for the window on screen — the step is the server's, hourly to a month and coarser beyond.
+  // Both ends sit on the hour so the key holds still between renders. Until it lands, or if
+  // the backend is away, today's price stands along the whole line and the caption says so.
+  const HOUR = 3_600_000;
+  const toHour = mounted ? Math.ceil(Date.now() / HOUR) * HOUR : 0;
+  const earliest = full[0]?.timestamp ?? toHour;
+  const fromHour =
+    Math.floor(
+      (span.days === null
+        ? Math.min(earliest, toHour - 86_400_000)
+        : toHour - span.days * 86_400_000) / HOUR,
+    ) * HOUR;
+  const prices = useQuery({
+    enabled: mounted && Boolean(weth.data) && fromHour > 0,
+    queryKey: ["eth-prices", fromHour, toHour],
+    queryFn: () => fetchPriceSeries(fromHour, toHour),
+    retry: false,
+    staleTime: 5 * 60_000,
+  });
+  // The near windows' own table, a month wide, so their arithmetic does not depend on which
+  // range the chart happens to be showing.
+  const monthFrom = toHour - 30 * 86_400_000;
+  const monthPrices = useQuery({
+    enabled: mounted && Boolean(weth.data) && monthFrom > 0,
+    queryKey: ["eth-prices", monthFrom, toHour],
+    queryFn: () => fetchPriceSeries(monthFrom, toHour),
+    retry: false,
+    staleTime: 5 * 60_000,
+  });
+  const today = weth.data?.price ?? 0;
   const series = useMemo(
-    () => sample(full, span.days ?? null),
-    [full, span.days],
+    () =>
+      sampleHoldings(
+        full,
+        span.days ?? null,
+        priceAt(prices.data ?? null, today),
+      ),
+    [full, span.days, prices.data, today],
+  );
+  const monthAt = useMemo(
+    () => priceAt(monthPrices.data ?? null, today),
+    [monthPrices.data, today],
   );
   // Only for the colour. Green unless the window actually fell, which is what the chart's own
   // `LINE` table says; the figure itself is not printed beside the total any more.
@@ -213,7 +249,11 @@ export function PortfolioHero() {
         </div>
         {weth.data ? (
           <p className="tabular mt-2 font-mono text-[11px] text-faint">
-            {`includes ${Number(formatUnits(weth.data.total, 18)).toFixed(5)} WETH at $${weth.data.price.toLocaleString(undefined, { maximumFractionDigits: 0 })} (Chainlink), valued at today's price along the whole line`}
+            {`includes ${Number(formatUnits(weth.data.total, 18)).toFixed(5)} WETH at $${weth.data.price.toLocaleString(undefined, { maximumFractionDigits: 0 })} (Chainlink), ${
+              prices.data
+                ? "each point of the line at the feed's price at that hour"
+                : "valued at today's price along the whole line"
+            }`}
           </p>
         ) : null}
 
@@ -227,7 +267,7 @@ export function PortfolioHero() {
             24H change reads as the whole balance arriving today. Briefly, and wrongly. The gate is
             the log having settled, not merely the total being known. */}
         {mounted && held && !own.isPending && full.length > 1 ? (
-          <ChangeWindows className="mt-4" series={full} />
+          <ChangeWindows className="mt-4" holdings={full} priceAt={monthAt} />
         ) : null}
 
         {/* An account with nothing in it still gets the line, flat at zero, with the scale opened

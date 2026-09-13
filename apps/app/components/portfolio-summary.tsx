@@ -13,7 +13,7 @@ import { ValueSpark } from "@/components/sparkline";
 import { CHAIN_ID, totals, useAccountState } from "@/hooks/use-account-state";
 import { configuredFactory } from "@/lib/account";
 import { readAccountActivity } from "@/lib/activity";
-import { change, sample, valueSeries } from "@/lib/value-history";
+import { change, holdings, sample, valueSeries } from "@/lib/value-history";
 
 /** Dollars, sign outside the symbol, so a fall reads `-$0.02` rather than `$-0.02`. */
 const money = (v: number, decimals = 2) =>
@@ -68,6 +68,13 @@ export function PortfolioSummary() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
+  // USDC only, in both shapes: the spark draws the dollar series, the change rows take the
+  // fold in units with ether priced at nothing. This card has never carried the WETH side; the
+  // hero on the portfolio page does, at the feed's price at each hour.
+  const units = useMemo(
+    () => (mounted ? holdings(own.data ?? [], held) : []),
+    [mounted, own.data, held],
+  );
   const full = useMemo(
     () => (mounted ? valueSeries(own.data ?? [], held) : []),
     [mounted, own.data, held],
@@ -105,7 +112,7 @@ export function PortfolioSummary() {
         {/* Not while the log is still loading: one live point makes every window start at
             nothing, and a 24H change then reads as the whole balance arriving today. */}
         {held && !own.isPending && full.length > 1 ? (
-          <ChangeWindows series={full} />
+          <ChangeWindows holdings={units} priceAt={() => 0} />
         ) : null}
 
         {/* A line only once there are two dated readings to draw between. One point is a dot, and

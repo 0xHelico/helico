@@ -1,7 +1,12 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { change, sample, type ValuePoint } from "@/lib/value-history";
+import {
+  change,
+  type HoldingPoint,
+  type PriceAt,
+  sampleHoldings,
+} from "@/lib/value-history";
 
 /** The three near windows. Anything wider is what the range buttons on the chart are for. */
 const WINDOWS = [
@@ -35,16 +40,26 @@ const money = (v: number, decimals: number) =>
  * the last seven days, which is a different question from a thirtieth of the month.
  */
 export function ChangeWindows({
-  series,
+  holdings,
+  priceAt,
   className,
 }: {
-  series: ValuePoint[];
+  /** The fold in units, from `holdings()`. */
+  holdings: HoldingPoint[];
+  /** Ether's price at a moment, so a window that held ether moves when its price did. */
+  priceAt: PriceAt;
   className?: string;
 }) {
   return (
     <div className={cn("flex gap-7", className)} data-testid="change-windows">
       {WINDOWS.map((w) => (
-        <Window days={w.days} key={w.label} label={w.label} series={series} />
+        <Window
+          days={w.days}
+          holdings={holdings}
+          key={w.label}
+          label={w.label}
+          priceAt={priceAt}
+        />
       ))}
     </div>
   );
@@ -64,13 +79,15 @@ export function ChangeWindows({
 function Window({
   label,
   days,
-  series,
+  holdings,
+  priceAt,
 }: {
   label: string;
   days: number;
-  series: ValuePoint[];
+  holdings: HoldingPoint[];
+  priceAt: PriceAt;
 }) {
-  const moved = change(sample(series, days), 4);
+  const moved = change(sampleHoldings(holdings, days, priceAt), 4);
   const sign = moved.absolute > 0 ? "+" : moved.absolute < 0 ? "−" : "";
   return (
     <div>
