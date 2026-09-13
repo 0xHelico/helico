@@ -6,8 +6,11 @@
 		"CONFIRM",
 		"DOLLARS",
 		"GRAPH_STUDIO_URL",
+		"HELICO_TAKER",
 		"MAKER_KEY",
-		"RPC_URL"
+		"ONEINCH_API_KEY",
+		"RPC_URL",
+		"TAKER_KEY"
 	],
 	"tasks": {
 		"build": {

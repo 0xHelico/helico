@@ -20,6 +20,20 @@ Wallet `0x47548B3de1C3dc00CeFA58B8106C531331CC1d72` holding 0.001 ETH and nothin
 The wallet paid $2.00 for the position and about $0.06 in gas across the three transactions of
 its own; 0.00018 ETH is left in it.
 
+**Where the proof of "maker on Aqua" is, for anyone who asks.** Three readings, all the same
+numbers, taken at 06:10 UTC:
+
+| Reading | USDC | WETH | Needs |
+|---|---|---|---|
+| `Aqua.rawBalances(maker, app, hash, token)` on `0x1111113ccf1426a8e30e2bff5e005d929bf6a90a` | 991242 | 396469738297462 | nothing — `cast call` |
+| 1inch's Aqua API, `GET /v1.0/strategies/opened`, maker `0x6e89…02D5`, hash `0x22e6bd1d…` | 991242 | 396469738297462 | an API key |
+| Arbiscan, tx `0xf10298a1…`, Logs tab, the Aqua contract's events | 991242 | 396469738297462 | a browser |
+
+`bun scripts/aqua-maker.ts <account>` prints the first beside the account's wallet balances —
+USDC at its 0.01 floor, hmUSDC carrying 0.493079 shares, hcWETH carrying the ether — which is
+the sentence in one table: Aqua holds the permission, the market holds the money. With
+`ONEINCH_API_KEY` set it asks 1inch as well and reports how many tokens agree (seven of seven).
+
 **Two runs for two assets, and why.** Both assets arrived in one transaction and the enclave
 placed them five minutes apart. That is the rule in `packages/plugins/cre/src/decision.ts`:
 `HelicoAccount.nonce` is strictly sequential, one signed statement authorises one call, so one
