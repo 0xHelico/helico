@@ -1,7 +1,13 @@
 import { expect, test } from "bun:test";
 
 import { type AccountEvent, withoutVenueLegs } from "@/lib/activity";
-import { change, sample, valueSeries } from "@/lib/value-history";
+import {
+  change,
+  holdings,
+  sample,
+  sampleHoldings,
+  valueSeries,
+} from "@/lib/value-history";
 
 const DAY = 86_400_000;
 
@@ -192,4 +198,39 @@ test("a transfer that pairs with nothing stays", () => {
   // Same amount, different transaction: still not the leg of that move.
   const elsewhere = { ...LEG, tx: "0xff" as `0x${string}`, key: "9-0" };
   expect(withoutVenueLegs([MOVED, elsewhere])).toHaveLength(2);
+});
+
+// **The line moves with ether between events.** Ether held across a day when the price doubled
+// is an account worth twice as much at the end of it, and nothing in the account's own log says
+// so — the log has no event for "the market moved". Valued at each sample's own price the rise is
+// drawn; valued at today's price along the whole line it is a flat line at the final figure.
+test("the same ether draws a rise when its price rose", () => {
+  const now = 10 * DAY;
+  const wethMove: AccountEvent = {
+    ...event("moved", 1_000_000_000_000_000_000n, 1, (8 * DAY) / 1000, true),
+    asset: "0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+  };
+  const held = holdings(
+    [wethMove],
+    { idle: 0n, working: 0n },
+    now,
+    1_000_000_000_000_000_000n,
+  );
+  // One ether, lent on day 8 and still there. Its price went from $2,000 on day 8 to $4,000 now.
+  const price = (at: number) => (at < 9 * DAY ? 2000 : 4000);
+  const line = sampleHoldings(held, 2, price, now, 5);
+  // Samples at day 8, 8.5, 9, 9.5, 10: nothing yet, then $2,000 twice, then $4,000 twice —
+  // and the first sample sits exactly on the move, which counts as held.
+  expect(line.map((p) => p.value)).toEqual([2000, 2000, 4000, 4000, 4000]);
+  // The same holdings at one price are flat, which is the line this replaces.
+  expect(
+    sampleHoldings(held, 2, () => 4000, now, 5).map((p) => p.value),
+  ).toEqual([4000, 4000, 4000, 4000, 4000]);
+  // And USDC is untouched by the price of ether. (The deposit carries a real 2026 timestamp,
+  // so "now" for this one is the day after it.)
+  const later = (DEPOSIT.at as number) * 1000 + DAY;
+  const usdc = holdings([DEPOSIT], { idle: 500_081n, working: 0n }, later);
+  expect(
+    sampleHoldings(usdc, 1, () => 99_999, later, 3).map((p) => p.value),
+  ).toEqual([0.500081, 0.500081, 0.500081]);
 });

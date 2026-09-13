@@ -4,6 +4,43 @@ Arbitrum One, chain id 42161. Every address below was read back from the chain a
 broadcast, not copied from a script's output — the third column is what the contract answers when
 asked about itself.
 
+## 13 September 2026 — the portfolio line moves with ether's price
+
+Not a contract: a read path, measured, because the demo shows the chart and the chart used to
+tell a small lie. An account holding ether was drawn at today's Chainlink price along the whole
+line, so a day when ether rose was a flat line at the final figure. The line is now priced at
+each point from the feed's own round history, and the backend serves that history.
+
+| What | Value |
+|---|---|
+| Source | Chainlink ETH/USD aggregator proxy `0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612`, the feed `apps/app/lib/usd.ts` sizes dollars with |
+| Current phase | 2, first round 19 Mar 2026 16:37 UTC ($2,109.47); 115,723 rounds by 13 Sep 03:06 UTC (~650 a day) |
+| Route | `GET https://api.helico.site/api/prices?asset=WETH&from=<unix>&to=<unix>[&step=<s>]` — hourly to a month, coarser beyond, never more than 720 points |
+| Read ahead | 1, 7, 30, 90 and 365 days at startup and every fifteen minutes |
+
+**How it was measured, before it was believed.** The public endpoint answers one `eth_call` in
+0.37–0.41 s from Jakarta, accepts a JSON-RPC batch of fifty, and refuses sixty with 429 — and,
+in bursts, refuses forty; six batches of forty back to back went through one minute and the
+fourth was refused the next. So a batch is forty and a refusal is waited out. Against the live
+feed, from a laptop, each window cold then warm:
+
+| Window | Step | Points | Cold | Warm |
+|---|---|---|---|---|
+| 1 day | 1 h | 25 | 3.2 s | 0.3 s |
+| 7 days | 1 h | 169 | 7.8 s | 0.3 s |
+| 30 days | 2 h | 361 | 15.8 s | 0.3 s |
+| 90 days | 4 h | 541 | 24.5 s | 0.3 s |
+| 365 days | 16 h | 549 | 19.7 s | 0.3 s |
+
+Cold is longer than a request may take (ten seconds), which is why the five windows are read
+ahead and the request path is the warm column. Every series came back monotonic in time, and the
+year's first point is the phase's first round, as designed: nothing older is claimed.
+
+**Checked on the second owner's account** (`0x8E0f7e6701c2e9b4F2591161B92c51b431591807`)
+through a local build: the priced line and the flat line agree at every event and differ between
+them by exactly the price move — $1.9978 against $1.9996 as ether went from $2,520 to $2,524 with
+0.000497 WETH held. Small on a one-dollar position, and the right shape.
+
 ## 13 September 2026, 02:11 UTC — a taker took USDC that was earning in Morpho
 
 The sentence the product is built on, as one transaction on Arbitrum One: a wallet swapped

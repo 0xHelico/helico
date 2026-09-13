@@ -2729,6 +2729,31 @@ READMEs.
   four permits true, Aqua's ledger holding the mandate at `0.992008` = `minAmountOut`, the
   allowance exactly that. 1,316,122 gas in all, about 0.00003 ETH.
 
+### 2026-09-13 — The portfolio line moves with ether's price
+
+- **Done:** `GET /api/prices` in `apps/be` (`internal/prices`): ether's price at each sample of a
+  window from the Chainlink aggregator's own round history, every sample searched together one
+  JSON-RPC batch per level, samples on the step's grid, the dapp's five windows read ahead at
+  startup and every fifteen minutes; `activity.RPC.EthCalls`, the batch form. In `apps/app` the
+  fold stops at units (`holdings()`) and dollars come at sampling time (`sampleHoldings()` with
+  `priceAt()` from the table), for the chart and the change rows; the caption says whether the
+  line is at the feed's price per hour or today's.
+
+- **AI's role:** Claude Opus 5 designed the search after measuring the endpoint — a sequential
+  bisection timed out the request, batches above fifty were refused, batches of forty were
+  refused in bursts — and wrote the batched, interpolating form with a retry, then measured each
+  window cold and warm on the live feed, and checked the priced line against the second owner's
+  real account through a local build before opening the PR. Ghoza asked for the behaviour in one
+  sentence and for it to reach the demo.
+
+- **Plan:** none written; the request was one sentence and the measurements are in
+  `docs/deployments.md`.
+
+- **Verified:** `go test` (prices: the round before never after, one round trip warm, the
+  pre-phase floor, the window bound; httpapi: shape, refusals, 503), `bun test` (the same ether
+  draws a rise when its price rose; USDC untouched by ether's price; `priceAt` before, on, between
+  and after readings), and the live-feed timings above.
+
 ### 2026-09-13 — The ether works too, and the pages say so
 
 - **Done:** "put $1 of ETH to work" wraps ether in the wallet, moves the WETH into the account,

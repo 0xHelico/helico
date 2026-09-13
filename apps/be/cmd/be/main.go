@@ -28,6 +28,7 @@ import (
 	"github.com/0xHelico/helico/apps/be/internal/graph"
 	"github.com/0xHelico/helico/apps/be/internal/graphmcp"
 	"github.com/0xHelico/helico/apps/be/internal/httpapi"
+	"github.com/0xHelico/helico/apps/be/internal/prices"
 	"github.com/0xHelico/helico/apps/be/internal/store"
 	"github.com/0xHelico/helico/apps/be/internal/swap"
 	"github.com/0xHelico/helico/apps/be/internal/telegram"
@@ -92,8 +93,15 @@ func run() error {
 	// the account was worth over time and a fold has to start where the money did. Truncated at the
 	// newest 50, the line would begin at whatever the 51st event left behind and claim the account
 	// appeared out of nothing at that figure.
-	accountActivity := activity.NewService(
-		db, activity.NewRPC(cfg.RPCURL, 15*time.Second), cfg.ActivityFrom, cfg.ActivityFresh, 200)
+	chainRPC := activity.NewRPC(cfg.RPCURL, 15*time.Second)
+	accountActivity := activity.NewService(db, chainRPC, cfg.ActivityFrom, cfg.ActivityFresh, 200)
+
+	// Ether's price at any past hour, from the same Chainlink feed the dapp sizes dollars with.
+	// Past rounds never change, so the service keeps what it has read for the life of the process,
+	// and the windows the dapp draws are read ahead of the first request: cold, a month is fifteen
+	// seconds of batches against the public endpoint, longer than a request may take.
+	etherPrices := prices.New(chainRPC, "")
+	go etherPrices.Warm(ctx, []int{1, 7, 30, 90, 365}, 15*time.Minute, log.Info)
 
 	// The bot, which holds no key. `internal/telegram` reads the chain and the account log and
 	// formats a reply; its most powerful action is sending a message. A deployment with no token
@@ -147,6 +155,7 @@ func run() error {
 			Graph:              subgraph,
 			GraphRatePerMin:    cfg.GraphRatePerMin,
 			Activity:           accountActivity,
+			Prices:             etherPrices,
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,

@@ -175,6 +175,77 @@ func (c *RPC) call(ctx context.Context, method string, params []any, out any) er
 	return json.Unmarshal(envelope.Result, out)
 }
 
+// EthCall is one read against the latest block, `to` and `data` as hex, the raw hex result back.
+// Here rather than in every package that needs a read, so the endpoint, the timeout and the
+// bounded body are decided once.
+func (c *RPC) EthCall(ctx context.Context, to, data string) (string, error) {
+	var out string
+	err := c.call(ctx, "eth_call", []any{map[string]any{"to": to, "data": data}, "latest"}, &out)
+	return out, err
+}
+
+// EthCalls is many reads against the latest block in one JSON-RPC batch, answers in the order
+// asked. An entry the contract reverted on comes back as "" rather than failing the batch —
+// a feed asked for a round it never wrote is a normal answer, not a broken endpoint — while a
+// transport failure, a rate limit, or an answer that is not a batch fails the whole call.
+func (c *RPC) EthCalls(ctx context.Context, to string, data []string) ([]string, error) {
+	reqs := make([]rpcRequest, len(data))
+	for i, d := range data {
+		reqs[i] = rpcRequest{ID: i, JSONRPC: "2.0", Method: "eth_call", Params: []any{map[string]any{"to": to, "data": d}, "latest"}}
+	}
+	body, err := json.Marshal(reqs)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.url, strings.NewReader(string(body)))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	res, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	payload, err := io.ReadAll(io.LimitReader(res.Body, 8<<20))
+	if err != nil {
+		return nil, err
+	}
+	var envelopes []struct {
+		ID     int             `json:"id"`
+		Error  *rpcError       `json:"error"`
+		Result json.RawMessage `json:"result"`
+	}
+	if err := json.Unmarshal(payload, &envelopes); err != nil {
+		// Not a batch: the endpoint refused the whole thing, and says why in one envelope.
+		var one struct {
+			Error *rpcError `json:"error"`
+		}
+		if json.Unmarshal(payload, &one) == nil && one.Error != nil {
+			return nil, fmt.Errorf("eth_call ×%d: %s", len(data), one.Error.Message)
+		}
+		return nil, fmt.Errorf("eth_call ×%d: %w", len(data), err)
+	}
+	out := make([]string, len(data))
+	for _, e := range envelopes {
+		if e.ID < 0 || e.ID >= len(data) {
+			return nil, fmt.Errorf("eth_call ×%d: answer for an id not asked (%d)", len(data), e.ID)
+		}
+		if e.Error != nil {
+			// A revert is the contract's own answer. Anything else in the middle of a batch is
+			// the endpoint's, and a partial batch is not a reading.
+			if strings.Contains(e.Error.Message, "revert") || strings.Contains(e.Error.Message, "execution") {
+				continue
+			}
+			return nil, fmt.Errorf("eth_call ×%d: %s", len(data), e.Error.Message)
+		}
+		if err := json.Unmarshal(e.Result, &out[e.ID]); err != nil {
+			return nil, fmt.Errorf("eth_call ×%d: %w", len(data), err)
+		}
+	}
+	return out, nil
+}
+
 // Head is the latest block the endpoint knows about.
 func (c *RPC) Head(ctx context.Context) (uint64, error) {
 	var hex string

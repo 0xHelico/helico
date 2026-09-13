@@ -19,6 +19,7 @@ import (
 	"github.com/0xHelico/helico/apps/be/internal/blog"
 	"github.com/0xHelico/helico/apps/be/internal/chat"
 	"github.com/0xHelico/helico/apps/be/internal/graph"
+	"github.com/0xHelico/helico/apps/be/internal/prices"
 	"github.com/0xHelico/helico/apps/be/internal/session"
 	"github.com/0xHelico/helico/apps/be/internal/swap"
 	"github.com/0xHelico/helico/apps/be/internal/telegram"
@@ -63,6 +64,9 @@ type Options struct {
 	// says so rather than answering an empty list, because "nothing happened" and "we cannot
 	// look" are different answers and only one of them is about the account.
 	Activity *activity.Service
+	// Prices answers what ether was worth at each hour of a window, from the feed's own round
+	// history. Nil means the route says so, like Activity.
+	Prices *prices.Service
 	// Telegram answers the bot's read commands. Nil, or unconfigured, and the webhook is a 404
 	// rather than a 503: an unconfigured deployment has no bot, so there is nothing to be unwell.
 	Telegram *telegram.Service
@@ -107,6 +111,7 @@ func New(svc *blog.Service, opt Options) http.Handler {
 		// servers, so an IP-keyed bucket would be one bucket for everybody.
 		telegramLimit: newLimiter(opt.TelegramRatePerMin, 0),
 		activity:      opt.Activity,
+		prices:        opt.Prices,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", api.health)
@@ -143,6 +148,9 @@ func New(svc *blog.Service, opt Options) http.Handler {
 	// one: both are reads a page makes on load, and neither should be able to spend the allowance
 	// of the endpoint that costs money.
 	mux.HandleFunc("GET /api/activity", api.accountActivity)
+	// Ether's price by the hour, so the same fold can carry an ether position at the price of
+	// each point rather than at today's. Same budget, same reason.
+	mux.HandleFunc("GET /api/prices", api.priceSeries)
 
 	// The bot's webhook. Guarded by Telegram's own secret header and served only when a token is
 	// configured; `internal/telegram` holds no key and the most powerful thing it does is read.
@@ -195,6 +203,7 @@ type api struct {
 	// Owns an account's history rather than caching a question about it. Nil when this build has
 	// no chain endpoint, and the handler says so instead of answering with nothing.
 	activity *activity.Service
+	prices   *prices.Service
 	// A budget of its own. Sharing the swap limiter would let a page that reads mandates spend
 	// the allowance for the endpoint that costs money.
 	graphLimit    *limiter
