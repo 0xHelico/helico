@@ -75,9 +75,12 @@ Rules:
   a second amount of ether to work as ETH beside the swap. "swap $1 of ETH to USDC and put it all
   to work" names one amount — the swap — so ethAmount and ethAmountUsd stay empty: "it all" is the
   USDC. Never invent the ether side. The amount rules below apply exactly as for a swap — a token
-  amount never becomes a dollar amount, and "$1 of ETH" is always a dollar amount. Leave all of
-  them empty for the other five actions, and for an earn that names no token: "put all my money to
-  work" is earn with nothing else set.
+  amount never becomes a dollar amount, and a dollar sign before a number is ALWAYS the dollar
+  field, even when "of ETH" is left out: "put $2 of ETH to work: $1 as USDC and $1 as ETH" is
+  amountUsd "1" and ethAmountUsd "1" — never ethAmount "1", which would be one whole ether. "put
+  $1 of ETH to work as USDC and $1 of ETH to work as ETH" is the same. Leave all of them empty for
+  the other five actions, and for an earn that names no token: "put all my money to work" is earn
+  with nothing else set.
 - tokenIn is what they are giving, tokenOut what they want. Use the ticker, not a name.
 - amount is how much of tokenIn, as a plain decimal number, no unit and no commas. "half an ETH" is "0.5". Never invent one.
 - amountUsd is for a dollar amount instead: "$5 of ETH", "5 dollars of ETH", "swap $5 ETH to USDC"
