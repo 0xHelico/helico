@@ -4,6 +4,32 @@ Arbitrum One, chain id 42161. Every address below was read back from the chain a
 broadcast, not copied from a script's output — the third column is what the contract answers when
 asked about itself.
 
+## 13 September 2026, 05:35–05:45 UTC — a third owner, both assets, ten minutes
+
+The same sentence from a second fresh wallet, with the app and the enclave as deployed above.
+Wallet `0x47548B3de1C3dc00CeFA58B8106C531331CC1d72` holding 0.001 ETH and nothing else, account
+`0x6e8968889a69Ec10cE6f99c8c2539FaB24c902D5`, MetaMask as an EIP-7702 smart account.
+
+| UTC | What | Tx |
+|---|---|---|
+| 05:35 | Opened the account, named the agent, permitted four markets ("Unlock all" on the limits page — pressed first this time, so the sentence below found the account armed) | `0xefe402b5a6162d5bb7d34fb024e685804e421b9ea2f7598384f49c06fbb9b9c7` |
+| 05:38 | "put all my money to work: swap $1 of ETH to USDC, and $1 of ETH as ETH" — 1inch delivered 0.996224 USDC to the account, 0.000396 ETH wrapped into it, seven approvals and the two-sided mandate shipped to Aqua; one signature | `0xf10298a158159d53b76fbe00b7ffe9c3c63c2db3f457c361ce497aefa1ab278f` |
+| 05:40 | The DON lent 0.986224 USDC to Morpho, keeping the 0.01 floor | `0x9484d76177ef7a0994f524185786141987e1b74a8755857b993829db0fa57cbc` |
+| 05:45 | The DON lent 0.000396 WETH to Compound v3 | `0x98bd82ef069c8370be2a334fe492037623d8fed3953c045ba4142e2b73e0a82f` |
+
+The wallet paid $2.00 for the position and about $0.06 in gas across the three transactions of
+its own; 0.00018 ETH is left in it.
+
+**Two runs for two assets, and why.** Both assets arrived in one transaction and the enclave
+placed them five minutes apart. That is the rule in `packages/plugins/cre/src/decision.ts`:
+`HelicoAccount.nonce` is strictly sequential, one signed statement authorises one call, so one
+move leaves per run — the largest by rate gap — and the other waits for the next cron tick.
+The day before, USDC and WETH arrived an hour apart and each was lent within two minutes of
+arriving, which is the same rule seen from the other side.
+
+MetaMask showed a "Review alert" on the batch — its own simulation flagging a request that
+touches nine contracts — and the batch went through; the alert's text was not captured.
+
 ## 13 September 2026 — the portfolio line moves with ether's price
 
 Not a contract: a read path, measured, because the demo shows the chart and the chart used to
