@@ -706,6 +706,38 @@ func TestEarnCanSwapFirst(t *testing.T) {
 		t.Errorf("reply does not say it wraps: %q", got.Reply)
 	}
 
+	// Both at once: the swap into USDC and ether working as itself, one sentence.
+	svc = New(fakeModel(t, http.StatusOK, `{"action":"earn","chain":"arbitrum","tokenIn":"ETH","tokenOut":"USDC","amount":"","amountUsd":"1","ethAmount":"","ethAmountUsd":"1","question":""}`))
+	got, err = svc.Interpret(context.Background(), "swap $1 of ETH to USDC and put $1 of ETH to work as ETH")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Action != ActionEarn || got.Intent == nil || got.Intent.TokenOut.Symbol != "USDC" || got.Intent.AmountUsd != "1" {
+		t.Fatalf("the swap half was not built: %+v", got.Intent)
+	}
+	if got.Intent.Eth == nil || got.Intent.Eth.AmountUsd != "1" {
+		t.Fatalf("the ether half was not carried: %+v", got.Intent.Eth)
+	}
+	if !strings.Contains(got.Reply, "$1 of ETH to work as ETH") {
+		t.Errorf("reply does not say both: %q", got.Reply)
+	}
+	svc = New(fakeModel(t, http.StatusOK, `{"action":"earn","chain":"arbitrum","tokenIn":"ETH","tokenOut":"USDC","amount":"0.0004","amountUsd":"","ethAmount":"0.0003","ethAmountUsd":"","question":""}`))
+	got, err = svc.Interpret(context.Background(), "swap 0.0004 ETH to USDC and put 0.0003 ETH to work as ETH")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Intent == nil || got.Intent.Eth == nil || got.Intent.Eth.AmountInWei != "300000000000000" {
+		t.Fatalf("a token amount for the ether half was not converted: %+v", got.Intent)
+	}
+	svc = New(fakeModel(t, http.StatusOK, `{"action":"earn","chain":"arbitrum","tokenIn":"ETH","tokenOut":"USDC","amount":"","amountUsd":"1","ethAmount":"lots","ethAmountUsd":"","question":""}`))
+	got, err = svc.Interpret(context.Background(), "swap $1 of ETH to USDC and put lots of ETH to work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Action != ActionEarn || got.Intent != nil || len(got.Needs) != 1 {
+		t.Fatalf("a non-number ether amount was not refused by name: action=%q intent=%+v needs=%v", got.Action, got.Intent, got.Needs)
+	}
+
 	// A swap that ends anywhere but USDC is refused by name, and the action is still earn so the
 	// person is not bounced to a swap card they did not ask for.
 	svc = New(fakeModel(t, http.StatusOK, `{"action":"earn","chain":"arbitrum","tokenIn":"USDC","tokenOut":"WETH","amount":"5","amountUsd":"","question":""}`))

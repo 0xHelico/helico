@@ -23,6 +23,17 @@ type Intent struct {
 	// which is the one thing an amount must never be. The wallet reads Chainlink for the token
 	// being spent and fills in the units, so the figure a person signs came from a feed.
 	AmountUsd string `json:"amountUsd,omitempty"`
+	// Eth is set on an "earn" that also puts ether to work as itself, beside the swap: "swap $1
+	// of ETH to USDC and put $1 of ETH to work as ETH". The app wraps it in the same batch and
+	// ships a mandate with both sides. Nil when the sentence named no such amount.
+	Eth *EthWork `json:"eth,omitempty"`
+}
+
+// EthWork is ether to put to work as ether, in one of the two units a person says it in.
+type EthWork struct {
+	AmountIn    string `json:"amountIn"`
+	AmountInWei string `json:"amountInWei"`
+	AmountUsd   string `json:"amountUsd,omitempty"`
 }
 
 // ErrNeeds is returned when the message did not carry enough to build an intent. The fields it
@@ -117,7 +128,10 @@ type draft struct {
 	TokenOut  string `json:"tokenOut"`
 	Amount    string `json:"amount"`
 	AmountUsd string `json:"amountUsd"`
-	Question  string `json:"question"`
+	// For "earn" only: ether to put to work as itself, beside a swap into USDC. Either unit.
+	EthAmount    string `json:"ethAmount"`
+	EthAmountUsd string `json:"ethAmountUsd"`
+	Question     string `json:"question"`
 }
 
 // build checks a draft against the registry and turns it into an Intent, or says what is

@@ -216,30 +216,44 @@ export function PutToWorkCard({
   // amount is sized here from the feed when the sentence said dollars, the same way the swap card
   // sizes one; the wallet's own balance is checked before a quote is asked for, so a wallet that
   // cannot pay is told so in a sentence rather than by a reverted batch.
-  // Two shapes, told apart by where the sentence sends the ether: into USDC is a swap that funds
-  // the USDC side; WETH is ether working as itself — wrapped, moved in, the other side of the
-  // same position. The backend has already refused anything else.
-  const wrapAsked = Boolean(fund) && fund?.tokenOut.symbol === "WETH";
-  const fundAsked = Boolean(fund) && !wrapAsked;
+  // Three shapes the sentence can take: a swap into USDC (the funding side), ether working as
+  // itself (the wrap side), or both at once — "swap $1 of ETH to USDC and put $1 of ETH to work
+  // as ETH" — which is one batch with both. The ether side comes either from `tokenOut WETH`
+  // (ether alone) or from `fund.eth` beside a swap. The backend has already refused anything else.
+  const wrapOnly = Boolean(fund) && fund?.tokenOut.symbol === "WETH";
+  const fundAsked = Boolean(fund) && !wrapOnly;
+  const ethSide = wrapOnly
+    ? { amountUsd: fund?.amountUsd, amountInWei: fund?.amountInWei ?? "0" }
+    : fund?.eth;
+  const wrapAsked = Boolean(ethSide);
   const wrapping = useQuery({
     enabled:
       wrapAsked && Boolean(account && address && client && balances.data),
     queryKey: [
       "put-to-work-wrap",
       account,
-      fund?.amountUsd ?? fund?.amountInWei,
+      ethSide?.amountUsd ?? ethSide?.amountInWei,
+      fundAsked,
     ],
     staleTime: 15_000,
     retry: false,
     queryFn: async (): Promise<{ amount: bigint }> => {
       const c = client as NonNullable<typeof client>;
-      const f = fund as Intent;
-      const amount = f.amountUsd
-        ? await unitsForDollars(c, zeroAddress, 18, f.amountUsd)
-        : BigInt(f.amountInWei);
-      if (ether < amount + GAS_CUSHION) {
+      const e = ethSide as NonNullable<typeof ethSide>;
+      const amount = e.amountUsd
+        ? await unitsForDollars(c, zeroAddress, 18, e.amountUsd)
+        : BigInt(e.amountInWei);
+      // The swap beside it spends ether too, when it is a swap of ether: both have to fit,
+      // with gas left over, or the batch reverts on the first call short of value.
+      const swapEther =
+        fundAsked && fund?.tokenIn.address === zeroAddress
+          ? fund.amountUsd
+            ? await unitsForDollars(c, zeroAddress, 18, fund.amountUsd)
+            : BigInt(fund.amountInWei)
+          : 0n;
+      if (ether < amount + swapEther + GAS_CUSHION) {
         throw new Error(
-          `Your wallet holds ${Number(formatUnits(ether, 18)).toFixed(5)} ETH; that plus gas needs more.`,
+          `Your wallet holds ${Number(formatUnits(ether, 18)).toFixed(5)} ETH; ${Number(formatUnits(amount + swapEther, 18)).toFixed(5)} for this plus gas needs more.`,
         );
       }
       return { amount };
@@ -428,14 +442,18 @@ export function PutToWorkCard({
       data-testid="put-to-work"
     >
       <p className="font-medium text-sm">
-        {wrapAsked && fund
+        {wrapOnly && fund
           ? `Put ${fund.amountUsd ? `$${fund.amountUsd} of ` : `${fund.amountIn} `}ETH to work`
-          : "Put everything to work"}
+          : fundAsked && wrapAsked
+            ? "Put USDC and ETH to work"
+            : "Put everything to work"}
       </p>
       <p className="mt-1 text-[11.5px] text-soft leading-relaxed">
-        {wrapAsked
+        {wrapOnly
           ? "One signature: the ETH is wrapped, moved into your account beside your USDC, and shipped as a second position with both sides. The agent lends the WETH in whichever ETH market pays most."
-          : "One signature, one transaction: all of it or none of it. The same money is quotable on 1inch Aqua and earning in a lending market at the same time."}
+          : fundAsked && wrapAsked
+            ? "One signature: part of the ETH is swapped into USDC and delivered to your account, the rest is wrapped in beside it, and both ship as one position with two sides. The agent lends each in whichever market pays most."
+            : "One signature, one transaction: all of it or none of it. The same money is quotable on 1inch Aqua and earning in a lending market at the same time."}
       </p>
 
       <div className="mt-3 flex flex-col gap-2 border-t pt-3 text-[11.5px]">
@@ -457,7 +475,7 @@ export function PutToWorkCard({
             different thing than the one requested. */}
         {fund && wrapAsked ? (
           <Line
-            label={`Put ${fund.amountUsd ? `$${fund.amountUsd} of ` : `${fund.amountIn} `}ETH in as ETH`}
+            label={`Put ${ethSide?.amountUsd ? `$${ethSide.amountUsd} of ` : `${wrapOnly ? fund.amountIn : (fund.eth?.amountIn ?? "")} `}ETH in as ETH`}
             detail={
               wrapping.isPending || !balances.data
                 ? "sizing…"
@@ -481,7 +499,7 @@ export function PutToWorkCard({
             }
           />
         ) : null}
-        {wrapAsked ? null : (
+        {wrapOnly ? null : (
           <Line
             done={!reading && wallet === 0n}
             label="Move your USDC in"
@@ -500,13 +518,17 @@ export function PutToWorkCard({
         )}
         <Line
           done={already && !wrapAsked}
-          label={wrapAsked ? "Ship a second position" : "Ship the position"}
+          label={
+            wrapAsked && already
+              ? "Ship a second position"
+              : "Ship the position"
+          }
           detail={
             position.isPending
               ? "asking the index…"
               : wrapAsked
                 ? wrapIn > 0n
-                  ? `${usdc(ceiling)} USDC + ${Number(formatUnits((balances.data?.weth ?? 0n) + wrapIn, 18)).toFixed(5)} WETH — both sides, so it prices; the ${position.data?.count ?? 0} shipped before stay as they are`
+                  ? `${usdc(ceiling)} USDC + ${Number(formatUnits((balances.data?.weth ?? 0n) + wrapIn, 18)).toFixed(5)} WETH — both sides, so it prices${already ? `; the ${position.data?.count ?? 0} shipped before stay as they are` : ""}`
                   : "sizing…"
                 : already
                   ? position.data?.count === 1
@@ -559,7 +581,11 @@ export function PutToWorkCard({
                 "Done"
               )
             ) : wrapAsked && wrapping.data ? (
-              `Put ${Number(formatUnits(wrapping.data.amount, 18)).toFixed(5)} ETH to work`
+              fundAsked ? (
+                "Execute"
+              ) : (
+                `Put ${Number(formatUnits(wrapping.data.amount, 18)).toFixed(5)} ETH to work`
+              )
             ) : (
               "Execute"
             )}

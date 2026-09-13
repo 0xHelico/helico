@@ -19,6 +19,11 @@ export type Intent = {
   amountIn: string;
   /** The same amount in the token's smallest unit, which is what gets signed. */
   amountInWei: string;
+  /**
+   * On an "earn" only: ether to put to work as itself, beside the swap — "swap $1 of ETH to
+   * USDC and put $1 of ETH to work as ETH". The put-to-work card wraps it in the same batch.
+   */
+  eth?: { amountIn: string; amountInWei: string; amountUsd?: string };
 };
 
 /**

@@ -236,6 +236,37 @@ func (s *Service) Interpret(ctx context.Context, message string, prior ...Turn) 
 			}
 			switch {
 			case strings.EqualFold(intent.TokenOut.Symbol, "USDC"):
+				// The ether that works as itself, beside the swap. Checked here like an amount, so
+				// a figure that is not a number is refused by name and not by the wallet.
+				if e := strings.TrimSpace(d.EthAmount); e != "" || strings.TrimSpace(d.EthAmountUsd) != "" {
+					eth := EthWork{AmountUsd: strings.TrimSpace(d.EthAmountUsd)}
+					if e != "" {
+						wei, err := baseUnits(e, 18)
+						if err != nil {
+							steps = append(steps, Step{Call: "baseUnits", Detail: "eth: " + err.Error()})
+							return Answer{Action: ActionEarn, Reply: capitalise(err.Error()) + ".", Needs: []string{"amount"}, Steps: steps}, nil
+						}
+						eth = EthWork{AmountIn: e, AmountInWei: wei.String()}
+					} else if _, err := baseUnits(eth.AmountUsd, 2); err != nil {
+						steps = append(steps, Step{Call: "baseUnits", Detail: "eth: " + err.Error()})
+						return Answer{Action: ActionEarn, Reply: capitalise(err.Error()) + ".", Needs: []string{"amount"}, Steps: steps}, nil
+					}
+					intent.Eth = &eth
+					ethSaid := eth.AmountIn + " ETH"
+					if eth.AmountUsd != "" {
+						ethSaid = "$" + eth.AmountUsd + " of ETH"
+					}
+					steps = append(steps, Step{Call: "eth", Detail: ethSaid + " to work as ETH, wrapped in the same batch", OK: true})
+					return Answer{
+						Action: ActionEarn,
+						Intent: &intent,
+						Reply: fmt.Sprintf("Swapping %s into USDC and putting %s to work as ETH, in one signature: the swap "+
+							"lands in your account, the ether is wrapped in beside it, the account ships both as one "+
+							"position on Aqua, and the agent places each in whichever market pays most. Nothing has "+
+							"moved: this is what I understood.", said, ethSaid),
+						Steps: steps,
+					}, nil
+				}
 				return Answer{
 					Action: ActionEarn,
 					Intent: &intent,
