@@ -15,7 +15,30 @@ describe("naming a token", () => {
     expect(token("0xaf88d065e77c8cC2239327C5EDb3A432268e5831")).toEqual({
       symbol: "USDC",
       decimals: 6,
+      side: "USDC",
     });
+  });
+
+  // The venue receipts are lines on every mandate the account ships — they are how a fill is
+  // covered out of a lending position — and a receipt shown as its address, in raw units, beside
+  // a USDC line is what made the spendable bars unreadable on 13 September.
+  test("the venue receipts are named, sized, and know which side they stand for", () => {
+    expect(token("0x1eC57cE1DdfdC7a4EbF4F54Aedee19ab73fcBB2E")).toEqual({
+      symbol: "hcUSDC",
+      decimals: 6,
+      side: "USDC",
+    });
+    expect(token("0xBBa798A61f0D7D1AE51466Fd4045Cd2Ea25c9A29").symbol).toBe(
+      "hmUSDC",
+    );
+    expect(token("0xb0A125F539237b553025e2cb180f9C40B25918cD")).toEqual({
+      symbol: "hcWETH",
+      decimals: 18,
+      side: "WETH",
+    });
+    expect(token("0xe50fA9b3c56FfB159cB0FCA61F5c9D750e8128c8").side).toBe(
+      "WETH",
+    );
   });
 
   test("case does not decide whether it is known", () => {
