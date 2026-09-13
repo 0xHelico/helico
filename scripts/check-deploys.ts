@@ -96,15 +96,28 @@ for (const app of APPS) {
 		continue
 	}
 
-	// A deploy still running is not a dropped one. Checked against the commits that are missing,
-	// not against "any run in flight": a queued run for an older commit would otherwise excuse a
-	// newer one that really was dropped.
-	const missing = behind.split('\n').map((l) => l.split(' ')[0])
-	const flying = runs.filter(
-		(r) =>
-			(r.status === 'in_progress' || r.status === 'queued' || r.status === 'pending') &&
-			missing.some((m) => r.headSha.startsWith(m)),
-	)
+	// A deploy still running is not a dropped one.
+	//
+	// **Matched by ancestry, not against the missing list.** It used to ask whether the running
+	// run's SHA appeared in `behind`, and `behind` is path-filtered — which omits merge commits,
+	// because a merge's diff against its first parent touches nothing under `apps/app` even when
+	// the branch it merges does. Deploys run on merge commits. So a healthy in-flight deploy
+	// reported `FAIL … which is missing`, and it did that at 03:21 on deadline morning against a
+	// deploy that was two minutes from landing.
+	//
+	// A false alarm is not a harmless alarm: this detector exists because a dropped deploy is
+	// silent, and a detector that cries wolf is one people stop reading — which puts the silence
+	// back.
+	//
+	// The question is simply whether the run carries something the deployed build does not. A run
+	// whose SHA is an ancestor of what is already deployed is old news and excuses nothing; one
+	// that is not is on its way.
+	const flying = []
+	for (const r of runs) {
+		if (r.status !== 'in_progress' && r.status !== 'queued' && r.status !== 'pending') continue
+		const older = await $`git merge-base --is-ancestor ${r.headSha} ${ok.headSha}`.nothrow().quiet()
+		if (older.exitCode !== 0) flying.push(r)
+	}
 	if (flying.length > 0) {
 		console.log(
 			`  ..  ${app}: running ${ok.headSha.slice(0, 8)}, and a deploy for ${flying[0].headSha.slice(0, 8)} is ${flying[0].status}`,
