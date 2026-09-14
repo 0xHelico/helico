@@ -52,7 +52,7 @@ Every transaction, address, and how it was verified is in [`docs/deployments.md`
 | Partner | What it does here | Check it |
 |---|---|---|
 | **Chainlink CRE** | The decision. A workflow registered with `handlerInTee` runs on the DON every five minutes; thresholds live in the Vault DON; the verdict leaves as a signed report through the KeystoneForwarder. The portfolio chart prices ether from the ETH/USD feed's own round history. | `cd apps/cre && ./rehearse-idle.sh` · [docs/tracks/chainlink.md](docs/tracks/chainlink.md) |
-| **1inch Aqua** | The liquidity. `HelicoMandateSwap` is an Aqua app: tokens stay in the owner's account, Aqua holds a ledger entry, and a fill can redeem from a lending market mid-swap. `HelicoTaker` lets any wallet take. | `bun scripts/check-aqua.ts` · [docs/tracks/1inch.md](docs/tracks/1inch.md) |
+| **1inch Aqua + SwapVM** | The liquidity. `HelicoMandateSwap` is an Aqua app on the canonical Aqua: tokens stay in the owner's account, Aqua holds a ledger entry, and a fill can redeem from a lending market mid-swap; `HelicoTaker` lets any wallet take. Beside it, a redeployment of 1inch's `AquaSwapVMRouter` with one instruction added — `AQUA_YIELD_COVER` (opcode 34), so a SwapVM curve prices against what the maker can cover from a lending position — deployed and verified on Arbitrum One, exercised by two fork suites. | `bun scripts/check-aqua.ts` · `forge test --match-contract ForkSwapVM` · [docs/tracks/1inch.md](docs/tracks/1inch.md) |
 | **The Graph** | The questions. Aqua's ledger cannot list a wallet's mandates on chain; our subgraph can. The enclave reads it to size its floor, and the chat reads it through The Graph's MCP server, showing every query it ran. | `bun scripts/check-subgraph.ts` · [docs/tracks/thegraph.md](docs/tracks/thegraph.md) |
 
 Where the code is, pinned to the commit it was read from and checked in CI:
@@ -69,7 +69,7 @@ Where the code is, pinned to the commit it was read from and checked in CI:
 
 | Directory | Contents |
 |---|---|
-| [`contracts/`](contracts/) | The account, the Aqua apps, the taker, the lending venues (Foundry) |
+| [`contracts/`](contracts/) | The account, the Aqua apps, the SwapVM router with our instruction (`src/swapvm/`), the taker, the lending venues (Foundry) |
 | [`apps/app/`](apps/app/) | The dapp (Next.js) |
 | [`apps/be/`](apps/be/) | Go backend: chat, sessions, account history, price history, the MCP client |
 | [`apps/landing/`](apps/landing/) | The site and docs (Astro) |
